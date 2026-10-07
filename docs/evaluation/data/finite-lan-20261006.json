@@ -150,6 +150,14 @@
     "native_receipt": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-native-coding-v36/receipt.json",
     "post_profile_recovery": "New manifest-authored chat.short request completes through the installed Rust/native product; both engines retain identity/configuration and zero transient work. One short recovery, not sustained decode evidence.",
     "post_profile_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-postprofile-recovery-v40",
+    "native_product_matrix": {
+      "fresh_coding": "deepseek-installed-metal-none-42; four complete 256-token controls",
+      "multi_turn": "deepseek-installed-conversation-none-42; four independent three-turn sessions, prefix reuse and exact input/token-ledger replay",
+      "reasoning_high": "deepseek-installed-metal-high-42; settled source-grammar refusal at 256 committed positions, not successful performance",
+      "reasoning_maximum": "deepseek-installed-metal-maximum-42; settled source-grammar refusal at 256 committed positions, not successful performance",
+      "engine_reload": false,
+      "case_prompt_replayed": false
+    },
     "case_prompt_replayed": false
   },
   "https_management": {
@@ -168,12 +176,12 @@
   "latest_coordinated_window": {
     "observed_date_utc": "2026-10-07",
     "source": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0, clean installed build",
-    "gate": "Installed public-C and real Exon LAN finite controls; installed Rust native coding/HTTP recovery; two isolated profiled coding arms and new post-profile native recovery. Not SDK/YAI semantic qualification or profiled throughput evidence.",
+    "gate": "Installed public-C and real Exon LAN finite controls; Rust/native coding and four three-turn sessions; settled high/maximum bounded refusals; HTTP/native recovery; two isolated diagnostic profiles. Not SDK/YAI semantic qualification, successful bounded reasoning performance or profiled throughput evidence.",
     "finite_engine_generation_unchanged": 1,
     "deepseek_restored_generation": 3,
     "production_binary_replaced": true,
     "listener_trust_grants_changed": false,
-    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-postprofile-recovery-v40",
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-product-remaining-v42",
     "case_prompt_replayed": false
   },
   "consumer_rules": {

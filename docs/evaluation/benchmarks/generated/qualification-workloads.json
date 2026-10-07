@@ -826,6 +826,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-installed-metal-none-42",
+          "target_identity": "1b0a91dcda0fac068dc46f714fac5c42147c3e5347a318b1b37807ad2ed689c9",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-native-operator-baseline",
           "target_identity": "47b709776420f206218c1e39b1eaa8e8cfa24467a46bdd50018d1e5e7c69e78c",
           "path": "product-native-v24",
@@ -904,6 +912,16 @@
       "workload_class": "representative",
       "targets": [
         {
+          "id": "deepseek-installed-metal-high-42",
+          "target_identity": "c291b9e867dda0da34f605c9b7ead4dc48aa7b326f919a9e81ecfd11f9acc978",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": [
+            "FAIL"
+          ]
+        },
+        {
           "id": "deepseek-native-coding-high-bounded-refusal",
           "target_identity": "5924b0b658d0625ec7238b3470b148668aee00aebedd42057dbedcc45b628718",
           "path": "product-native-v24",
@@ -952,7 +970,18 @@
       "strategy": "speculative",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-installed-metal-maximum-42",
+          "target_identity": "f6188c3afebb8489e224e0401fc1c3728f00522972734659e486bb56fafecca3",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": [
+            "FAIL"
+          ]
+        }
+      ]
     },
     {
       "suite": "deepseek-product",
@@ -1189,6 +1218,14 @@
       "state": "UNQUALIFIED",
       "workload_class": "representative",
       "targets": [
+        {
+          "id": "deepseek-installed-conversation-none-42",
+          "target_identity": "1b0a91dcda0fac068dc46f714fac5c42147c3e5347a318b1b37807ad2ed689c9",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
         {
           "id": "deepseek-native-operator-baseline",
           "target_identity": "47b709776420f206218c1e39b1eaa8e8cfa24467a46bdd50018d1e5e7c69e78c",

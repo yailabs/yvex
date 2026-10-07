@@ -197,6 +197,13 @@ Raw post-window controls and snapshots remain at
 `published-native-coding-v36`, `published-product-recovery-v37` and
 `published-product-lan-v38`; the subsequent profile/restore and native recovery
 are `published-physical-profile-v39` and `published-postprofile-recovery-v40`.
+The latest idle product controls add `published-product-matrix-v41` and
+`published-product-remaining-v42`: four fresh coding requests, twelve multi-turn
+turns and two bounded reasoning refusals all settle with the same engines,
+generations and zero transient/session ownership. These controls do not send a
+Case prompt, change trust or requalify remote SDK/YAI behavior. Their
+[generated product matrix](retained-observations.md#installed-native-coding-and-multi-turn-matrix-2026-10-07)
+keeps sustained decode, reused prefill and incomplete reasoning distinct.
 The failed outer-lock and exact-profile-as-model CLI attempts were refused
 before dispatch and retained; the corrected ordinary `v4-flash --variant ...`
 command neither redispatched indeterminate work nor replayed a Case prompt.

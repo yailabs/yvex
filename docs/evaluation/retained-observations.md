@@ -1272,3 +1272,69 @@ and `published-postprofile-recovery-v40`. Generated target views derive from the
 structured records. The competitive Task stays IN PROGRESS: independent quality,
 broader reasoning/product controls and quantitative competitive closure remain;
 20 target-only decode / 700 uncached prefill are not earned or weakened.
+
+## Installed native coding and multi-turn matrix (2026-10-07)
+
+The installed clean `a444bcdd` Rust shell and resident Host execute the authored
+`deepseek-product` corpus without changing DeepSeek generation 3, finite
+generation 1, context 32768, prefill chunk 64 or DSpark. Four fresh
+[Metal coding controls](benchmarks/generated/qualification-deepseek-installed-metal-none-42.md)
+and four three-turn
+[conversation controls](benchmarks/generated/qualification-deepseek-installed-conversation-none-42.md)
+complete through native protocol 25 with greedy sampling and the manifest's
+256-output bound. Each conversation sample uses its own session; later turns
+reuse that session's real committed prefix. Exact input/history identities and
+token-ledger identities agree across all four repetitions of each turn.
+The generated details own median, range and dispersion, prompt/reused/new
+positions, internal/client-visible TTFT and DSpark populations/economics.
+These are LOCAL product characterizations, not upstream quality or a claim for
+all prompts. All four samples, including the first workload sample, are kept.
+
+The short greeting commits ten tokens; it is a latency control, not sustained
+decode. The subsequent coding and explanation turns each commit 256 tokens.
+For the reused turns the benchmark publishes prefill wall time and actual new
+positions, not an uncached-prefill rate. The native acknowledgement timing
+accounts for most of the server/client first-token gap in fresh sessions;
+its much shorter reused-turn arrival is observed separately. That difference
+does not, by itself, isolate transport cost or prove every setup allocation
+removable. The coding acceptance population is lower than the separately
+retained hash-table control: different prompt/acceptance shapes are not averaged
+into a generic DeepSeek speed or treated as directly comparable workloads.
+
+One new coding request in each source-authored
+[high](benchmarks/generated/qualification-deepseek-installed-metal-high-42.md)
+and [maximum](benchmarks/generated/qualification-deepseek-installed-metal-maximum-42.md)
+mode reaches 256 committed positions without the reasoning terminator. Both
+return `YVEX_ERR_FORMAT` with a reset-required partial receipt; the owned session
+is closed and no successful performance receipt is emitted. Their publication
+records retain the settled refusal, raw hashes and cleanup, with **no throughput
+measurements**. Reasoning-to-final transition and successful reasoning rate are
+NOT MEASURED. The maximum source instruction, output bound and stop grammar
+were not shortened, changed or retried. These bounded failures are visible in
+the generated workload/reasoning matrix, not relabeled successful thinking.
+
+The controls exposed two Rust publication gaps: a short post-first burst could
+enter the sustained-decode metric, and prefix-reused work could enter the
+uncached-prefill metric. The canonical qualification owner now supplies shared
+population eligibility through generated rules to both Rust and the engineering
+adapter. Boundary, missing/malformed-count and mixed-population controls protect
+the filter. Raw observations remain unchanged; only eligible metric rows are
+published. Rust observations also retain the authored logical case identity,
+so multi-turn generated population views do not reconstruct it from prose.
+
+The source/build/executable witness and sampled accelerator-process observations
+remain external under the existing evidence root in `published-product-matrix-v41`
+and `published-product-remaining-v42`. The adapter is frozen at `37992920`,
+tree `8110302887de1a1264f24277872f1ab4d0c631c8`; the Host remains the same
+immutable installed `a444bcdd` executable. There is no profiler or periodic
+`smaps` walk in timed requests. Sampled clear process lists do not prove
+uninterrupted hardware exclusivity; missing typed hardware/kernel provenance
+still prevents a fully qualified ranking. Closure again shows both engines
+ready, no active/HTTP/queued work, sessions, model leases, attached clients or
+owned transient bytes. Approved HTTPS/SSH pins, grants and listeners are unchanged.
+
+This completes the bounded installed-product matrix at its declared workload
+scope, not the competitive Task. Successful longer-bound reasoning, independent
+representation quality and the measured software execution owners remain open;
+20 target-only decode / 700 uncached prefill remain unearned. No YAI/SDK/Studio
+code, Case prompt, indeterminate SEND, Metal or A03 work is advanced.
