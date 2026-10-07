@@ -1108,3 +1108,37 @@ These observations qualify concurrent atomic metadata publication at the stated
 software boundary. They neither establish model quality/performance nor repair
 the independent repeated-8K numerical failure. No production host was replaced
 or operator request replayed for this control.
+
+## Qualification operator consumer (2026-10-07)
+
+The Rust shell exposes registry-derived `model qualification
+list|show|suite|compare|run`. Published records, comparison rules and immutable
+workloads share the [structured qualification authority](benchmarks/generated/qualification-index.md).
+Inspection does not invoke Python or load weights. Native runs authenticate the
+local binding against the loaded producer, preserve its selected configuration,
+and emit protected local receipts; they cannot promote local observations into
+published qualification. Decimal receipt statistics retain exact F64 round-trip
+semantics instead of weakening the comparison oracle with a tolerance.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Rust operator contracts | Canonical registry, qualification rules and generated records | Complete shell campaign, 91 qualification acceptance/refusal controls | One grammar; compatible records only; missing provenance refuses comparison | 81 unit and five structural controls pass; mapped shell receipt `5fb101bec020aea1d0d2c9b5737ec4049970c4428a1ccfdb2f6cb1ca9d8335c9` | Exact identity/statistics; fmt and clippy without suppressed warnings | PASS | Software projection, not model/reference qualification |
+| Native observer | C-owned protocol client and independently authored protocol fixture | Started/fragment/terminal events, repeated turns, malformed invocation | Correlated timing and bounded owned-session cleanup | Receipt `b4e6a21a5d826380bbf44d3ff05e130abcc7c3c458b8774220e2502ca4294bfd` | No private wire reimplementation | PASS | Native measurement adapter/lifecycle |
+| Cancellation and terminal interaction | Correlated terminal settlement and REPLAI contract | Six cancellation/partial-delivery fences; PTYs at 40/80/180 columns | ACK alone cannot authorize cleanup; stale or unresolved work is journaled | Isolated cancellation and shell PTY controls pass | Plain/styled, Unicode, resize, reconnect and restoration | PASS | Tested refusal/cancellation and terminal behavior |
+| Protocol/server regressions | Existing typed local protocol and server owners | Mapped unit controls | No protocol/version or server behavior change | Receipts `0e982c700b4de59d24bf2c16e5e307fd6a5b9c9a134f42b019efb64aac1ee82a` and `a15df738e70d6e9d81201a1db730e484ffe84a1b527eb6c3aad5c0d51bfd166d` | Exact existing contracts | PASS | Exercised protocol/server compatibility |
+
+A manifest-authored short conversational case also completes through this Rust
+command against the unchanged installed DeepSeek producer, and retires its
+benchmark session. Its single local receipt remains under
+`/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/qualified-cli-native-smoke-v26`.
+Unknown producer/hardware provenance remains explicit; this is not a published
+performance sample or independent model oracle. The installed producer retains
+its speculative strategy, context and chunk; no operator Case content is used.
+
+Separately retained candidate observations have their own generated
+[target-only](benchmarks/generated/qualification-deepseek-device-ingress-coding-23.md)
+and [speculative](benchmarks/generated/qualification-deepseek-device-ingress-speculative-coding-25.md)
+target details. Those frozen candidate receipts do not describe the installed
+producer or qualify an unexecuted configuration. Numerical, representation and
+hardware gates remain independent; competitive execution/residency is still
+IN PROGRESS.

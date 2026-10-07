@@ -21,7 +21,7 @@ source-authored rendering may add policy-specific instructions. Synthetic cases 
 
 | Case | Class | speculative / high | target-only / high | speculative / maximum | target-only / maximum | speculative / none | target-only / none |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| coding.hash-table | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-installed-native-coding-21: product-path CHARACTERIZED](qualification-deepseek-installed-native-coding-21.md)<br>[deepseek-published-native-coding-16: product-path CHARACTERIZED](qualification-deepseek-published-native-coding-16.md) | [deepseek-candidate-explicit-warm-coding-11: product-path CHARACTERIZED](qualification-deepseek-candidate-explicit-warm-coding-11.md)<br>[deepseek-candidate-native-coding-17: product-path CHARACTERIZED](qualification-deepseek-candidate-native-coding-17.md) |
+| coding.hash-table | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-device-ingress-speculative-coding-25: product-path CHARACTERIZED](qualification-deepseek-device-ingress-speculative-coding-25.md)<br>[deepseek-installed-native-coding-21: product-path CHARACTERIZED](qualification-deepseek-installed-native-coding-21.md)<br>[deepseek-published-native-coding-16: product-path CHARACTERIZED](qualification-deepseek-published-native-coding-16.md) | [deepseek-candidate-explicit-warm-coding-11: product-path CHARACTERIZED](qualification-deepseek-candidate-explicit-warm-coding-11.md)<br>[deepseek-candidate-native-coding-17: product-path CHARACTERIZED](qualification-deepseek-candidate-native-coding-17.md)<br>[deepseek-device-ingress-coding-23: product-path CHARACTERIZED](qualification-deepseek-device-ingress-coding-23.md) |
 
 Native adapter exclusions:
 

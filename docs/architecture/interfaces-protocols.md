@@ -80,6 +80,28 @@ diagnostic populations remain available under `--verbose` and in JSONL.
 REPLAI owns semantic styling and responsive geometry; human
 noise/cadence filtering never changes retained events or the JSONL contract.
 
+## Qualification operator boundary
+
+`model qualification list|show|suite|compare|run` is derived from the same
+operator registry as other model porcelain. The Rust shell embeds generated
+published records and workload manifests; it validates their target identities,
+independent evidence planes and comparison keys without invoking a Python
+process. JSON and human records project the same structured authority.
+
+`run` uses an already-loaded exact variant and the C-owned native client. It
+authenticates the local binding against the reported artifact/binding identities
+without materializing weights or initializing a backend. It never changes the
+model/profile/strategy/context/chunk, owns only newly created benchmark sessions,
+and emits a local receipt rather than granting published qualification. Unknown
+producer build/hardware facts remain unknown; the client build is not the host
+build. The journal retains unresolved delivery rather than retrying or blindly
+closing it. Cancellation requires correlated terminal settlement, not merely a
+cancel ACK, before scoped cleanup.
+
+[Qualification methodology](../evaluation/benchmarks/methodology.md#operator-inspection-and-local-measurement)
+owns metric definitions and claim scope. Protocol fixtures qualify correlation
+and lifecycle only; independent checkpoint/model evidence remains separate.
+
 ## YAI boundary
 
 YAI owns Case meaning, memory, workflow, authority and effects. YVEX owns source,
@@ -220,8 +242,10 @@ its default branch does not change the pinned dependency.
   artifact operations, inspection, direct component execution, profiling, and
   system facts.
 
-The runtime-client lane cannot open an artifact, initialize CUDA, execute a
-Transformer, or host a model. The offline lane closes all resources before the
+The runtime-client lane cannot materialize an artifact, initialize CUDA, execute
+a Transformer, or host a model. A qualification client may read an authenticated
+local binding to validate the exact loaded identities; it never opens its weight
+payload for execution. The offline lane closes all resources before the
 process exits and never owns persistent sessions. The server lane is explicit
 in the invocation and never shells out to or executes a hidden binary.
 

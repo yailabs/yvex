@@ -1,4 +1,5 @@
 // Runtime reads use the existing C client; the shell never reconstructs the private wire.
+pub(crate) mod cancellation;
 use crate::ffi::{self, Client, Error, raw};
 use crate::{catalog, presentation, registry::Invocation};
 use replai::Alignment;
@@ -930,7 +931,9 @@ pub fn host_status(socket: Option<&str>) -> Result<HostStatus, Error> {
 }
 
 impl HostStatus {
-    pub(crate) fn from_snapshot(snapshot: raw::yvex_server_summary) -> Self { Self { snapshot } }
+    pub(crate) fn from_snapshot(snapshot: raw::yvex_server_summary) -> Self {
+        Self { snapshot }
+    }
     pub fn memory_json(&self) -> Value {
         let metrics = &self.snapshot.metrics;
         json!({ "schema": "yvex.host.memory.v2", "rss_bytes": metrics.current_rss_bytes,

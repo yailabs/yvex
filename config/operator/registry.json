@@ -43,7 +43,8 @@
         "tensor_map",
         "tensors",
         "tokenize",
-        "tokenizer"
+        "tokenizer",
+        "qualification"
       ],
       "runtime-client": [
         "chat",
@@ -75,7 +76,8 @@
         "session_state_restore",
         "session_state_save",
         "session_show",
-        "version"
+        "version",
+        "qualification_run"
       ]
     },
     "completion_providers": [
@@ -4972,6 +4974,248 @@
     ]
   },
   "operations": [
+    {
+      "operation_id": "model.qualification.list",
+      "command_path": [
+        "model",
+        "qualification",
+        "list"
+      ],
+      "adapter_id": "qualification",
+      "architectural_plane": "Inspect",
+      "lane": "offline-engine",
+      "visibility": "product-default",
+      "help_group": "Models",
+      "documentation_owner": "docs/evaluation/benchmarks/methodology.md",
+      "test_owner": "tests/test_qualification.py",
+      "result_schema": "yvex.qualification.catalog.v1",
+      "summary": "Inspect published exact qualification targets; no inherited support claims.",
+      "arguments": [],
+      "flags": [
+        {
+          "name": "--json",
+          "description": "Emit typed qualification evidence without terminal styling.",
+          "value_type": "boolean",
+          "takes_value": false
+        }
+      ]
+    },
+    {
+      "operation_id": "model.qualification.show",
+      "command_path": [
+        "model",
+        "qualification",
+        "show"
+      ],
+      "adapter_id": "qualification",
+      "architectural_plane": "Inspect",
+      "lane": "offline-engine",
+      "visibility": "product-default",
+      "help_group": "Models",
+      "documentation_owner": "docs/evaluation/benchmarks/methodology.md",
+      "test_owner": "tests/test_qualification.py",
+      "result_schema": "yvex.qualification.catalog.v1",
+      "summary": "Inspect one exact qualification target or local receipt.",
+      "arguments": [
+        {
+          "name": "TARGET_OR_RECEIPT",
+          "value_type": "text",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.text",
+          "completion_provider": "none"
+        }
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "description": "Emit typed qualification evidence without terminal styling.",
+          "value_type": "boolean",
+          "takes_value": false
+        }
+      ]
+    },
+    {
+      "operation_id": "model.qualification.suite",
+      "command_path": [
+        "model",
+        "qualification",
+        "suite"
+      ],
+      "adapter_id": "qualification",
+      "architectural_plane": "Inspect",
+      "lane": "offline-engine",
+      "visibility": "product-default",
+      "help_group": "Models",
+      "documentation_owner": "docs/evaluation/benchmarks/methodology.md",
+      "test_owner": "tests/test_qualification.py",
+      "result_schema": "yvex.qualification.workloads.v1",
+      "summary": "Inspect immutable qualification workloads and reasoning/strategy cells.",
+      "arguments": [],
+      "flags": [
+        {
+          "name": "--json",
+          "description": "Emit typed qualification evidence without terminal styling.",
+          "value_type": "boolean",
+          "takes_value": false
+        }
+      ]
+    },
+    {
+      "operation_id": "model.qualification.compare",
+      "command_path": [
+        "model",
+        "qualification",
+        "compare"
+      ],
+      "adapter_id": "qualification",
+      "architectural_plane": "Inspect",
+      "lane": "offline-engine",
+      "visibility": "product-default",
+      "help_group": "Models",
+      "documentation_owner": "docs/evaluation/benchmarks/methodology.md",
+      "test_owner": "tests/test_qualification.py",
+      "result_schema": "yvex.qualification.comparison.v1",
+      "summary": "Compare compatible receipt metrics; refuse missing or incompatible evidence.",
+      "arguments": [
+        {
+          "name": "LEFT",
+          "value_type": "path",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.path",
+          "completion_provider": "none"
+        },
+        {
+          "name": "RIGHT",
+          "value_type": "path",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.path",
+          "completion_provider": "none"
+        }
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "description": "Emit typed qualification evidence without terminal styling.",
+          "value_type": "boolean",
+          "takes_value": false
+        },
+        {
+          "name": "--metric",
+          "description": "Select an exact metric identity.",
+          "value_type": "text",
+          "takes_value": true,
+          "required": true
+        },
+        {
+          "name": "--case",
+          "description": "Select the same workload case in both receipts.",
+          "value_type": "text",
+          "takes_value": true,
+          "required": true
+        },
+        {
+          "name": "--vary",
+          "description": "Declare comma-separated experimental target axes; never implicit.",
+          "value_type": "text",
+          "takes_value": true
+        }
+      ]
+    },
+    {
+      "operation_id": "model.qualification.run",
+      "command_path": [
+        "model",
+        "qualification",
+        "run"
+      ],
+      "adapter_id": "qualification_run",
+      "architectural_plane": "Run",
+      "lane": "runtime-client",
+      "visibility": "product-default",
+      "help_group": "Models",
+      "daemon_requirement": "required",
+      "model_requirement": "runtime-model",
+      "side_effects": "creates bounded owned benchmark sessions and local receipt; no model load/unload",
+      "documentation_owner": "docs/evaluation/benchmarks/methodology.md",
+      "test_owner": "tests/test_qualification.py",
+      "summary": "Run one immutable suite case against the loaded variant; emit a local receipt, not published qualification.",
+      "result_schema": "yvex.qualification.catalog.v1",
+      "arguments": [
+        {
+          "name": "MODEL",
+          "required": true,
+          "multiplicity": "one",
+          "value_type": "text",
+          "validator": "syntax.text",
+          "completion_provider": "model-registry"
+        }
+      ],
+      "flag_sets": [
+        "cli_model_catalog_show"
+      ],
+      "flags": [
+        {
+          "name": "--variant",
+          "value_type": "text",
+          "takes_value": true,
+          "description": "Select an exact loaded representation."
+        },
+        {
+          "name": "--suite",
+          "value_type": "text",
+          "takes_value": true,
+          "required": true,
+          "description": "Select the immutable suite ID."
+        },
+        {
+          "name": "--case",
+          "value_type": "text",
+          "takes_value": true,
+          "required": true,
+          "description": "Select one logical workload case."
+        },
+        {
+          "name": "--reasoning",
+          "value_type": "text",
+          "takes_value": true,
+          "required": true,
+          "description": "Select an explicitly admitted reasoning mode; no easier replacement."
+        },
+        {
+          "name": "--receipt-dir",
+          "value_type": "path",
+          "takes_value": true,
+          "required": true,
+          "description": "Create a new private receipt directory; never overwrite evidence."
+        },
+        {
+          "name": "--samples",
+          "value_type": "u64",
+          "takes_value": true,
+          "range": "1..20",
+          "description": "Number of fresh-session repetitions (default 3)."
+        },
+        {
+          "name": "--sampling",
+          "value_type": "enum",
+          "takes_value": true,
+          "enum_values": [
+            "product",
+            "greedy"
+          ],
+          "description": "Preserve product sampling (default) or explicitly select greedy."
+        },
+        {
+          "name": "--socket",
+          "value_type": "path",
+          "takes_value": true,
+          "description": "Select an isolated native host socket without changing its profile."
+        }
+      ]
+    },
     {
       "adapter_argv": [
         "identity"

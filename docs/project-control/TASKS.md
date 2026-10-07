@@ -93,6 +93,10 @@ selected. Current operator service and finite producer are protected. Explicit
 idle windows permit supported sequential DeepSeek unload/reload, not overlapping
 model processes or user-prompt replay. The first evidence-authority publication
 is a software/documentation checkpoint, not competitive or throughput closure.
+The registry-derived Rust qualification consumer is now independently exercised
+through native protocol, settled cancellation and scoped session cleanup;
+[consumer evidence](../evaluation/retained-observations.md#qualification-operator-consumer-2026-10-07)
+does not qualify the unpublished computational candidate or close this Task.
 
 ## Selected platform convergence
 

@@ -2886,6 +2886,125 @@ def supervised_acquisition(binary: Path, reference: Path | None) -> int:
     return count
 
 
+def qualification(binary: Path) -> int:
+    """Python authority / Rust consumer parity; fixtures never become model evidence."""
+    import sys
+    sys.path.insert(0, str(ROOT / "tools"))
+    import qualification as q
+    environment = dict(os.environ, NO_COLOR="1")
+    prefix = ["model", "qualification"]
+    catalog = invoke(binary, [*prefix, "list", "--json"], environment)
+    assert catalog.returncode == 0, catalog.stderr
+    records = json.loads(catalog.stdout)["targets"]
+    for record in records:
+        q.validate(record)
+    suite = invoke(binary, [*prefix, "suite", "--json"], environment)
+    assert suite.returncode == 0
+    suites = json.loads(suite.stdout)["suites"]
+    assert all(c["reasoning_modes"] == ["none", "high", "maximum"] for s in suites for c in s["cases"])
+    target = {"schema":q.TARGET_SCHEMA, **{k:1 if t=="integer" else "fixture" for k,t in q.TARGET_FIELDS.items()}}
+    metric = "decode.post-first.committed"; plane, unit, definition = q.METRICS[metric]
+    m = dict(metric=metric,unit=unit,definition=definition,case="fixture",prompt_identity="fixture",
+             reference_identity=None,session_state="fresh",warm_state="warm",output_bound=256,
+             samples=[1,2,3],statistics=q.statistics_for([1,2,3]),scope="fixture",evidence="fixture")
+    receipt = dict(schema=q.RECEIPT_SCHEMA,id="fixture",title="Software fixture only",target=target,
+                   target_identity=q.target_id(target),origin="local",measurements=[m],
+                   claims={p:dict(state="UNQUALIFIED",scope="fixture",required_evidence=[],evidence={},blockers=[]) for p in q.PLANES},
+                   provenance={"source_stability":"fixture","evidence_class":"fixture","profiled":False},limitations=["Not model evidence"])
+    q.validate(receipt)
+    count = 2
+    with tempfile.TemporaryDirectory(prefix="yvex-qualification-contract-") as directory:
+        left, right = Path(directory)/"left.json", Path(directory)/"right.json"
+        left.write_text(json.dumps(receipt));right.write_text(json.dumps(receipt))
+        command = [*prefix,"compare",str(left),str(right),"--metric",metric,"--case","fixture","--json"]
+        result = invoke(binary,command,environment)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["kind"] == "direct"
+        count += 1
+        for value in (True, None, "false"):
+            candidate = json.loads(json.dumps(receipt))
+            candidate["provenance"]["profiled"] = value
+            try:
+                q.comparison(receipt, m, candidate, candidate['measurements'][0])
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('profiled/unknown fixture was admitted for performance comparison')
+            right.write_text(json.dumps(candidate))
+            assert invoke(binary,command,environment).returncode != 0
+            count += 1
+        for outcomes in (None, {}, [{"case":"fixture", "result":"QUALIFIED", "reason":"fixture", "evidence":"fixture"}],
+                         [{"case":"fixture", "result":"FAIL", "reason":"bounded refusal", "evidence":"fixture"}]):
+            candidate = json.loads(json.dumps(receipt))
+            candidate["provenance"]["case_outcomes"] = outcomes
+            try:
+                q.validate(candidate)
+                expected_valid = True
+            except ValueError:
+                expected_valid = False
+            right.write_text(json.dumps(candidate))
+            result = invoke(binary,[*prefix,"show",str(right),"--json"],environment)
+            assert (result.returncode == 0) == expected_valid, result.stderr
+            count += 1
+        fact = dict(id="mapped-rss", case="fixture", value=0, unit="byte",
+                    definition="Linux mapping RSS; not a timed benchmark", evidence="fixture")
+        for facts in ([fact], [dict(fact, value=None)], [dict(fact, value=True)],
+                      [dict(fact, value=-1)], [dict(fact, unit="token/s")], [fact, fact], None):
+            candidate = json.loads(json.dumps(receipt))
+            candidate["provenance"]["diagnostics"] = facts
+            try:
+                q.validate(candidate)
+                expected_valid = True
+            except ValueError:
+                expected_valid = False
+            right.write_text(json.dumps(candidate))
+            result = invoke(binary,[*prefix,"show",str(right),"--json"],environment)
+            assert (result.returncode == 0) == expected_valid, result.stderr
+            if expected_valid:
+                human = invoke(binary,[*prefix,"show",str(right)],environment)
+                assert human.returncode == 0 and "not timed benchmark samples" in human.stdout
+                assert ("NOT MEASURED" in human.stdout) == (facts[0]["value"] is None)
+            count += 1
+        for key, kind in q.TARGET_FIELDS.items():
+            candidate = json.loads(json.dumps(receipt))
+            candidate["target"][key] = 2 if kind == "integer" else "different"
+            candidate["target_identity"] = q.target_id(candidate["target"])
+            right.write_text(json.dumps(candidate))
+            refused = invoke(binary,command,environment)
+            assert refused.returncode != 0, key
+            admitted = invoke(binary,[*command,"--vary",key],environment)
+            assert admitted.returncode == 0, (key,admitted.stderr)
+            expected = q.comparison(receipt,m,candidate,candidate["measurements"][0],(key,))
+            assert json.loads(admitted.stdout)["varying"] == expected["varying"]
+            count += 2
+        candidate = json.loads(json.dumps(receipt));candidate["measurements"][0]["statistics"]["median"]=900
+        right.write_text(json.dumps(candidate))
+        assert invoke(binary,command,environment).returncode != 0
+        # Unknown suite refuses before connecting to any Host or creating a receipt.
+        refused = invoke(binary,[*prefix,"run","fixture","--suite","absent","--case","absent",
+                                 "--reasoning","maximum","--receipt-dir",str(Path(directory)/"new"),"--json"],environment)
+        assert refused.returncode != 0 and not (Path(directory)/"new").exists()
+        count += 2
+        candidate = json.loads(json.dumps(receipt))
+        metric = "same-top-token"
+        _, unit, definition = q.METRICS[metric]
+        candidate["measurements"][0].update(metric=metric, unit=unit, definition=definition)
+        command = [*prefix,"compare",str(left),str(right),"--metric",metric,"--case","fixture","--json"]
+        for identity in (None, "", " ", "independent-fixture"):
+            candidate["measurements"][0]["reference_identity"] = identity
+            left.write_text(json.dumps(candidate)); right.write_text(json.dumps(candidate))
+            result = invoke(binary, command, environment)
+            assert (result.returncode == 0) == (identity == "independent-fixture"), result.stderr
+            count += 1
+    return count
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--binary", required=True, type=Path)
+    parser.add_argument("--reference", type=Path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", required=True, type=Path)
@@ -2895,6 +3014,8 @@ def main() -> None:
     args = parser.parse_args()
     binary = args.binary.resolve()
     reference = args.reference.resolve() if args.reference else None
+    qualification_count = qualification(binary)
+    print(f"PASS qualification contracts: {qualification_count} controls; software evidence only")
     account_count = accounts(binary, reference)
     tokenizer_count = tokenizers(binary, reference)
     path_count = paths(binary, reference)

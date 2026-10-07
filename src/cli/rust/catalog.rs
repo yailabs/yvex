@@ -284,6 +284,7 @@ pub(crate) fn size(value: Option<u64>) -> String {
 pub(crate) struct RuntimeChoice {
     pub alias: String,
     pub contract: Value,
+    pub binding_path: String,
 }
 
 fn runtime_choice(
@@ -337,6 +338,7 @@ fn runtime_choice(
     let composite = ffi::text(&profile.profile) == "composite";
     RuntimeChoice {
         alias: ffi::text(&profile.alias),
+        binding_path: ffi::text(&profile.runtime_binding),
         contract: json!({ "model": selector(model), "name": ffi::text(&model.entry.display_name),
             "variant": variant, "format": if composite { "composite".into() } else {
                 artifact.map(|artifact| ffi::text(&artifact.format)).unwrap_or_else(|| "package".into()) },
@@ -1763,6 +1765,7 @@ mod tests {
             ..Default::default()
         };
         ffi::put_text(&mut profile.alias, "control-cpu-1").unwrap();
+        ffi::put_text(&mut profile.runtime_binding, "/fixture/exact-binding").unwrap();
         ffi::put_text(&mut profile.artifact_identity, &"a".repeat(64)).unwrap();
         ffi::put_text(&mut profile.backend, "cpu").unwrap();
         ffi::put_text(&mut profile.engine_kind, "text").unwrap();
@@ -1777,6 +1780,7 @@ mod tests {
         assert_eq!(choices(&model), vec![1, 2]);
         let choice = runtime_choice(&model, &revision);
         assert_eq!(choice.alias, "control-cpu-2");
+        assert_eq!(choice.binding_path, "/fixture/exact-binding");
         assert_eq!(choice.contract["variant"], "BF16@aaaaaaaa");
         assert_eq!(choice.contract["artifact_identity"], "a".repeat(64));
         assert!(choice_matches(&model, &revision, &choice, "BF16"));

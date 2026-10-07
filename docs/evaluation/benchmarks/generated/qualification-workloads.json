@@ -376,6 +376,14 @@
           "plane": "product-path",
           "state": "CHARACTERIZED",
           "outcomes": []
+        },
+        {
+          "id": "deepseek-device-ingress-coding-23",
+          "target_identity": "6d016cdaea3de53ffdddb76e3fb934be699fbd01a17887bd3fafd901b9d1097e",
+          "path": "controlled-engine/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
         }
       ]
     },
@@ -388,6 +396,14 @@
       "state": "UNQUALIFIED",
       "workload_class": "representative",
       "targets": [
+        {
+          "id": "deepseek-device-ingress-speculative-coding-25",
+          "target_identity": "06bac9ea92cbdd6141219dbe1e240e89394b5854f59068cd114ace92a0b6f589",
+          "path": "product-native/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
         {
           "id": "deepseek-installed-native-coding-21",
           "target_identity": "c915a176ebe6d318560f936ba2fc7aa340b970954a31ba5bfbfca249035c3e50",

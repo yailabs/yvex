@@ -284,10 +284,10 @@ checkpoint or reference corpus. Reports follow the permanent
 
 ## Operator inspection and local measurement
 
-The Rust-shell consumer is implemented in the Task candidate but is not part of
-this evidence-authority publication checkpoint. The registry-derived product
-projection below remains pending immutable consumer integration and qualification;
-do not infer that the currently installed executable provides these commands:
+The Rust shell projects the canonical records and manifests through the operator
+registry. Inspection does not load a model, run Python, or start a benchmark.
+An older installed executable may predate this projection; check its exact build
+before assuming these commands are present:
 
 ```sh
 yvex model qualification list
@@ -302,8 +302,8 @@ local receipt file. `compare` refuses missing relevant provenance, a different
 checkpoint/reference for quality, or undeclared configuration changes. `--vary`
 declares an experiment, never implicit comparability or automatic ranking.
 
-The native local measurement command is implemented but its full real-model
-qualification remains pending in the active Task:
+The native local measurement command consumes the existing C-owned private
+protocol. A local characterization is not full-model qualification:
 
 ```sh
 yvex model qualification run v4-flash --suite deepseek-product \

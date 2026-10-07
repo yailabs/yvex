@@ -350,6 +350,15 @@ test-repl: client $(OPENAI_FAKE_HOST) $(REPL_PTY_TEST) $(TERMIOS_PROBE)
 		BUILD_DIR='$(BUILD_DIR)' \
 		sh $(REPL_PTY_TEST)
 
+.PHONY: test-qualification-native
+$(PRODUCT_MEASUREMENT_CLIENT): $(PRODUCT_MEASUREMENT_CLIENT_OBJ) $(LIBYVEX) $(LINK_BUILD_CONFIG)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+test-qualification-native: $(PRODUCT_MEASUREMENT_CLIENT) $(OPENAI_FAKE_HOST)
+	python3 tests/integration/qualification_native.py \
+		'$(PRODUCT_MEASUREMENT_CLIENT)' '$(OPENAI_FAKE_HOST)'
+
 test-packaging: package
 	@test -x '$(BUILD_DIR)/package/product/bin/yvex'
 	@test ! -e '$(BUILD_DIR)/package/product/bin/yvexd'
@@ -1247,6 +1256,10 @@ test-rust-shell: rust-client $(OPENAI_FAKE_HOST) $(TERMIOS_PROBE) $(RUST_BENCHMA
 	+YVEX_NATIVE_BUILD_DIR='$(abspath $(BUILD_DIR))' \
 		CARGO_TARGET_DIR='$(abspath $(RUST_CARGO_TARGET_DIR))' \
 		$(CARGO) test --locked --lib --test rust_structure
+	+YVEX_NATIVE_BUILD_DIR='$(abspath $(BUILD_DIR))' \
+		YVEX_TEST_PROTOCOL_FIXTURE='$(abspath $(OPENAI_FAKE_HOST))' \
+		CARGO_TARGET_DIR='$(abspath $(RUST_CARGO_TARGET_DIR))' \
+		$(CARGO) test --locked --lib qualification::run::tests::cancellation_protocol -- --ignored --exact
 	+YVEX_NATIVE_BUILD_DIR='$(abspath $(BUILD_DIR))' \
 		CARGO_TARGET_DIR='$(abspath $(RUST_CARGO_TARGET_DIR))' \
 		$(CARGO) clippy --locked --all-targets -- -D warnings

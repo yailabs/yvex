@@ -1,5 +1,5 @@
 // Borrowed source reports are pinned, bounds-checked and copied at the FFI boundary.
-use super::{argument, borrowed_text, error, extent_error, pointer, raw, Error};
+use super::{Error, argument, borrowed_text, error, extent_error, pointer, raw};
 use std::ffi::CString;
 
 pub(crate) struct ManifestRequest<'a> {

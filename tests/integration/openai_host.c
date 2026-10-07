@@ -563,6 +563,8 @@ static int send_native_cancellation(int fd,
     message.status = YVEX_ERR_CANCELLED;
     message.failure_class = YVEX_CLIENT_FAILURE_CLIENT_CANCELLED;
     strcpy(message.reason, "native generation cancellation admitted");
+    message.generation_phase = YVEX_CLIENT_PHASE_CANCELLED;
+    message.cancellation_class = YVEX_CLIENT_CANCELLATION_COMPLETED;
     return yvex_server_protocol_send(fd, &message, err);
 }
 

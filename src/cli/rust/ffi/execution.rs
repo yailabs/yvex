@@ -128,6 +128,15 @@ impl Family {
 }
 
 pub(crate) fn binding(path: &str) -> Result<raw::yvex_runtime_binding_summary, Error> {
+    Ok(binding_lineage(path)?.summary)
+}
+
+pub(crate) struct BindingLineage {
+    pub summary: raw::yvex_runtime_binding_summary,
+    pub tokenizer_conversation: Option<String>,
+}
+
+pub(crate) fn binding_lineage(path: &str) -> Result<BindingLineage, Error> {
     let path = argument(Some(path))?.expect("required binding");
     let mut binding = std::ptr::null_mut();
     let mut summary = raw::yvex_runtime_binding_summary::default();
@@ -143,10 +152,25 @@ pub(crate) fn binding(path: &str) -> Result<raw::yvex_runtime_binding_summary, E
             &mut failure,
         )
     };
+    // Borrow only while the authenticated binding is alive. No pointer crosses FFI.
+    let tokenizer_conversation = if status == 0 && !binding.is_null() {
+        let policy = unsafe { raw::yvex_runtime_binding_tokenizer_policy(binding) };
+        if policy.is_null() {
+            None
+        } else {
+            let identity = text(unsafe { &(*policy).policy_identity });
+            (!identity.is_empty()).then_some(identity)
+        }
+    } else {
+        None
+    };
     // Close partial opens as well; the summary is a pointer-free copied record.
     unsafe { raw::yvex_runtime_binding_close(binding) };
     checked(status, &failure)?;
-    Ok(summary)
+    Ok(BindingLineage {
+        summary,
+        tokenizer_conversation,
+    })
 }
 
 pub(crate) struct Run {

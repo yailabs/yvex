@@ -24,19 +24,20 @@ pub mod help;
 pub mod host;
 mod interaction;
 mod management;
+mod management_jobs;
+mod management_local;
+mod management_models;
 mod management_network;
 mod management_pairing;
-mod management_local;
 mod management_product;
-mod management_jobs;
 mod management_runtime;
-mod management_models;
 mod media;
 mod paths;
 mod pipeline;
 mod pipeline_projection;
 mod plumbing;
 mod preparation;
+mod qualification;
 mod quant;
 mod source;
 mod target;
@@ -239,7 +240,8 @@ fn dispatch(
                     "management.product.protocol" => management_product::protocol(invocation),
                     op if op.starts_with("management.network.")
                         || op.starts_with("management.pairing.")
-                        || op.starts_with("management.owner.") => {
+                        || op.starts_with("management.owner.") =>
+                    {
                         management_network::dispatch(invocation)
                     }
                     "management.product.worker" => management_product::worker(invocation),
@@ -339,6 +341,9 @@ fn offline_projection(
 ) -> Option<Projection> {
     let standard = |text| Output::standard(text, 0);
     Some(match invocation.operation.operation_id.as_str() {
+        operation if operation.starts_with("model.qualification.") => {
+            qualification::dispatch(invocation, width, styled)
+        }
         operation if operation.starts_with("execute.graph.attention.") => {
             attention::dispatch(invocation, width, styled)
         }

@@ -32,7 +32,9 @@ pub(crate) fn credential_hash(raw: &str) -> Result<String> {
     }
     let bytes: Vec<u8> = raw
         .as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|v| {
             let digit = |v: u8| if v <= b'9' { v - b'0' } else { v - b'a' + 10 };
             digit(v[0]) * 16 + digit(v[1])

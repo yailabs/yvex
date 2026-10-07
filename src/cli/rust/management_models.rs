@@ -1078,10 +1078,10 @@ pub(crate) fn validate(operation: &str, value: &Value) -> Result<()> {
         "build.start" => {
             let request: Build = input(value)?;
             text(&request.model, 512)?;
-            if let Some(plan) = request.expected_plan {
-                if plan.len() != 64 || !plan.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                    return Err(invalid("invalid_build_plan_identity"));
-                }
+            if let Some(plan) = request.expected_plan
+                && (plan.len() != 64 || !plan.bytes().all(|byte| byte.is_ascii_hexdigit()))
+            {
+                return Err(invalid("invalid_build_plan_identity"));
             }
             if let Some(quant) = request.quant {
                 text(&quant, 128)?;

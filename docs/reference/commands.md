@@ -95,6 +95,25 @@ bounded migration hint and never dispatch their former operation.
 
 ## Process roles
 
+### Qualification porcelain
+
+`model qualification list` inspects published exact targets; it does not run
+tests. `show TARGET_OR_RECEIPT` exposes one full identity/evidence record, while
+`suite` discovers immutable cases and their reasoning/strategy axes. `compare`
+requires a metric and case and refuses incomplete or incompatible comparison
+keys. `--vary` declares changed experimental axes; it never grants automatic
+ranking. All four support human output and `--json` without a loaded host.
+
+`model qualification run MODEL --suite SUITE --case CASE --reasoning MODE
+--receipt-dir NEW_DIRECTORY` characterizes an idle already-loaded exact variant.
+It uses native local protocol, not HTTP, preserves the selected configuration,
+and creates only bounded benchmark-owned sessions. Repetitions, sampling
+override and isolated socket selection are explicit registry flags. The result
+is a local receipt, not a new YVEX-published quality claim. Refusal or interruption
+retains its journal without manufacturing successful samples.
+See [methodology](../evaluation/benchmarks/methodology.md#operator-inspection-and-local-measurement)
+for reproduction, missing-identity behavior and cancellation settlement.
+
 Remote finite-compute enrollment is explicit:
 `yvex management enroll ... --scope finite-decision`. Without the flag,
 management peers remain read-only. The enrolled forced `management finite-protocol`
