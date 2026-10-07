@@ -43,6 +43,12 @@ Failure, cancellation or rejected work must never partially mutate committed
 E. Reuse Program S's transaction philosophy; current candidate/committed
 sequence transactions do not already implement E or B1 State Update.
 
+Training checkpoints and optimizer/gradient state belong to the separate
+[future adaptation lifecycle](model-adaptation.md#native-computational-execution-target).
+They may reuse physical checkpoint/transaction mechanisms, but are not committed
+E, sequence checkpoints or qualified deliberation continuity. Learned-parameter
+changes require their own candidate source/composition and qualification lineage.
+
 An engine/executable model would own immutable model resources and compatible
 E realization generations. Sessions/requests receive a binding/lease to an
 exact committed generation. Qualified read-only bindings may share physical

@@ -85,6 +85,12 @@ YAI does not own tensors, CUDA, residency, layers or model update equations.
 E does not become YAI memory, and model-produced latent changes do not become
 canonical Case facts.
 
+[Native adaptation/post-training](model-adaptation.md#native-adaptation-and-post-training-horizon)
+is a separate future YVEX computational target. Updating learned parameters is
+not E continuity, Recall, semantic admission or the default solution to a long
+Case. YAI must explicitly select and authorize any Case-derived training material;
+no automatic Case-to-weights policy or YAI-specific trainer is adopted.
+
 Future W ingress is **mechanical validation, not semantic adjudication**.
 YVEX may validate representation integrity, schema/version compatibility,
 identity/digest binding, declared provenance binding, exact model compatibility,

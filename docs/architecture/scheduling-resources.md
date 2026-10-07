@@ -173,6 +173,14 @@ and physical GPU working set are not substituted for one another. Overlapping
 spans, state subsets, and peak classes are never presented as an additive total.
 
 
+## Future training resource horizon
+
+Future [low-memory training](../research/model-adaptation.md#low-memory-physical-training-research)
+extends the existing OPEN phase-aware resource-lifetime target to forward,
+recomputation, backward and update. Layer streaming is one candidate physical
+strategy, not current runtime support or a separate scheduler. Frozen-base
+adapter memory bounds do not admit selective or full-parameter training.
+
 ## Implementation and evidence
 
 [src/runtime/scheduler.c](../../src/runtime/scheduler.c) · [src/runtime/capacity.c](../../src/runtime/capacity.c) · [include/yvex/internal/engine_scheduler.h](../../include/yvex/internal/engine_scheduler.h) · [include/yvex/internal/engine_resource.h](../../include/yvex/internal/engine_resource.h)

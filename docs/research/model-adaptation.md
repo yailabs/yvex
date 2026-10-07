@@ -24,6 +24,140 @@ What evidence would justify training and admitting a state-aware model compositi
 
 Keep data, recipe, base/checkpoint and augmentation provenance. Separate surgery parity, fitting, held-out usefulness and negative ablations; training data cannot qualify itself.
 
+## Native adaptation and post-training horizon
+
+**Adopted future product target, not an implemented capability or selected
+delivery.** YVEX is the computational owner of future model adaptation and
+post-training. External differentiable trainers remain valid bootstrap and
+independent reference producers; they are not the permanent boundary of YVEX's
+product scope. [ADR 0013](../decisions/0013-native-model-adaptation-horizon.md)
+records this ownership selection, without selecting a backward IR, optimizer
+ABI, wire format or implementation schedule.
+
+| Owner | Future responsibility | Does not own |
+| --- | --- | --- |
+| YAI | Semantic selection of Case-derived material, source meaning/provenance, user intent, authority, policy, visibility, privacy and whether adaptation is permitted. | Model mathematics, gradients, optimizer execution or computational checkpoint production. |
+| YVEX | Generic dataset computational intake, tokenizer/model realization, recipe and trainable-role identities, forward/backward computation, gradients/optimizer, resource scheduling, checkpoint lineage, resulting adapter/model identity and computational evidence. | Case lifecycle, semantic selection, disclosure permission or application authority. |
+| Studio | Presentation and orchestration through admitted consumer boundaries. | Semantic authority or training execution. |
+
+YAI is one prospective consumer of generic YVEX adaptation, not a special
+trainer path. A future admitted dataset may derive from closed Cases, repeated
+workflows, corrected outcomes, source-grounded examples, stable knowledge or
+operator-approved behavior. That possibility does not authorize automatic
+extraction, transfer or training from existing Cases. No cross-repository
+contract is selected here.
+
+### Memory versus learning
+
+Adaptation is not the default remedy for an oversized active Case. Factual,
+revisable continuity remains YAI semantic state/Recall → working-state selection
+→ context and, eventually, qualified computational-state realization. Training
+learns durable behavior, skills, representations or domain patterns; it does
+not preserve source-addressable truth and cannot replace Recall. Case content
+must never be silently compressed into model weights. The
+[E/L state target](native-computational-state.md) remains separate from changes
+to learned parameters.
+
+A possible future composition is immutable base + compatible company/project
+adapter + optional explicitly qualified Case-derived adapter. It is only one
+possibility: no automatic per-Case adapter policy or unrestricted adapter
+stacking is adopted. Every member needs exact base compatibility, dataset
+provenance, recipe, checkpoint lineage, independent qualification and a distinct
+deployment/composition identity.
+
+### Distinct training classes
+
+These are research classes, not current backend support or a selected suite.
+
+| Class | Computational distinction and qualification pressure |
+| --- | --- |
+| Frozen-base adapter training | LoRA or independently admitted compatible adapter classes, including DoRA; base parameters stay immutable, trainable parameters and optimizer state are separately identified. |
+| QLoRA | Frozen quantized base plus trainable adapters; quantized forward/backward realization and its numerical/reference obligations are explicit, not inherited from ordinary LoRA. |
+| Selective parameter adaptation | Selected base roles unfreeze; gradients, optimizer storage and checkpoint lineage include those roles. |
+| Architecture-augmentation training | New compatible computation/parameters, including the B1 controls below; surgery preservation precedes learned usefulness claims. |
+| Distillation | Exact teacher, student, target evidence and recipe relationships; teacher agreement is not itself held-out task benefit. |
+| Full parameter training | All selected base parameters are mutable; full gradient/optimizer/checkpoint costs require their own resource and numerical contracts. |
+
+Continual/rehearsal-based adaptation is a possible recipe dimension across these
+classes, not proof against forgetting. A future plan may mix new and retained
+replay data with an explicit deterministic ratio and provenance. Held-out
+evaluation must separately measure new learning, retention and interference;
+neither training data nor replay data qualifies itself.
+
+### Native computational execution target
+
+```text
+exact model source + adaptation intent + dataset/recipe provenance
+  → trainable-role manifest
+  → forward + backward computational plan
+  → physical training plan
+  → gradient / optimizer / checkpoint lifecycle
+  → trained candidate source with immutable checkpoint lineage
+  → artifact / binding / deployment
+  → independent qualification
+```
+
+Source owns intake/recipe/checkpoint provenance; model/family semantics and the
+shared compiler own trainable roles and computation; physical planning owns
+representation and legal realization; runtime/scheduling own resources and
+candidate/checkpoint lifetime; backends execute admitted work; composition
+validates the exact resulting base/adapter relationship. Evaluation observes
+these owners rather than controlling training. This extends existing owners,
+not a standalone Python-shaped execution universe. Backward representation,
+optimizer algorithms/ABI and distributed training remain undecided.
+
+### Low-memory physical training research
+
+Layer streaming is one possible physical strategy, not the definition of
+training and not a current YVEX mechanism. Connect it to the existing OPEN
+[phase-aware executable-resource lifetime target](sparse-parameter-memory.md#phase-liveness-and-quantized-runtime-state).
+Future compiled liveness may cover forward, activation recomputation, backward
+and optimizer update. Physical planning may place parameters, activations,
+gradients and optimizer state in accelerator memory, coherent/unified memory,
+pinned or pageable host memory, or NVMe/file-backed storage, with explicit
+prefetch, bounded buffering, overlap, eviction and rematerialization.
+Transformation IR authenticates derivation; PEIR retains package truth; the
+physical computational plan owns execution. Mapping/addressability alone does
+not establish residency, admitted streaming or a bounded working set.
+
+[Soup's pinned streaming documentation][soup-streaming] and
+[runtime][soup-runtime] are methodological references, not an architecture to
+copy. At revision `7abd05fc39ae536f86b6eb3d32ce06cf51057d40`, the relevant
+path shards a frozen base by decoder layer, builds a meta/skeleton model and
+substitutes layer weights from host RAM or NVMe into bounded device buffers.
+Asynchronous prefetch/double buffering and checkpointed backward recomputation
+reduce residency; adapters remain materialized. Its streaming path refuses
+full fine-tuning. Resident-reference forward and backward controls are distinct
+correctness claims. The historical 8B/4 GB result is adapter training over a
+frozen base, not full-parameter training; its version-bound timings are not
+YVEX fit or performance expectations. Soup's admission of one adapter/architecture
+combination does not imply another, including DoRA.
+
+YVEX must independently qualify any future resident/streamed equivalence,
+buffer-reuse ordering, failure/cancellation, checkpoint recovery, memory high
+water and preparation/throughput tradeoff. No memory envelope is promised for
+full training from a frozen-base streaming observation.
+
+### Candidate qualification
+
+Use the existing [qualification target and independent evidence planes](../evaluation/benchmarks/methodology.md),
+not a parallel training claim system. Retain exact base/checkpoint,
+dataset/recipe, trainable scope, transformation, candidate lineage,
+representation, deployment/backend/hardware and held-out suite relationships.
+Training provenance records how a candidate was produced; qualification proves
+what that exact candidate earned. Loss reduction, completion, saved adapters
+or successful load are not qualification.
+
+Required evidence, where applicable, separates base/surgery preservation,
+held-out task benefit, independent reference behavior, retention/forgetting,
+interference, numerical correctness, resource/performance/lifecycle and final
+inference deployment correctness. A trained checkpoint, each quantization and
+each backend/deployment need their own claim scope. B1 additionally retains its
+controls below; no learned state or training maturity is promoted by this page.
+
+[soup-streaming]: https://github.com/MakazhanAlpamys/Soup/blob/7abd05fc39ae536f86b6eb3d32ce06cf51057d40/docs/performance-and-quantization.md
+[soup-runtime]: https://github.com/MakazhanAlpamys/Soup/blob/7abd05fc39ae536f86b6eb3d32ce06cf51057d40/src/soup_cli/utils/layer_stream_runtime.py
+
 
 ## Qwen B1 model adaptation and post-training target
 
@@ -128,12 +262,13 @@ or independent qualification.
 An initial external differentiable research trainer may own autograd,
 backpropagation, optimizer, gradient accumulation, schedule and training
 checkpoint production with exact input/output provenance. YVEX imports the
-trained composition as immutable source truth. A YVEX-native trainer is neither
-implemented nor required: backward IR, optimizer execution, training scheduling,
-gradient state and distributed training remain possible future research.
-C may declare trainable roles and computational meaning without owning optimizer
-policy; D composes compatible modules, Source retains provenance, P realizes
-weights and Q independently qualifies the result.
+trained composition as immutable source truth. Native training is not implemented
+and is not a prerequisite for initial external B1 experiments. It is now an
+adopted [future YVEX product target](#native-adaptation-and-post-training-horizon),
+not an excluded responsibility. C may declare trainable roles and computational
+meaning without selecting optimizer policy; D composes compatible modules,
+Source retains provenance, P realizes weights and Q independently qualifies the
+result. No native training implementation follows from the B1 target selection.
 
 
 ## Cross-execution episodes and objective families

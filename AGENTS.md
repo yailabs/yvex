@@ -227,6 +227,16 @@ prove an uninterrupted reservation; never retire an operator's work for a test.
 
 ## Documentation and Task closure
 
+Native model adaptation/post-training is an adopted future YVEX computational
+product target, not a current capability or selected delivery. Follow the
+[canonical research doctrine](docs/research/model-adaptation.md#native-adaptation-and-post-training-horizon):
+YAI selects/authorizes semantic training material; YVEX owns generic computational
+adaptation; Studio presents/orchestrates. External trainers may bootstrap or
+supply references. Do not implement training, invent a YAI-specific trainer or
+silently turn Case continuity into learned weights without an authorized Task.
+Frozen-base adapter streaming does not qualify full-parameter training; training
+provenance/loss does not qualify a resulting model or replace Recall.
+
 Update executable architecture in the same Task as its change. Route public
 ABI/protocol changes to Contracts, family support to the family record and
 Status, observations to Evaluation, selected delivery to Tasks, structural

@@ -40,6 +40,17 @@ appropriate. Fixed recurrent state need not grow like KV.
 Existing virtual pages and immutable prefix sharing are foundations, not proof
 of the complete cross-provider contract or an automatic caching policy.
 
+## Future training resource execution
+
+[Native adaptation](model-adaptation.md#native-computational-execution-target)
+extends the existing compiler/physical/runtime/backend owners; no separate
+training scheduler is selected. The OPEN phase-aware resource-lifetime target
+may eventually cover forward, recomputation, backward and optimizer update with
+explicit storage tiers and bounded prefetch/eviction. Frozen-base adapter
+streaming, selective unfreezing and full training require distinct admission and
+checkpoint contracts. No backward IR, optimizer ABI or training execution exists
+by virtue of this research route.
+
 
 ## Speculation breadth
 

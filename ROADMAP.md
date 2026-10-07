@@ -24,6 +24,7 @@ Read this page for long-horizon planning. Daily delivery lives in
 | Mature single-node execution | Fair progress, bounded resources and reusable state | Real workload populations, isolation, negative paths and complete-request measurements |
 | Expand results beyond chat | Admitted finite, retrieval and media results | Exact output semantics; independent numerical and lifecycle qualification |
 | Establish useful computational state | Model-native continuity beyond token persistence | Controlled read/update/usefulness evidence; YAI semantic authority preserved |
+| Establish native model adaptation / post-training | Generic YVEX computational training over exact sources and trainable roles | Checkpoint/recipe lineage, numerical/lifecycle evidence, held-out benefit/retention and independently qualified inference deployment; [research owner](docs/research/model-adaptation.md#native-adaptation-and-post-training-horizon) |
 | Qualify product/release claims | Reproducible behavior, performance and reliability | All version-specific gates close together |
 | Scale out | Distributed execution and state | Single-node owners extended with explicit topology, identity and failure semantics |
 
@@ -43,7 +44,7 @@ Task hierarchy or independent completion counters.
 | S | State, scheduling and resource maturity | [Runtime horizons](docs/research/runtime-horizons.md) |
 | N | Model-native cognitive state | [Native state](docs/research/native-computational-state.md) |
 | G | General generation policies | [Generation horizons](docs/research/runtime-horizons.md) |
-| D | Exact adapted/component compositions | [Model adaptation](docs/research/model-adaptation.md) |
+| D | Exact adapted/component compositions and future native post-training | [Model adaptation](docs/research/model-adaptation.md) |
 | O | Typed output runners beyond chat | [Output runners](docs/research/output-runners.md) |
 | M | General composite/media execution | [Family boundaries](docs/model-families/README.md) |
 | X | Qualified consumers and platform surfaces | [Interfaces](docs/architecture/interfaces-protocols.md) |
@@ -57,6 +58,13 @@ execution. Recipe search needs trustworthy measurement and independent final
 qualification. Model adaptation needs exact source/composition provenance and
 held-out controls. Distributed deployment needs topology and failure semantics,
 not merely a second GPU.
+
+Native model adaptation is a future YVEX product target, not a selected delivery.
+External trainers remain valid bootstrap/reference producers. Low-memory layer
+streaming is a candidate physical strategy under existing phase-liveness and
+resource owners, not a claim that full training fits an adapter-training envelope.
+YAI selects and authorizes semantic material; YVEX computes; Studio presents.
+Training does not replace Recall or source-addressable Case continuity.
 
 YAI consumes qualified computational contracts. Future W → E ingress and optional
 reconciliation do not transfer Case authority to YVEX. N.B1 is the selected

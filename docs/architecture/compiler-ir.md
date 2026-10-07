@@ -293,6 +293,15 @@ remains OPEN: typed computational state does not introduce semantic-state
 ingress or YAI authority into this compiler.
 
 
+## Native adaptation horizon
+
+Future native adaptation extends this compiler boundary rather than introducing
+a separate trainer architecture. Its trainable-role manifest, forward/backward
+plan and trained candidate lineage remain **TARGET**, not implemented IR or
+optimizer ABI. The [adaptation research owner](../research/model-adaptation.md#native-computational-execution-target)
+defines the adopted computational horizon and independent qualification; current
+inference compilation does not establish training capability.
+
 ## Repository boundary
 
 Model weights, source payloads, complete artifacts, runtime bindings,
