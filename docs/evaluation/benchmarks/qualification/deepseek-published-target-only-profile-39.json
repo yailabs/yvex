@@ -1,0 +1,906 @@
+{
+  "claims": {
+    "backend-execution": {
+      "blockers": [],
+      "evidence": {
+        "profile": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+          "result": "PASS",
+          "sha256": "a00d625182d84bfb9c0d4563a3b484ec7bbee93a9808a728572876a5cd7030c3"
+        }
+      },
+      "required_evidence": [],
+      "scope": "One source-frozen 31-input/256-output coding profile; no numerical, quality or performance qualification",
+      "state": "CHARACTERIZED"
+    },
+    "checkpoint-reference": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "One source-frozen 31-input/256-output coding profile; no numerical, quality or performance qualification",
+      "state": "UNQUALIFIED"
+    },
+    "deployment-performance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "One source-frozen 31-input/256-output coding profile; no numerical, quality or performance qualification",
+      "state": "UNQUALIFIED"
+    },
+    "family-conformance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "One source-frozen 31-input/256-output coding profile; no numerical, quality or performance qualification",
+      "state": "UNQUALIFIED"
+    },
+    "product-path": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "One source-frozen 31-input/256-output coding profile; no numerical, quality or performance qualification",
+      "state": "UNQUALIFIED"
+    },
+    "representation-quality": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "One source-frozen 31-input/256-output coding profile; no numerical, quality or performance qualification",
+      "state": "UNQUALIFIED"
+    }
+  },
+  "id": "deepseek-published-target-only-profile-39",
+  "limitations": [
+    "One profiled diagnostic turn; no timing from this run is an unprofiled performance claim.",
+    "API waits overlap device execution; clipped sums are not additive.",
+    "Kernel union is activity, not occupancy, Tensor Core utilization or measured memory bandwidth.",
+    "Linux smaps was observed only before and after coding, not sampled inside this turn.",
+    "Request setup spans server receive to turn start; it includes queue, policy, prompt preparation and generation-context open, not transport latency alone.",
+    "N=1 diagnostic per strategy, not a throughput series; measurements is intentionally empty.",
+    "Same source/artifact/binding and coding text, but target-only and DSpark execute different admitted populations.",
+    "Hardware/kernel/toolkit dimensions unavailable from the producer remain null; strict performance comparison refuses.",
+    "No hidden warming, page-cache eviction, alternative representation or numerical relaxation.",
+    "Finite generation 1 and public listeners remained available; DeepSeek restored at generation 3 with unchanged identities/configuration.",
+    "No independent checkpoint/representation-quality or 20/700 gate is earned."
+  ],
+  "measurements": [],
+  "origin": "local",
+  "provenance": {
+    "adapter_source": {
+      "delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "head": "aaa2ba3a41f803c3647973404883adb5738fa1f7",
+      "state": "clean",
+      "tree": "32d1a2218761b5fdd864ae1cbc593dc7df8f6357"
+    },
+    "binding_file_sha256": "a2dbc7898e04eba22c4d78315d3f4dbadf1ee48fb454c9e6f8c2e4320072a277",
+    "closure": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/coding/closed.json",
+      "result": "PASS",
+      "sha256": "fa85cf5c80affef03dd027ff64ce48b972e5efa056abb6e007ed47d44838b9ed"
+    },
+    "diagnostics": [
+      {
+        "case": "request_setup",
+        "definition": "Server-authored phase span under instrumentation; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "request_setup-wall",
+        "unit": "s",
+        "value": 0.378423816
+      },
+      {
+        "case": "request_setup",
+        "definition": "Union of clipped GPU kernel intervals; overlaps API waits, not occupancy or bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "request_setup-kernel-union",
+        "unit": "s",
+        "value": 0.0
+      },
+      {
+        "case": "request_setup",
+        "definition": "Actual intersecting kernel activities in this phase, including graph nodes",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "request_setup-kernel-count",
+        "unit": "count",
+        "value": 0
+      },
+      {
+        "case": "request_setup",
+        "definition": "Observed intersecting Driver API activities, not additional CPU work",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "request_setup-driver-call-count",
+        "unit": "count",
+        "value": 8043
+      },
+      {
+        "case": "request_setup",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "request_setup-cuCtxSynchronize-count",
+        "unit": "count",
+        "value": 1406
+      },
+      {
+        "case": "request_setup",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "request_setup-cuCtxSynchronize-wait",
+        "unit": "s",
+        "value": 0.015268945
+      },
+      {
+        "case": "tokenizer",
+        "definition": "Server-authored phase span under instrumentation; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "tokenizer-wall",
+        "unit": "s",
+        "value": 0.000458608
+      },
+      {
+        "case": "tokenizer",
+        "definition": "Union of clipped GPU kernel intervals; overlaps API waits, not occupancy or bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "tokenizer-kernel-union",
+        "unit": "s",
+        "value": 0.0
+      },
+      {
+        "case": "tokenizer",
+        "definition": "Actual intersecting kernel activities in this phase, including graph nodes",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "tokenizer-kernel-count",
+        "unit": "count",
+        "value": 0
+      },
+      {
+        "case": "tokenizer",
+        "definition": "Observed intersecting Driver API activities, not additional CPU work",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "tokenizer-driver-call-count",
+        "unit": "count",
+        "value": 0
+      },
+      {
+        "case": "prefill",
+        "definition": "Server-authored phase span under instrumentation; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-wall",
+        "unit": "s",
+        "value": 1.160300798
+      },
+      {
+        "case": "prefill",
+        "definition": "Union of clipped GPU kernel intervals; overlaps API waits, not occupancy or bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-kernel-union",
+        "unit": "s",
+        "value": 0.752246966
+      },
+      {
+        "case": "prefill",
+        "definition": "Actual intersecting kernel activities in this phase, including graph nodes",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-kernel-count",
+        "unit": "count",
+        "value": 4585
+      },
+      {
+        "case": "prefill",
+        "definition": "Observed intersecting Driver API activities, not additional CPU work",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-driver-call-count",
+        "unit": "count",
+        "value": 16740
+      },
+      {
+        "case": "prefill",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-cuCtxSynchronize-count",
+        "unit": "count",
+        "value": 611
+      },
+      {
+        "case": "prefill",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-cuCtxSynchronize-wait",
+        "unit": "s",
+        "value": 0.414776383
+      },
+      {
+        "case": "prefill",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-cuStreamSynchronize-count",
+        "unit": "count",
+        "value": 131
+      },
+      {
+        "case": "prefill",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-cuStreamSynchronize-wait",
+        "unit": "s",
+        "value": 0.27203559
+      },
+      {
+        "case": "prefill",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-cuMemFree_v2-count",
+        "unit": "count",
+        "value": 129
+      },
+      {
+        "case": "prefill",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-cuMemFree_v2-wait",
+        "unit": "s",
+        "value": 0.071395212
+      },
+      {
+        "case": "prefill",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-cuGraphInstantiateWithFlags-count",
+        "unit": "count",
+        "value": 86
+      },
+      {
+        "case": "prefill",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "prefill-cuGraphInstantiateWithFlags-wait",
+        "unit": "s",
+        "value": 0.014179826
+      },
+      {
+        "case": "first_decode",
+        "definition": "Server-authored phase span under instrumentation; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-wall",
+        "unit": "s",
+        "value": 0.142071189
+      },
+      {
+        "case": "first_decode",
+        "definition": "Union of clipped GPU kernel intervals; overlaps API waits, not occupancy or bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-kernel-union",
+        "unit": "s",
+        "value": 0.086411598
+      },
+      {
+        "case": "first_decode",
+        "definition": "Actual intersecting kernel activities in this phase, including graph nodes",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-kernel-count",
+        "unit": "count",
+        "value": 2547
+      },
+      {
+        "case": "first_decode",
+        "definition": "Observed intersecting Driver API activities, not additional CPU work",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-driver-call-count",
+        "unit": "count",
+        "value": 11145
+      },
+      {
+        "case": "first_decode",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-cuCtxSynchronize-count",
+        "unit": "count",
+        "value": 239
+      },
+      {
+        "case": "first_decode",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-cuCtxSynchronize-wait",
+        "unit": "s",
+        "value": 0.056576123
+      },
+      {
+        "case": "first_decode",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-cuStreamSynchronize-count",
+        "unit": "count",
+        "value": 133
+      },
+      {
+        "case": "first_decode",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-cuStreamSynchronize-wait",
+        "unit": "s",
+        "value": 0.024311955
+      },
+      {
+        "case": "first_decode",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-cuGraphInstantiateWithFlags-count",
+        "unit": "count",
+        "value": 86
+      },
+      {
+        "case": "first_decode",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-cuGraphInstantiateWithFlags-wait",
+        "unit": "s",
+        "value": 0.008715008
+      },
+      {
+        "case": "first_decode",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-cuMemFree_v2-count",
+        "unit": "count",
+        "value": 129
+      },
+      {
+        "case": "first_decode",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "first_decode-cuMemFree_v2-wait",
+        "unit": "s",
+        "value": 0.006410625
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Server-authored phase span under instrumentation; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-wall",
+        "unit": "s",
+        "value": 31.211104454
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Union of clipped GPU kernel intervals; overlaps API waits, not occupancy or bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-kernel-union",
+        "unit": "s",
+        "value": 22.068644375
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Actual intersecting kernel activities in this phase, including graph nodes",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-kernel-count",
+        "unit": "count",
+        "value": 625413
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Observed intersecting Driver API activities, not additional CPU work",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-driver-call-count",
+        "unit": "count",
+        "value": 1987401
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-cuCtxSynchronize-count",
+        "unit": "count",
+        "value": 55080
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-cuCtxSynchronize-wait",
+        "unit": "s",
+        "value": 14.375287368
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-cuStreamSynchronize-count",
+        "unit": "count",
+        "value": 33915
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-cuStreamSynchronize-wait",
+        "unit": "s",
+        "value": 6.23400541
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-cuMemFree_v2-count",
+        "unit": "count",
+        "value": 32895
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-cuMemFree_v2-wait",
+        "unit": "s",
+        "value": 1.625061647
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Observed intersecting Driver calls; no claim that every wait is removable",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-cuGraphInstantiateWithFlags-count",
+        "unit": "count",
+        "value": 273
+      },
+      {
+        "case": "post_first_decode",
+        "definition": "Clipped API time overlaps GPU execution and other waits; do not add to kernel intervals",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+        "id": "post_first_decode-cuGraphInstantiateWithFlags-wait",
+        "unit": "s",
+        "value": 0.044781734
+      }
+    ],
+    "driver": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/driver-identity.json",
+      "result": "PASS",
+      "sha256": "7cbb2bb71d4948553e8b925f7ba908589d7f61fdd635b5846af60b4fd7a873d6"
+    },
+    "evidence_class": "instrumented-diagnostic",
+    "identity_evidence": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/coding/identity.json",
+      "result": "PASS",
+      "sha256": "3323439bfd54e667d6c529bbb13af8cd28b96067ec4a73f2a27b8b039e81dee7"
+    },
+    "instrumentation": {
+      "declared_profiled": true,
+      "observed_environment_markers": [
+        "CUDA_INJECTION64_PATH",
+        "YVEX_DIAGNOSTIC_CUPTI_OUTPUT"
+      ],
+      "profiled": true,
+      "schema": "yvex.qualification.instrumentation.v1",
+      "scope": "caller declaration and invoking-process markers; not proof against external profiler attachment"
+    },
+    "measurement_lane": "controlled-engine",
+    "output_population": {
+      "committed_tokens": 256,
+      "prompt_tokens": 31,
+      "reused_tokens": 0
+    },
+    "process_residency": {
+      "after_evidence": {
+        "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/coding-memory-after.json",
+        "result": "PASS",
+        "sha256": "5b2232fb53d3e3cf2c05c9e192ef2d2332a09ffde562db89cbb233072fed3460"
+      },
+      "before_evidence": {
+        "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/coding-memory-before.json",
+        "result": "PASS",
+        "sha256": "d7daabc38f4e4658b7e922447895dfd5185f2c6e5f873313f8cf3ebbf566fe59"
+      },
+      "cpu_major_fault_delta": 0,
+      "process_read_bytes_delta": 0,
+      "scope": "Linux process/file-backed observations before/after only; not pinning, future residency, GPU fault or bus-traffic evidence"
+    },
+    "producer_build": {
+      "build_commit": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0",
+      "build_identity": "f748ad6114858e5f1b6246f8bd2d6ade9a1743bd72e8e27b351d951c35b00bac",
+      "local_protocol_version": 25,
+      "registry_identity": "1bf91cd6c95e5b1dbec21613e0b41d8a6ef061478d60648ef808afbba51cc2cc",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "97c432212c41b05c3dc194ccd70311692a1858c564b4bfe74d8cee09f3d6ed3a",
+      "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_state": "clean",
+      "source_tree": "508e7cfeb5887fc123e200038d073ce72dc79049",
+      "version": "0.1.0"
+    },
+    "production_restore": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/production-after.json",
+      "result": "PASS",
+      "sha256": "42bac90b1ece35330bb8ce9126b824c08f42a731ddf9ad0b0d66e491f1579362"
+    },
+    "profile_summary": {
+      "analysis_sha256": "94be12c2d859dbc3d432d48bd77071087e809c0ebf26aef62097099e440887fa",
+      "dropped_records": 0,
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/profile-with-admission.json",
+      "phases": {
+        "first_decode": {
+          "api": {
+            "count": 11145,
+            "top": [
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.056576123,
+                "count": 239,
+                "grid_or_copy_bytes": 0,
+                "name": "cuCtxSynchronize"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.024311955,
+                "count": 133,
+                "grid_or_copy_bytes": 0,
+                "name": "cuStreamSynchronize"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.008715008,
+                "count": 86,
+                "grid_or_copy_bytes": 0,
+                "name": "cuGraphInstantiateWithFlags"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.006410625,
+                "count": 129,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemFree_v2"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.005263584,
+                "count": 1703,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemcpyDtoDAsync_v2"
+              }
+            ]
+          },
+          "kernel": {
+            "count": 2547,
+            "top": [
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.008833249,
+                "count": 86,
+                "grid_or_copy_bytes": 1,
+                "name": "yvex_residual_mhc_pre"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.008461632,
+                "count": 43,
+                "grid_or_copy_bytes": 1024,
+                "name": "yvex_decoded_mxfp4_rows"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.008432352,
+                "count": 43,
+                "grid_or_copy_bytes": 1536,
+                "name": "yvex_moe_grouped_up_rows"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.007534947,
+                "count": 86,
+                "grid_or_copy_bytes": 512,
+                "name": "yvex_qtype_matvec"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.006290721,
+                "count": 1,
+                "grid_or_copy_bytes": 16160,
+                "name": "yvex_qtype_matvec"
+              }
+            ]
+          },
+          "kernel_union_seconds": 0.086411598,
+          "wall_seconds": 0.142071189
+        },
+        "post_first_decode": {
+          "api": {
+            "count": 1987401,
+            "top": [
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 14.375287368,
+                "count": 55080,
+                "grid_or_copy_bytes": 0,
+                "name": "cuCtxSynchronize"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 6.23400541,
+                "count": 33915,
+                "grid_or_copy_bytes": 0,
+                "name": "cuStreamSynchronize"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 1.625061647,
+                "count": 32895,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemFree_v2"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 1.205289636,
+                "count": 394979,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemcpyDtoDAsync_v2"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.604015423,
+                "count": 365415,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemsetD8Async"
+              }
+            ]
+          },
+          "kernel": {
+            "count": 625413,
+            "top": [
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 2.269602922,
+                "count": 21930,
+                "grid_or_copy_bytes": 1,
+                "name": "yvex_residual_mhc_pre"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 2.151814275,
+                "count": 10965,
+                "grid_or_copy_bytes": 1536,
+                "name": "yvex_moe_grouped_up_rows"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 2.118872179,
+                "count": 10965,
+                "grid_or_copy_bytes": 1024,
+                "name": "yvex_decoded_mxfp4_rows"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 1.935690668,
+                "count": 21930,
+                "grid_or_copy_bytes": 512,
+                "name": "yvex_qtype_matvec"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 1.627042943,
+                "count": 255,
+                "grid_or_copy_bytes": 16160,
+                "name": "yvex_qtype_matvec"
+              }
+            ]
+          },
+          "kernel_union_seconds": 22.068644375,
+          "wall_seconds": 31.211104454
+        },
+        "prefill": {
+          "api": {
+            "count": 16740,
+            "top": [
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.414776383,
+                "count": 611,
+                "grid_or_copy_bytes": 0,
+                "name": "cuCtxSynchronize"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.27203559,
+                "count": 131,
+                "grid_or_copy_bytes": 0,
+                "name": "cuStreamSynchronize"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.071395212,
+                "count": 129,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemFree_v2"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.015595008,
+                "count": 147,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemCreate"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.014179826,
+                "count": 86,
+                "grid_or_copy_bytes": 0,
+                "name": "cuGraphInstantiateWithFlags"
+              }
+            ]
+          },
+          "kernel": {
+            "count": 4585,
+            "top": [
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.187968922,
+                "count": 86,
+                "grid_or_copy_bytes": 93,
+                "name": "yvex_qtype_matvec"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.094908113,
+                "count": 43,
+                "grid_or_copy_bytes": 47616,
+                "name": "yvex_moe_grouped_up_rows"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.074085553,
+                "count": 43,
+                "grid_or_copy_bytes": 95232,
+                "name": "yvex_moe_grouped_down_rows"
+              },
+              {
+                "block_or_copy_kind": 128,
+                "clipped_seconds": 0.068497512,
+                "count": 43,
+                "grid_or_copy_bytes": 5952,
+                "name": "yvex_moe_grouped_up_tensorcore"
+              },
+              {
+                "block_or_copy_kind": 256,
+                "clipped_seconds": 0.045808548,
+                "count": 86,
+                "grid_or_copy_bytes": 8192,
+                "name": "yvex_qtype_matvec"
+              }
+            ]
+          },
+          "kernel_union_seconds": 0.752246966,
+          "wall_seconds": 1.160300798
+        },
+        "request_setup": {
+          "api": {
+            "count": 8043,
+            "top": [
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.227416354,
+                "count": 1,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemHostAlloc"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.073693016,
+                "count": 1273,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemAlloc_v2"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.015268945,
+                "count": 1406,
+                "grid_or_copy_bytes": 0,
+                "name": "cuCtxSynchronize"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.007770337,
+                "count": 1275,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemGetInfo_v2"
+              },
+              {
+                "block_or_copy_kind": 0,
+                "clipped_seconds": 0.003814113,
+                "count": 1273,
+                "grid_or_copy_bytes": 0,
+                "name": "cuMemsetD8Async"
+              }
+            ]
+          },
+          "kernel": {
+            "count": 0,
+            "top": []
+          },
+          "kernel_union_seconds": 0.0,
+          "wall_seconds": 0.378423816
+        },
+        "tokenizer": {
+          "api": {
+            "count": 0,
+            "top": []
+          },
+          "kernel": {
+            "count": 0,
+            "top": []
+          },
+          "kernel_union_seconds": 0.0,
+          "wall_seconds": 0.000458608
+        }
+      },
+      "profiler": true,
+      "raw_evidence_sha256": {
+        "build.json": "536af12edabd291d83854a5c64222b6605c44accc27b26bef18ac948fa41b897",
+        "cleanup.json": "5129a8b4a901e0de515f8f4d642a47233cfe501f240643a6ee5c66527c677016",
+        "coding-memory-after.json": "5b2232fb53d3e3cf2c05c9e192ef2d2332a09ffde562db89cbb233072fed3460",
+        "coding-memory-before.json": "d7daabc38f4e4658b7e922447895dfd5185f2c6e5f873313f8cf3ebbf566fe59",
+        "coding/identity.json": "3323439bfd54e667d6c529bbb13af8cd28b96067ec4a73f2a27b8b039e81dee7",
+        "coding/observations.jsonl": "29beef7ba3ac6b7c257ede8cd3833ca0695d3be646bd6932635fa79939551a4f",
+        "cupti.tsv": "fbc8f270c04cd793baa916635be79cf8b43b6bba3c0bf8fe7cea6d87e49558e5",
+        "host.jsonl": "19d2565427cf72617d8f318663ff9463f0fcb9b8278d19353e1348721e9b9e81",
+        "profiler.json": "444528d504aef5049e109e0c52b4b71ff9da9424c4815857e681264f027051ae"
+      },
+      "result": "PASS",
+      "sha256": "a00d625182d84bfb9c0d4563a3b484ec7bbee93a9808a728572876a5cd7030c3"
+    },
+    "profiled": true,
+    "resource_observation": {
+      "adapter": "cuda-process-list-v1",
+      "allowed_pids": [
+        3731221
+      ],
+      "devices": [],
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-physical-profile-v39/target-only/coding/native-0.resources.jsonl",
+      "interval_seconds": 1,
+      "observations": 34,
+      "probe_seconds": 0.7894234510313254,
+      "schema": "yvex.qualification.resource-observation.v1",
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "state": "OBSERVED_CLEAR"
+    },
+    "source": {
+      "delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "head": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0",
+      "state": "clean",
+      "tree": "508e7cfeb5887fc123e200038d073ce72dc79049"
+    },
+    "source_stability": "frozen"
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "build": "f748ad6114858e5f1b6246f8bd2d6ade9a1743bd72e8e27b351d951c35b00bac",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "concurrency": 1,
+    "context": 32768,
+    "device_count": null,
+    "driver": null,
+    "executable": "e1ea8e02ad223a3fffb2ecc6839ee354658bd97a6e23c7e6b0651007d4ad3b4d",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": null,
+    "kernel_bundle": null,
+    "memory_configuration": null,
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "prefill_geometry": "chunk=64",
+    "product_path": "controlled-engine/native-v25",
+    "reasoning": "none",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "runtime_configuration": "b1d4e763aefe8e4bd5d7e36c2c41dd1e21a144e58c268c644b3f9a9e19310b56",
+    "runtime_toolkit": null,
+    "sampling": "greedy",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0",
+    "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_tree": "508e7cfeb5887fc123e200038d073ce72dc79049",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "strategy": "target-only",
+    "suite": "94f29d3a9002bfc3b2d91d3427268099ce7659430d32030c9747e1bf00582a01",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "topology": null,
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark"
+  },
+  "target_identity": "f9c64fd420400aec5ddba19fe90e92fef8b5a84ccc641c5ccef185c1dd7c6490",
+  "title": "DeepSeek clean published target-only coding profile; diagnostic only"
+}

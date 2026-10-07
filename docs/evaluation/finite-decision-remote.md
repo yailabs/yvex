@@ -160,10 +160,13 @@ duplicate IDs refuse before dispatch. This renews the real producer/transport
 control, not SDK/YAI semantic acceptance or low-latency Fast Search qualification.
 No client private key was copied and no trust/grant was changed.
 
-DeepSeek is restored at **generation 2** at this capture, with the same model,
-artifact and binding, context 32768, chunk 64 and speculative
-strategy. A new synthetic `Return OK.` recovery completes with HTTP 200 and
-natural stop; no operator/Case prompt is replayed. Typed snapshots show zero
+DeepSeek was restored at generation 2 after the installed-Host replacement.
+After the two subsequent isolated coding profiles it is **generation 3**, with
+the same model, artifact, binding and specialization, context 32768, chunk 64
+and speculative strategy. The earlier new synthetic `Return OK.` recovery
+completes with HTTP 200 and natural stop; a separate post-profile,
+manifest-authored `chat.short` request now completes through the installed Rust
+native product. No operator/Case prompt is replayed. Typed snapshots show zero
 active/queued work, sessions, leases, attached clients and transient state.
 HTTPS certificate inspection matches the previously approved pin; neither
 public listener was restarted or re-enrolled. Further model reloads can change
@@ -192,7 +195,8 @@ Raw post-window controls and snapshots remain at
 `/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL`:
 `published-product-rollout-v33`, `published-product-controls-v34`,
 `published-native-coding-v36`, `published-product-recovery-v37` and
-`published-product-lan-v38`.
+`published-product-lan-v38`; the subsequent profile/restore and native recovery
+are `published-physical-profile-v39` and `published-postprofile-recovery-v40`.
 The failed outer-lock and exact-profile-as-model CLI attempts were refused
 before dispatch and retained; the corrected ordinary `v4-flash --variant ...`
 command neither redispatched indeterminate work nor replayed a Case prompt.

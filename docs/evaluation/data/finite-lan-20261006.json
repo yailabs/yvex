@@ -137,7 +137,7 @@
   },
   "deepseek_preserved": {
     "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
-    "engine_generation": 2,
+    "engine_generation": 3,
     "context": 32768,
     "prefill_chunk": 64,
     "strategy": "speculative",
@@ -148,6 +148,8 @@
     "fresh_synthetic_recovery": "New HTTP 200; 7 prompt / 1 committed output token; natural stop; explicit output bound 3; not sustained decode or YAI Case qualification",
     "native_coding_recovery": "Installed Rust model qualification command over protocol 25: four fresh deterministic 31-input/256-output coding controls complete with one identical committed token-ledger identity; LOCAL receipt only",
     "native_receipt": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-native-coding-v36/receipt.json",
+    "post_profile_recovery": "New manifest-authored chat.short request completes through the installed Rust/native product; both engines retain identity/configuration and zero transient work. One short recovery, not sustained decode evidence.",
+    "post_profile_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-postprofile-recovery-v40",
     "case_prompt_replayed": false
   },
   "https_management": {
@@ -166,12 +168,12 @@
   "latest_coordinated_window": {
     "observed_date_utc": "2026-10-07",
     "source": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0, clean installed build",
-    "gate": "New installed public-C finite controls, four real Exon restricted-SSH controls, four installed Rust native coding controls and fresh HTTP recovery; not SDK/YAI semantic qualification",
+    "gate": "Installed public-C and real Exon LAN finite controls; installed Rust native coding/HTTP recovery; two isolated profiled coding arms and new post-profile native recovery. Not SDK/YAI semantic qualification or profiled throughput evidence.",
     "finite_engine_generation_unchanged": 1,
-    "deepseek_restored_generation": 2,
+    "deepseek_restored_generation": 3,
     "production_binary_replaced": true,
     "listener_trust_grants_changed": false,
-    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-product-recovery-v37",
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-postprofile-recovery-v40",
     "case_prompt_replayed": false
   },
   "consumer_rules": {

@@ -1203,8 +1203,8 @@ Raw replayable source captures, benchmark observations, lifecycle wrapper and
 device logs remain outside Git under
 `/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL`.
 The complete-model lifecycle window is `integrated-generation-lifecycle-v31`;
-native coding is `integrated-native-product-coding-v29`. The production binary
-was not replaced: supported unload/restore keeps finite generation 1, approved
+native coding is `integrated-native-product-coding-v29`. At that historical
+capture the production binary was not replaced: supported unload/restore keeps finite generation 1, approved
 listeners/grants and the unchanged DeepSeek profile, restored as generation 27.
 No user/Case prompt is replayed. Current producer facts are in the
 [operational handoff](data/finite-lan-20261006.json).
@@ -1215,3 +1215,60 @@ independent representation-quality qualification and complete competitive
 decomposition remain open. The missing historical bootstrap-Q2 gate and optional
 full-qtype memcheck diagnostic retain their separate status. No CUDA result
 qualifies Metal, another checkpoint, A03 or release readiness.
+
+## Clean published inference profile and installed recovery (2026-10-07)
+
+Two sequential isolated Hosts execute the same `coding.hash-table` case through
+the canonical native measurement adapter: 31 new input positions, 256 committed
+output tokens, greedy/non-thinking, context 32768, prefill chunk 64, one sequence
+and no prefix reuse. The computational source is clean published `a444bcdd`,
+tree `508e7cfeb5887fc123e200038d073ce72dc79049`; executable SHA-256
+`e1ea8e02ad223a3fffb2ecc6839ee354658bd97a6e23c7e6b0651007d4ad3b4d`.
+The adapter is independently frozen at `aaa2ba3a`, tree
+`32d1a2218761b5fdd864ae1cbc593dc7df8f6357`. Exact build, artifact, binding,
+specialization, capacity and suite identities are retained in the separate
+[target-only](benchmarks/generated/qualification-deepseek-published-target-only-profile-39.md)
+and [DSpark](benchmarks/generated/qualification-deepseek-published-speculative-profile-39.md)
+structured LOCAL records. Missing typed hardware/kernel facts remain unknown.
+
+Both profiles complete with zero dropped CUPTI activity records and source,
+adapter and executable closure. Server-authored phase boundaries join one exact
+session/request to actual kernel/API activities, including graph nodes. The
+records intentionally contain **no performance measurements**: diagnostic phase
+durations are not unprofiled throughput samples. The generic native-capture
+adapter now retains explicit profiling declaration and observed marker names;
+performance import refuses profiled, missing or conflicting instrumentation.
+It does not claim to detect an undeclared externally attached profiler.
+
+The fresh ranking identifies a distributed execution cost, not a single
+residency wait: ordered projections, routed/shared expert work, attention and mHC
+remain substantial. Target-only post-first-token execution records 625,413 kernel
+activities and 1,987,401 Driver calls; DSpark records 248,218 and 895,968 for its
+different admitted population. Context/stream synchronization, call-scoped
+storage release and graph instantiation remain material investigation owners.
+API waits overlap device execution and must not be added to GPU intervals as
+extra CPU work. A kernel interval union is not occupancy, Tensor Core utilization
+or memory bandwidth. This profile neither proves every barrier removable nor
+establishes a hardware/numerical ceiling.
+
+Before/after Linux observations show the artifact's file-backed range resident
+at those boundaries, no process backing-read increment and no CPU major-fault
+increment. No `smaps` walk occurs inside the coding turn. These observations do
+not prove page locking, future residency or absence of GPU faults; mmap, CUDA
+addressability and actual physical residency remain distinct. No whole-range
+prefetch, cache eviction or representation conversion is introduced by profiling.
+
+Only DeepSeek is unloaded for the approved isolated window. The finite engine
+stays at generation 1; HTTPS and restricted-SSH listeners, pins and grants are
+not changed. Supported lifecycle restores DeepSeek at generation 3 with exact
+model/artifact/binding/specialization, context/chunk and strategy unchanged. A
+new `chat.short` native recovery succeeds afterwards, and typed closure shows
+both engines READY with zero active/HTTP/queued work, sessions, leases, attached
+clients and transient bytes. This does not renew SDK/YAI Case acceptance.
+
+Raw profiles, hashes, replayable source and restore/recovery witnesses remain
+under the existing external evidence root in `published-physical-profile-v39`
+and `published-postprofile-recovery-v40`. Generated target views derive from the
+structured records. The competitive Task stays IN PROGRESS: independent quality,
+broader reasoning/product controls and quantitative competitive closure remain;
+20 target-only decode / 700 uncached prefill are not earned or weakened.
