@@ -249,7 +249,8 @@ def qualification_views():
         'metric_fields':qualification.METRIC_FIELDS,
         'diagnostic_fields':qualification.DIAGNOSTIC_FIELDS,
         'diagnostic_units':qualification.DIAGNOSTIC_UNITS,
-        'quality_key':qualification.QUALITY_KEY, 'metrics':qualification.METRICS}, indent=2)+'\n'
+        'quality_key':qualification.QUALITY_KEY, 'metrics':qualification.METRICS,
+        'metric_admission':qualification.METRIC_ADMISSION}, indent=2)+'\n'
     import qualification_run
     suites = qualification_run.corpora(ROOT/'tests/vectors')
     cells = [dict(suite=s['id'], suite_identity=qualification.identity(s), **c)

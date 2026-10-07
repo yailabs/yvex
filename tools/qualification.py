@@ -64,6 +64,25 @@ METRICS = {
     "same-top-token": ("representation-quality", "fraction", "fraction of identical full-vocabulary argmax tokens, same contexts"),
     "greedy-prefix": ("checkpoint-reference", "token", "matching continuation prefix under the declared exact comparison policy"),
 }
+# Publication eligibility, not runtime admission or a universal sustained-rate
+# guarantee. Both native consumers use this generated population contract.
+METRIC_ADMISSION = {
+    "decode.post-first.committed": {"post_first_decode_units": {"minimum": 32}},
+    "prefill.uncached": {"reused_tokens": {"maximum": 0}, "prefill_tokens": {"minimum": 1}},
+}
+
+
+def metric_observation_admitted(metric, observation):
+    """Missing/invalid populations cannot become sustained or uncached samples."""
+    for field, bounds in METRIC_ADMISSION.get(metric, {}).items():
+        value = observation.get(field)
+        if type(value) is not int or value < 0:
+            return False
+        if "minimum" in bounds and value < bounds["minimum"]:
+            return False
+        if "maximum" in bounds and value > bounds["maximum"]:
+            return False
+    return metric in METRICS
 
 
 def canonical(value):

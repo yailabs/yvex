@@ -230,5 +230,20 @@
       "token",
       "matching continuation prefix under the declared exact comparison policy"
     ]
+  },
+  "metric_admission": {
+    "decode.post-first.committed": {
+      "post_first_decode_units": {
+        "minimum": 32
+      }
+    },
+    "prefill.uncached": {
+      "reused_tokens": {
+        "maximum": 0
+      },
+      "prefill_tokens": {
+        "minimum": 1
+      }
+    }
   }
 }

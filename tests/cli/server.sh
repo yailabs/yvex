@@ -210,9 +210,9 @@ while test "$attempt" -lt 100; do
     sleep 0.02
 done
 test "$ready" -eq 1 || fail 'persistent host did not become ready'
-contains "$OUT_DIR/host.out" 'HOST ready · 2 workers · capacity 2'
-contains "$OUT_DIR/host.out" 'protocol 25'
-contains "$OUT_DIR/host.out" 'Ctrl-C to stop'
+# --logs off suppresses the console banner and events. Readiness and host
+# configuration remain authoritative in the typed status response below.
+test ! -s "$OUT_DIR/host.out" || fail 'logs-off host emitted console output'
 not_contains "$OUT_DIR/host.out" '█'
 not_contains "$OUT_DIR/host.out" '▀'
 contains "$OUT_DIR/status.json" '"schema":"yvex.host.status.v1"'

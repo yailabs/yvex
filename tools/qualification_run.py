@@ -506,14 +506,16 @@ def native_measurements(config, rows, scope, evidence, skip_first):
         for metric in (*fields, "prefill.uncached", "decode.post-first.committed",
                        "reasoning.phase-rate", "final.phase-rate"):
             def value(m):
+                if not q.metric_observation_admitted(metric, m):
+                    return None
                 if metric.startswith("reasoning.") and not m.get("reasoning_tokens"):
                     return None
                 if metric.startswith("final.") and not m.get("final_tokens"):
                     return None
                 if metric == "prefill.uncached":
-                    return m["prefill_rate"] if not m["reused_tokens"] and m["prefill_tokens"] else None
+                    return m["prefill_rate"]
                 if metric == "decode.post-first.committed":
-                    return m["post_first_decode_rate"] if m.get("post_first_decode_units", 0) >= 32 else None
+                    return m["post_first_decode_rate"]
                 if metric in ("reasoning.phase-rate", "final.phase-rate"):
                     prefix = metric.split(".")[0]
                     return m[prefix + "_tokens"] / m[prefix + "_seconds"] if m.get(prefix + "_seconds", 0) > 0 else None

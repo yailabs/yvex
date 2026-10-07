@@ -3,6 +3,36 @@
   "scope": "published operator registry; management v2 classification",
   "operations": [
     {
+      "operation": "model.qualification.list",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local projection of published identity-bound evidence; no remote management operation or inherited model qualification."
+    },
+    {
+      "operation": "model.qualification.show",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local published-target or caller-supplied receipt inspection; no remote management operation."
+    },
+    {
+      "operation": "model.qualification.suite",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local projection of immutable workload manifests and admitted cells; no remote management operation."
+    },
+    {
+      "operation": "model.qualification.compare",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local compatible-receipt comparison with explicit experimental axes; not a remote execution or model-quality grant."
+    },
+    {
+      "operation": "model.qualification.run",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Bounded local measurement through the native runtime client, owning only new benchmark sessions and a local receipt. No qualification-run operation is admitted by remote management."
+    },
+    {
       "operation": "management.identity",
       "class": "cli_interaction",
       "public_operation": null,

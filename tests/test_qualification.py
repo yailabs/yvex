@@ -223,6 +223,21 @@ class NativeReceiptTests(unittest.TestCase):
         self.assertTrue(all(r["metric"] == "request.client-complete" and r["session_state"] == "reused"
                             and r["statistics"]["count"] == 1 for r in observations))
 
+    def test_shared_metric_population_rules_refuse_missing_malformed_or_short_counts(self):
+        for units, admitted in ((0, False), (9, False), (31, False), (32, True), (255, True)):
+            self.assertEqual(q.metric_observation_admitted("decode.post-first.committed",
+                dict(post_first_decode_units=units)), admitted)
+        for units in (None, True, -1, 32.0, "32"):
+            self.assertFalse(q.metric_observation_admitted("decode.post-first.committed",
+                dict(post_first_decode_units=units)))
+        self.assertFalse(q.metric_observation_admitted("decode.post-first.committed", {}))
+        self.assertTrue(q.metric_observation_admitted("prefill.uncached",
+            dict(prefill_tokens=6, reused_tokens=0)))
+        for tokens, reused in ((6, 16), (0, 0), (6, True), (6, -1), (6, None)):
+            self.assertFalse(q.metric_observation_admitted("prefill.uncached",
+                dict(prefill_tokens=tokens, reused_tokens=reused)))
+        self.assertFalse(q.metric_observation_admitted("unknown", {}))
+
 
 class MeasurementTests(unittest.TestCase):
     def continuation_fixture(self, actual=(7, 8, 9), expected=(7, 8, 9), stop="max-new-tokens"):

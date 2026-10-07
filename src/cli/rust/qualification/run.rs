@@ -574,6 +574,7 @@ pub(super) fn execute(inv: &Invocation<'_>, width: usize, styled: bool) -> Resul
                     }
                     value["sample"] = json!(sample);
                     value["turn_index"] = json!(index);
+                    value["case"] = case["id"].clone();
                     value["input_identity"] = json!(input_identity(prompt, &history)?);
                     history.push((
                         ffi::digest(prompt.as_bytes())?,
@@ -644,6 +645,32 @@ fn input_groups(rows: &[Value], index: usize) -> Result<Vec<(String, Vec<&Value>
     Ok(groups.into_iter().collect())
 }
 
+fn metric_observation_admitted(metric: &str, row: &Value, rules: &Value) -> bool {
+    let Some(admission) = rules["metric_admission"].as_object() else {
+        return false;
+    };
+    let Some(required) = admission.get(metric) else {
+        return rules["metrics"].get(metric).is_some();
+    };
+    required.as_object().is_some_and(|fields| {
+        fields.iter().all(|(field, bounds)| {
+            let Some(value) = row[field].as_u64() else {
+                return false;
+            };
+            bounds.as_object().is_some_and(|bounds| {
+                !bounds.is_empty()
+                    && bounds.iter().all(|(key, bound)| {
+                        bound.as_u64().is_some_and(|bound| match key.as_str() {
+                            "minimum" => value >= bound,
+                            "maximum" => value <= bound,
+                            _ => false,
+                        })
+                    })
+            })
+        })
+    })
+}
+
 fn measurements(
     case: &Value,
     prompts: &[String],
@@ -681,6 +708,12 @@ fn measurements(
                 ("prefill.uncached", "prefill_rate"),
                 ("prefill.wall", "prefill_seconds"),
             ] {
+                if group
+                    .iter()
+                    .any(|row| !metric_observation_admitted(metric, row, rules))
+                {
+                    continue;
+                }
                 let samples = group.iter().map(|r| r[field].clone()).collect::<Vec<_>>();
                 if samples.iter().any(Value::is_null) {
                     continue;
@@ -817,6 +850,92 @@ fn receipt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metric_populations_keep_bursts_and_prefix_reuse_out_of_benchmark_rows() {
+        let rules: Value = serde_json::from_str(RULES).unwrap();
+        for (units, eligible) in [(0, false), (9, false), (31, false), (32, true), (255, true)] {
+            let rows = vec![json!({"turn_index":0,"input_identity":"fixture",
+                "post_first_decode_units":units,"post_first_decode_rate":99.0,
+                "prefill_tokens":6,"reused_tokens":16,"prefill_rate":11.0,
+                "prefill_seconds":0.5,"client_complete_seconds":3.0})];
+            let (metrics, _) = measurements(
+                &json!({"id":"fixture","maximum_output":256}),
+                &["prompt".into()],
+                &rows,
+                &rules,
+                Path::new("/fixture"),
+            )
+            .unwrap();
+            assert_eq!(
+                metrics
+                    .iter()
+                    .any(|m| m["metric"] == "decode.post-first.committed"),
+                eligible
+            );
+            assert!(!metrics.iter().any(|m| m["metric"] == "prefill.uncached"));
+            assert!(metrics.iter().any(|m| m["metric"] == "prefill.wall"));
+            assert!(
+                metrics
+                    .iter()
+                    .any(|m| m["metric"] == "request.client-complete")
+            );
+        }
+        for invalid in [
+            Value::Null,
+            json!(true),
+            json!(-1),
+            json!(32.0),
+            json!("32"),
+        ] {
+            assert!(!metric_observation_admitted(
+                "decode.post-first.committed",
+                &json!({"post_first_decode_units":invalid}),
+                &rules
+            ));
+        }
+        assert!(metric_observation_admitted(
+            "prefill.uncached",
+            &json!({"prefill_tokens":6,"reused_tokens":0}),
+            &rules
+        ));
+        assert!(!metric_observation_admitted(
+            "prefill.uncached",
+            &json!({"prefill_tokens":0,"reused_tokens":0}),
+            &rules
+        ));
+        assert!(!metric_observation_admitted(
+            "decode.post-first.committed",
+            &json!({"post_first_decode_units":255}),
+            &json!({})
+        ));
+        let rows = vec![
+            json!({"turn_index":0,"input_identity":"fixture","post_first_decode_units":255,
+                "post_first_decode_rate":8.0,"prefill_seconds":0.5}),
+            json!({"turn_index":0,"input_identity":"fixture","post_first_decode_units":9,
+                "post_first_decode_rate":24.0,"prefill_seconds":0.6}),
+        ];
+        let (metrics, _) = measurements(
+            &json!({"id":"fixture","maximum_output":256}),
+            &["prompt".into()],
+            &rows,
+            &rules,
+            Path::new("/fixture"),
+        )
+        .unwrap();
+        assert!(
+            !metrics
+                .iter()
+                .any(|m| m["metric"] == "decode.post-first.committed")
+        );
+        assert_eq!(
+            metrics
+                .iter()
+                .find(|m| m["metric"] == "prefill.wall")
+                .unwrap()["statistics"]["count"],
+            2
+        );
+    }
 
     #[test]
     fn different_histories_are_separate_measurements_not_cross_input_averages() {

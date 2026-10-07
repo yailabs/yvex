@@ -157,6 +157,17 @@ their source-authored transition remain separate. Fragment count is not token
 count. Speculative evidence also records real proposals, verification population,
 accepted/rejected/discarded tokens, accepted prefixes and phase costs.
 
+The shared metric-publication rules exclude fewer than 32 post-first committed
+positions from `decode.post-first.committed`; a ten-token greeting remains a
+latency/phase observation, not a sustained-decode sample. This eligibility floor
+does not, by itself, establish steady-state or release throughput. Likewise,
+`prefill.uncached` requires a positive newly executed population and zero reused
+prefix tokens. Reused turns retain their new-position counts and prefill wall
+time, but do not become uncached-prefill benchmarks. Missing or malformed counts
+are unavailable, not zero. Both Rust and the engineering adapter consume the
+same generated population rules; a mixed eligible/ineligible repetition group
+cannot silently discard short samples and publish the remainder.
+
 The native `generated_token_identity` (projected as `token_identity` in local
 observations) includes execution/state lineage, not only sampled token IDs.
 Different target-only and speculative identities do not establish different
