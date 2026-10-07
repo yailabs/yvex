@@ -1129,10 +1129,9 @@ static int state_begin(
     }
     rc = state_cancel_check(state, cancellation, layer_index,
                             "attention state cancelled before begin", failure, err);
-    if (rc != YVEX_OK) {
-        state->summary.invalidated = 1;
-        goto done;
-    }
+    /* Request cancellation aborts private work, not committed continuity.
+     * The counter owner still invalidates an actual accounting overflow. */
+    if (rc != YVEX_OK) goto done;
     if (state->transaction.active &&
         (state->transaction.cancellation_bound != (cancellation != NULL) ||
          (cancellation &&
