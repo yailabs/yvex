@@ -2,6 +2,7 @@
 src/cli/rust/build.rs	build	build.rust_shell	entrypoint	private	generated-abi	cli.rust	entrypoint	none
 src/cli/rust/client.rs	cli	cli.native_runtime	generic	private	protocol-client	cli.rust	implementation	none
 src/cli/rust/client/cancellation.rs	cli	cli.native_request_cancellation	generic	private	resource-lifecycle	cli.rust	implementation	none
+src/cli/rust/client/telemetry.rs	cli	cli.native_phase_projection	generic	private	typed-projection	cli.rust	implementation	none
 src/cli/rust/qualification.rs	cli	cli.qualification_projection	generic	private	typed-projection	cli.rust	implementation	none
 src/cli/rust/qualification/run.rs	cli	cli.qualification_execution	generic	private	lifecycle	cli.rust	implementation	none
 src/cli/rust/catalog.rs	cli	cli.native_catalog	generic	private	typed-projection	cli.rust	implementation	none

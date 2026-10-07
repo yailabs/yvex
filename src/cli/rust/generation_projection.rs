@@ -191,6 +191,52 @@ pub(crate) fn fields(
         ("family", json!(ffi::text(&result.family))),
         ("backend", json!(ffi::text(&result.backend))),
         (
+            "host_workspace",
+            if result.host_workspace_available != 0 {
+                let w = &result.host_workspace;
+                json!({"capacity_bytes": w.capacity, "used_bytes": w.used,
+                    "peak_used_bytes": w.peak, "allocation_count": w.allocation_count,
+                    "attached": w.attached != 0, "owned": w.owned != 0, "pinned": w.pinned != 0,
+                    "scope": "backend staging after execution, before cleanup; not total physical memory"})
+            } else {
+                Value::Null
+            },
+        ),
+        // Copy the admitted C plan. Do not infer lineage from command names,
+        // artifact paths or a separately configured benchmark profile.
+        (
+            "runtime_model_identity",
+            json!(ffi::text(&result.plan.runtime_model_identity)),
+        ),
+        (
+            "runtime_binding_identity",
+            json!(ffi::text(&result.plan.runtime_binding_identity)),
+        ),
+        (
+            "tokenizer_plan_identity",
+            json!(ffi::text(&result.plan.tokenizer_plan_identity)),
+        ),
+        (
+            "prompt_policy_identity",
+            json!(ffi::text(&result.plan.prompt_policy_identity)),
+        ),
+        (
+            "kernel_bundle_identity",
+            json!(ffi::text(&result.plan.kernel_bundle_identity)),
+        ),
+        (
+            "execution_profile_identity",
+            json!(ffi::text(&result.plan.execution_profile_identity)),
+        ),
+        ("context_capacity", json!(result.plan.context_capacity)),
+        (
+            "prefill_chunk_tokens",
+            json!(result.plan.prefill_chunk_tokens),
+        ),
+        ("maximum_new_tokens", json!(result.plan.maximum_new_tokens)),
+        ("execution_class", json!(result.plan.execution_class)),
+        ("evidence_profile", json!(result.plan.evidence_profile)),
+        (
             "generation_plan_identity",
             json!(ffi::text(&result.plan.generation_plan_identity)),
         ),
@@ -199,6 +245,10 @@ pub(crate) fn fields(
             json!(ffi::text(&run.generation_execution_identity)),
         ),
         ("prompt_identity", json!(ffi::text(&run.prompt_identity))),
+        (
+            "prompt_token_identity",
+            json!(ffi::text(&run.prompt_token_identity)),
+        ),
         (
             "execution_mode",
             json!(if run.execution_mode
@@ -244,6 +294,26 @@ pub(crate) fn fields(
 mod tests {
     use super::*;
     #[test]
+    fn admitted_plan_geometry_is_copied_not_reconstructed() {
+        let mut result = raw::yvex_generation_operator_result::default();
+        result.plan.context_capacity = 4096;
+        result.plan.prefill_chunk_tokens = 64;
+        result.plan.maximum_new_tokens = 256;
+        ffi::put_text(&mut result.plan.runtime_binding_identity, "native-binding").unwrap();
+        let projected = fields(&result, &[]).unwrap();
+        for (name, expected) in [
+            ("context_capacity", json!(4096)),
+            ("prefill_chunk_tokens", json!(64)),
+            ("maximum_new_tokens", json!(256)),
+            ("runtime_binding_identity", json!("native-binding")),
+        ] {
+            assert_eq!(
+                projected.iter().find(|(key, _)| *key == name).unwrap().1,
+                expected
+            );
+        }
+    }
+    #[test]
     fn unknown_and_unavailable_measurement_is_not_a_zero_cost_claim() {
         let mut evidence = raw::yvex_runtime_generation_evidence::default();
         assert!(roofline(&evidence).unwrap().is_null());
@@ -252,6 +322,22 @@ mod tests {
         assert!(roofline(&evidence).is_err());
         let result = raw::yvex_generation_operator_result::default();
         let fields = fields(&result, &[]).unwrap();
+        assert!(
+            fields
+                .iter()
+                .find(|(k, _)| *k == "host_workspace")
+                .unwrap()
+                .1
+                .is_null()
+        );
+        assert_eq!(
+            fields
+                .iter()
+                .find(|(k, _)| *k == "prompt_token_identity")
+                .unwrap()
+                .1,
+            ""
+        );
         assert_eq!(
             fields
                 .iter()
@@ -268,5 +354,27 @@ mod tests {
                 .1,
             json!([])
         );
+    }
+
+    #[test]
+    fn staging_capacity_and_actual_high_water_are_different_facts() {
+        let mut result = raw::yvex_generation_operator_result {
+            host_workspace_available: 1,
+            ..Default::default()
+        };
+        result.host_workspace.capacity = 1024;
+        result.host_workspace.used = 16;
+        result.host_workspace.peak = 32;
+        result.host_workspace.pinned = 1;
+        let fields = fields(&result, &[]).unwrap();
+        let value = &fields
+            .iter()
+            .find(|(k, _)| *k == "host_workspace")
+            .unwrap()
+            .1;
+        assert_eq!(value["capacity_bytes"], 1024);
+        assert_eq!(value["used_bytes"], 16);
+        assert_eq!(value["peak_used_bytes"], 32);
+        assert_eq!(value["pinned"], true);
     }
 }

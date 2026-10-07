@@ -3014,6 +3014,8 @@ def main() -> None:
     args = parser.parse_args()
     binary = args.binary.resolve()
     reference = args.reference.resolve() if args.reference else None
+    console_count = empty_host_console(binary)
+    print(f"PASS isolated empty-host console: {console_count} modes; no operator host or model")
     qualification_count = qualification(binary)
     print(f"PASS qualification contracts: {qualification_count} controls; software evidence only")
     account_count = accounts(binary, reference)
@@ -3054,6 +3056,42 @@ def main() -> None:
     loaded_image_count = acquisition_loaded_image(binary)
     print(f"PASS Rust CLI contracts: providers={account_count} tokenizer={tokenizer_count} paths={path_count} catalog={catalog_count} artifacts={artifact_count} profiles={profile_count} integrity={integrity_count} source={source_count} native_weights={native_count} construction={construction_count} conversion={conversion_count} materialization={materialization_count} gates={gate_count} mapping={mapping_count}; "
           f"quant_documents={document_count}; physical_variants={variant_count}; discovery={discovery_count}; distribution={distribution_count}; local_acquisition={acquisition_count}; attention={attention_count}; benchmark_publication={benchmark_count}; pipeline={pipeline_count}; generation={generation_count}; native_pipeline={native_pipeline_count}; runtime_input={input_count}; media={media_count}; artifact_diagnostics={diagnostic_count}; target_catalog={target_count}; model_preparation={preparation_count}; artifact_preparation={artifact_preparation_count}; artifact_check={check_count}; artifact_inventory={inventory_count}; target_engineering={engineering_count}; supervised_acquisition={supervised_count}; remote_acquisition={remote_count}; loaded_image={loaded_image_count}; isolated projections/refusals, pure JSON, redaction, native IDs and ordered prompt roles")
+
+
+def empty_host_console(binary: Path) -> int:
+    """Real owned empty hosts: RAW is JSONL, OFF is silent, human has a header."""
+    for mode in ("json", "off", "human"):
+        with tempfile.TemporaryDirectory(prefix="yvex-console-") as temporary:
+            runtime = Path(temporary).resolve()
+            env = dict(os.environ, XDG_RUNTIME_DIR=str(runtime), NO_COLOR="1")
+            process = subprocess.Popen([str(binary), "serve", "--openai", "off", "--logs", mode],
+                                       cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                deadline = time.monotonic() + 15
+                while not (runtime / "yvex/yvexd.sock").exists():
+                    assert process.poll() is None and time.monotonic() < deadline
+                    time.sleep(.02)
+                status = invoke(binary, ["host", "status", "--json"], env)
+                assert status.returncode == 0 and json.loads(status.stdout)["loaded_engine_count"] == 0
+                stopped = invoke(binary, ["host", "stop"], env)
+                assert stopped.returncode == 0, stopped.stderr
+                out, err = process.communicate(timeout=15)
+                assert process.returncode == 0 and not err, (mode, err)
+                assert not (runtime / "yvex/yvexd.sock").exists()
+                if mode == "off":
+                    assert not out
+                elif mode == "json":
+                    rows = [json.loads(line) for line in out.splitlines()]
+                    assert rows and all(isinstance(row, dict) and "kind" in row for row in rows)
+                    assert "\x1b" not in out
+                else:
+                    assert "HOST ready" in out and "Ctrl-C to stop" in out
+            finally:
+                if process.poll() is None:
+                    process.terminate()  # Only this test-owned empty process.
+                    process.communicate(timeout=15)
+    return 3
 
 
 if __name__ == "__main__":

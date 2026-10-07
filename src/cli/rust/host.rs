@@ -102,28 +102,30 @@ pub(crate) fn run(invocation: &Invocation<'_>, width: usize, styled: bool) -> Re
     let signal_handle = signals.handle();
     let mut host = Host::create(options, &socket)?;
     host.start()?;
-    let header = format!(
-        "YVEX {}  HOST ready · {} workers · capacity {}\n\
+    if options.console == raw::yvex_server_console_kind_YVEX_SERVER_CONSOLE_HUMAN {
+        let header = format!(
+            "YVEX {}  HOST ready · {} workers · capacity {}\n\
         native {} · protocol {}\n{}\nCtrl-C to stop\n",
-        ffi::version(),
-        options.worker_count,
-        options.maximum_engines,
-        socket,
-        ffi::LOCAL_PROTOCOL_VERSION,
-        if options.openai_enabled != 0 {
-            format!("OpenAI 127.0.0.1:{} · loopback", options.openai_port)
-        } else {
-            "OpenAI disabled".into()
-        }
-    );
-    output(
-        &presentation::lines(
-            &header.lines().map(String::from).collect::<Vec<_>>(),
-            width,
-            styled,
-        )
-        .map_err(|error| failure("presentation", error))?,
-    )?;
+            ffi::version(),
+            options.worker_count,
+            options.maximum_engines,
+            socket,
+            ffi::LOCAL_PROTOCOL_VERSION,
+            if options.openai_enabled != 0 {
+                format!("OpenAI 127.0.0.1:{} · loopback", options.openai_port)
+            } else {
+                "OpenAI disabled".into()
+            }
+        );
+        output(
+            &presentation::lines(
+                &header.lines().map(String::from).collect::<Vec<_>>(),
+                width,
+                styled,
+            )
+            .map_err(|error| failure("presentation", error))?,
+        )?;
+    }
     let done = Arc::new(AtomicBool::new(false));
     let reader = host.events();
     let log_socket = socket.as_str();
@@ -139,6 +141,7 @@ pub(crate) fn run(invocation: &Invocation<'_>, width: usize, styled: bool) -> Re
         let log_thread = scope.spawn(move || {
             let mut cursor = 0;
             let mut cadence = client::EventCadence::default();
+            let mut phases = client::TurnPhases::default();
             let mut resources = client::ResourceCadence::default();
             loop {
                 match reader.next(cursor) {
@@ -148,7 +151,7 @@ pub(crate) fn run(invocation: &Invocation<'_>, width: usize, styled: bool) -> Re
                             let text = if console == raw::yvex_server_console_kind_YVEX_SERVER_CONSOLE_RAW {
                                 format!("{}\n", client::event_json(&event))
                             } else if cadence.admit(&event, false) {
-                                let rendered = client::event_render(&event, false, width, styled)
+                                let rendered = phases.render(&event, false, width, styled)
                                     .and_then(|mut text| {
                                         if resources.due(&event)
                                             && let Ok(summary) = reader.summary()

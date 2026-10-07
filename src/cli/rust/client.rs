@@ -64,6 +64,7 @@ pub(crate) fn logs(invocation: &Invocation<'_>, width: usize, styled: bool) -> R
     client.send(&request)?;
     let mut output = io::stdout().lock();
     let mut cadence = EventCadence::default();
+    let mut phases = TurnPhases::default();
     if !json {
         let title = if follow {
             "YVEX logs · UTC · Ctrl-C to detach"
@@ -90,7 +91,8 @@ pub(crate) fn logs(invocation: &Invocation<'_>, width: usize, styled: bool) -> R
         let rendered = if json {
             format!("{}\n", event_json(&reply.event))
         } else {
-            event_render(&reply.event, verbose, width, styled)
+            phases
+                .render(&reply.event, verbose, width, styled)
                 .map_err(|error| invalid("presentation", &error.to_string()))?
         };
         if !write_log(&mut output, &rendered)? {
@@ -365,7 +367,7 @@ fn event_parts(event: &raw::yvex_server_event, verbose: bool) -> (&'static str, 
                         )
                     } else {
                         format!(
-                            "gen={a} finish={stop:?}{} {:.3}s",
+                            "gen={a} finish={stop:?}{} total={:.3}s{speculation}",
                             token_rates(&event.measurement, event.rate, false),
                             event.seconds
                         )
@@ -491,6 +493,9 @@ pub(crate) fn event_render(
     render_log_record(event, category, detail, verbose, width, styled)
 }
 
+mod telemetry;
+pub(crate) use telemetry::TurnPhases;
+
 fn render_log_record(
     event: &raw::yvex_server_event,
     category: &str,
@@ -583,11 +588,12 @@ fn token_rates(
         && measurement.cumulative_rate > 0.0
     {
         let scope = match measurement.scope {
+            raw::yvex_execution_measurement_scope_YVEX_EXECUTION_SCOPE_PREFILL => "prefill",
             raw::yvex_execution_measurement_scope_YVEX_EXECUTION_SCOPE_SUBSEQUENT_DECODE => {
                 "decode-avg"
             }
             raw::yvex_execution_measurement_scope_YVEX_EXECUTION_SCOPE_TOTAL_OPERATION => {
-                "total-avg"
+                "committed-avg"
             }
             _ => "avg",
         };
@@ -958,13 +964,17 @@ impl HostStatus {
                 self.snapshot.metrics.peak_rss_bytes as f64 / 1073741824.0
             ),
             format!(
-                "MODEL  {} mapped · {} prepared",
+                "MODEL  {} mapped · {} prepared · {} CUDA-addressable",
                 reported(
                     resource.model_mapped_bytes,
                     raw::YVEX_EXECUTION_RESOURCE_MODEL_AVAILABLE as u64
                 ),
                 reported(
                     resource.model_prepared_bytes,
+                    raw::YVEX_EXECUTION_RESOURCE_MODEL_AVAILABLE as u64
+                ),
+                reported(
+                    resource.model_device_addressable_bytes,
                     raw::YVEX_EXECUTION_RESOURCE_MODEL_AVAILABLE as u64
                 )
             ),
@@ -992,7 +1002,7 @@ impl HostStatus {
                 {
                     "reported"
                 } else {
-                    "not reported"
+                    "not measured (not zero)"
                 }
             ),
         ];
@@ -1604,7 +1614,7 @@ mod tests {
             let text = event_render(&event, false, width, false).unwrap();
             assert!(text.contains("22/22 tokens"), "{width}: {text}");
             assert!(text.contains("4.142s"), "{width}: {text}");
-            assert!(text.contains("avg=5.31t/s"), "{width}: {text}");
+            assert!(text.contains("prefill=5.31t/s"), "{width}: {text}");
             assert!(!text.contains('\x1b'));
         }
         event.severity = yvex_server_event_severity_YVEX_SERVER_SEVERITY_ERROR;
@@ -1816,10 +1826,10 @@ mod tests {
         event.proposed_tokens = 100;
         event.accepted_tokens = 39;
         let human = event_human(&event, true);
-        assert!(human.contains("total-avg=6.98") && human.contains("spec-accepted=39/100"));
+        assert!(human.contains("committed-avg=6.98") && human.contains("spec-accepted=39/100"));
         assert!(!human.contains("decode-avg"));
         let compact = event_human(&event, false);
-        assert!(compact.contains("total=6.98t/s") && !compact.contains("spec-accepted"));
+        assert!(compact.contains("committed=6.98t/s") && compact.contains("spec-accepted=39/100"));
     }
 
     #[test]
@@ -1872,7 +1882,9 @@ mod tests {
         event.measurement.total_units = 330;
         event.measurement.duration_ns = 28_070_000_000;
         event.measurement.cumulative_rate = 11.76;
-        assert!(event_human(&event, true).contains("tokens=330/330 elapsed=28.07s avg=11.76tok/s"));
+        assert!(
+            event_human(&event, true).contains("tokens=330/330 elapsed=28.07s prefill=11.76tok/s")
+        );
         event.measurement.available = 0;
         let human = event_human(&event, false);
         assert!(human.contains("330/unknown") && !human.contains("tok/s"));

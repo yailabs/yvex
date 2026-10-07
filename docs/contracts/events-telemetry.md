@@ -89,7 +89,8 @@ terminal by default. `yvex host logs` renders a finite retained-history
 snapshot from another terminal, while `host logs --follow` keeps the typed
 subscription open. `host logs --verbose` additionally renders individual
 speculative cycles. `yvex serve --logs json` and `yvex host logs --json`
-emit canonical JSONL for the admitted trace schema. `host status` is a
+emit canonical JSONL for the admitted trace schema, without a human startup
+banner. `--logs off` also suppresses the human banner. `host status` is a
 bounded host snapshot and `engine list` is the engine-inventory snapshot;
 neither is an event replay. Human projections render retained history plus live
 events in stable semantic categories. They retain operator-significant host,
@@ -116,8 +117,14 @@ fragments and individual speculative phases require explicit detailed trace.
 The rate record names its denominator. Cumulative decode is committed decode
 work divided by complete decode wall; rolling decode is recent committed work
 divided by its own recent duration, with a current maximum window of 32 tokens.
-The compact server projection labels subsequent decode `decode-avg` and
-`rolling[count/window]`; prefill and total-operation rates remain distinct.
+The human projection labels newly executed prefill `prefill`, subsequent decode
+`decode` (`decode-avg` in detail), and complete-operation committed rate
+`committed`; `total` names elapsed turn time, never a different rate. The
+terminal summary joins available prefill duration/rate and `ttft-server` from
+the same server process/session/request. Missing or dropped history remains
+unavailable, not zero. These bounded joins neither reconstruct client arrival
+clocks nor convert server first-token timing into client-visible TTFT.
+`rolling[count/window]` remains independently named.
 Canonical JSON keeps
 the complete scope, clock, composition, unit, work, duration, and rates. Human
 abbreviations never replace the typed authority.
