@@ -102,7 +102,7 @@ does not qualify the unpublished computational candidate or close this Task.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` | Reconcile logical computation, producer planning and independent graphical compute clients | P1 | 🔵 IN PROGRESS | Typed preparation assessment and exact plan/recovery; explicit current single-host execution versus future distributed realization; Studio scope/product acceptance remains consumer-owned. |
+| `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` | Reconcile logical computation, producer planning and independent graphical compute clients | P1 | 🔵 IN PROGRESS | Typed preparation assessment and exact plan/recovery; explicit managed-Host start/stop/restart with separate grants and disposable native evidence; current single-host execution versus future distributed realization remains explicit; Studio scope/product acceptance remains consumer-owned. |
 
 Authorized 2026-10-07. Starts from published `36c16dfb`; preserves concurrent
 GB10 qualification and the installed operator Host. Native adaptation remains

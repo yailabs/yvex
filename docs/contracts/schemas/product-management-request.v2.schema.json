@@ -57,7 +57,11 @@
         "profile.verify",
         "profile.create",
         "profile.remove",
-        "source.cleanup"
+        "source.cleanup",
+        "host.control",
+        "host.start",
+        "host.stop",
+        "host.restart"
       ]
     },
     "input": {
@@ -637,6 +641,70 @@
         "properties": {
           "input": {
             "$ref": "#/$defs/SourceCleanupInput"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "host.control"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/EmptyInput"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "host.start"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/HostStartInput"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "host.stop"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/HostStopInput"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "host.restart"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input": {
+            "$ref": "#/$defs/HostStopInput"
           }
         }
       }
@@ -3823,6 +3891,183 @@
         "delete_candidates",
         "deleted_paths",
         "missing"
+      ],
+      "additionalProperties": true
+    },
+    "HostOwnership": {
+      "type": "string",
+      "enum": [
+        "managed",
+        "external",
+        "unconfigured"
+      ]
+    },
+    "HostControl": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string"
+        },
+        "ownership": {
+          "$ref": "#/$defs/HostOwnership"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/HostState"
+        },
+        "host_instance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "service_control_granted": {
+          "type": "boolean"
+        },
+        "can_start": {
+          "type": "boolean"
+        },
+        "can_stop": {
+          "type": "boolean"
+        },
+        "can_restart": {
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inference_port": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "ownership",
+        "revision",
+        "state",
+        "host_instance",
+        "configured",
+        "service_control_granted",
+        "can_start",
+        "can_stop",
+        "can_restart",
+        "reason",
+        "inference_port"
+      ],
+      "additionalProperties": true
+    },
+    "HostStartInput": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "expected_revision"
+      ],
+      "additionalProperties": false
+    },
+    "HostStopInput": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "host_instance": {
+          "type": "string"
+        },
+        "acknowledge_disruption": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expected_revision",
+        "host_instance",
+        "acknowledge_disruption"
+      ],
+      "additionalProperties": false
+    },
+    "HostControlPhase": {
+      "type": "string",
+      "enum": [
+        "stopping",
+        "stopped",
+        "starting",
+        "running"
+      ]
+    },
+    "HostControlResult": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/HostControlPhase"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previous_host_instance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host_instance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "models_restored": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema",
+        "phase",
+        "revision",
+        "previous_host_instance",
+        "host_instance",
+        "models_restored"
       ],
       "additionalProperties": true
     }

@@ -213,7 +213,13 @@ pub(crate) fn list(peer: &str, limit: usize) -> Result<Value> {
     jobs.truncate(limit);
     Ok(json!({"jobs":jobs,"retention_limit":RETENTION,"truncated":truncated}))
 }
-pub(crate) fn submit(peer: &str, id: &str, operation: &str, input: &Value) -> Result<Job> {
+pub(crate) fn submit(
+    peer: &str,
+    id: &str,
+    operation: &str,
+    input: &Value,
+    control_root: Option<&Path>,
+) -> Result<Job> {
     if !identity(id) {
         return Err(fail("invalid_job_identity"));
     }
@@ -255,7 +261,13 @@ pub(crate) fn submit(peer: &str, id: &str, operation: &str, input: &Value) -> Re
     } else {
         std::env::current_exe().map_err(|_| fail("worker_unavailable"))?
     };
-    let spawned = Command::new(executable)
+    let mut command = Command::new(executable);
+    if let Some(root) = control_root {
+        command.env("YVEX_MANAGED_HOST_ROOT", root);
+    } else {
+        command.env_remove("YVEX_MANAGED_HOST_ROOT");
+    }
+    let spawned = command
         .args(["management", "product-worker", peer, id])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -293,7 +305,9 @@ pub(crate) fn run(peer: &str, id: &str) -> Result<()> {
         job.updated_at_unix_ms = now();
         save(&path, &job)
     };
-    let result = if operation.starts_with("engine.")
+    let result = if operation.starts_with("host.") {
+        crate::management_host::execute(&operation, &input, id, &mut progress)
+    } else if operation.starts_with("engine.")
         || operation.starts_with("session.")
         || operation.starts_with("generation.")
     {

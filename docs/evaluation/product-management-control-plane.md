@@ -13,6 +13,77 @@ publication: {html: true, pdf: true, index: true}
 [Evaluation](README.md) · [Public contract](../contracts/product-management.md) ·
 [Lifecycle classification](../contracts/product-management-lifecycle-map.md)
 
+## Managed Host lifecycle correction — 2026-10-07
+
+Starts from `07e6c8a8`. The operator rejected the prior client composition and
+identified missing practical server control. The producer now exposes
+`host.control/start/stop/restart` through the independent public SDK. This is a
+bounded correction in the selected compute milestone, not whole-product or human
+acceptance. No DGX or operator Host/Engine/Session/Case was mutated.
+
+Evidence: 89 Rust unit tests pass (two unrelated opt-in tests ignored), five
+Rust structure checks pass, 40 canonical SDK tests pass, existing bounded HTTPS
+and headless ownership lanes pass. `tests/integration/managed_host_lifecycle.py`
+uses an actual zero-engine native Host under disposable HTTPS and proves explicit
+grant default-deny, configuration, lost-response exact observation, duplicate
+request identity, stale control/Host fencing, restart into a new empty instance,
+management restart independence, revoke, settled shutdown, occupied inference
+port failure and external Host protection. This does not qualify loaded-model
+shutdown, physical DGX rollout, inference compatibility or human UI acceptance.
+
+### Reproduce the isolated producer controls
+
+From the YVEX repository, with its required Rust toolchain and native archive:
+
+```sh
+make generate-operator-registry
+CARGO_TARGET_DIR=build/host-control-cargo cargo +1.98.1 build --locked --bin yvex
+YVEX_BIN=build/host-control-cargo/debug/yvex python3 tests/integration/managed_host_lifecycle.py
+```
+
+For a persistent disposable native Studio target:
+
+```sh
+python3 tests/support/managed_host_fixture.py --binary build/host-control-cargo/debug/yvex --root /tmp/yvex-studio-host-test
+```
+
+Use a new root. The helper prints the exact HTTPS endpoint/pin and invitation
+file, configures only a disposable stopped Host, and never automatically approves
+a client. Keep it running while exercising Studio; Ctrl+C stops only its isolated
+Host/service. Use its `profiles` directory through
+`YVEX_SDK_CONNECTION_PROFILE_ROOT` when launching the qualification client.
+
+### Procedura operatore e confronto pubblico
+
+1. In Studio aggiungi il server indicato dal fixture, verifica il pin stampato e
+   richiedi accesso. Importa l'invito proprietario attraverso il percorso nativo.
+2. Approva il client: la gestione ordinaria funziona, ma **Start server** resta
+   non ammesso finché il proprietario non concede esplicitamente il controllo
+   del server. Confronta `host.control.service_control_granted` e `can_start`.
+3. Concedi il permesso al solo client del fixture. Avvia: `state=running`,
+   `ownership=managed`, `host_instance` presente, zero modelli caricati.
+4. Riavvia dopo la conferma: l'identità cambia; modelli e Sessions restano zero.
+   Ferma: `state=stopped`; il servizio HTTPS continua a rispondere.
+5. Revoca il permesso: i successivi comandi di controllo devono essere rifiutati.
+   Ritorna al Case: nessun Case, identità o draft deve cambiare.
+
+Per controllare gli stessi oggetti usa il client pubblico SDK `connections`:
+`connections invoke PROFILE_REF REQUEST_FILE`. Il file contiene
+`schema: yvex.management.request.v2`, un `request_id` casuale a 64 cifre esadecimali,
+`operation: host.control` (oppure `host.get`, `engine.list`) e `input: {}`.
+Per osservare un comando già inviato usa `operation: job.get` con
+`input: {"job_id":"IDENTITÀ_ESATTA"}`. Dopo risposta persa osserva quel Job;
+non rispedire il comando. `connections owner-connections OWNER_REF` rende i
+permessi e la revisione del proprietario. Il client legge le credenziali dal
+vault nativo e non richiede di stamparle o passarle negli argomenti.
+
+Restituisci schermate dello stato fermo/attivo, conferma riavvio, nuovo stato e
+permesso revocato, insieme alle identità pubbliche del fixture. Queste prove sono
+mutazioni esplicite **solo del fixture**. Il server operatore già avviato con
+`yvex serve` resta `external`: una migrazione richiede un diverso intervento
+esplicitamente autorizzato, con arresto e successivo ricaricamento dei modelli.
+L'accettazione visiva umana rimane pendente.
+
 ## Compute product refoundation — 2026-10-07
 
 `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` starts from reconciled published

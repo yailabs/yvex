@@ -67,9 +67,52 @@ The complete operator classification is maintained alongside the public catalog.
 Low-level tensor, compiler, quantization research and numerical probes remain
 engineering tools. Local shell interaction and filesystem export/checkpoint
 paths are not silently promoted to unrestricted remote file operations.
-Host process/service provisioning remains a local deployment responsibility;
-management observes stopped Hosts rather than implicitly starting or replacing
-an operator service. Engine load/unload never replaces the Host.
+Host process configuration remains a local deployment responsibility. Explicitly
+configured managed Hosts support separately granted lifecycle control below;
+external operator services are never implicitly replaced. Engine load/unload
+never replaces the Host.
+
+## Managed Host control
+
+`host.control` observes ownership (`managed`, `external`, `unconfigured`), exact
+Host instance, control revision, configured inference port, explicit service-control
+grant and admitted start/stop/restart actions. `host.start`, `host.stop` and
+`host.restart` are durable Jobs. They are offered only for a locally provisioned
+managed Host. Existing `yvex serve` processes remain external; no observation,
+pairing approval or management restart silently adopts or replaces them.
+
+Provisioning is an explicit local command while the Host is stopped:
+`yvex management host-configure 8001 [--state-dir DIRECTORY]`. This stores a
+bounded server configuration with the existing native socket, one worker, native
+maximum-Engine defaults and a loopback inference listener on the selected port.
+It starts nothing. No public request accepts arbitrary paths, executables or
+shell arguments. Local same-user clients may control this explicitly configured
+Host. Remote peers additionally need a separately granted `service_control_grant`
+owner action; previously approved peers default to no service-control grant.
+Existing restricted SSH product enrollment does not confer it.
+
+Start requires `expected_revision`. Stop/restart additionally require exact
+`host_instance` and `acknowledge_disruption: true`. The producer serializes control,
+retains the request identity, checks native instance ownership, and runs an internal
+process owner calling the same public native Host APIs as the CLI. The native
+socket lock prevents duplicate Hosts. Stop completion requires process/lock
+retirement, not merely the native stop acknowledgement. A timeout, response loss
+or worker loss remains indeterminate. Pending lifecycle intent prevents a fresh
+blind start/restart; reobserve the exact Job and Host. After an uncertain start
+with no remaining process, explicit local reprovisioning while stopped is the
+recovery boundary, rather than automatic replay.
+
+Restart creates a new Host instance with **zero loaded models and Sessions**.
+There is no automatic model/session restoration. It does not restart the HTTPS
+management listener. Management restart likewise does not stop its managed Host.
+The installed operator Host remains external until an explicitly authorized
+migration stops it and configures the managed owner; no adoption operation is
+published.
+
+`observe.events` exposes the same native retained event/log owner as `yvex host
+logs`, at stage depth, with bounded pages and a Host-bound cursor. It is not a
+system journal or management-process stderr stream. This delivery does not add
+full/token trace or an unbounded watch subscription.
 
 ## Jobs, progress and recovery
 

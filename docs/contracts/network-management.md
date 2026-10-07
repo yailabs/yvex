@@ -12,6 +12,23 @@ publication: {html: true, pdf: true, index: true}
 
 [Up](README.md) · [Product operations](product-management.md)
 
+## Explicit service-control permission — 2026-10-07
+
+Pairing approval grants ordinary product management, not Host process control.
+The revision-fenced owner actions `service_control_grant` and
+`service_control_revoke` target an already approved peer's exact `request_id`.
+Owner connection observations add optional `available_actions` and per-peer
+`service_control_granted`; clients hide these controls when older services omit
+the advertised actions. Existing peer ledgers deserialize with this grant false.
+Revocation blocks subsequent submissions; already accepted exact Jobs retain
+normal durable completion/recovery semantics. Management ownership itself does
+not grant product-management or service-control credentials.
+
+The new SDK accepts older observations that omit these additive fields. Older
+strict SDKs may refuse the expanded owner observation; upgrade the canonical
+client for service-control administration. Ordinary legacy management and pairing
+response shapes are unchanged.
+
 ## Selected boundary
 
 The selected Studio compute-control-plane program includes a standalone YVEX

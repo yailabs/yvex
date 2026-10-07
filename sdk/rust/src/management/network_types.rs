@@ -65,7 +65,7 @@ pub enum OwnerPosture {Approved,Revoked}
 pub enum OwnerProfilePosture {Prepared,Claiming,Approved,Revoked}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all="snake_case")]
-pub enum OwnerActionKind {PairingOpen,PairingApprove,PairingRevoke,OwnerRevoke}
+pub enum OwnerActionKind {PairingOpen,PairingApprove,PairingRevoke,OwnerRevoke,ServiceControlGrant,ServiceControlRevoke}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all="snake_case")]
 pub enum OwnerActionPosture {Applied,Refused}
@@ -106,6 +106,8 @@ pub struct OwnerPeer {
     pub posture: PairingPosture,
     pub scope: String,
     pub expires_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_control_granted: Option<bool>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -116,6 +118,8 @@ pub struct OwnerAdministrationObservation {
     pub revision: u64,
     pub open_until_unix_ms: u64,
     pub peers: Vec<OwnerPeer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available_actions: Option<Vec<OwnerActionKind>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

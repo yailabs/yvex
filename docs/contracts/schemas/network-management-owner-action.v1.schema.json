@@ -29,7 +29,9 @@
         "pairing_open",
         "pairing_approve",
         "pairing_revoke",
-        "owner_revoke"
+        "owner_revoke",
+        "service_control_grant",
+        "service_control_revoke"
       ]
     },
     "target_ref": {

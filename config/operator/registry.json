@@ -283,6 +283,22 @@
       {
         "operation": "source.cleanup",
         "kind": "job"
+      },
+      {
+        "operation": "host.control",
+        "kind": "read"
+      },
+      {
+        "operation": "host.start",
+        "kind": "job"
+      },
+      {
+        "operation": "host.stop",
+        "kind": "job"
+      },
+      {
+        "operation": "host.restart",
+        "kind": "job"
       }
     ]
   },
@@ -10546,6 +10562,80 @@
       "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
       "summary": "Revoke an exact remote pairing administrator.",
       "test_owner": "tests/integration/network_ownership.py",
+      "visibility": "product-default"
+    },
+    {
+      "adapter_argv": [
+        "host-worker"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [
+        {
+          "completion_provider": "none",
+          "multiplicity": "one",
+          "name": "control_root",
+          "required": true,
+          "validator": "syntax.text",
+          "value_type": "text"
+        },
+        {
+          "completion_provider": "none",
+          "multiplicity": "one",
+          "name": "action_id",
+          "required": true,
+          "validator": "syntax.text",
+          "value_type": "text"
+        }
+      ],
+      "command_path": [
+        "management",
+        "host-worker"
+      ],
+      "documentation_owner": "docs/contracts/remote-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.host.worker",
+      "side_effects": "owns one explicitly configured native Host process",
+      "summary": "Internal managed Host process owner.",
+      "test_owner": "tests/integration/product_management.py",
+      "visibility": "automation"
+    },
+    {
+      "adapter_argv": [
+        "host-configure"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [
+        {
+          "completion_provider": "none",
+          "multiplicity": "one",
+          "name": "inference_port",
+          "required": true,
+          "validator": "syntax.text",
+          "value_type": "text"
+        }
+      ],
+      "command_path": [
+        "management",
+        "host-configure"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.host.configure",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        }
+      ],
+      "side_effects": "explicit local managed Host configuration; no Host start or peer grant",
+      "summary": "Opt in to managed Host control while stopped; select the inference port.",
+      "test_owner": "tests/integration/network_management.py",
       "visibility": "product-default"
     }
   ],

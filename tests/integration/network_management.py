@@ -130,11 +130,11 @@ def main():
             assert status == 200 and response['status'] == 'ok'
             assert response['device_identity'] == certificate
             assert response['authenticated_peer'] == 'credential-sha256:' + digest
-            assert len(response['data']['operations']) == 36
+            assert len(response['data']['operations']) == 40
             assert operation('management.capabilities', credential=secrets.token_hex(32))[0] == 403
             status, response = operation('management.capabilities', local=True)
             assert status == 200 and response['authenticated_peer'] == f'local-user:{os.geteuid()}'
-            assert len(response['data']['operations']) == 36
+            assert len(response['data']['operations']) == 40
             assert exchange('POST', '/v1/management', {}, token, extra='X-Yvex-Device-Identity: tls-sha256:'+'0'*64+'\r\n')[1]['reason'] == 'stale_management_device_identity'
             for extra in ['Origin: http://untrusted.invalid\r\n', 'Transfer-Encoding: chunked\r\n',
                           'Authorization: Bearer duplicate\r\n', 'Host: duplicate\r\n',
@@ -224,7 +224,7 @@ def main():
             print(json.dumps({'result': 'PASS', 'evidence_class': 'generated_loopback_TLS_and_same_user_UDS',
                               'controls': ['public identity only', 'closed/pending/approved pairing',
                                            'strict framing', 'wrong credential', 'private stable TLS identity',
-                                           '36 shared operations', 'last-known Host is historical, never admission', 'durable receipt restart',
+                                           '40 shared operations', 'last-known Host is historical, never admission', 'durable receipt restart',
                                            'transport-separated receipt access', 'remote revoke/local continuity',
                                            '8-connection bound', 'absolute TLS deadline', 'unsafe storage refusal'],
                               'operator_state_touched': False}))

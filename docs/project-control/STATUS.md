@@ -27,14 +27,17 @@ producer and independent-client scope. Public preparation now exposes typed
 assessment, selection basis and explicit unevaluated runtime/quality/performance
 boundaries. General hardware-aware compiler search and distributed realization
 remain OPEN; several connected Hosts do not qualify either. Training retains
-ADR 0013's future ownership. Consumer/native product acceptance remains separate.
+ADR 0013's future ownership. Consumer/native product acceptance remains separate. Managed Host control now
+adds explicit ownership, separate service-control permission, revision/instance
+fences and durable start/stop/restart. Disposable native zero-engine and HTTPS
+proof is qualified; the DGX operator Host has not been migrated or restarted.
 
 ## Platform control-plane convergence
 
 The selected milestone has qualified the independent MIT public SDK (`sdk/rust`
 0.2 and `@yvex/sdk`), explicit headless ownership, typed observation retention,
 profile v3 readiness and exact reviewed-build-plan fencing. Product management
-remains 36 operations; CLI classification covers 186 entries. CPU, protocol,
+now has 40 operations; CLI classification covers 193 entries. CPU, protocol,
 native-vault and recovery evidence is recorded in
 [control-plane evaluation](../evaluation/product-management-control-plane.md).
 Studio native visual acceptance and the complete real model-to-Case vertical
@@ -57,7 +60,7 @@ remain separate closure requirements; the milestone is not declared complete.
 - **Execution:** cooperative ready progress and real batch/worklist populations;
   dynamic ready-sequence join/leave is not established.
 - **Interfaces:** local protocol v25, bounded OpenAI adapter, real provider progress;
-  36 typed product-management operations share native owners and durable receipts.
+  40 typed product-management operations share native owners and durable receipts.
   Standalone HTTPS/pairing and same-user local management are under cross-client
   qualification; [network contract](../contracts/network-management.md).
   The [remote finite producer](../contracts/finite-decision-remote.md) separately

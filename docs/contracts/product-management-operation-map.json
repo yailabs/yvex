@@ -1147,6 +1147,18 @@
       "class": "cli_interaction",
       "public_operation": null,
       "reason": "Local installation recovery can revoke the owner. Authenticated remote administration uses the separately versioned ownership API, not an ordinary product-management grant."
+    },
+    {
+      "operation": "management.host.configure",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Explicit local process configuration; remote callers cannot select arbitrary process arguments or paths."
+    },
+    {
+      "operation": "management.host.worker",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Private product process owner behind exact Host lifecycle receipts."
     }
   ]
 }

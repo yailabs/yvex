@@ -108,16 +108,24 @@ impl Service {
                 {
                     return Err("stale_management_device_identity");
                 }
+                let mut service_control = uid.is_some();
                 let peer = if let Some(uid) = uid {
                     format!("local-user:{uid}")
                 } else {
                     let hash = bearer(request.authorization.as_deref())?;
                     self.store.authorize(&hash)?;
+                    service_control = self.store.service_control(&hash)?;
                     format!("credential-sha256:{hash}")
                 };
                 // Receipt identity is transport-domain separated, unlike the public peer label.
                 let journal = pairing::digest(format!("yvex.management.peer.v1:{peer}").as_bytes());
-                management_product::network_request(&request.body, &self.device, &peer, &journal)
+                management_product::network_request(
+                    &request.body,
+                    &self.device,
+                    &peer,
+                    &journal,
+                    Some((&self.store.control_root(), service_control)),
+                )
             }
             _ => Err("unsupported_management_route"),
         }
@@ -486,11 +494,27 @@ fn serve(invocation: &Invocation<'_>, store: Store) -> Result<Output> {
     Ok(Output::standard(String::new(), 0))
 }
 pub(crate) fn dispatch(invocation: &Invocation<'_>) -> Result<Output> {
+    if invocation.operation.operation_id == "management.host.worker" {
+        crate::management_host::worker(
+            std::path::Path::new(&invocation.positionals[0]),
+            &invocation.positionals[1],
+        )
+        .map_err(|_| "managed_host_worker_failed")?;
+        return Ok(Output::standard(String::new(), 0));
+    }
     let store = Store::open(invocation.value("--state-dir"))?;
     // Initialize identity before any approval ledger can be created.
     let _ = store.identity()?;
     let value = match invocation.operation.operation_id.as_str() {
         "management.network.serve" => return serve(invocation, store),
+        "management.host.configure" => crate::management_host::configure(
+            &store.control_root(),
+            invocation.positionals[0]
+                .parse()
+                .map_err(|_| "invalid_inference_port")?,
+        )
+        .map_err(|_| "host_configuration_refused")?,
+
         "management.network.identity" => {
             let identity = store.identity()?;
             json!({"schema":"yvex.management.identity.v1","device_identity":identity.device(),

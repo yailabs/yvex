@@ -38,13 +38,15 @@ HTTPS with explicit local pairing approval and per-request grant revocation.
 The producer stores credential digests; the native client owns protected secret
 storage. mDNS supplies untrusted discovery hints. A same-user public Unix socket
 uses owner-only paths, OS peer identity and a selected service identity precondition.
-All transports dispatch the same 36-operation contract. Existing scoped SSH and
+All transports dispatch the same 40-operation catalog. Existing scoped SSH and
 finite-decision protocols retain distinct grants; management enrollment grants no
 inference credential, YAI trust, Participant authority or Case permission.
 
-The service can exist with a stopped or empty computational Host. Starting it
-never replaces another Host. Listener/service provisioning and registry credential
-administration remain explicit local owners. Arbitrary file transfer requires a
+The service can exist with a stopped or empty computational Host. Starting management never replaces another Host. The 2026-10-07 extension adds
+explicit locally configured managed-Host lifecycle under a separate remote
+service-control grant. Existing operator Hosts remain external. Restart creates
+a new empty Host and does not imply model/session restoration. Management-listener
+provisioning and registry credential administration remain explicit local owners. Arbitrary file transfer requires a
 bounded transfer/admission contract before remote promotion. Training requires
 its own producer semantics before capability or UI publication.
 
