@@ -24,6 +24,7 @@ pub mod help;
 pub mod host;
 mod interaction;
 mod management;
+mod management_host;
 mod management_jobs;
 mod management_local;
 mod management_models;
@@ -241,7 +242,8 @@ fn dispatch(
                     "management.product.protocol" => management_product::protocol(invocation),
                     op if op.starts_with("management.network.")
                         || op.starts_with("management.pairing.")
-                        || op.starts_with("management.owner.") =>
+                        || op.starts_with("management.owner.")
+                        || op.starts_with("management.host.") =>
                     {
                         management_network::dispatch(invocation)
                     }

@@ -877,6 +877,8 @@ pub struct BuildResult {
     pub binding_published: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planning: Option<BuildPlanning>,
     #[serde(flatten)]
     pub additional: std::collections::BTreeMap<String, serde_json::Value>,
 }
@@ -1074,6 +1076,97 @@ pub struct LastKnownHost {
     pub host_instance: String,
     pub status: HostSnapshot,
     pub observed_at_unix_ms: u64,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct BuildPlanning {
+    pub schema: String,
+    pub readiness: ProfileReadiness,
+    pub basis: BuildPlanningBasis,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub native_status: Option<i64>,
+    #[serde(default)]
+    pub owner: Option<String>,
+    #[serde(default)]
+    pub execution_strategy: Option<String>,
+    pub runtime_admission: BuildEvidencePosture,
+    pub quality_evidence: BuildEvidencePosture,
+    pub performance_evidence: BuildEvidencePosture,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildPlanningBasis {
+    AdmittedRecipe,
+    VerifiedProfile,
+    NotAdmitted,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildEvidencePosture {
+    NotEvaluated,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostOwnership {
+    Managed,
+    External,
+    Unconfigured,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct HostControl {
+    pub schema: String,
+    pub ownership: HostOwnership,
+    pub revision: u64,
+    pub state: HostState,
+    #[serde(default)]
+    pub host_instance: Option<String>,
+    pub configured: bool,
+    pub service_control_granted: bool,
+    pub can_start: bool,
+    pub can_stop: bool,
+    pub can_restart: bool,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub inference_port: Option<u64>,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostStartInput {
+    pub expected_revision: u64,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostStopInput {
+    pub expected_revision: u64,
+    pub host_instance: String,
+    pub acknowledge_disruption: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostControlPhase {
+    Stopping,
+    Stopped,
+    Starting,
+    Running,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct HostControlResult {
+    pub schema: String,
+    pub phase: HostControlPhase,
+    pub revision: u64,
+    #[serde(default)]
+    pub previous_host_instance: Option<String>,
+    #[serde(default)]
+    pub host_instance: Option<String>,
+    pub models_restored: bool,
     #[serde(flatten)]
     pub additional: std::collections::BTreeMap<String, serde_json::Value>,
 }
@@ -1332,6 +1425,34 @@ pub mod operations {
         const ID: &'static str = "source.cleanup";
         const KIND: OperationKind = OperationKind::Job;
     }
+    pub struct HostControl;
+    impl Operation for HostControl {
+        type Input = super::EmptyInput;
+        type Output = super::HostControl;
+        const ID: &'static str = "host.control";
+        const KIND: OperationKind = OperationKind::Read;
+    }
+    pub struct HostStart;
+    impl Operation for HostStart {
+        type Input = super::HostStartInput;
+        type Output = super::Job;
+        const ID: &'static str = "host.start";
+        const KIND: OperationKind = OperationKind::Job;
+    }
+    pub struct HostStop;
+    impl Operation for HostStop {
+        type Input = super::HostStopInput;
+        type Output = super::Job;
+        const ID: &'static str = "host.stop";
+        const KIND: OperationKind = OperationKind::Job;
+    }
+    pub struct HostRestart;
+    impl Operation for HostRestart {
+        type Input = super::HostStopInput;
+        type Output = super::Job;
+        const ID: &'static str = "host.restart";
+        const KIND: OperationKind = OperationKind::Job;
+    }
 }
 pub(crate) fn validate_input(operation: &str, value: &serde_json::Value) -> Result<(), serde_json::Error> {
     match operation {
@@ -1371,6 +1492,10 @@ pub(crate) fn validate_input(operation: &str, value: &serde_json::Value) -> Resu
         "profile.create" => serde_json::from_value::<ProfileCreateInput>(value.clone()).map(|_| ()),
         "profile.remove" => serde_json::from_value::<ProfileRemoveInput>(value.clone()).map(|_| ()),
         "source.cleanup" => serde_json::from_value::<SourceCleanupInput>(value.clone()).map(|_| ()),
+        "host.control" => serde_json::from_value::<EmptyInput>(value.clone()).map(|_| ()),
+        "host.start" => serde_json::from_value::<HostStartInput>(value.clone()).map(|_| ()),
+        "host.stop" => serde_json::from_value::<HostStopInput>(value.clone()).map(|_| ()),
+        "host.restart" => serde_json::from_value::<HostStopInput>(value.clone()).map(|_| ()),
         _ => Err(serde::de::Error::custom("unknown operation")),
     }
 }
@@ -1412,6 +1537,10 @@ pub(crate) fn validate_projection(operation: &str, value: &serde_json::Value) ->
         "profile.create" => serde_json::from_value::<Job>(value.clone()).map(|_| ()),
         "profile.remove" => serde_json::from_value::<Job>(value.clone()).map(|_| ()),
         "source.cleanup" => serde_json::from_value::<Job>(value.clone()).map(|_| ()),
+        "host.control" => serde_json::from_value::<HostControl>(value.clone()).map(|_| ()),
+        "host.start" => serde_json::from_value::<Job>(value.clone()).map(|_| ()),
+        "host.stop" => serde_json::from_value::<Job>(value.clone()).map(|_| ()),
+        "host.restart" => serde_json::from_value::<Job>(value.clone()).map(|_| ()),
         _ => unreachable!("validated operation"),
     }
 }
@@ -1557,6 +1686,27 @@ pub(crate) fn validate_job(job: &Job) -> Result<(), serde_json::Error> {
             }
             Ok(())
         }
+        "host.start" => {
+            serde_json::from_value::<HostStartInput>(job.input.clone())?;
+            if let Some(result) = &job.result {
+                serde_json::from_value::<HostControlResult>(result.clone()).map(|_| ())?;
+            }
+            Ok(())
+        }
+        "host.stop" => {
+            serde_json::from_value::<HostStopInput>(job.input.clone())?;
+            if let Some(result) = &job.result {
+                serde_json::from_value::<HostControlResult>(result.clone()).map(|_| ())?;
+            }
+            Ok(())
+        }
+        "host.restart" => {
+            serde_json::from_value::<HostStopInput>(job.input.clone())?;
+            if let Some(result) = &job.result {
+                serde_json::from_value::<HostControlResult>(result.clone()).map(|_| ())?;
+            }
+            Ok(())
+        }
         _ => Err(serde::de::Error::custom("unknown job operation")),
     }
 }
@@ -1597,6 +1747,10 @@ pub const OPERATIONS: &[(&str, OperationKind)] = &[
     ("profile.create", OperationKind::Job),
     ("profile.remove", OperationKind::Job),
     ("source.cleanup", OperationKind::Job),
+    ("host.control", OperationKind::Read),
+    ("host.start", OperationKind::Job),
+    ("host.stop", OperationKind::Job),
+    ("host.restart", OperationKind::Job),
 ];
 pub struct Models<'a>(&'a crate::management::Client);
 impl crate::management::Client {
@@ -1668,6 +1822,18 @@ impl crate::management::Client {
 impl Hosts<'_> {
     pub fn get(&self, input: &EmptyInput) -> Result<crate::management::Observation<HostObservation>, crate::management::Error> {
         self.0.read::<operations::HostGet>(input)
+    }
+    pub fn control(&self, input: &EmptyInput) -> Result<crate::management::Observation<HostControl>, crate::management::Error> {
+        self.0.read::<operations::HostControl>(input)
+    }
+    pub fn prepare_start(&self, input: &HostStartInput) -> Result<crate::management::Prepared<operations::HostStart>, crate::management::Error> {
+        self.0.prepare::<operations::HostStart>(input)
+    }
+    pub fn prepare_stop(&self, input: &HostStopInput) -> Result<crate::management::Prepared<operations::HostStop>, crate::management::Error> {
+        self.0.prepare::<operations::HostStop>(input)
+    }
+    pub fn prepare_restart(&self, input: &HostStopInput) -> Result<crate::management::Prepared<operations::HostRestart>, crate::management::Error> {
+        self.0.prepare::<operations::HostRestart>(input)
     }
 }
 pub struct Engines<'a>(&'a crate::management::Client);

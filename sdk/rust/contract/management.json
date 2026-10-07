@@ -642,7 +642,8 @@
       "creation_reproducible": "optional:bool",
       "runtime_binding": "optional:string",
       "binding_published": "optional:bool",
-      "plan_id": "optional:string"
+      "plan_id": "optional:string",
+      "planning": "optional:BuildPlanning"
     },
     "JobSummary": {
       "job_id": "string",
@@ -785,6 +786,75 @@
       "host_instance": "string",
       "status": "HostSnapshot",
       "observed_at_unix_ms": "u64"
+    },
+    "BuildPlanning": {
+      "schema": "string",
+      "readiness": "ProfileReadiness",
+      "basis": "BuildPlanningBasis",
+      "reason": "nullable:string",
+      "native_status": "nullable:i64",
+      "owner": "nullable:string",
+      "execution_strategy": "nullable:string",
+      "runtime_admission": "BuildEvidencePosture",
+      "quality_evidence": "BuildEvidencePosture",
+      "performance_evidence": "BuildEvidencePosture"
+    },
+    "BuildPlanningBasis": {
+      "$enum": [
+        "admitted_recipe",
+        "verified_profile",
+        "not_admitted"
+      ]
+    },
+    "BuildEvidencePosture": {
+      "$enum": [
+        "not_evaluated"
+      ]
+    },
+    "HostOwnership": {
+      "$enum": [
+        "managed",
+        "external",
+        "unconfigured"
+      ]
+    },
+    "HostControl": {
+      "schema": "string",
+      "ownership": "HostOwnership",
+      "revision": "u64",
+      "state": "HostState",
+      "host_instance": "nullable:string",
+      "configured": "bool",
+      "service_control_granted": "bool",
+      "can_start": "bool",
+      "can_stop": "bool",
+      "can_restart": "bool",
+      "reason": "nullable:string",
+      "inference_port": "nullable:u64"
+    },
+    "HostStartInput": {
+      "expected_revision": "u64"
+    },
+    "HostStopInput": {
+      "expected_revision": "u64",
+      "host_instance": "string",
+      "acknowledge_disruption": "bool"
+    },
+    "HostControlPhase": {
+      "$enum": [
+        "stopping",
+        "stopped",
+        "starting",
+        "running"
+      ]
+    },
+    "HostControlResult": {
+      "schema": "string",
+      "phase": "HostControlPhase",
+      "revision": "u64",
+      "previous_host_instance": "nullable:string",
+      "host_instance": "nullable:string",
+      "models_restored": "bool"
     }
   },
   "operations": [
@@ -1003,6 +1073,30 @@
       "kind": "job",
       "input": "SourceCleanupInput",
       "output": "Job"
+    },
+    {
+      "operation": "host.control",
+      "input": "EmptyInput",
+      "output": "HostControl",
+      "kind": "read"
+    },
+    {
+      "operation": "host.start",
+      "input": "HostStartInput",
+      "output": "Job",
+      "kind": "job"
+    },
+    {
+      "operation": "host.stop",
+      "input": "HostStopInput",
+      "output": "Job",
+      "kind": "job"
+    },
+    {
+      "operation": "host.restart",
+      "input": "HostStopInput",
+      "output": "Job",
+      "kind": "job"
     }
   ],
   "job_results": {
@@ -1066,12 +1160,21 @@
     ],
     "profile.scan": [
       "ProfileScan"
+    ],
+    "host.start": [
+      "HostControlResult"
+    ],
+    "host.stop": [
+      "HostControlResult"
+    ],
+    "host.restart": [
+      "HostControlResult"
     ]
   },
   "producer_schemas": {
     "request_schema_path": "docs/contracts/schemas/product-management-request.v2.schema.json",
-    "request_schema_sha256": "72c576995acaf89504532e30bc09bdd51d8cc655f7f7aa04848f916a25ce3667",
+    "request_schema_sha256": "5da19e24b4f90a09d0c979c245febb188fefe02110ecf87f562c63aba27d2826",
     "response_schema_path": "docs/contracts/schemas/product-management-response.v2.schema.json",
-    "response_schema_sha256": "7c3dda5e09a45d64f46e72ba3710e2635cee5af1921db291abf89439d9df32b6"
+    "response_schema_sha256": "135a0f242d8a0124d3e85ae8a8f7bfac6ee7dae42805f97714573f9569e58eaf"
   }
 }

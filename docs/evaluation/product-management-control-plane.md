@@ -13,6 +13,136 @@ publication: {html: true, pdf: true, index: true}
 [Evaluation](README.md) · [Public contract](../contracts/product-management.md) ·
 [Lifecycle classification](../contracts/product-management-lifecycle-map.md)
 
+## Managed Host lifecycle correction — 2026-10-07
+
+Starts from `07e6c8a8`. The operator rejected the prior client composition and
+identified missing practical server control. The producer now exposes
+`host.control/start/stop/restart` through the independent public SDK. This is a
+bounded correction in the selected compute milestone, not whole-product or human
+acceptance. No DGX or operator Host/Engine/Session/Case was mutated.
+
+Evidence: 89 Rust unit tests pass (two unrelated opt-in tests ignored), five
+Rust structure checks pass, 40 canonical SDK tests pass, existing bounded HTTPS
+and headless ownership lanes pass. `tests/integration/managed_host_lifecycle.py`
+uses an actual zero-engine native Host under disposable HTTPS and proves explicit
+grant default-deny, configuration, lost-response exact observation, duplicate
+request identity, stale control/Host fencing, restart into a new empty instance,
+management restart independence, revoke, settled shutdown, occupied inference
+port failure and external Host protection. This does not qualify loaded-model
+shutdown, physical DGX rollout, inference compatibility or human UI acceptance.
+
+### Reproduce the isolated producer controls
+
+From the YVEX repository, with its required Rust toolchain and native archive:
+
+```sh
+make generate-operator-registry
+CARGO_TARGET_DIR=build/host-control-cargo cargo +1.98.1 build --locked --bin yvex
+YVEX_BIN=build/host-control-cargo/debug/yvex python3 tests/integration/managed_host_lifecycle.py
+```
+
+For a persistent disposable native Studio target:
+
+```sh
+python3 tests/support/managed_host_fixture.py --binary build/host-control-cargo/debug/yvex --root /tmp/yvex-studio-host-test
+```
+
+Use a new root. The helper prints the exact HTTPS endpoint/pin and invitation
+file, configures only a disposable stopped Host, and never automatically approves
+a client. Keep it running while exercising Studio; Ctrl+C stops only its isolated
+Host/service. Use its `profiles` directory through
+`YVEX_SDK_CONNECTION_PROFILE_ROOT` when launching the qualification client.
+
+### Procedura operatore e confronto pubblico
+
+1. In Studio aggiungi il server indicato dal fixture, verifica il pin stampato e
+   richiedi accesso. Importa l'invito proprietario attraverso il percorso nativo.
+2. Approva il client: la gestione ordinaria funziona, ma **Start server** resta
+   non ammesso finché il proprietario non concede esplicitamente il controllo
+   del server. Confronta `host.control.service_control_granted` e `can_start`.
+3. Concedi il permesso al solo client del fixture. Avvia: `state=running`,
+   `ownership=managed`, `host_instance` presente, zero modelli caricati.
+4. Riavvia dopo la conferma: l'identità cambia; modelli e Sessions restano zero.
+   Ferma: `state=stopped`; il servizio HTTPS continua a rispondere.
+5. Revoca il permesso: i successivi comandi di controllo devono essere rifiutati.
+   Ritorna al Case: nessun Case, identità o draft deve cambiare.
+
+Per controllare gli stessi oggetti usa il client pubblico SDK `connections`:
+`connections invoke PROFILE_REF REQUEST_FILE`. Il file contiene
+`schema: yvex.management.request.v2`, un `request_id` casuale a 64 cifre esadecimali,
+`operation: host.control` (oppure `host.get`, `engine.list`) e `input: {}`.
+Per osservare un comando già inviato usa `operation: job.get` con
+`input: {"job_id":"IDENTITÀ_ESATTA"}`. Dopo risposta persa osserva quel Job;
+non rispedire il comando. `connections owner-connections OWNER_REF` rende i
+permessi e la revisione del proprietario. Il client legge le credenziali dal
+vault nativo e non richiede di stamparle o passarle negli argomenti.
+
+Restituisci schermate dello stato fermo/attivo, conferma riavvio, nuovo stato e
+permesso revocato, insieme alle identità pubbliche del fixture. Queste prove sono
+mutazioni esplicite **solo del fixture**. Il server operatore già avviato con
+`yvex serve` resta `external`: una migrazione richiede un diverso intervento
+esplicitamente autorizzato, con arresto e successivo ricaricamento dei modelli.
+L'accettazione visiva umana rimane pendente.
+
+## Compute product refoundation — 2026-10-07
+
+`COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` starts from reconciled published
+`36c16dfb`. Its bounded producer change adds optional `yvex.build.planning.v1`
+to the existing preparation result. CLI and public management share the same
+preparation owner. No new operation, source ABI, scheduling owner, training or
+distributed execution implementation is introduced.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Typed assessment | Native status owner and canonical SDK enum | Six refusal classes; arbitrary contradictory prose; legacy result | Status classification, no readiness inferred from prose or missing field | Exact readiness; legacy optional absence; fabricated runtime admission rejected | Exact typed value | PASS | Producer/client assessment semantics |
+| Preparation management | Real native preparation and source/profile owners | Disposable acquired-record fixture, no weights; controlled registry provider | Ready recipe plan; same identity; stale fence before compile; incompatible known source | Exact plan survives repeat; stale refuses; blocked assessment has no executable plan; actual build still fails | No physical plan or source-byte mutation | PASS | Public Job/result semantics, not real compilation/model execution |
+| Sibling CLI | Same preparation owner | 14 existing preparation controls | Typed dry-run, nonzero blocked exit, retained blocker field, no output/source mutation | All controls pass | Exact contract/preservation | PASS | CLI compatibility |
+| Public independent SDK | `sdk/rust` with native credential feature | 40 unit/transport/profile controls | Typed projection and compatibility, exact recovery/security maintained | All pass | Exact contract | PASS | Independent client regression |
+| Contract inventory | Producer registry/operation map | Published main plus additive assessment | Every CLI entry classified; no accidental operation addition | 191 CLI entries, 36 management operations | Exact inventory | PASS | Public parity, not real endpoint availability |
+
+A planning assessment does not inspect actual hardware placement or prove memory
+fit. Native source verification, compilation, artifact admission, Engine load and
+runtime resource admission remain separate. Runtime/quality/performance are
+explicitly not evaluated, including when readiness is ready. Current build logic
+selects admitted source recipe/deployment defaults; generic hardware/workload/quality
+search is still the OPEN Physical Model Compiler research owner.
+
+The architecture audit found current public Sessions bound to one exact Host
+instance/Engine generation. Multiple connected Hosts and multiple Engines are real
+management/lifetime properties, not coordinated distributed execution. Unlocking
+that boundary requires runtime/compiler-owned logical realization, placement,
+state/transaction and partial-failure/recovery contracts. Existing Session fences
+cannot be weakened or replaced by client-local topology. Native adaptation is
+reconciled with ADR 0013 without advertising training capability.
+
+### Riproduzione operatore
+
+Sul server YVEX, nella stessa sessione/profilo del servizio osservato da Studio:
+
+```sh
+yvex model list --json
+yvex host status --json
+yvex model active --json
+yvex session list --model '<alias esatto osservato>' --json
+```
+
+Questi controlli leggono catalogo, Host, Engine e Sessioni. Confrontare identità
+modello, generazione, backend, numero e identità Sessioni con la UI; un errore di
+osservazione non significa inventario vuoto. Non copiare credenziali nell'output.
+Per il planner, dopo aver selezionato un modello esatto nel catalogo:
+
+```sh
+yvex model prepare '<modello esatto>' --dry-run --json
+```
+
+Il dry run prende il lease di preparazione e osserva il piano; non compila né
+carica un Engine. Confrontare `plan_id`, backend, quant, `planning.readiness`,
+`planning.basis` e motivi. BLOCKED ha exit nonzero e nessun piano eseguibile;
+ready non promette fit, qualità o prestazioni. Il listener remoto deve essere
+aggiornato a questa revisione prima che Studio possa osservare il nuovo campo.
+Nessun aggiornamento/restart del servizio DGX è stato eseguito per questa prova.
+La procedura UI/native e l'accettazione umana rimangono al consumer Studio.
+
 ## Qualified producer boundary
 
 `YVEX.STUDIO.COMPUTE.CONTROL.PLANE.0` starts from published YVEX `803dd98d`.

@@ -72,6 +72,31 @@ fn ready(view: &View, selector: &str, changed: bool, published: bool) -> Value {
         "action": if view.rebind { "rebound" } else { "prepared" },
         "creation_reproducible": !view.rebind})
 }
+// A preparation assessment is independent of runtime admission and benchmark evidence.
+// Keep it outside the existing plan digest so additive explanation does not rewrite
+// reviewed compilation identity or make an older exact plan silently mean new work.
+fn planning(mut value: Value, basis: &str, strategy: Option<&str>) -> Value {
+    value["planning"] = json!({"schema":"yvex.build.planning.v1", "readiness":"ready",
+        "basis":basis, "reason":null, "native_status":null, "owner":null,
+        "execution_strategy":strategy, "runtime_admission":"not_evaluated",
+        "quality_evidence":"not_evaluated", "performance_evidence":"not_evaluated"});
+    value
+}
+fn blocked_plan(selector: &str, error: &ffi::Error) -> Value {
+    let readiness = match error.code {
+        raw::yvex_status_YVEX_ERR_UNSUPPORTED => "incompatible",
+        raw::yvex_status_YVEX_ERR_IO | raw::yvex_status_YVEX_ERR_NOMEM => "unavailable",
+        raw::yvex_status_YVEX_ERR_INVALID_ARG | raw::yvex_status_YVEX_ERR_STATE => "blocked",
+        _ => "unknown",
+    };
+    json!({"schema":"yvex.model.prepare.v1", "model":selector,
+        "state":"BLOCKED", "changed":false, "blocker":error.message,
+        "planning":{"schema":"yvex.build.planning.v1", "readiness":readiness,
+        "basis":"not_admitted", "reason":error.message, "native_status":error.code,
+        "owner":error.owner, "execution_strategy":null,
+        "runtime_admission":"not_evaluated", "quality_evidence":"not_evaluated",
+        "performance_evidence":"not_evaluated"}})
+}
 fn exists(path: &str) -> Result<bool> {
     match std::fs::symlink_metadata(path) {
         Ok(_) => Ok(true),
@@ -227,52 +252,86 @@ pub(crate) fn prepare_model_expected(
     })?;
     let model = library.snapshot(index)?;
     let selector = catalog::selector(&model);
-    if model.entry.profile_launchable != 0 && request.quant.is_none() && request.imatrix.is_none() {
-        ffi::preparation::verify_ready(&library, index, request)?;
-        return seal_plan(
-            json!({"schema": "yvex.model.prepare.v1", "model": selector,
-            "state": "READY", "changed": false}),
-            &model,
-            expected,
-        );
-    }
     let dry = request.dry;
+    if model.entry.profile_launchable != 0 && request.quant.is_none() && request.imatrix.is_none() {
+        if let Err(error) = ffi::preparation::verify_ready(&library, index, request) {
+            return if dry {
+                Ok(blocked_plan(&selector, &error))
+            } else {
+                Err(error.into())
+            };
+        }
+        return Ok(planning(
+            seal_plan(
+                json!({"schema": "yvex.model.prepare.v1", "model": selector,
+            "state": "READY", "changed": false}),
+                &model,
+                expected,
+            )?,
+            "verified_profile",
+            None,
+        ));
+    }
     let imatrix = request.imatrix;
-    let mut context = Preparation::open(&library, index, request).map_err(|error| ffi::Error {
-        code: error.code,
-        owner: "model.prepare.blocked".into(),
-        message: if model
-            .sources
-            .first()
-            .is_some_and(|source| ffi::text(&source.format).eq_ignore_ascii_case("gguf"))
-        {
-            concat!(
-                "existing GGUF is preserved without requantization, ",
-                "but this representation has no admitted runtime binding"
-            )
-            .into()
-        } else {
-            error.message
-        },
-    })?;
+    let mut context = match Preparation::open(&library, index, request) {
+        Ok(context) => context,
+        Err(mut error) => {
+            error.owner = "model.prepare.blocked".into();
+            if model
+                .sources
+                .first()
+                .is_some_and(|source| ffi::text(&source.format).eq_ignore_ascii_case("gguf"))
+            {
+                error.message = concat!(
+                    "existing GGUF is preserved without requantization, ",
+                    "but this representation has no admitted runtime binding"
+                )
+                .into();
+            }
+            return if dry {
+                Ok(blocked_plan(&selector, &error))
+            } else {
+                Err(error.into())
+            };
+        }
+    };
     let view = context.view()?;
     let reviewed = seal_plan(plan(&view, &selector), &model, expected)?;
     if dry {
-        return Ok(reviewed);
+        return Ok(planning(reviewed, "admitted_recipe", Some(&view.strategy)));
     }
     context.verify()?;
     if !view.rebind && compile(&mut context, imatrix, index)? {
-        return Ok(ready(&context.view()?, &selector, false, false));
+        return Ok(planning(
+            ready(&context.view()?, &selector, false, false),
+            "verified_profile",
+            Some(&view.strategy),
+        ));
     }
     let published = context.binding()?;
     let view = context.view()?;
     publish_profile(&view, imatrix)?;
-    Ok(ready(&view, &selector, true, published))
+    Ok(planning(
+        ready(&view, &selector, true, published),
+        "verified_profile",
+        Some(&view.strategy),
+    ))
 }
 
 pub(crate) fn dispatch(invocation: &Invocation<'_>, width: usize, styled: bool) -> Result<Output> {
     match prepare_model(&invocation.positionals[0], request(invocation)) {
-        Ok(value) => present(value, invocation.has("--json"), width, styled, 0),
+        Ok(value) => {
+            let exit = if value["state"] == "BLOCKED" {
+                if value["planning"]["native_status"] == raw::yvex_status_YVEX_ERR_INVALID_ARG {
+                    2
+                } else {
+                    3
+                }
+            } else {
+                0
+            };
+            present(value, invocation.has("--json"), width, styled, exit)
+        }
         Err(error) => {
             let Some(native) = error.downcast_ref::<ffi::Error>() else {
                 return Err(error);
@@ -896,4 +955,33 @@ pub(crate) fn check(invocation: &Invocation<'_>, width: usize, styled: bool) -> 
         report.render(mode == "audit" || invocation.has("--audit"), width, styled)?,
         exit,
     ))
+}
+
+#[cfg(test)]
+mod planning_tests {
+    use super::*;
+
+    #[test]
+    fn assessments_use_native_status_and_do_not_grant_runtime_or_quality() {
+        for (code, readiness) in [
+            (-5, "incompatible"),
+            (-3, "unavailable"),
+            (-2, "unavailable"),
+            (-10, "blocked"),
+            (-8, "blocked"),
+            (-999, "unknown"),
+        ] {
+            let error = ffi::Error {
+                code,
+                owner: "fixture.owner".into(),
+                message: "ready compatible available is not classification evidence".into(),
+            };
+            let value = blocked_plan("exact-model", &error);
+            assert_eq!(value["planning"]["readiness"], readiness);
+            assert_eq!(value["planning"]["native_status"], code);
+            assert_eq!(value["planning"]["runtime_admission"], "not_evaluated");
+            assert_eq!(value["changed"], false);
+            assert!(value.get("plan_id").is_none());
+        }
+    }
 }

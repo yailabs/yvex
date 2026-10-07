@@ -103,6 +103,8 @@ pub(crate) struct OwnerAction {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 struct Peer {
+    #[serde(default)]
+    service_control: bool,
     credential_hash: String,
     client_name: String,
     posture: String,
@@ -215,6 +217,17 @@ impl Store {
             return Err("unsafe_service_storage");
         }
         Ok(Self { root })
+    }
+    pub(crate) fn control_root(&self) -> PathBuf {
+        self.root.join("host-control")
+    }
+    pub(crate) fn service_control(&self, hash: &str) -> Result<bool> {
+        let _guard = self.lock()?;
+        let state = self.state()?;
+        Ok(state
+            .peers
+            .iter()
+            .any(|p| p.credential_hash == hash && p.posture == "approved" && p.service_control))
     }
     fn lock(&self) -> Result<fs::File> {
         let file = fs::OpenOptions::new()
@@ -340,6 +353,7 @@ impl Store {
             return Err("pairing_pending_capacity");
         }
         let peer = Peer {
+            service_control: false,
             credential_hash: hash.into(),
             client_name: name.into(),
             posture: "pending".into(),
@@ -537,10 +551,14 @@ impl Store {
         require_owner(&state, hash)?;
         Ok(json!({"schema":"yvex.management.owner.connections.v1",
             "scope":"pairing-administration","owner_ref":hash,"revision":state.revision,
-            "open_until_unix_ms":state.open_until,"peers":state.peers.iter().map(|peer| {
+            "open_until_unix_ms":state.open_until,
+            "available_actions":["pairing_open","pairing_approve","pairing_revoke",
+                "owner_revoke","service_control_grant","service_control_revoke"],
+            "peers":state.peers.iter().map(|peer| {
                 json!({"request_id":peer.credential_hash,"client_name":peer.client_name,
                     "posture":projection(peer,now())["posture"],"scope":"product-management",
-                    "expires_at_unix_ms":peer.expires_at})
+                    "expires_at_unix_ms":peer.expires_at,
+                    "service_control_granted":peer.service_control&&peer.posture=="approved"})
             }).collect::<Vec<_>>()}))
     }
     pub(crate) fn owner_action(&self, hash: &str, request: OwnerAction) -> Result<Value> {
@@ -548,7 +566,12 @@ impl Store {
             || !management_jobs::identity(&request.request_id)
             || !matches!(
                 request.action.as_str(),
-                "pairing_open" | "pairing_approve" | "pairing_revoke" | "owner_revoke"
+                "pairing_open"
+                    | "pairing_approve"
+                    | "pairing_revoke"
+                    | "owner_revoke"
+                    | "service_control_grant"
+                    | "service_control_revoke"
             )
             || (request.action == "pairing_open") != request.target_ref.is_none()
             || request
@@ -694,6 +717,14 @@ fn apply_owner_action(state: &mut State, request: &OwnerAction) -> Result<()> {
     let target = request.target_ref.as_deref().unwrap_or("");
     match request.action.as_str() {
         "pairing_open" => state.open_until = now() + WINDOW_MS,
+        "service_control_grant" | "service_control_revoke" => {
+            let peer = state
+                .peers
+                .iter_mut()
+                .find(|p| p.credential_hash == target && p.posture == "approved")
+                .ok_or("approved_peer_required")?;
+            peer.service_control = request.action == "service_control_grant";
+        }
         "owner_revoke" => {
             let owner = state
                 .owners

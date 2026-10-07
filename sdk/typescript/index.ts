@@ -621,6 +621,7 @@ export interface BuildResult {
   runtime_binding?: string;
   binding_published?: boolean;
   plan_id?: string;
+  planning?: BuildPlanning;
   [field: string]: unknown;
 }
 export interface JobSummary {
@@ -763,6 +764,55 @@ export interface LastKnownHost {
   observed_at_unix_ms: number;
   [field: string]: unknown;
 }
+export interface BuildPlanning {
+  schema: string;
+  readiness: ProfileReadiness;
+  basis: BuildPlanningBasis;
+  reason: string | null;
+  native_status: number | null;
+  owner: string | null;
+  execution_strategy: string | null;
+  runtime_admission: BuildEvidencePosture;
+  quality_evidence: BuildEvidencePosture;
+  performance_evidence: BuildEvidencePosture;
+  [field: string]: unknown;
+}
+export type BuildPlanningBasis = "admitted_recipe" | "verified_profile" | "not_admitted";
+export type BuildEvidencePosture = "not_evaluated";
+export type HostOwnership = "managed" | "external" | "unconfigured";
+export interface HostControl {
+  schema: string;
+  ownership: HostOwnership;
+  revision: number;
+  state: HostState;
+  host_instance: string | null;
+  configured: boolean;
+  service_control_granted: boolean;
+  can_start: boolean;
+  can_stop: boolean;
+  can_restart: boolean;
+  reason: string | null;
+  inference_port: number | null;
+  [field: string]: unknown;
+}
+export interface HostStartInput {
+  expected_revision: number;
+}
+export interface HostStopInput {
+  expected_revision: number;
+  host_instance: string;
+  acknowledge_disruption: boolean;
+}
+export type HostControlPhase = "stopping" | "stopped" | "starting" | "running";
+export interface HostControlResult {
+  schema: string;
+  phase: HostControlPhase;
+  revision: number;
+  previous_host_instance: string | null;
+  host_instance: string | null;
+  models_restored: boolean;
+  [field: string]: unknown;
+}
 export interface JobResults {
   "engine.load": EngineResult;
   "engine.unload": EngineResult | Acknowledgement;
@@ -784,6 +834,9 @@ export interface JobResults {
   "profile.remove": ProfileRemoved;
   "source.cleanup": SourceCleanup;
   "profile.scan": ProfileScan;
+  "host.start": HostControlResult;
+  "host.stop": HostControlResult;
+  "host.restart": HostControlResult;
 }
 export type Job = { [O in keyof JobResults]: Omit<JobRecord, "operation" | "result" | "input"> & { operation: O; input: OperationInputs[O]; result: JobResults[O] | null } }[keyof JobResults];
 export interface OperationInputs {
@@ -823,6 +876,10 @@ export interface OperationInputs {
   "profile.create": ProfileCreateInput;
   "profile.remove": ProfileRemoveInput;
   "source.cleanup": SourceCleanupInput;
+  "host.control": EmptyInput;
+  "host.start": HostStartInput;
+  "host.stop": HostStopInput;
+  "host.restart": HostStopInput;
 }
 export interface OperationOutputs {
   "management.capabilities": Capabilities;
@@ -861,6 +918,10 @@ export interface OperationOutputs {
   "profile.create": Job;
   "profile.remove": Job;
   "source.cleanup": Job;
+  "host.control": HostControl;
+  "host.start": Job;
+  "host.stop": Job;
+  "host.restart": Job;
 }
 export type ManagementOperation = keyof OperationInputs;
 export interface ManagementInvocation<O extends ManagementOperation = ManagementOperation> {
@@ -917,7 +978,7 @@ export interface DiscoveredHost {
 }
 export type OwnerPosture = "approved" | "revoked";
 export type OwnerProfilePosture = "prepared" | "claiming" | "approved" | "revoked";
-export type OwnerActionKind = "pairing_open" | "pairing_approve" | "pairing_revoke" | "owner_revoke";
+export type OwnerActionKind = "pairing_open" | "pairing_approve" | "pairing_revoke" | "owner_revoke" | "service_control_grant" | "service_control_revoke";
 export type OwnerActionPosture = "applied" | "refused";
 export interface OwnerInvitationPreview {
   endpoint: string;
@@ -948,6 +1009,7 @@ export interface OwnerPeer {
   posture: PairingPosture;
   scope: string;
   expires_at_unix_ms: number;
+  service_control_granted?: boolean;
 }
 export interface OwnerAdministrationObservation {
   schema: string;
@@ -956,6 +1018,7 @@ export interface OwnerAdministrationObservation {
   revision: number;
   open_until_unix_ms: number;
   peers: Array<OwnerPeer>;
+  available_actions?: Array<OwnerActionKind>;
 }
 export interface OwnerActionRequest {
   schema: string;

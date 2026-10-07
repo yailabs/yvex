@@ -14,3 +14,9 @@ The CLI and network dispatcher invoke the same producer domain owners.
 should pin YVEX directly. TypeScript contains safe public records, not renderer
 credential transport. `sdk/tools/generate.py` owns generated projections from the
 reviewed public records under `sdk/rust/contract`.
+
+Managed Host clients use `hosts().control`, `prepare_start`, `prepare_stop`, and
+`prepare_restart`; Job observation retains exact identity after transport loss.
+Remote service control is a separately advertised owner grant. The SDK never
+adopts an external Host, provisions a server by shell command, or restores model
+and Session state after restart. See the producer product-management contract.

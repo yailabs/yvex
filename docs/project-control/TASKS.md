@@ -70,10 +70,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 50 | 38 | 3 | 1 | 8 |
+| 51 | 38 | 4 | 1 | 8 |
 <!-- task-counts:end -->
 
-**38/50 selected Tasks complete.** This denominator includes the significant
+**38/51 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -97,6 +97,18 @@ The registry-derived Rust qualification consumer is now independently exercised
 through native protocol, settled cancellation and scoped session cleanup;
 [consumer evidence](../evaluation/retained-observations.md#qualification-operator-consumer-2026-10-07)
 does not qualify the unpublished computational candidate or close this Task.
+
+## Compute platform product refoundation
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` | Reconcile logical computation, producer planning and independent graphical compute clients | P1 | 🔵 IN PROGRESS | Typed preparation assessment and exact plan/recovery; explicit managed-Host start/stop/restart with separate grants and disposable native evidence; current single-host execution versus future distributed realization remains explicit; Studio scope/product acceptance remains consumer-owned. |
+
+Authorized 2026-10-07. Starts from published `36c16dfb`; preserves concurrent
+GB10 qualification and the installed operator Host. Native adaptation remains
+an adopted future owner, not selected training implementation. Distributed
+execution and general hardware/quality-aware compiler search require their real
+research owners; this Task does not advertise either as implemented.
 
 ## Selected platform convergence
 

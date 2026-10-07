@@ -2,6 +2,7 @@
 """Exercise the real Make rules with disposable C/CUDA/package inputs."""
 
 from pathlib import Path
+import json
 import shutil
 import subprocess
 import tempfile
@@ -61,6 +62,33 @@ class BuildContract(unittest.TestCase):
         self.assertIn(" -c ", self.make("CPPFLAGS=-DPACKAGER_FLAG=2", target))
         self.assertIn(" -c ", self.make("CPPFLAGS=-DPACKAGER_FLAG=2", "CFLAGS=-O0 -std=c11", target))
         self.assertIn(str(header), Path(target).with_suffix(".d").read_text())
+
+    def test_ubsan_flags_are_compiler_arguments_not_shell_continuations(self):
+        # Native Make and cc-rs both consume these exported flags. A shell
+        # continuation inside single quotes becomes a literal cc-rs argument.
+        probe = self.root / "nested-make"
+        probe.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, pathlib, subprocess, sys\n"
+            "root = pathlib.Path(next(a.split('=', 1)[1] for a in sys.argv[1:] "
+            "if a.startswith('BUILD_DIR=')))\n"
+            "target = root / 'tests/test'\n"
+            "target.parent.mkdir(parents=True)\n"
+            "flags = next(a.split('=', 1)[1] for a in sys.argv[1:] "
+            "if a.startswith('CFLAGS='))\n"
+            "subprocess.run(['cc', *flags.split(), '-x', 'c', '-', '-o', str(target)], "
+            "input='int main(void) { return 0; }', text=True, check=True)\n"
+            "print(json.dumps({'cflags':flags}))\n"
+        )
+        probe.chmod(0o755)
+        output = self.make(f"MAKE={probe}", "CFLAGS=-O0 -std=c11", "test-runtime-ubsan")
+        observed = [json.loads(line)["cflags"] for line in output.splitlines()
+                    if line.startswith('{"cflags":')]
+        flags = observed[-1]
+        self.assertNotIn("\\", flags)
+        self.assertNotIn("\n", flags)
+        self.assertIn("-fsanitize=undefined", flags.split(), output)
+        self.assertIn("-fno-sanitize-recover=undefined", flags.split())
 
     def test_structural_archive_identity_follows_build_layout(self):
         archive = self.root / "alternate/libyvex.a"

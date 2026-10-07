@@ -83,7 +83,9 @@
         "pairing_open",
         "pairing_approve",
         "pairing_revoke",
-        "owner_revoke"
+        "owner_revoke",
+        "service_control_grant",
+        "service_control_revoke"
       ]
     },
     "OwnerActionPosture": {
@@ -120,7 +122,8 @@
       "client_name": "string",
       "posture": "PairingPosture",
       "scope": "string",
-      "expires_at_unix_ms": "u64"
+      "expires_at_unix_ms": "u64",
+      "service_control_granted": "optional:bool"
     },
     "OwnerAdministrationObservation": {
       "schema": "string",
@@ -128,7 +131,8 @@
       "owner_ref": "string",
       "revision": "u64",
       "open_until_unix_ms": "u64",
-      "peers": "array:OwnerPeer"
+      "peers": "array:OwnerPeer",
+      "available_actions": "optional:array:OwnerActionKind"
     },
     "OwnerActionRequest": {
       "schema": "string",
@@ -168,15 +172,15 @@
     },
     "owner-connections": {
       "path": "docs/contracts/schemas/network-management-owner-connections.v1.schema.json",
-      "sha256": "05369a1b91d5642d0b6642bd127312bcf9fc04c8d6f1f9864bf7e218662f3b1b"
+      "sha256": "7b74409f9ddaea392e209bf70b65fff23c77c01da3b1eeab14197575cf17d684"
     },
     "owner-action": {
       "path": "docs/contracts/schemas/network-management-owner-action.v1.schema.json",
-      "sha256": "e0ff45cf4f7021ee241ed5db76f1fc9c8bb52eba62aa711c5a09b26817c5e3d5"
+      "sha256": "d2a047077d48b082199a66857610fb8163c9de62acb96b64751787902c5e787a"
     },
     "owner-action-receipt": {
       "path": "docs/contracts/schemas/network-management-owner-action-receipt.v1.schema.json",
-      "sha256": "59ef6a72fd5e0da21eed5906d99c52a7655acc73c77e8d2731e4c6bf55e8f736"
+      "sha256": "be929ab834aefd6655e6f2c949083ee93a19ceafabaaf0847949ada0d0e1cea2"
     },
     "owner-invitation": {
       "path": "docs/contracts/schemas/network-management-owner-invitation.v1.schema.json",

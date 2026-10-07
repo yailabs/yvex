@@ -32,6 +32,10 @@ pub(crate) const OPERATIONS: &[(&str, &str)] = &[
     ("build.start", "job"),
     ("package.get", "read"),
     ("host.get", "read"),
+    ("host.control", "read"),
+    ("host.start", "job"),
+    ("host.stop", "job"),
+    ("host.restart", "job"),
     ("engine.list", "read"),
     ("engine.load", "job"),
     ("engine.unload", "job"),
@@ -85,14 +89,23 @@ fn capability() -> Value {
         "automatic_retry":false,"training":false
     })
 }
-fn result(r: &Request, peer: &str) -> std::result::Result<Value, ffi::Error> {
+fn result(
+    r: &Request,
+    peer: &str,
+    control: Option<(&std::path::Path, bool)>,
+) -> std::result::Result<Value, ffi::Error> {
     let kind = OPERATIONS
         .iter()
         .find(|(op, _)| *op == r.operation)
         .map(|(_, kind)| *kind)
         .ok_or_else(|| runtime::failure("unsupported_operation"))?;
     if kind == "job" {
-        if r.operation.starts_with("engine.")
+        if r.operation.starts_with("host.") {
+            if !control.is_some_and(|(_, grant)| grant) {
+                return Err(runtime::failure("service_control_grant_required"));
+            }
+            crate::management_host::validate(&r.operation, &r.input)?;
+        } else if r.operation.starts_with("engine.")
             || r.operation.starts_with("session.")
             || r.operation.starts_with("generation.")
         {
@@ -100,8 +113,14 @@ fn result(r: &Request, peer: &str) -> std::result::Result<Value, ffi::Error> {
         } else {
             models::validate(&r.operation, &r.input)?;
         }
-        return serde_json::to_value(jobs::submit(peer, &r.request_id, &r.operation, &r.input)?)
-            .map_err(|_| runtime::failure("job_encoding_failed"));
+        return serde_json::to_value(jobs::submit(
+            peer,
+            &r.request_id,
+            &r.operation,
+            &r.input,
+            control.filter(|(_, grant)| *grant).map(|(root, _)| root),
+        )?)
+        .map_err(|_| runtime::failure("job_encoding_failed"));
     }
     match r.operation.as_str() {
         "management.capabilities" => {
@@ -109,6 +128,15 @@ fn result(r: &Request, peer: &str) -> std::result::Result<Value, ffi::Error> {
                 return Err(runtime::failure("invalid_input"));
             }
             Ok(capability())
+        }
+        "host.control" => {
+            if !r.input.as_object().unwrap().is_empty() {
+                return Err(runtime::failure("invalid_input"));
+            }
+            crate::management_host::observation(
+                control.map(|(root, _)| root),
+                control.is_some_and(|(_, grant)| grant),
+            )
         }
         "job.get" => {
             if r.input.as_object().unwrap().len() != 1 {
@@ -141,12 +169,18 @@ fn result(r: &Request, peer: &str) -> std::result::Result<Value, ffi::Error> {
         _ => models::read(&r.operation, &r.input),
     }
 }
-fn reply(request: &Request, device: &str, peer: &str, journal: &str) -> Value {
+fn reply(
+    request: &Request,
+    device: &str,
+    peer: &str,
+    journal: &str,
+    control: Option<(&std::path::Path, bool)>,
+) -> Value {
     let mut out = json!({"schema":"yvex.management.response.v2","request_id":request.request_id,
         "device_identity":device,
         "authenticated_peer":peer,
         "status":"ok","data":null,"reason":null});
-    match result(request, journal) {
+    match result(request, journal, control) {
         Ok(value) => out["data"] = value,
         Err(error) => {
             out["status"] = json!(if error.message == "unsupported_operation" {
@@ -179,13 +213,14 @@ pub(crate) fn network_request(
     device: &str,
     peer: &str,
     journal: &str,
+    control: Option<(&std::path::Path, bool)>,
 ) -> std::result::Result<Value, &'static str> {
     let mut framed = bytes.to_vec();
     if !framed.ends_with(b"\n") {
         framed.push(b'\n');
     }
     let request = parse(&framed)?;
-    Ok(reply(&request, device, peer, journal))
+    Ok(reply(&request, device, peer, journal, control))
 }
 pub(crate) fn protocol(invocation: &Invocation<'_>) -> std::result::Result<Output, &'static str> {
     let (device, peer) = match management::authenticate(invocation, "product-protocol") {
@@ -218,6 +253,7 @@ pub(crate) fn protocol(invocation: &Invocation<'_>) -> std::result::Result<Outpu
             &format!("ssh-ed25519:sha256:{device}"),
             &format!("ssh-ed25519:sha256:{peer}"),
             &peer,
+            None,
         ),
         Err(reason) => {
             json!({

@@ -436,7 +436,7 @@ test-runtime-ubsan:
 		$(MAKE) BUILD_DIR="$$build_dir" \
 			YVEX_BIN="$$build_dir/yvex" \
 			NVCC=__yvex_nvcc_unavailable__ \
-		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined -fno-sanitize-recover=undefined' \
+			CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined -fno-sanitize-recover=undefined' \
 			LDFLAGS='$(LDFLAGS) -fsanitize=undefined' \
 			test-runtime client test-openai test-tiny-vertical test-repl; \
 	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \

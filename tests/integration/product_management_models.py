@@ -169,6 +169,29 @@ def main():
             assert planned['result']['revision'] == build_revision
             assert planned['result']['target'] == 'deepseek4-v4-flash-dspark'
             assert len(planned['result']['plan_id']) == 64
+            assessment = planned['result']['planning']
+            assert assessment['schema'] == 'yvex.build.planning.v1'
+            assert assessment['readiness'] == 'ready' and assessment['basis'] == 'admitted_recipe'
+            assert assessment['execution_strategy'] == 'speculative'
+            assert all(assessment[key] == 'not_evaluated' for key in
+                       ['runtime_admission', 'quality_evidence', 'performance_evidence'])
+            # A known model with no admitted recipe is an observed blocked plan,
+            # not a successful build or an unclassified transport failure.
+            blocked = job('build.start', {'model': source_name, 'dry_run': True})
+            assert blocked['state'] == 'succeeded', blocked
+            assert blocked['result']['state'] == 'BLOCKED' and not blocked['result']['changed']
+            assert blocked['result']['planning']['readiness'] == 'incompatible', blocked
+            assert blocked['result']['planning']['basis'] == 'not_admitted'
+            assert blocked['result']['planning']['native_status'] == -5
+            assert blocked['result']['planning']['reason']
+            assert 'plan_id' not in blocked['result']
+            actual_blocked = job('build.start', {'model': source_name, 'dry_run': False})
+            assert actual_blocked['state'] == 'failed' and actual_blocked['result'] is None
+            cli_blocked = subprocess.run([str(binary), 'model', 'prepare', source_name,
+                '--dry-run', '--json'], env=env, text=True, capture_output=True, timeout=30)
+            assert cli_blocked.returncode != 0
+            assert json.loads(cli_blocked.stdout)['planning']['readiness'] == 'incompatible'
+
             same_plan = job('build.start', {'model':'build-plan','dry_run':True,'expected_plan':planned['result']['plan_id']})
             assert same_plan['state'] == 'succeeded' and same_plan['result']['plan_id'] == planned['result']['plan_id']
             stale_plan = job('build.start', {'model':'build-plan','dry_run':False,'expected_plan':'0'*64})

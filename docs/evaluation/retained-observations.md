@@ -1698,3 +1698,44 @@ restoration remain in `followup-20261007.iiQ6tR/yvex-mxfp4-matrix-window-01`,
 `qualification-rejected-mxfp4-matrix` and `mxfp4-matrix-comparison.json` outside Git.
 The same installed DeepSeek profile is restored at generation 37; finite remains
 at generation 1 and the approved public listeners are unchanged.
+
+## Attention-layer cancellation preserves committed state (2026-10-07)
+
+The operator's `main/r98` returned `runtime attention state is invalidated` at
+the same wall-clock second as the explicitly authorized cancellation. This is
+not a benchmark sample or evidence of a spontaneous failure at a particular
+output length. No operator conversation is replayed.
+
+The generic attention provider marked committed state invalid when request
+cancellation refused a layer before `begin`. The session finalizer subsequently
+returned `YVEX_ERR_STATE` instead of the original `YVEX_ERR_CANCELLED`. The repair
+removes that invalidation, preserving the committed prefix and retaining the
+primary cancellation after successful abort. Actual cleanup failures and
+counter overflow still fail closed. The server's separate incomplete-turn/reset
+contract is unchanged.
+
+| Control | Authority | Expected and observed | Result | Claim |
+| --- | --- | --- | --- | --- |
+| Target/draft, first layer/between layers | `unit.runtime_state`; committed bytes, position and identity | Before repair: cancellation is replaced by state failure. After repair: abort retains `CANCELLED`; exact committed state survives and a new computational request commits once. | PASS after repair | Generic provider/session abort semantics, not model quality |
+| Malformed cancellation/counter overflow | Same typed state owner | Malformed input refuses without mutation; real counter overflow invalidates and cannot revive. | PASS | Fail-closed misuse/accounting |
+| Full-model target-only and DSpark | Typed native protocol client; owned isolated sessions | Cancel after visible content returns `CANCELLED`, not model failure; observation retains the committed position. Explicit reset followed by a distinct new request completes. | PASS | Bounded complete-model cancellation/reset lifecycle, not throughput |
+
+The live controls use the admitted mixed artifact `b669d807`, binding `8cdb4929`,
+specialization `3fb4ce20`, CUDA/one GB10, context 4096, prefill chunk 64, greedy
+sampling and reasoning disabled. They run through a captured public-C host over
+protocol 25, not through the installed Rust/chat executable. Their candidate
+is `36c16dfb` plus source delta
+`75afcf201444a6c9bba76c1853c18af6039d093c850e7de41f0ee81e8ad2c645`;
+native build identity is
+`fcd8bce0b0712d1b3ee3d8d37ac38f3a46b9a1fcec8ff212f992dbcb62741b85`.
+Independent checkpoint/representation quality and the 20/700 performance exit
+are not established by these controls.
+
+Raw source/build captures, typed client outcomes, server events and zero-work
+cleanup are retained outside Git in the existing competitive evidence root,
+`followup-20261007.iiQ6tR/yvex-cancel-lifecycle-window-02`. The finite engine
+remains generation 1; DeepSeek is restored with speculative execution, context
+32768 and chunk 64. The installed `a444bcdd` host does not acquire the fix merely
+because the candidate passes. The first disposable consumer's read-only
+`session.show` incorrectly supplied a mutation fence and was refused; corrected
+controls retain that negative attempt and use the admitted read request.
