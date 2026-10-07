@@ -3,6 +3,9 @@
 #define SRC_BACKEND_CUDA_ATTENTION_OPS_H_INCLUDED
 #include "src/backend/cuda/private.h"
 
+/* Bound ranking scratch independently of the admitted prompt width. */
+#define YVEX_CUDA_ATTENTION_SELECTION_ROWS 32ull
+
 /* Borrowed phase-private buffers, retained through stream completion. The
  * rolling state has one slot, or rows+1 slots when prefix checkpoints are
  * requested. No operation here publishes into committed session state. */
@@ -14,6 +17,13 @@ typedef struct {
     unsigned long long rows;
     int checkpoints;
 } yvex_cuda_attention_rolling_phase;
+
+typedef struct {
+    CUdeviceptr query, weights, indexer, positions, selected, selected_positions;
+    CUdeviceptr selected_count, valid_count, scores, indexes, status;
+    unsigned long long candidates, candidate_capacity, score_grid, selected_stride;
+    unsigned long long rows, heads, dimension, indexer_stride, ratio, first_position, k;
+} yvex_cuda_attention_selection_phase;
 
 typedef struct {
     int (*fail)(yvex_backend_attention_failure *, yvex_backend_attention_failure_code,
@@ -66,13 +76,15 @@ typedef struct {
                   const char *, yvex_backend_attention_failure *, yvex_error *);
     int (*rolling_phase)(yvex_cuda_work *, const yvex_cuda_attention_rolling_phase *,
                          const char *, yvex_backend_attention_failure *, yvex_error *);
+    int (*selection_phase)(yvex_cuda_work *, const yvex_cuda_attention_selection_phase *,
+                           const char *, yvex_backend_attention_failure *, yvex_error *);
     int (*weighted_norm)(yvex_cuda_work *, CUdeviceptr, unsigned long long, unsigned long long,
                          const yvex_backend_attention_weight *, CUdeviceptr, double,
                          CUdeviceptr, const char *, yvex_backend_attention_failure *, yvex_error *);
     int (*unit_norm)(yvex_cuda_work *, CUdeviceptr, unsigned long long, unsigned long long,
                      double, CUdeviceptr, const char *, yvex_backend_attention_failure *, yvex_error *);
     int (*rope)(yvex_cuda_work *, CUdeviceptr, unsigned long long, unsigned long long,
-                unsigned long long, unsigned long long,
+                unsigned long long, unsigned long long, unsigned long long,
                 const yvex_backend_attention_position *, int, CUdeviceptr, const char *,
                 yvex_backend_attention_failure *, yvex_error *);
     int (*activation)(yvex_cuda_work *, CUdeviceptr, unsigned long long, unsigned long long,

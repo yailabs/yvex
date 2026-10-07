@@ -243,6 +243,14 @@ committed state. A prepare failure cannot leave one participant visible.
 Attention/KV providers, backend state residency, target/draft state, token
 ledger, decoder, RNG, and publication metadata remain separate participants.
 
+Request-scoped cancellation at an attention layer boundary is not provider
+invalidation. It refuses the candidate and aborts any partially staged batch,
+preserving committed bytes, positions and identities in both target and draft
+scopes. Successful abort retains `YVEX_ERR_CANCELLED`; an actual cleanup failure
+or accounting overflow still fails closed. This computational guarantee does
+not relax the server's separate incomplete-turn/reset policy or authorize an
+automatic retry of an operator prompt.
+
 DSpark candidates are private. The complete target selects one ordered
 checkpoint; the transaction promotes exactly the accepted target-authored
 prefix and discards the rejected suffix. Accepted target rows are not replayed.

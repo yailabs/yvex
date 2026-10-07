@@ -143,15 +143,53 @@ int yvex_backend_encoded_matvec(
     yvex_encoded_reduction_policy reduction_policy,
     yvex_backend_operation_facts *facts, yvex_error *err)
 {
+    return yvex_backend_encoded_matvec_workspace(backend, resident_encoded, encoded_bytes,
+        qtype, row_count, row_width, row_bytes, input_rows, input, input_tail,
+        input_head_width, additive, output, input_policy, reduction_policy, NULL, facts, err);
+}
+
+int yvex_backend_encoded_workspace_bytes(yvex_backend *backend, unsigned int qtype,
+    unsigned long long width, unsigned long long rows, yvex_encoded_input_policy policy,
+    unsigned long long *bytes, yvex_error *err)
+{
+    const yvex_backend_encoded_operations *ops = backend_encoded_operations(backend);
+    if (!bytes || !width || !rows || policy < YVEX_ENCODED_INPUT_F32 || policy > YVEX_ENCODED_INPUT_BF16)
+        return backend_refuse(err, YVEX_ERR_INVALID_ARG, "backend.encoded-workspace",
+                              "positive geometry and output required");
+    *bytes = 0u;
+    yvex_error_clear(err);
+    return ops && ops->workspace_bytes ? ops->workspace_bytes(qtype, width, rows, policy, bytes, err) : YVEX_OK;
+}
+
+int yvex_backend_encoded_matvec_workspace(
+    yvex_backend *backend, const unsigned char *resident_encoded,
+    unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,
+    unsigned long long row_width, unsigned long long row_bytes, unsigned long long input_rows,
+    const yvex_device_tensor *input, const yvex_device_tensor *input_tail,
+    unsigned long long input_head_width, const yvex_device_tensor *additive,
+    yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
+    yvex_encoded_reduction_policy reduction_policy, const yvex_device_tensor *workspace,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
     const yvex_backend_encoded_operations *operations =
         backend_encoded_operations(backend);
+    if (facts) memset(facts, 0, sizeof(*facts));
     if (!operations || !operations->matvec)
         return backend_refuse(err, YVEX_ERR_UNSUPPORTED, "backend.encoded-matvec",
                               "backend has no encoded matrix-row implementation");
+    if (workspace) {
+        unsigned long long bytes;
+        int rc = yvex_backend_encoded_workspace_bytes(backend, qtype, row_width, input_rows, input_policy, &bytes, err);
+        if (rc != YVEX_OK) return rc;
+        if (!bytes || !backend_tensor_owner_is(backend, workspace) || !workspace->data ||
+            workspace->dtype != YVEX_DTYPE_I8 || workspace->rank != 1u || workspace->bytes < bytes || input_tail)
+            return backend_refuse(err, YVEX_ERR_BOUNDS, "backend.encoded-workspace",
+                                  "packing workspace does not fit the admitted geometry");
+    }
     return operations->matvec(
         backend, resident_encoded, encoded_bytes, qtype, row_count, row_width,
         row_bytes, input_rows, input, input_tail, input_head_width, additive,
-        output, input_policy, reduction_policy, facts, err);
+        output, input_policy, reduction_policy, workspace, facts, err);
 }
 
 int yvex_backend_encoded_gather(

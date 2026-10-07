@@ -1153,7 +1153,7 @@ static int moe_cuda_batch_experts(moe_cuda_batch *batch,
     unsigned long long up_input_extent, down_input_extent, up_shared = 0ull, down_shared = 0ull;
     unsigned long long up_tasks, down_tasks, reduce_tasks;
     unsigned long long bucket_bound, scalar_bound;
-    unsigned long long tensor_up_tasks = 0ull, tensor_down_tasks = 0ull;
+    unsigned long long tensor_up_tasks = 0ull, tensor_down_tasks = 0ull, column_bound;
     unsigned long long tensor_core_minimum =
         job->worklist_policy &&
                 moe_cuda_tensorcore_expert_qtypes(gate, up, down)
@@ -1173,6 +1173,12 @@ static int moe_cuda_batch_experts(moe_cuda_batch *batch,
     int rc;
     if (rows->row_count < tensor_core_minimum) tensor_core_minimum = 0ull;
     bucket_bound = count < experts ? count : experts;
+    /* Sum ceil(population / 8) is bounded by ceil(all pairs / 8) plus
+     * the real bucket bound. Kernels skip padding and subthreshold buckets. */
+    if (!yvex_core_u64_add(count / 8ull + (count % 8ull != 0ull),
+                           bucket_bound, &column_bound))
+        return moe_cuda_refuse(err, YVEX_ERR_BOUNDS,
+                               "CUDA expert column-tile bound overflowed");
     scalar_bound = tensor_core_minimum ? bucket_bound : count;
     up_input_extent = up_q8 ? input_width / YVEX_CUDA_Q8_K_BLOCK : input_width;
     down_input_extent = down_q8 ? intermediate_width / YVEX_CUDA_Q8_K_BLOCK
@@ -1190,9 +1196,9 @@ static int moe_cuda_batch_experts(moe_cuda_batch *batch,
                            &down_tasks) ||
         !yvex_core_u64_mul(rows->row_count, layer->hidden_width, &reduce_tasks) ||
         (tensor_core_minimum &&
-         (!yvex_core_u64_mul(bucket_bound, (intermediate_width + 15ull) / 16ull,
+         (!yvex_core_u64_mul(column_bound, (intermediate_width + 15ull) / 16ull,
                              &tensor_up_tasks) ||
-          !yvex_core_u64_mul(bucket_bound, (layer->hidden_width + 15ull) / 16ull,
+          !yvex_core_u64_mul(column_bound, (layer->hidden_width + 15ull) / 16ull,
                              &tensor_down_tasks) ||
           !moe_cuda_grid(tensor_up_tasks, 4u,
                           &tensor_up_grid) ||

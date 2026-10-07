@@ -304,13 +304,16 @@ typedef enum {
     YVEX_ENCODED_REDUCTION_ROW = 1
 } yvex_encoded_reduction_policy;
 struct yvex_backend_encoded_operations {
+    int (*workspace_bytes)(unsigned int qtype, unsigned long long row_width,
+        unsigned long long input_rows, yvex_encoded_input_policy input_policy,
+        unsigned long long *bytes, yvex_error *err);
     int (*matvec)(yvex_backend *backend, const unsigned char *resident_encoded,
         unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,
         unsigned long long row_width, unsigned long long row_bytes,
         unsigned long long input_rows, const yvex_device_tensor *input,
         const yvex_device_tensor *input_tail, unsigned long long input_head_width,
         const yvex_device_tensor *additive, yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
-        yvex_encoded_reduction_policy reduction_policy,
+        yvex_encoded_reduction_policy reduction_policy, const yvex_device_tensor *workspace,
         yvex_backend_operation_facts *facts, yvex_error *err);
     int (*gather)(yvex_backend *backend, const unsigned char *resident_encoded,
         unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,
@@ -325,6 +328,18 @@ int yvex_backend_encoded_matvec(yvex_backend *backend, const unsigned char *resi
     const yvex_device_tensor *input, const yvex_device_tensor *input_tail, unsigned long long input_head_width,
     const yvex_device_tensor *additive, yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
     yvex_encoded_reduction_policy reduction_policy,
+    yvex_backend_operation_facts *facts, yvex_error *err);
+/* Optional call-borrowed packing storage. Its owner serializes reuse through
+ * checked completion; no backend cache, allocator ownership or numerical change. */
+int yvex_backend_encoded_workspace_bytes(yvex_backend *backend, unsigned int qtype,
+    unsigned long long row_width, unsigned long long input_rows, yvex_encoded_input_policy policy,
+    unsigned long long *bytes, yvex_error *err);
+int yvex_backend_encoded_matvec_workspace(yvex_backend *backend, const unsigned char *resident_encoded,
+    unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,
+    unsigned long long row_width, unsigned long long row_bytes, unsigned long long input_rows,
+    const yvex_device_tensor *input, const yvex_device_tensor *input_tail, unsigned long long input_head_width,
+    const yvex_device_tensor *additive, yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
+    yvex_encoded_reduction_policy reduction_policy, const yvex_device_tensor *workspace,
     yvex_backend_operation_facts *facts, yvex_error *err);
 int yvex_backend_encoded_gather(yvex_backend *backend, const unsigned char *resident_encoded,
     unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,

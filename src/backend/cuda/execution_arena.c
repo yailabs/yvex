@@ -1,5 +1,5 @@
 /* Own bounded CUDA work allocations and admitted arenas with stable tensor views. */
-#include "src/backend/cuda/private.h"
+#include "src/backend/cuda/attention_ops.h"
 #include <yvex/internal/graph_state.h>
 
 #include <limits.h>
@@ -42,6 +42,13 @@ static int attention_workspace_required_from_recipe(
         unsigned long long count = component->element_count, bytes, aligned;
         unsigned long long scale =
             component->scales_with_tokens ? recipe->token_capacity : 1ull;
+        /* Device ranking may execute independent query rows together. The
+         * authored recipe keeps token-local scratch; backend lowering reserves
+         * a bounded row tile without changing persisted semantic identity. */
+        if (!host && (component->kind == YVEX_ATTENTION_WORKSPACE_TOPK_SCORES ||
+                      component->kind == YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES))
+            scale = recipe->token_capacity < YVEX_CUDA_ATTENTION_SELECTION_ROWS
+                ? recipe->token_capacity : YVEX_CUDA_ATTENTION_SELECTION_ROWS;
         unsigned long long mask = component->alignment - 1ull;
         /* CUDA ingress is borrowed from the admitted device activation. Host
          * input jobs retain this component; forensic evidence is unchanged. */

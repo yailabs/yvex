@@ -1362,6 +1362,119 @@ static int quant_cuda_bf16_projection_pair(yvex_backend *backend)
     return 0;
 }
 
+static unsigned int quant_cuda_unexpected_allocations;
+
+static CUresult quant_cuda_refuse_allocation(CUdeviceptr *pointer, size_t bytes)
+{
+    (void)pointer; (void)bytes;
+    ++quant_cuda_unexpected_allocations;
+    return (CUresult)2;
+}
+
+static int quant_cuda_packing_workspace(yvex_backend *backend, const unsigned char *mapped,
+    unsigned long long encoded_bytes, unsigned int qtype, unsigned int width,
+    unsigned long long row_bytes, yvex_device_tensor *input, yvex_device_tensor *output,
+    yvex_encoded_reduction_policy reduction, const float *expected)
+{
+    enum { ROWS = 2051, INPUTS = 65 };
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_device_tensor *workspace = NULL, *completion = NULL;
+    yvex_device_tensor changed;
+    yvex_backend_memory_stats before, retained, after;
+    yvex_backend_operation_facts facts;
+    yvex_error err;
+    unsigned long long bytes = 0u, unavailable = 1u;
+    float *actual = malloc((size_t)output->bytes), saved_input;
+    YVEX_TEST_ASSERT(actual && ops && ops->program_begin && ops->program_complete &&
+        yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK &&
+        yvex_backend_encoded_workspace_bytes(backend, qtype, width, INPUTS, YVEX_ENCODED_INPUT_Q8,
+            &bytes, &err) == YVEX_OK && bytes == (width / 256u) * INPUTS * 292ull &&
+        yvex_backend_encoded_workspace_bytes(backend, qtype, width, INPUTS, YVEX_ENCODED_INPUT_F32,
+            &unavailable, &err) == YVEX_OK && unavailable == 0u &&
+        yvex_backend_encoded_workspace_bytes(backend, qtype, width, ULLONG_MAX, YVEX_ENCODED_INPUT_Q8,
+            &unavailable, &err) == YVEX_ERR_BOUNDS &&
+        yvex_backend_encoded_workspace_bytes(backend, qtype, 0u, INPUTS, YVEX_ENCODED_INPUT_Q8,
+            &unavailable, &err) == YVEX_ERR_INVALID_ARG &&
+        yvex_backend_encoded_workspace_bytes(backend, qtype, width, INPUTS, (yvex_encoded_input_policy)99,
+            &unavailable, &err) == YVEX_ERR_INVALID_ARG,
+        "packing query binds exact geometry and refuses overflow or invalid policy");
+    YVEX_TEST_ASSERT(quant_cuda_tensor(backend, "retained-q8-pack", YVEX_DTYPE_I8, NULL,
+            bytes, &workspace, &err) &&
+        quant_cuda_tensor(backend, "retained-q8-completion", YVEX_DTYPE_I8, NULL,
+            sizeof(int), &completion, &err), "packing and completion storage are separately owned");
+    for (unsigned int test = 0u; test < 7u; ++test) {
+        changed = *workspace;
+        if (test == 0u) --changed.bytes;
+        if (test == 1u) changed.owner = NULL;
+        if (test == 2u) changed.dtype = YVEX_DTYPE_F32;
+        if (test == 3u) changed.rank = 2u;
+        if (test == 4u) changed.data = input->data;
+        if (test == 5u) changed.data = output->data;
+        if (test == 6u) {
+            unsigned long long address;
+            YVEX_TEST_ASSERT(yvex_backend_resident_resolve(backend, mapped, encoded_bytes,
+                &address) == YVEX_BACKEND_RESIDENT_HIT, "resolve exact weight overlap control");
+            changed.data = (unsigned char *)(uintptr_t)address;
+        }
+        YVEX_TEST_ASSERT(yvex_backend_encoded_matvec_workspace(backend, mapped, encoded_bytes, qtype,
+            ROWS, width, row_bytes, INPUTS, input, NULL, 0u, NULL, output, YVEX_ENCODED_INPUT_Q8,
+            reduction, &changed, &facts, &err) == (test < 4u ? YVEX_ERR_BOUNDS : YVEX_ERR_FORMAT) &&
+            !facts.kernel_launches && yvex_backend_tensor_read(backend, output, actual,
+                (size_t)output->bytes, &err) == YVEX_OK && !memcmp(actual, expected, (size_t)output->bytes),
+            "malformed, foreign or aliasing packing storage refuses before output mutation");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_encoded_matvec_workspace(backend, mapped, encoded_bytes, qtype,
+        ROWS, width, row_bytes, INPUTS, input, NULL, 0u, NULL, output, YVEX_ENCODED_INPUT_Q8,
+        reduction, workspace, &facts, &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, output, actual, (size_t)output->bytes, &err) == YVEX_OK &&
+        !memcmp(actual, expected, (size_t)output->bytes), "standalone borrowed packing preserves every output bit");
+    YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(backend, &retained, &err) == YVEX_OK &&
+        ops->program_begin(backend, completion, &err) == YVEX_OK, "open one checked packing reuse scope");
+    CUresult (*allocator)(CUdeviceptr *, size_t) = state->driver.cuMemAlloc_v2;
+    state->driver.cuMemAlloc_v2 = quant_cuda_refuse_allocation;
+    quant_cuda_unexpected_allocations = 0u;
+    int rc = YVEX_OK;
+    for (unsigned int repeat = 0u; repeat < 3u && rc == YVEX_OK; ++repeat)
+        rc = yvex_backend_encoded_matvec_workspace(backend, mapped, encoded_bytes, qtype,
+            ROWS, width, row_bytes, INPUTS, input, NULL, 0u, NULL, output, YVEX_ENCODED_INPUT_Q8,
+            reduction, workspace, &facts, &err);
+    state->driver.cuMemAlloc_v2 = allocator;
+    int completed = ops->program_complete(backend, &facts, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && completed == YVEX_OK && !quant_cuda_unexpected_allocations &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocation_events == retained.allocation_events && after.release_events == retained.release_events &&
+        yvex_backend_tensor_read(backend, output, actual, (size_t)output->bytes, &err) == YVEX_OK &&
+        !memcmp(actual, expected, (size_t)output->bytes),
+        "serial checked projections reuse packing without allocations, releases or numerical drift");
+    yvex_device_tensor first = *input;
+    first.rank = 1u; first.bytes = sizeof(float); first.dims[0] = 1u;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, &first, &saved_input, sizeof(float), &err) == YVEX_OK,
+        "retain exact input before nonfinite packing control");
+    float invalid = INFINITY;
+    for (unsigned int run = 0u; run < 2u; ++run) {
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, &first, run ? &saved_input : &invalid,
+            sizeof(float), &err) == YVEX_OK && ops->program_begin(backend, completion, &err) == YVEX_OK &&
+            yvex_backend_encoded_matvec_workspace(backend, mapped, encoded_bytes, qtype,
+                ROWS, width, row_bytes, INPUTS, input, NULL, 0u, NULL, output, YVEX_ENCODED_INPUT_Q8,
+                reduction, workspace, &facts, &err) == YVEX_OK,
+            "packing keeps numerical refusal latched until its completion owner");
+        YVEX_TEST_ASSERT(ops->program_complete(backend, &facts, &err) == (run ? YVEX_OK : YVEX_ERR_FORMAT),
+            "nonfinite packing refuses and a new completion scope recovers");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, output, actual, (size_t)output->bytes, &err) == YVEX_OK &&
+        !memcmp(actual, expected, (size_t)output->bytes) &&
+        yvex_backend_tensor_release(backend, &completion, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &workspace, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes && after.allocation_count == before.allocation_count,
+        "recovered packing remains exact and closes to the original resource baseline");
+    free(actual);
+    printf("retained packing: qtype=%u width=%u inputs=%u outputs=%u bytes=%llu exact=true allocations=0 negatives=7 recovery=true\n",
+        qtype, width, INPUTS, ROWS, bytes);
+    return 0;
+}
+
 static int quant_cuda_wide_q8_rows(yvex_backend *backend, unsigned int qtype, int row_contract)
 {
     enum { ROWS = 2051, INPUTS = 65, MAX_WIDTH = 4096, PATTERNS = 17 };
@@ -1498,6 +1611,10 @@ static int quant_cuda_wide_q8_rows(yvex_backend *backend, unsigned int qtype, in
             YVEX_ENCODED_INPUT_Q8, YVEX_ENCODED_REDUCTION_ROW, &facts, &err) == YVEX_OK &&
             output->is_written, "row matrix is usable after failed-work cleanup");
     }
+    YVEX_TEST_ASSERT(quant_cuda_packing_workspace(backend, mapped, descriptor.bytes,
+        qtype, width, row_bytes, input, output, qtype == YVEX_GGUF_QTYPE_MXFP4 || row_contract ?
+            YVEX_ENCODED_REDUCTION_ROW : YVEX_ENCODED_REDUCTION_DEFAULT, actual) == 0,
+        "retained packing passes independent projection and ownership controls");
     free(actual);
     YVEX_TEST_ASSERT(yvex_backend_resident_detach(backend, &err) == YVEX_OK &&
         yvex_backend_tensor_release(backend, &output, &err) == YVEX_OK &&
@@ -1507,9 +1624,11 @@ static int quant_cuda_wide_q8_rows(yvex_backend *backend, unsigned int qtype, in
     return 0;
 }
 
-static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
+static int quant_cuda_grouped_attention_rows(yvex_backend *backend, unsigned int group_rows,
+                                            unsigned int input_count)
 {
-    enum { GROUPS = 8, GROUP_ROWS = 17, INPUT_ROWS = 9, ROWS = 136, WIDTH = 256 };
+    enum { GROUPS = 8, INPUT_ROWS = 16, ROWS = 136, WIDTH = 256 };
+    const unsigned int rows = GROUPS * group_rows;
     const yvex_cuda_attention_operations *operations =
         yvex_cuda_attention_operations_get();
     yvex_backend_attention_weight weight = {0};
@@ -1530,13 +1649,15 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
     unsigned int matvec_block, matvec_grid;
     int block_row, device_wide = 1, rc, status_value = 0;
 
-    for (index = 0ull; index < ROWS * WIDTH; ++index)
+    YVEX_TEST_ASSERT(group_rows <= 17u && input_count <= INPUT_ROWS,
+        "grouped test geometry fits fixed fixture storage");
+    for (index = 0ull; index < rows * WIDTH; ++index)
         source[index] = (float)((int)((index * 7ull + 3ull) % 41ull) - 20) /
                         (float)(3ull + index % 11ull);
     for (index = 0ull; index < INPUT_ROWS * GROUPS * WIDTH; ++index)
         vectors[index] = (float)((int)((index * 5ull + 1ull) % 31ull) - 15) /
                          (float)(7ull + index % 5ull);
-    for (row = 0u; row < ROWS; ++row) {
+    for (row = 0u; row < rows; ++row) {
         size_t current_bytes = 0u;
         YVEX_TEST_ASSERT(
             quant_cuda_encode_row(YVEX_GGUF_QTYPE_MXFP4,
@@ -1548,7 +1669,7 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
             descriptor.name = "grouped_attention_rows_encoded";
             descriptor.dtype = YVEX_DTYPE_I8;
             descriptor.rank = 1u;
-            descriptor.dims[0] = descriptor.bytes = ROWS * row_bytes;
+            descriptor.dims[0] = descriptor.bytes = rows * row_bytes;
             YVEX_TEST_ASSERT(
                 yvex_backend_resident_alloc(
                     backend, &descriptor, &resident, &mapped, &err) == YVEX_OK,
@@ -1559,14 +1680,14 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
         memcpy(mapped + row * row_bytes, encoded_row, row_bytes);
         free(encoded_row);
         encoded_row = NULL;
-        group = row / GROUP_ROWS;
-        for (input_row = 0u; input_row < INPUT_ROWS; ++input_row)
+        group = row / group_rows;
+        for (input_row = 0u; input_row < input_count; ++input_row)
             YVEX_TEST_ASSERT(
                 yvex_quant_cpu_dot(
                     YVEX_GGUF_QTYPE_MXFP4, mapped + row * row_bytes,
                     row_bytes,
                     vectors + input_row * GROUPS * WIDTH + group * WIDTH,
-                    WIDTH, &expected[input_row * ROWS + row],
+                    WIDTH, &expected[input_row * rows + row],
                     &quant_failure, &err) == YVEX_OK,
                 "grouped attention rows reference succeeds");
     }
@@ -1586,10 +1707,10 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
         "grouped attention rows device fixtures allocate");
     weight = (yvex_backend_attention_weight){
         .encoded = mapped,
-        .encoded_bytes = ROWS * row_bytes,
+        .encoded_bytes = rows * row_bytes,
         .row_bytes = row_bytes,
         .row_width = WIDTH,
-        .row_count = ROWS,
+        .row_count = rows,
         .qtype = YVEX_GGUF_QTYPE_MXFP4,
         .present = 1
     };
@@ -1598,9 +1719,9 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
     work.variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED;
     YVEX_TEST_ASSERT(
         operations->matvec_grouped(
-            &work, &weight, yvex_cuda_tensor_ptr(resident), GROUPS, GROUP_ROWS,
-            INPUT_ROWS, yvex_cuda_tensor_ptr(input), GROUPS * WIDTH,
-            yvex_cuda_tensor_ptr(output), ROWS, 0, yvex_cuda_tensor_ptr(status),
+            &work, &weight, yvex_cuda_tensor_ptr(resident), GROUPS, group_rows,
+            input_count, yvex_cuda_tensor_ptr(input), GROUPS * WIDTH,
+            yvex_cuda_tensor_ptr(output), rows, 0, yvex_cuda_tensor_ptr(status),
             "cuda.test.grouped-attention-rows", &attention_failure, &err) == YVEX_OK &&
             work.launches == 2ull && work.tensor_core_launches == 0ull,
         "grouped attention prepares lossless digits and projects every group and input row");
@@ -1616,22 +1737,22 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
                 backend, output, actual, sizeof(actual), &err) == YVEX_OK,
         "grouped attention rows complete without a device-wide barrier");
     rc = yvex_cuda_qtype_matvec_geometry(
-             GROUP_ROWS, WIDTH, INPUT_ROWS, YVEX_GGUF_QTYPE_MXFP4, 1, 1,
+             group_rows, WIDTH, input_count, YVEX_GGUF_QTYPE_MXFP4, 1, 1,
              &matvec_grid, &matvec_block, &block_row) && !block_row
              ? YVEX_OK
              : YVEX_ERR_BOUNDS;
     for (group = 0u; rc == YVEX_OK && group < GROUPS; ++group) {
-        unsigned long long start_row = group * GROUP_ROWS;
-        unsigned long long row_count = GROUP_ROWS;
-        unsigned long long input_rows = INPUT_ROWS;
+        unsigned long long start_row = group * group_rows;
+        unsigned long long row_count = group_rows;
+        unsigned long long input_rows = input_count;
         unsigned long long input_stride = GROUPS * WIDTH;
-        unsigned long long output_stride = ROWS;
+        unsigned long long output_stride = rows;
         unsigned int qtype = YVEX_GGUF_QTYPE_MXFP4;
         CUdeviceptr additive = 0ull;
         CUdeviceptr resident_ptr = yvex_cuda_tensor_ptr(resident);
         CUdeviceptr input_ptr = yvex_cuda_tensor_ptr(input) + group * WIDTH * sizeof(float);
         CUdeviceptr output_ptr = yvex_cuda_tensor_ptr(ordinary_output) +
-                                group * GROUP_ROWS * sizeof(float);
+                                group * group_rows * sizeof(float);
         CUdeviceptr status_ptr = yvex_cuda_tensor_ptr(status);
         int forensic_numeric = 0, output_bf16 = 0, q8_input = 0;
         void *params[] = {
@@ -1654,22 +1775,22 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
             backend, ordinary_output, ordinary, sizeof(ordinary), &err);
     YVEX_TEST_ASSERT(
         rc == YVEX_OK && work.launches == 2ull + GROUPS &&
-            memcmp(actual, ordinary, sizeof(actual)) == 0,
+            memcmp(actual, ordinary, input_count * rows * sizeof(float)) == 0,
         "grouped rows are bit-identical to the ordinary per-group launch loop");
-    for (input_row = 0u; input_row < INPUT_ROWS; ++input_row)
-        for (row = 0u; row < ROWS; ++row)
+    for (input_row = 0u; input_row < input_count; ++input_row)
+        for (row = 0u; row < rows; ++row)
             YVEX_TEST_ASSERT(
-                fabs((double)actual[input_row * ROWS + row] -
-                     expected[input_row * ROWS + row]) <=
-                    1e-5 * (1.0 + fabs((double)expected[input_row * ROWS + row])),
+                fabs((double)actual[input_row * rows + row] -
+                     expected[input_row * rows + row]) <=
+                    1e-5 * (1.0 + fabs((double)expected[input_row * rows + row])),
                 "grouped attention rows match the independent exact reference");
     printf("grouped decoded rows: groups=%u inputs=%u values=%u bit_mismatches=0 "
-           "CPU_tolerance=1e-5*(1+abs(reference))\n", GROUPS, INPUT_ROWS, INPUT_ROWS * ROWS);
+           "CPU_tolerance=1e-5*(1+abs(reference))\n", GROUPS, input_count, input_count * rows);
     vectors[0] = NAN;
     YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, input, vectors, sizeof(vectors), &err) == YVEX_OK &&
         operations->matvec_grouped(&work, &weight, yvex_cuda_tensor_ptr(resident),
-            GROUPS, GROUP_ROWS, INPUT_ROWS, yvex_cuda_tensor_ptr(input), GROUPS * WIDTH,
-            yvex_cuda_tensor_ptr(output), ROWS, 0, yvex_cuda_tensor_ptr(status),
+            GROUPS, group_rows, input_count, yvex_cuda_tensor_ptr(input), GROUPS * WIDTH,
+            yvex_cuda_tensor_ptr(output), rows, 0, yvex_cuda_tensor_ptr(status),
             "cuda.test.grouped-attention-invalid", &attention_failure, &err) == YVEX_OK &&
         yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
             &device_wide, "cuda.test.grouped-attention-invalid", &err) == YVEX_OK &&
@@ -3847,7 +3968,11 @@ int yvex_cuda_test_quant_qtype(void)
                 backend, cases[index].qtype, blocks[b] * 256u) == 0,
                 "integer subgroup and tail geometry retains canonical Q8 activation dots");
     }
-    YVEX_TEST_ASSERT(quant_cuda_grouped_attention_rows(backend) == 0,
+    YVEX_TEST_ASSERT(quant_cuda_grouped_attention_rows(backend, 17u, 9u) == 0 &&
+        quant_cuda_grouped_attention_rows(backend, 16u, 3u) == 0 &&
+        quant_cuda_grouped_attention_rows(backend, 16u, 5u) == 0 &&
+        quant_cuda_grouped_attention_rows(backend, 16u, 9u) == 0 &&
+        quant_cuda_grouped_attention_rows(backend, 16u, 16u) == 0,
                      "grouped attention rows retain exact activation semantics");
     for (unsigned int input_count = 1u; input_count <= 8u; ++input_count)
         for (int bf16 = 0; bf16 <= 1; ++bf16)

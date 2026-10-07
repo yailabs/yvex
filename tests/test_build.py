@@ -68,6 +68,33 @@ class BuildContract(unittest.TestCase):
         output = self.make(f"LIBYVEX={archive}", f"OBJ_DIR={objects}", "-s", "print-archive-layout")
         self.assertEqual(output.splitlines()[-2:], [str(archive), str(objects) + "/"])
 
+    def test_ubsan_recursive_flags_are_argv_not_shell_continuations(self):
+        # cc-rs consumes exported CFLAGS without a shell. A continuation inside
+        # the quoted Make value becomes a literal backslash argument, unlike
+        # the ordinary C recipe. Observe the real recursive invocation here;
+        # sanitizer/runtime semantics remain covered by the real sanitizer lane.
+        import json
+        import shlex
+        fake = self.root / "recursive-make-fixture"
+        fake.write_text('#!/usr/bin/env python3\n'
+                        'import json, pathlib, sys\n'
+                        'args = dict(a.split("=", 1) for a in sys.argv[1:] if "=" in a)\n'
+                        'print("SANITIZER_FLAGS " + json.dumps(args["CFLAGS"]))\n'
+                        'runner = pathlib.Path(args["BUILD_DIR"]) / "tests/test"\n'
+                        'runner.parent.mkdir(parents=True)\n'
+                        'runner.write_text("#!/bin/sh\\nexit 0\\n")\n'
+                        'runner.chmod(0o755)\n')
+        fake.chmod(0o755)
+        for target in ("test-runtime-ubsan", "test-quant-ubsan"):
+            with self.subTest(target=target):
+                output = self.make(f"MAKE={fake}", target)
+                flags = json.loads(next(line[len("SANITIZER_FLAGS "):] for line in output.splitlines()
+                                        if line.startswith("SANITIZER_FLAGS ")))
+                self.assertNotIn("\\", flags)
+                self.assertNotIn("\n", flags)
+                self.assertIn("-fsanitize=undefined", shlex.split(flags))
+                self.assertIn("-fno-sanitize-recover=undefined", shlex.split(flags))
+
     def test_platform_thread_link_defaults_preserve_overrides(self):
         projection = "--eval=print-link-defaults:;@printf '%s\\n' '$(LDLIBS)'"
         darwin = self.make("YVEX_HOST_OS=Darwin", "YVEX_HOST_ARCH=x86_64",

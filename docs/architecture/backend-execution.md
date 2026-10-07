@@ -159,6 +159,30 @@ capacity admission and workspace preparation. Persistent state, prefix
 checkpoints, status, publication and device scratch keep their original owners
 and lifetimes; the smaller host bound does not remove validation or state work.
 
+The shared CUDA attention-primitives owner performs independent candidate
+ranking for up to 32 query rows per score/top-k tile. Each query retains its own
+causal visible prefix, source score arithmetic and stable tie order. This tile
+is not the prompt-position admission envelope: larger admitted phases cover
+their real rows through multiple tiles. Workspace charges only the bounded
+ranking tile; future or padded rows never become visible candidates.
+
+Rolling compression first emits its complete phase-owned population. Its
+per-emission weighted normalization, position-strided RoPE and main/index
+publication then execute as multi-row transforms rather than repeated
+single-row launches. The compressor ratio determines the position stride, not
+a reconstructed layer or family name. Quantized main-cache rows retain their
+physical stride, while index rows retain their own Hadamard/FP8 layout.
+State staging, causal selection and transaction completion are unchanged.
+
+Routed encoded MoE matrix execution maps each real expert population to
+independent eight-column tiles. Warps own independent output tiles; a
+cooperative bucket-prefix scan resolves the compact tile ordinal against the
+canonical worklist. Conservative launch padding performs no selected work.
+The change retains expert associations, activation encoding, exact integer
+products, the admitted F32 reduction tree, BF16 publication and exceptional
+source-ordered F64 recovery. It introduces no prepared weight layout or
+different routing policy.
+
 ## Backend boundary
 
 Upstream supplies legal operations, package representation, numerical
@@ -193,7 +217,33 @@ status through an ordered device copy into the program-owned word. Beginning
 the successor never clears an unobserved predecessor failure. Output-program
 admission charges this completion workspace along with all other compiled
 device storage; a one-byte-short budget still refuses before publication.
-This change alters submission/status lifetime, not arithmetic, reduction order,
+An invocation explicitly carries that completion ownership to pure SSA copy,
+reshape, row construction/slicing and rotary preparation. Their same-stream
+copies no longer complete at each intermediate value. Weighted normalization
+likewise lets its completing consumer own the copied scratch. This does not
+weaken the synchronous tensor-copy API: non-scoped callers and backends without
+queued-copy support retain checked synchronous copying. The runner drains
+submitted copies before cancellation/refusal can release or publish storage.
+Eligible encoded projections also accept an explicitly owned packing workspace.
+The backend declares its checked byte extent from the admitted encoding and
+actual row population. A prepared physical program retains one buffer for its
+serialized linear steps, accounts growth including the temporary old/new overlap,
+and releases it with the program owner. Reuse is ordered on the execution stream
+through checked completion; it cannot borrow an unrelated operation's scratch
+arena. Missing, foreign, insufficient or operand-aliasing storage refuses before
+submission. Standalone callers without a supplied workspace retain call-owned
+packing and immediate checked completion. This changes neither the Q8 packing
+algorithm nor the projection's accumulation/publication class.
+Small mixing matrices may retain one matrix cell per warp lane during iterative
+normalization. The generic four-stream-and-smaller realization preserves ordered
+F64 row/column sums, every intermediate F32 publication and the first-iteration
+rule; only storage and synchronization differ. Larger matrices retain the checked
+block-wide realization. This is not a different numerical class or family policy.
+Frozen CUDA preservation, independent post-first-iteration host continuation,
+malformed-input controls and sanitizer checks precede the source-stable
+[complete-model characterization](../evaluation/retained-observations.md#warp-cell-mixing-normalization-2026-10-07).
+The checked completion and packing changes alter submission/status lifetime,
+not arithmetic, reduction order,
 physical precision or state transactions. The source-stable complete-model
 generation gate additionally qualifies replay, target/DSpark equivalence,
 refusal, cancellation and cleanup at the exercised bounded scope.

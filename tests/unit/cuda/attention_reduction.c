@@ -7,6 +7,7 @@
 #include <string.h>
 #include <yvex/internal/backend.h>
 #include "src/backend/cuda/private.h"
+#include "src/backend/cuda/attention_ops.h"
 #include "tests/test.h"
 
 enum { REDUCTION_WIDTH = 1280, REDUCTION_ROWS = 512, REDUCTION_HEADS = 3,
@@ -322,6 +323,127 @@ static int rolling_rows_check(yvex_backend *backend, unsigned long long ratio,
     return 0;
 }
 
+enum { EMISSION_ROWS = 128, EMISSION_WIDTH = 512 };
+typedef struct {
+    float before, values[EMISSION_ROWS * EMISSION_WIDTH], after, weights[EMISSION_WIDTH];
+    int status;
+} emission_fixture;
+
+/* Independent emitted vectors may share a launch, not an arithmetic reduction.
+ * Compare batch/serial publication bytes and a scalar F64 normalization/RoPE
+ * oracle. This does not qualify full-model reference behavior. */
+static int emission_rows_check(yvex_backend *backend, unsigned long long rows,
+    unsigned long long ratio, int index, unsigned int negative)
+{
+    const unsigned long long width = EMISSION_WIDTH, rope_width = 128ull;
+    unsigned long long activation_width = index ? width : width - rope_width;
+    unsigned long long start = 256ull, step = negative == 1u ? 0ull : ratio;
+    if (negative == 2u) start = ~0ull;
+    emission_fixture *seed = calloc(1u, sizeof(*seed)), *actual = calloc(1u, sizeof(*actual));
+    float *previous = malloc(sizeof(seed->values));
+    yvex_backend_tensor_desc desc = {.name = "compressed-emission-rows", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {sizeof(*seed)}, .bytes = sizeof(*seed)};
+    yvex_device_tensor *arena = NULL;
+    yvex_cuda_work work = {.backend = backend, .state = yvex_cuda_state(backend),
+        .variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED};
+    const yvex_cuda_attention_operations *ops = yvex_cuda_attention_operations_get();
+    yvex_backend_attention_weight weight = {.row_width = width, .row_count = 1ull,
+        .row_bytes = width * sizeof(float), .qtype = YVEX_GGUF_QTYPE_F32, .present = 1};
+    yvex_backend_attention_position position = {.theta = 10000ull, .scaling_factor = 1ull,
+        .rope_dimensions = rope_width};
+    yvex_backend_attention_activation activation = {.required = 1, .block_width = 32ull,
+        .quantization = index ? 1u : 2u, .hadamard = index};
+    yvex_backend_attention_failure failure = {0};
+    yvex_error err = {0};
+    int device_wide = 0;
+    const double epsilon = 1e-6;
+    YVEX_TEST_ASSERT(seed && actual && previous, "allocate emission oracle");
+    seed->before = seed->after = 12345.0f;
+    seed->status = negative == 3u ? 17 : 0;
+    for (unsigned long long i = 0ull; i < width; ++i)
+        seed->weights[i] = 1.0f + (float)(i % 7ull) / 16.0f;
+    for (unsigned long long i = 0ull; i < EMISSION_ROWS * width; ++i)
+        seed->values[i] = i < rows * width ? (float)((int)(i * 17ull % 251ull) - 125) / 128.0f : 12345.0f;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &arena, &err) == YVEX_OK,
+        "allocate emission device storage");
+    CUdeviceptr base = yvex_cuda_activation_pointer(backend, arena);
+    CUdeviceptr values = base + offsetof(emission_fixture, values);
+    CUdeviceptr weights = base + offsetof(emission_fixture, weights);
+    CUdeviceptr status = base + offsetof(emission_fixture, status);
+    for (unsigned int serial = 0u; serial < 2u; ++serial) {
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, seed, sizeof(*seed), &err) == YVEX_OK,
+            "initialize independent emission realization");
+        if (negative == 1u || negative == 2u) {
+            YVEX_TEST_ASSERT(ops->rope(&work, values, 1ull, rows, width, start, step, &position,
+                0, status, "cuda.test.emissions.invalid", &failure, &err) == YVEX_ERR_BOUNDS &&
+                yvex_backend_tensor_read(backend, arena, actual, sizeof(*actual), &err) == YVEX_OK &&
+                !memcmp(seed, actual, sizeof(*seed)), "zero/overflow position step refuses before mutation");
+            break;
+        }
+        for (unsigned long long row = 0ull; row < (serial ? rows : 1ull); ++row)
+            YVEX_TEST_ASSERT(ops->weighted_norm(&work, values + row * width * sizeof(float), width,
+                serial ? 1ull : rows, &weight, weights, epsilon, status, "cuda.test.emissions.norm",
+                &failure, &err) == YVEX_OK, "normalize independent emission population");
+        YVEX_TEST_ASSERT(yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            &device_wide, "cuda.test.emissions.norm", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, actual, sizeof(*actual), &err) == YVEX_OK,
+            "complete normalization oracle boundary");
+        if (!negative) for (unsigned long long row = 0ull; row < rows; ++row) {
+            double sum = 0.0;
+            for (unsigned long long i = 0ull; i < width; ++i) {
+                double value = seed->values[row * width + i];
+                sum += value * value;
+            }
+            double inverse = 1.0 / sqrt(sum / (double)width + epsilon);
+            for (unsigned long long i = 0ull; i < width; ++i)
+                YVEX_TEST_ASSERT(actual->values[row * width + i] == reduction_bf16((float)(
+                    (double)seed->values[row * width + i] * inverse * seed->weights[i])),
+                    "emission normalization matches independent scalar F64/BF16 oracle exactly");
+        }
+        float normalized[EMISSION_WIDTH];
+        for (unsigned long long row = 0ull; row < (serial ? rows : 1ull); ++row)
+            YVEX_TEST_ASSERT(ops->rope(&work, values + row * width * sizeof(float), 1ull,
+                serial ? 1ull : rows, width, start + row * ratio, step, &position, 0, status,
+                "cuda.test.emissions.rope", &failure, &err) == YVEX_OK,
+                "rotate the exact source-authored emission positions");
+        if (!negative) memcpy(normalized, actual->values, sizeof(normalized));
+        YVEX_TEST_ASSERT(yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            &device_wide, "cuda.test.emissions.rope", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, actual, sizeof(*actual), &err) == YVEX_OK,
+            "complete positional oracle boundary");
+        if (!negative) for (unsigned long long pair = 0ull; pair < rope_width / 2ull; ++pair) {
+            double angle = (double)start * pow(10000.0, -2.0 * (double)pair / (double)rope_width);
+            unsigned long long i = width - rope_width + pair * 2ull;
+            double left = (double)normalized[i] * cos(angle) - (double)normalized[i + 1ull] * sin(angle);
+            double right = (double)normalized[i] * sin(angle) + (double)normalized[i + 1ull] * cos(angle);
+            YVEX_TEST_ASSERT(fabs((double)actual->values[i] - left) <= fabs(left) / 256.0 + 2e-5 &&
+                fabs((double)actual->values[i + 1ull] - right) <= fabs(right) / 256.0 + 2e-5,
+                "emission RoPE agrees with independent trigonometric F64 oracle within BF16 publication tolerance");
+        }
+        for (unsigned long long row = 0ull; row < (serial ? rows : 1ull); ++row)
+            YVEX_TEST_ASSERT(ops->activation(&work, values + row * width * sizeof(float),
+                serial ? 1ull : rows, activation_width, width, &activation, status,
+                "cuda.test.emissions.activation", &failure, &err) == YVEX_OK,
+                "publish the admitted activation class with physical vector stride");
+        YVEX_TEST_ASSERT(yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            &device_wide, "cuda.test.emissions.activation", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, actual, sizeof(*actual), &err) == YVEX_OK,
+            "complete emitted publication");
+        YVEX_TEST_ASSERT(actual->status == seed->status && actual->before == seed->before &&
+            actual->after == seed->after && !memcmp(actual->weights, seed->weights, sizeof(seed->weights)),
+            "emission status, canaries and immutable weights retained");
+        if (negative == 3u) YVEX_TEST_ASSERT(!memcmp(seed, actual, sizeof(*seed)),
+            "prior status prevents every emitted-vector transformation");
+        if (serial) YVEX_TEST_ASSERT(!memcmp(previous, actual->values, sizeof(actual->values)),
+            "batch/serial normalization, positional stride, Hadamard/quantization and unused tail are byte-identical");
+        else memcpy(previous, actual->values, sizeof(actual->values));
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+        "retire emitted-vector storage");
+    free(previous); free(actual); free(seed);
+    return 0;
+}
+
 int yvex_cuda_test_attention_reduction(void)
 {
     const unsigned long long widths[] = {1ull, 127ull, 128ull, 255ull, 256ull, 257ull,
@@ -332,6 +454,16 @@ int yvex_cuda_test_attention_reduction(void)
     int rc = yvex_backend_open(&backend, &options, &err);
     if (rc == YVEX_ERR_UNSUPPORTED) return 77;
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open reduction CUDA backend");
+    const unsigned long long emission_rows[] = {1ull, 2ull, 7ull, 31ull, 32ull, 128ull};
+    const unsigned long long emission_ratios[] = {1ull, 4ull, 128ull};
+    for (size_t i = 0u; i < sizeof(emission_rows) / sizeof(emission_rows[0]); ++i)
+        for (size_t r = 0u; r < sizeof(emission_ratios) / sizeof(emission_ratios[0]); ++r)
+            for (int index = 0; index <= 1; ++index)
+                if (emission_rows_check(backend, emission_rows[i], emission_ratios[r], index, 0u)) return 1;
+    for (unsigned int negative = 1u; negative <= 3u; ++negative)
+        if (emission_rows_check(backend, 7ull, 4ull, 0, negative)) return 1;
+    puts("compressed emissions: 36 batch/serial controls, 3 refusal controls; exact normalization/BF16 oracle; "
+         "RoPE F64 tolerance=abs(reference)/256+2e-5; main/index activation bytes identical");
     for (unsigned long long ratio = 4ull; ratio <= 128ull; ratio *= 32ull)
         for (unsigned long long head = 128ull; head <= 512ull; head *= 4ull)
             for (int checkpoints = 0; checkpoints <= 1; ++checkpoints)

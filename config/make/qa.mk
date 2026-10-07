@@ -436,8 +436,7 @@ test-runtime-ubsan:
 		$(MAKE) BUILD_DIR="$$build_dir" \
 			YVEX_BIN="$$build_dir/yvex" \
 			NVCC=__yvex_nvcc_unavailable__ \
-		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined \
-			-fno-sanitize-recover=undefined' \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined -fno-sanitize-recover=undefined' \
 			LDFLAGS='$(LDFLAGS) -fsanitize=undefined' \
 			test-runtime client test-openai test-tiny-vertical test-repl; \
 	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
@@ -452,8 +451,7 @@ test-runtime-ubsan-live: tests/cli/attention_graph.sh
 	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
 	$(MAKE) BUILD_DIR="$$build_dir" \
 		NVCC=__yvex_nvcc_unavailable__ \
-		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined \
-			-fno-sanitize-recover=undefined' \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined -fno-sanitize-recover=undefined' \
 		LDFLAGS='$(LDFLAGS) -fsanitize=undefined' test-runtime; \
 	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
 		YVEX_TEST_FILTER=deepseek_attention \
@@ -461,8 +459,7 @@ test-runtime-ubsan-live: tests/cli/attention_graph.sh
 	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
 	$(MAKE) BUILD_DIR="$$build_dir" YVEX_BIN="$$build_dir/yvex" \
 		NVCC=__yvex_nvcc_unavailable__ \
-		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined \
-			-fno-sanitize-recover=undefined' \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined -fno-sanitize-recover=undefined' \
 		LDFLAGS='$(LDFLAGS) -fsanitize=undefined' cli; \
 	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
 		YVEX_BIN="$$build_dir/yvex" YVEX_TEST_OUT_DIR="$$tmp_dir/output" \
@@ -1054,8 +1051,7 @@ test-quant-ubsan:
 	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
 	$(MAKE) BUILD_DIR="$$build_dir" \
 		NVCC=__yvex_nvcc_unavailable__ \
-		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined \
-			-fno-sanitize-recover=undefined' \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined -fno-sanitize-recover=undefined' \
 		LDFLAGS='$(LDFLAGS) -fsanitize=undefined' test-quant
 
 test-quant-sanitizers:

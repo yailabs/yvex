@@ -1013,7 +1013,8 @@ extern "C" __global__ void yvex_attention_yarn_rope(
     float *values, unsigned long long vectors_per_token,
     unsigned long long token_count,
     unsigned long long vector_width, unsigned long long rope_dims,
-    unsigned long long token_position, unsigned long long theta,
+    unsigned long long token_position, unsigned long long position_step,
+    unsigned long long theta,
     unsigned long long scaling_factor, unsigned long long original_context,
     unsigned long long beta_fast, unsigned long long beta_slow,
     int inverse, int *status)
@@ -1025,7 +1026,8 @@ extern "C" __global__ void yvex_attention_yarn_rope(
     unsigned long long total;
     if (!status) return;
     if (*status != 0) return;
-    if (!values || !vectors_per_token || !token_count || !rope_dims ||
+    if (!values || !vectors_per_token || !token_count || !position_step ||
+        token_count - 1ull > (~0ull - token_position) / position_step || !rope_dims ||
         rope_dims > vector_width ||
         (rope_dims & 1ull) || theta <= 1ull || !scaling_factor ||
         (original_context && (!beta_slow || beta_fast <= beta_slow))) {
@@ -1049,7 +1051,7 @@ extern "C" __global__ void yvex_attention_yarn_rope(
     double frequency = attention_yarn_frequency(
         local_pair, rope_dims, theta, scaling_factor, original_context,
         beta_fast, beta_slow);
-    double angle = (double)(token_position + token_index) * frequency;
+    double angle = (double)(token_position + token_index * position_step) * frequency;
     double c = cos(angle);
     double s = inverse ? -sin(angle) : sin(angle);
     double x = (double)values[offset];
@@ -1262,6 +1264,65 @@ extern "C" __global__ void yvex_attention_activation_quantize(
     }
 }
 
+/* Small mixing matrices keep each cell in one warp lane. Ordered F64
+ * sums and every F32 publication are unchanged; only storage/barriers differ. */
+static __device__ void mhc_sinkhorn_normalize(
+    float *matrix, unsigned long long streams, unsigned long long iterations,
+    double epsilon)
+{
+    unsigned int thread = threadIdx.x;
+    if (streams <= 4ull && blockDim.x >= 32u) {
+        if (thread < 32u) {
+            int active = thread < streams * streams;
+            unsigned int row = active ? thread / (unsigned int)streams : 0u;
+            unsigned int column = active ? thread % (unsigned int)streams : 0u;
+            float value = active ? matrix[thread] : 0.0f;
+            for (unsigned long long iteration = 0ull; iteration < iterations; ++iteration) {
+                double row_total = 0.0;
+                #pragma unroll
+                for (unsigned int source = 0u; source < 4u; ++source) {
+                    if (source >= streams) continue;
+                    float part = __shfl_sync(0xffffffffu, value, row * streams + source);
+                    if (active) row_total += (double)part;
+                }
+                if (iteration && active)
+                    value = (float)((double)value / (row_total + epsilon));
+                double column_total = 0.0;
+                #pragma unroll
+                for (unsigned int source = 0u; source < 4u; ++source) {
+                    if (source >= streams) continue;
+                    float part = __shfl_sync(0xffffffffu, value, source * streams + column);
+                    if (active) column_total += (double)part;
+                }
+                if (active) value = (float)((double)value / (column_total + epsilon));
+            }
+            if (active) matrix[thread] = value;
+        }
+        __syncthreads();
+        return;
+    }
+    for (unsigned long long iteration = 0ull; iteration < iterations; ++iteration) {
+        if (iteration && thread < streams) {
+            double total = 0.0;
+            for (unsigned long long column = 0ull; column < streams; ++column)
+                total += matrix[thread * streams + column];
+            for (unsigned long long column = 0ull; column < streams; ++column)
+                matrix[thread * streams + column] =
+                    (float)((double)matrix[thread * streams + column] / (total + epsilon));
+        }
+        __syncthreads();
+        if (thread < streams) {
+            double total = 0.0;
+            for (unsigned long long row = 0ull; row < streams; ++row)
+                total += matrix[row * streams + thread];
+            for (unsigned long long row = 0ull; row < streams; ++row)
+                matrix[row * streams + thread] =
+                    (float)((double)matrix[row * streams + thread] / (total + epsilon));
+        }
+        __syncthreads();
+    }
+}
+
 extern "C" __global__ void yvex_residual_mhc_pre(
     float *residual, const float *linear_mix, const float *scale,
     const float *base, unsigned long long streams,
@@ -1372,31 +1433,7 @@ extern "C" __global__ void yvex_residual_mhc_pre(
     }
     __syncthreads();
     if (!active) return;
-    for (unsigned long long iteration = 0ull;
-         iteration < sinkhorn_iterations; ++iteration) {
-        if (iteration != 0ull && (unsigned long long)thread < streams) {
-            unsigned long long row = (unsigned long long)thread;
-            double total = 0.0;
-            for (unsigned long long column = 0ull; column < streams; ++column)
-                total += combination[row * streams + column];
-            for (unsigned long long column = 0ull; column < streams; ++column)
-                combination[row * streams + column] =
-                    (float)((double)combination[row * streams + column] /
-                            (total + mhc_epsilon));
-        }
-        __syncthreads();
-        if ((unsigned long long)thread < streams) {
-            unsigned long long column = (unsigned long long)thread;
-            double total = 0.0;
-            for (unsigned long long row = 0ull; row < streams; ++row)
-                total += combination[row * streams + column];
-            for (unsigned long long row = 0ull; row < streams; ++row)
-                combination[row * streams + column] =
-                    (float)((double)combination[row * streams + column] /
-                            (total + mhc_epsilon));
-        }
-        __syncthreads();
-    }
+    mhc_sinkhorn_normalize(combination, streams, sinkhorn_iterations, mhc_epsilon);
     for (unsigned long long lane = (unsigned long long)thread; lane < stream_width;
          lane += (unsigned long long)blockDim.x) {
         if (!isfinite(collapsed[lane]) || !isfinite(post[lane % streams])) {
@@ -1768,16 +1805,23 @@ extern "C" __global__ void yvex_attention_candidate_scores(
     unsigned long long current_count, unsigned long long current_stride,
     unsigned long long heads, unsigned long long head_dim,
     unsigned long long ratio, unsigned long long query_position,
-    float *scores, int *status)
+    float *scores, int *status, unsigned long long query_rows, unsigned long long candidate_stride)
 {
     extern __shared__ double head_terms[];
     __shared__ int active;
-    unsigned long long candidate = (unsigned long long)blockIdx.x;
+    unsigned long long ordinal = candidate_stride ? blockIdx.x / candidate_stride : query_rows;
+    unsigned long long candidate = candidate_stride ? blockIdx.x % candidate_stride : 0ull;
     unsigned int thread = threadIdx.x;
     if (!status) return;
+    /* A captured capacity envelope may retain more blocks than the active
+     * query/candidate population. Padding is not a malformed replay input. */
+    if (candidate_stride && query_rows && ordinal >= query_rows) return;
     if (!index_query || !index_weights || !scores || !heads ||
         !head_dim || heads > (~0ull - head_dim) / head_dim || blockDim.x != 256u ||
-        !ratio || history_count > ~0ull - current_count ||
+        !ratio || !query_rows || !candidate_stride || ordinal >= query_rows ||
+        query_rows > ~0ull / heads / head_dim || query_rows > ~0ull / candidate_stride ||
+        query_position > ~0ull - ordinal || history_count > ~0ull - current_count ||
+        candidate_stride < history_count + current_count ||
         (history_count && (!history_indexer || !history_positions ||
                            history_stride < head_dim)) ||
         (current_count && (!current_indexer || !current_positions ||
@@ -1786,6 +1830,10 @@ extern "C" __global__ void yvex_attention_candidate_scores(
         return;
     }
     if (candidate >= history_count + current_count) return;
+    query_position += ordinal;
+    index_query += ordinal * heads * head_dim;
+    index_weights += ordinal * heads;
+    scores += ordinal * candidate_stride;
     unsigned long long position = candidate < history_count ? history_positions[candidate]
         : current_positions[candidate - history_count];
     if (position > query_position || position > ~0ull - ratio + 1ull ||
@@ -1847,19 +1895,31 @@ extern "C" __global__ void yvex_attention_topk(
     unsigned long long ratio, unsigned long long query_position, unsigned long long k,
     unsigned long long *selected, unsigned long long *selected_positions,
     unsigned long long *selected_count, unsigned long long *valid_count,
-    float *scores, unsigned long long *valid_indexes, unsigned long long extent, int *status)
+    float *scores, unsigned long long *valid_indexes, unsigned long long extent, int *status,
+    unsigned long long query_rows, unsigned long long candidate_stride, unsigned long long selected_stride)
 {
     __shared__ unsigned long long valid;
     __shared__ int active;
-    if (!status || blockIdx.x != 0u) return;
+    if (!status || blockIdx.x >= query_rows) return;
     if (!selected || !selected_positions || !selected_count || !valid_count || !scores ||
-        !valid_indexes || !ratio || !k || history_count > ~0ull - current_count ||
+        !valid_indexes || !ratio || !k || !query_rows || !selected_stride ||
+        query_rows > ~0ull / selected_stride || !candidate_stride ||
+        query_rows > ~0ull / candidate_stride ||
+        query_position > ~0ull - blockIdx.x || history_count > ~0ull - current_count ||
         !extent || (extent & (extent - 1ull)) || extent > (1ull << 32u) ||
-        extent < history_count + current_count ||
+        extent < history_count + current_count || candidate_stride < extent ||
+        (selected_stride < k && selected_stride < history_count + current_count) ||
         (history_count && !history_positions) || (current_count && !current_positions)) {
         if (threadIdx.x == 0u) atomicCAS(status, 0, 2);
         return;
     }
+    query_position += blockIdx.x;
+    selected += blockIdx.x * selected_stride;
+    selected_positions += blockIdx.x * selected_stride;
+    selected_count += blockIdx.x;
+    valid_count += blockIdx.x;
+    scores += blockIdx.x * candidate_stride;
+    valid_indexes += blockIdx.x * candidate_stride;
     if (threadIdx.x == 0u) { active = *status == 0; valid = 0ull; }
     __syncthreads();
     if (!active) return;

@@ -492,6 +492,48 @@ static __device__ float4 tensorcore_expert_register_dot(const unsigned char *wei
     }
     return make_float4(values[0], values[1], values[2], values[3]);
 }
+/* Compact the real eligible bucket populations into independent eight-column
+ * tiles. The immutable worklist remains authoritative; a conservative launch
+ * bound may contain padding, but never duplicates a selected pair. Each warp
+ * owns one output tile rather than serially visiting an entire expert bucket. */
+static __device__ unsigned long long tensorcore_expert_column_tile(
+    unsigned long long tile, const unsigned long long *populations,
+    unsigned long long buckets, unsigned long long minimum,
+    unsigned int *column_base, int *status)
+{
+    unsigned int lane = threadIdx.x & 31u;
+    unsigned long long cursor = 0ull;
+    *column_base = 0u;
+    /* The launch includes conservative padding. Resolve its compact ordinal
+     * cooperatively instead of making lane zero rescan every expert bucket
+     * for every output-row tile. Prefixes retain the original bucket order. */
+    for (unsigned long long first = 0ull; first < buckets; first += 32ull) {
+        unsigned long long index = first + lane;
+        unsigned long long population = index < buckets ? populations[index] : 0ull;
+        if (__any_sync(0xffffffffu, population > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH)) {
+            if (!lane) atomicCAS(status, 0, 2);
+            return buckets;
+        }
+        unsigned int extent = population >= minimum ?
+            (unsigned int)((population + 7ull) / 8ull) : 0u;
+        unsigned int inclusive = extent;
+        for (unsigned int offset = 1u; offset < 32u; offset <<= 1u) {
+            unsigned int previous = __shfl_up_sync(0xffffffffu, inclusive, offset);
+            if (lane >= offset) inclusive += previous;
+        }
+        unsigned long long begin = cursor + inclusive - extent;
+        unsigned int owners = __ballot_sync(0xffffffffu,
+            tile >= begin && tile - begin < extent);
+        if (owners) {
+            unsigned int owner = (unsigned int)__ffs(owners) - 1u;
+            *column_base = (unsigned int)(tile - __shfl_sync(0xffffffffu, begin, owner)) * 8u;
+            return __shfl_sync(0xffffffffu, index, owner);
+        }
+        cursor += __shfl_sync(0xffffffffu, inclusive, 31);
+    }
+    return buckets;
+}
+
 extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
     const unsigned char *gate, unsigned long long gate_row_bytes,
     unsigned long long gate_expert_bytes, unsigned int gate_qtype,
@@ -516,11 +558,18 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
     unsigned int warp = threadIdx.x >> 5u, lane = threadIdx.x & 31u;
     unsigned long long tiles = (intermediate_width + 15ull) / 16ull;
     unsigned long long task = (unsigned long long)blockIdx.x * 4ull + warp;
-    unsigned long long bucket = tiles ? task / tiles : pair_count;
     unsigned long long row_base = tiles ? (task % tiles) * 16ull : intermediate_width;
     if (!status || *status || warp >= 4u || !summary || !expert_ids ||
-        !bucket_offsets || !bucket_populations ||
-        bucket >= summary->bucket_count) return;
+        !bucket_offsets || !bucket_populations) return;
+    if (!tiles || !tensor_core_minimum || summary->bucket_count > expert_count ||
+        summary->bucket_count > pair_count) {
+        if (!lane) atomicCAS(status, 0, 2);
+        return;
+    }
+    unsigned int column_base = 0u;
+    unsigned long long bucket = tensorcore_expert_column_tile(task / tiles,
+        bucket_populations, summary->bucket_count, tensor_core_minimum, &column_base, status);
+    if (bucket >= summary->bucket_count) return;
     unsigned long long offset = bucket_offsets[bucket];
     unsigned long long population = bucket_populations[bucket];
     unsigned long long expert = expert_ids[bucket];
@@ -539,7 +588,8 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
-    if (!lane) for (unsigned long long column = 0ull; column < population; ++column) {
+    if (!lane) for (unsigned long long column = column_base;
+                   column < population && column < column_base + 8ull; ++column) {
         unsigned long long source_pair = order[offset + column];
         if (source_pair >= pair_count || selected[source_pair] != expert)
             atomicCAS(status, 0, 2);
@@ -553,7 +603,7 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
-    for (unsigned int column_base = 0u; column_base < population; column_base += 8u) {
+    {
         float4 gate_values = tensorcore_expert_register_dot(gate + expert * gate_expert_bytes,
             gate_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
             order, offset, (unsigned int)population, (unsigned int)topk,
@@ -594,11 +644,18 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
     unsigned int warp = threadIdx.x >> 5u, lane = threadIdx.x & 31u;
     unsigned long long tiles = (hidden + 15ull) / 16ull;
     unsigned long long task = (unsigned long long)blockIdx.x * 4ull + warp;
-    unsigned long long bucket = tiles ? task / tiles : pair_count;
     unsigned long long row_base = tiles ? (task % tiles) * 16ull : hidden;
     if (!status || *status || warp >= 4u || !summary || !expert_ids ||
-        !bucket_offsets || !bucket_populations ||
-        bucket >= summary->bucket_count) return;
+        !bucket_offsets || !bucket_populations) return;
+    if (!tiles || !tensor_core_minimum || summary->bucket_count > expert_count ||
+        summary->bucket_count > pair_count) {
+        if (!lane) atomicCAS(status, 0, 2);
+        return;
+    }
+    unsigned int column_base = 0u;
+    unsigned long long bucket = tensorcore_expert_column_tile(task / tiles,
+        bucket_populations, summary->bucket_count, tensor_core_minimum, &column_base, status);
+    if (bucket >= summary->bucket_count) return;
     unsigned long long offset = bucket_offsets[bucket];
     unsigned long long population = bucket_populations[bucket];
     unsigned long long expert = expert_ids[bucket];
@@ -615,7 +672,8 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
-    if (!lane) for (unsigned long long column = 0ull; column < population; ++column) {
+    if (!lane) for (unsigned long long column = column_base;
+                   column < population && column < column_base + 8ull; ++column) {
         unsigned long long source_pair = order[offset + column];
         if (source_pair >= pair_count || selected[source_pair] != expert)
             atomicCAS(status, 0, 2);
@@ -627,7 +685,7 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
-    for (unsigned int column_base = 0u; column_base < population; column_base += 8u) {
+    {
         float4 dot = tensorcore_expert_register_dot(down + expert * expert_bytes,
             row_bytes, hidden, row_base, intermediate, (unsigned int)input_blocks,
             order, offset, (unsigned int)population, (unsigned int)topk, column_base, qtype, 1, status);
@@ -643,5 +701,6 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
         }
     }
     if (!lane && !row_base && !*status)
-        atomicAdd(&summary->matrix_tile_executed_pairs, population);
+        atomicAdd(&summary->matrix_tile_executed_pairs,
+                  population - column_base < 8ull ? population - column_base : 8ull);
 }

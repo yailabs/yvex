@@ -37,12 +37,24 @@ struct yvex_program_kernels {
     float *host_staging;
     unsigned long long host_staging_bytes;
     yvex_device_tensor *signal_workspace;
+    yvex_device_tensor *encoded_workspace;
 };
 
 static int kernel_refuse(yvex_error *err, yvex_status status, const char *why)
 {
     yvex_error_set(err, status, "runtime.program.kernel", why);
     return status;
+}
+
+/* Intermediate SSA storage and its readers share the enclosing program's
+ * completion lifetime. Standalone/non-scoped consumers still complete copies. */
+static int kernel_copy(yvex_program_kernels *c, const yvex_program_device_invocation *r,
+    yvex_device_tensor *destination, const yvex_device_tensor *source, yvex_error *err)
+{
+    int rc = r->completion_scoped ?
+        yvex_backend_tensor_copy_async(c->backend, destination, source, err) : YVEX_ERR_UNSUPPORTED;
+    return rc == YVEX_ERR_UNSUPPORTED ?
+        yvex_backend_tensor_copy(c->backend, destination, source, err) : rc;
 }
 
 static int kernel_account(yvex_program_kernels *c, unsigned long long host, unsigned long long device,
@@ -710,6 +722,39 @@ static int kernel_mhc_prepare(yvex_program_kernels *c, unsigned long long rows, 
     return YVEX_OK;
 }
 
+/* One serialized program reuses packing storage across its linear steps.
+ * Geometry belongs to the backend; lifetime and budget belong to this owner. */
+static int kernel_encoded_prepare(yvex_program_kernels *c, unsigned long long rows, yvex_error *err)
+{
+    unsigned long long bytes = 0u, old = c->encoded_workspace ? c->encoded_workspace->bytes : 0u, peak;
+    for (size_t i = 0u; i < c->summary->step_count; ++i) {
+        const yvex_program_physical_step *s = yvex_program_physical_step_at(c->program, i);
+        if (strcmp(s->implementation, "linear.row_dot.q8.v1")) continue;
+        const yvex_component_encoded_weight *w = c->weights + s->operands[1];
+        unsigned long long required, population = yvex_program_physical_step_population(c->program, i, rows);
+        int rc = yvex_backend_encoded_workspace_bytes(c->backend, w->qtype, w->row_width, population,
+            YVEX_ENCODED_INPUT_Q8, &required, err);
+        if (rc != YVEX_OK) return rc;
+        if (required > bytes) bytes = required;
+    }
+    if (bytes <= old) return YVEX_OK;
+    if (old > c->device_bytes || !yvex_core_u64_add(c->device_bytes, bytes, &peak) ||
+        (c->device_limit && peak > c->device_limit))
+        return kernel_refuse(err, YVEX_ERR_BOUNDS, "encoded workspace growth exceeds preparation budget");
+    yvex_backend_tensor_desc d = {.name = "program-encoded-workspace", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {bytes}, .bytes = bytes};
+    yvex_device_tensor *grown = NULL;
+    int rc = yvex_backend_tensor_alloc(c->backend, &d, &grown, err);
+    if (rc != YVEX_OK) return rc;
+    if (c->encoded_workspace && (rc = yvex_backend_tensor_release(c->backend, &c->encoded_workspace, err)) != YVEX_OK) {
+        (void)yvex_backend_tensor_release(c->backend, &grown, NULL);
+        return rc;
+    }
+    c->encoded_workspace = grown;
+    c->device_bytes = peak - old;
+    return YVEX_OK;
+}
+
 int yvex_program_kernels_prepare(yvex_program_kernels *c, unsigned long long rows,
     unsigned long long host_limit, unsigned long long device_limit, yvex_error *err)
 {
@@ -725,6 +770,7 @@ int yvex_program_kernels_prepare(yvex_program_kernels *c, unsigned long long row
     if (rows == 1u) c->single_ready = 0; else c->multiple_ready = 0;
     rc = kernel_host_staging_prepare(c, rows, err);
     if (rc == YVEX_OK) rc = kernel_mhc_prepare(c, rows, err);
+    if (rc == YVEX_OK) rc = kernel_encoded_prepare(c, rows, err);
     for (i = 0u; rc == YVEX_OK && i < c->linear_count; ++i) {
         program_kernel_linear *l = &c->linears[i];
         unsigned long long population = l->population.symbol == YVEX_IR_NONE ? l->population.extent : rows;
@@ -1157,7 +1203,7 @@ static int kernel_rows(yvex_program_kernels *c, const yvex_program_device_invoca
                 return kernel_refuse(err, YVEX_ERR_STATE, "row construction exceeds compiled output storage");
             destination.rank = source->rank;
             memcpy(destination.dims, source->dims, sizeof(destination.dims));
-            rc = yvex_backend_tensor_copy(c->backend, &destination, source, err);
+            rc = kernel_copy(c, r, &destination, source, err);
             offset += source->bytes / sizeof(float);
         }
         if (rc == YVEX_OK && offset != output->bytes / sizeof(float))
@@ -1254,7 +1300,8 @@ static int kernel_f32_execute(yvex_program_kernels *c, const yvex_program_device
         int rounded = !strcmp(s->implementation, "cast.rne.bf16.v1");
         /* The rounding operation is a completing consumer of the same owned
          * storage. Backends without queued copies retain synchronous copy. */
-        int rc = rounded ? yvex_backend_tensor_copy_async(c->backend, output, input, err) : YVEX_ERR_UNSUPPORTED;
+        int rc = rounded ? yvex_backend_tensor_copy_async(c->backend, output, input, err) :
+            kernel_copy(c, r, output, input, err);
         if (rc == YVEX_ERR_UNSUPPORTED) rc = yvex_backend_tensor_copy(c->backend, output, input, err);
         if (rc == YVEX_OK && yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU)
             facts->d2d_bytes = input->bytes;
@@ -1320,7 +1367,7 @@ static int kernel_f32_execute(yvex_program_kernels *c, const yvex_program_device
             return kernel_refuse(err, YVEX_ERR_STATE, "row slice exceeds its compiled operand");
         view.rank = output->rank;
         memcpy(view.dims, output->dims, sizeof(view.dims));
-        int rc = yvex_backend_tensor_copy(c->backend, output, &view, err);
+        int rc = kernel_copy(c, r, output, &view, err);
         if (rc == YVEX_OK) {
             facts->compulsory_memory_facts_available = 1;
             if (yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU) facts->d2d_bytes = view.bytes;
@@ -1350,7 +1397,7 @@ static int kernel_f32_execute(yvex_program_kernels *c, const yvex_program_device
     if (!strcmp(s->implementation, "rotary_half.f32.v1")) {
         unsigned long long head = yvex_program_physical_attribute(s, "head_dimension")->value.integer;
         const yvex_device_tensor *cosine = &r->values[s->operands[1]], *sine = &r->values[s->operands[2]];
-        int rc = yvex_backend_tensor_copy(c->backend, output, input, err);
+        int rc = kernel_copy(c, r, output, input, err);
         if (rc == YVEX_OK) rc = c->ops->rotary_half_f32(c->backend, output, cosine, sine,
             r->rows, width / head, head, cosine->dims[1], facts, err);
         if (rc == YVEX_OK && yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU &&
@@ -1376,9 +1423,15 @@ static int kernel_encoded_linear(yvex_program_kernels *c, const yvex_program_dev
         YVEX_ENCODED_REDUCTION_ROW : YVEX_ENCODED_REDUCTION_DEFAULT;
     if (yvex_backend_kind_of(c->backend) == YVEX_BACKEND_KIND_CPU)
         return kernel_linear_cpu(w, r, input, output, facts, err);
-    return yvex_backend_encoded_matvec(c->backend, w->encoded, w->encoded_bytes, w->qtype,
+    unsigned long long packing = 0u;
+    if (q8) {
+        int rc = yvex_backend_encoded_workspace_bytes(c->backend, w->qtype, w->row_width, r->rows,
+            precision, &packing, err);
+        if (rc != YVEX_OK) return rc;
+    }
+    return yvex_backend_encoded_matvec_workspace(c->backend, w->encoded, w->encoded_bytes, w->qtype,
         w->row_count, w->row_width, w->row_bytes, r->rows, input, NULL, 0u, NULL,
-        output, precision, reduction, facts, err);
+        output, precision, reduction, packing ? c->encoded_workspace : NULL, facts, err);
 }
 
 static int kernel_index_linearize(const yvex_program_device_invocation *r, yvex_error *err)
@@ -1410,6 +1463,7 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
     yvex_device_tensor *output;
     const yvex_device_tensor *input;
     if (!c || !r || r->program != c->program || !facts || !r->arguments || !r->values || !r->indices ||
+        (r->completion_scoped != 0 && r->completion_scoped != 1) ||
         r->step != yvex_program_physical_step_at(c->program, r->step_index) || !r->step)
         return kernel_refuse(err, YVEX_ERR_INVALID_ARG, "kernel requires its bound physical invocation");
     s = r->step;
@@ -1459,7 +1513,7 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
             return kernel_refuse(err, YVEX_ERR_STATE, "reshape requires its verified contiguous element extent");
         view.rank = output->rank;
         memcpy(view.dims, output->dims, sizeof(view.dims));
-        int rc = yvex_backend_tensor_copy(c->backend, output, &view, err);
+        int rc = kernel_copy(c, r, output, &view, err);
         if (rc == YVEX_OK) {
             facts->compulsory_memory_facts_available = 1;
             if (yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU) facts->d2d_bytes = view.bytes;
@@ -1498,7 +1552,7 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
     if (!strcmp(s->implementation, "rotary_half.f32acc.bf16.v1")) {
         const yvex_ir_type *table = &yvex_program_physical_value_at(c->program, s->operands[1])->type;
         unsigned long long head = yvex_program_physical_attribute(s, "head_dimension")->value.integer;
-        int rc = yvex_backend_tensor_copy(c->backend, output, input, err);
+        int rc = kernel_copy(c, r, output, input, err);
         if (rc == YVEX_OK) rc = c->ops->rotary_half_f32(c->backend, output,
             &r->values[s->operands[1]], &r->values[s->operands[2]], r->rows,
             output->dims[1] / head, head, table->shape[1].extent, facts, err);
@@ -1510,7 +1564,7 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
         const yvex_ir_type *x = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
         const yvex_ir_type *table = &yvex_program_physical_value_at(c->program, s->operands[1])->type;
         unsigned long long head = yvex_program_physical_attribute(s, "head_dimension")->value.integer;
-        int rc = yvex_backend_tensor_copy(c->backend, output, input, err);
+        int rc = kernel_copy(c, r, output, input, err);
         if (rc == YVEX_OK) rc = c->ops->rotary_half_bf16(c->backend, output,
             &r->values[s->operands[1]], &r->values[s->operands[2]], r->rows,
             x->shape[1].extent / head, head, table->shape[1].extent, facts, err);
@@ -1619,6 +1673,8 @@ int yvex_program_kernels_close(yvex_program_kernels **out, yvex_error *err)
     if (!c) return YVEX_OK;
     if (c->signal_workspace &&
         (rc = yvex_backend_tensor_release(c->backend, &c->signal_workspace, err)) != YVEX_OK) return rc;
+    if (c->encoded_workspace &&
+        (rc = yvex_backend_tensor_release(c->backend, &c->encoded_workspace, err)) != YVEX_OK) return rc;
     for (i = 0u; c->linears && i < c->linear_count; ++i) {
         if (c->linears[i].single &&
             (rc = c->ops->linear_release(c->backend, &c->linears[i].single, err)) != YVEX_OK) return rc;

@@ -111,6 +111,23 @@ output executables include that word in their aggregate admission budget;
 neither a nonzero completion requirement nor a pending numerical failure may be
 discarded as an implementation convenience.
 
+The private invocation carries explicit completion ownership to its kernel
+adapter. Pure copies into SSA-owned storage may enqueue only under that scope;
+the paired completion drains them before output publication or resource reuse,
+also after cancellation or operation refusal. Non-scoped invocation preserves
+synchronous copying, and an unavailable queued-copy implementation retains its
+known-correct synchronous path. This is not a relaxed public tensor-copy contract.
+
+Encoded linear steps may borrow one program-owned packing buffer. Backend
+geometry determines its byte requirement; the prepared program accounts its
+maximum live extent and temporary growth overlap against the existing device
+budget. Steps serialize buffer reuse on the same stream, and checked completion
+precedes reuse by another invocation or release. No operation borrows an unrelated
+attention arena. Standalone projections retain call-owned packing when no
+workspace is supplied; input precision, reduction, status validation and output
+publication remain unchanged. This is a private adapter, not a public ABI or
+representation change.
+
 ## Joint preparation and executable composition
 
 [`joint_program.c`](../../src/graph/joint_program.c) imports conditioned joint

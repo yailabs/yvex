@@ -781,6 +781,9 @@ static int program_mhc_barrier_control(void)
 
 int yvex_cuda_test_program(void)
 {
+    const unsigned int mixing_streams[] = {1u, 2u, 3u, 4u, 7u, 8u, 9u, 16u};
+    for (size_t i = 0u; i < sizeof(mixing_streams) / sizeof(mixing_streams[0]); ++i)
+        if (test_mhc_sinkhorn_order(mixing_streams[i])) return 1;
     if (program_mhc_barrier_control()) return 1;
     if (program_pending_status_control()) return 1;
     if (program_checked_scope_control()) return 1;

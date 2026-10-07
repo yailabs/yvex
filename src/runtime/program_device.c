@@ -278,7 +278,7 @@ int yvex_program_device_run(yvex_program_device *c, unsigned long long rows,
     for (i = 0u; rc == YVEX_OK && i < c->summary->step_count; ++i) {
         const yvex_program_physical_step *s = yvex_program_physical_step_at(c->program, i);
         yvex_program_device_invocation r = {
-            c->program, s, args, c->values, rows, i, cancel, cancel_context, c->indices};
+            c->program, s, args, c->values, rows, i, cancel, cancel_context, c->indices, scoped};
         yvex_backend_operation_facts facts = {0};
         if (!c->kernels[i].invoke) continue; /* Immutable parameter binding, no device work. */
         r.rows = yvex_program_physical_step_population(c->program, i, rows);

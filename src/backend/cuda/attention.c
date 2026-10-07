@@ -710,7 +710,11 @@ static int attn_extent(const attn_run *run,
     case EXT_INDEX_QUERY: right = run->index_query_extent; break;
     case EXT_INDEX_WEIGHTS: right = run->job->indexer_heads; break;
     case EXT_SELECTED: right = run->topk_capacity; break;
-    case EXT_CANDIDATES: left = run->candidate_capacity; break;
+    case EXT_CANDIDATES:
+        left = run->candidate_capacity;
+        right = run->job->token_count < YVEX_CUDA_ATTENTION_SELECTION_ROWS
+            ? run->job->token_count : YVEX_CUDA_ATTENTION_SELECTION_ROWS;
+        break;
     case EXT_QUERY_HEADS: left = run->job->query_heads; break;
     case EXT_PHASE_COMPRESSED:
         left = run->phase_compressed_count; right = run->job->head_dimension; break;
@@ -1218,13 +1222,13 @@ static int attn_project(attn_run *run) {
     if (rc != YVEX_OK) return rc;
     rc = run->ops->rope(
         &run->resources, run->phase_query, run->job->query_heads, rows, run->job->head_dimension,
-        run->phase_start_position,
+        run->phase_start_position, 1ull,
         &run->job->position, 0, run->device_status,
         "cuda.attention.query_rope", run->failure, run->err);
     if (rc == YVEX_OK)
         rc = run->ops->rope(
             &run->resources, run->phase_raw_kv, 1ull, rows, run->job->kv_width,
-            run->phase_start_position,
+            run->phase_start_position, 1ull,
             &run->job->position, 0, run->device_status,
             "cuda.attention.kv_rope", run->failure, run->err);
     if (rc == YVEX_OK && run->job->kv_width > run->job->position.rope_dimensions)
@@ -1252,11 +1256,16 @@ static int attn_rolling_execute(attn_run *run, unsigned int kind) {
         ? &run->job->compressor_rotated_activation : &run->job->compressor_activation;
     const char *stage = index ? "cuda.attention.index_rolling" : "cuda.attention.main_rolling";
     unsigned long long activation_width = rolling->head_dimension;
-    int emit = device->value_count != 0ull, rc = YVEX_OK;
-    if (!run->ordinal) {
-        /* The phase owns projected rows and candidate state. Batch only the
-         * causal transitions; emission normalization stays before its first
-         * consumer, and every retained prefix remains independently addressable. */
+    unsigned long long emissions = (rolling->cursor + run->job->token_count) / rolling->ratio;
+    CUdeviceptr values = index ? run->phase_new_indexer : run->phase_new_compressed;
+    unsigned long long first_position = run->phase_start_position - rolling->cursor;
+    int rc = YVEX_OK;
+    if (run->ordinal) return YVEX_OK;
+    {
+        /* The ordered rolling transitions materialize every phase emission.
+         * Independent publication transforms may then execute together; causal
+         * consumers select only their own prefix and rolling checkpoints do
+         * not depend on normalized/rotated emissions. */
         yvex_cuda_attention_rolling_phase phase = {
             rolling, &run->job->weights[base], &run->weight[base],
             run->phase_core_input, device->kv, device->score, device->ape,
@@ -1265,18 +1274,16 @@ static int attn_rolling_execute(attn_run *run, unsigned int kind) {
             run->device_status, run->job->token_count, run->job->retain_prefix_checkpoints};
         rc = run->ops->rolling_phase(&run->resources, &phase, stage, run->failure, run->err);
     }
-    /* Non-emitting transitions publish rolling state only. Graph compatibility
-     * binds the emission pattern, so no dummy normalization/rotation is needed. */
-    if (rc != YVEX_OK || !emit) return rc;
+    if (rc != YVEX_OK || !emissions) return rc;
     rc = run->ops->weighted_norm(
-        &run->resources, device->value, rolling->head_dimension, 1ull,
+        &run->resources, values, rolling->head_dimension, emissions,
         &run->job->weights[base + 3], run->weight[base + 3],
         run->job->rms_epsilon, run->device_status, stage, run->failure,
         run->err);
     if (rc == YVEX_OK)
         rc = run->ops->rope(
-            &run->resources, device->value, 1ull, 1ull, rolling->head_dimension,
-            run->emission_position, &run->job->position, 0,
+            &run->resources, values, 1ull, emissions, rolling->head_dimension,
+            first_position, rolling->ratio, &run->job->position, 0,
             run->device_status, stage, run->failure, run->err);
     if (rc != YVEX_OK) return rc;
     if (!index) {
@@ -1289,8 +1296,8 @@ static int attn_rolling_execute(attn_run *run, unsigned int kind) {
         activation_width -= run->job->position.rope_dimensions;
     }
     return run->ops->activation(
-        &run->resources, device->value, 1ull, activation_width,
-        activation_width, activation,
+        &run->resources, values, emissions, activation_width,
+        rolling->head_dimension, activation,
         run->device_status, stage, run->failure, run->err);
 }
 static int attn_index_prepare(attn_run *run) {
@@ -1316,7 +1323,7 @@ static int attn_index_prepare(attn_run *run) {
     if (rc != YVEX_OK) return rc;
     rc = run->ops->rope(
         &run->resources, run->phase_index_query, run->job->indexer_heads, rows,
-        run->job->indexer_head_dimension, run->phase_start_position,
+        run->job->indexer_head_dimension, run->phase_start_position, 1ull,
         &run->job->position, 0, run->device_status, "cuda.attention.index_query_rope",
         run->failure, run->err);
     if (rc != YVEX_OK) return rc;
@@ -1329,34 +1336,27 @@ static int attn_index_prepare(attn_run *run) {
     return rc;
 }
 static int attn_index_topk(attn_run *run) {
-    int rc;
     const yvex_backend_attention_job *job = run->job;
-    attn_rolling_run *rolling = &run->rolling[ROLL_INDEX];
-    unsigned long long candidates = job->indexer_count + rolling->value_count, extent;
-    if (!run->score_grid || run->score_grid > UINT_MAX ||
-        !yvex_core_power_of_two_capacity(candidates, 1ull, 1ull, 1ull, &extent) ||
-        extent > run->candidate_capacity || extent > run->score_grid) return attn_run_fail(run,
-        YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT, "cuda.attention.score",
-        UINT_MAX, candidates, YVEX_ERR_BOUNDS, "candidate population exceeds launch geometry");
-    void *score_params[] = {
-        &run->index_query, &run->index_weights, &run->history_indexer,
-        &run->history_indexer_positions, (void *)&job->indexer_count, (void *)&job->indexer_stride,
-        &rolling->value, &rolling->positions, &rolling->value_count,
-        (void *)&job->indexer_head_dimension, (void *)&job->indexer_heads, (void *)&job->indexer_head_dimension,
-        (void *)&job->compression_ratio, (void *)&job->token_position, &run->topk_scores, &run->device_status
-    };
-    rc = run->ops->launch(&run->resources, run->state->attention_candidate_scores_function,
-        (unsigned int)run->score_grid, YVEX_CUDA_ATTN_BLOCK,
-        YVEX_CUDA_ATTN_BLOCK * sizeof(double), score_params, "cuda.attention.score", run->failure, run->err);
-    if (rc != YVEX_OK) return rc;
-    void *params[] = {
-        &run->history_indexer_positions, (void *)&job->indexer_count, &rolling->positions, &rolling->value_count,
-        (void *)&job->compression_ratio, (void *)&job->token_position, (void *)&job->indexer_topk,
-        &run->selected, &run->selected_positions, &run->selected_count, &run->valid_count,
-        &run->topk_scores, &run->valid_indexes, &extent, &run->device_status
-    };
-    return run->ops->launch(&run->resources, run->state->attention_topk_function, 1u,
-        YVEX_CUDA_ATTN_BLOCK, 0u, params, "cuda.attention.topk", run->failure, run->err);
+    unsigned long long end = run->ordinal + 1ull;
+    if (end % YVEX_CUDA_ATTENTION_SELECTION_ROWS && end != job->token_count) return YVEX_OK;
+    unsigned long long first = run->ordinal / YVEX_CUDA_ATTENTION_SELECTION_ROWS *
+        YVEX_CUDA_ATTENTION_SELECTION_ROWS;
+    yvex_cuda_attention_selection_phase phase = {
+        run->phase_index_query + first * run->index_query_extent * sizeof(float),
+        run->phase_index_weights + first * job->indexer_heads * sizeof(float),
+        run->phase_indexer, run->phase_indexer_positions,
+        run->phase_selected + first * run->topk_capacity * sizeof(unsigned long long),
+        run->phase_selected_positions + first * run->topk_capacity * sizeof(unsigned long long),
+        run->phase_selected_count + first * sizeof(unsigned long long),
+        run->phase_valid_count + first * sizeof(unsigned long long),
+        run->topk_scores, run->valid_indexes, run->device_status,
+        job->indexer_count + run->rolling[ROLL_INDEX].value_count,
+        run->candidate_capacity, run->score_grid, run->topk_capacity,
+        end - first, job->indexer_heads, job->indexer_head_dimension,
+        job->indexer_stride, job->compression_ratio, run->phase_start_position + first,
+        job->indexer_topk};
+    return run->ops->selection_phase(&run->resources, &phase,
+        "cuda.attention.selection.rows", run->failure, run->err);
 }
 static int attn_compress(attn_run *run) {
     if (run->job->attention_class == YVEX_BACKEND_ATTENTION_SWA) return YVEX_OK;
@@ -1411,7 +1411,7 @@ static int attn_reduce(attn_run *run) {
     rc = run->ops->rope(
         &run->resources, run->phase_attention, run->job->query_heads,
         run->job->token_count, run->job->head_dimension,
-        run->phase_start_position, &run->job->position, 1,
+        run->phase_start_position, 1ull, &run->job->position, 1,
         run->device_status, "cuda.attention.output_inverse_rope",
         run->failure, run->err);
     if (rc != YVEX_OK) return rc;

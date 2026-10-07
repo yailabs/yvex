@@ -41,6 +41,9 @@ typedef struct {
     int (*cancel_requested)(void *);
     void *cancel_context;
     yvex_program_index_value *indices;
+    /* The runner owns paired backend begin/completion hooks and drains all
+     * submitted work before output publication, including on refusal. */
+    int completion_scoped;
 } yvex_program_device_invocation;
 
 /* A static implementation table, not a dynamic plugin protocol. Each name is

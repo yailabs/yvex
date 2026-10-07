@@ -12,7 +12,7 @@
 #include "src/backend/cuda/private.h"
 #include "tests/test.h"
 
-enum { MOE_ROWS_WIDTH = 9, MOE_ROWS_EXPERTS = 3, MOE_ROWS_PAIRS = 64,
+enum { MOE_ROWS_WIDTH = 33, MOE_ROWS_EXPERTS = 65, MOE_ROWS_PAIRS = 512,
        MOE_ROWS_BLOCKS = 17, MOE_ROWS_Q8_BYTES = 292 };
 typedef struct {
     unsigned char weights[MOE_ROWS_WIDTH * MOE_ROWS_EXPERTS * MOE_ROWS_BLOCKS * 84];
@@ -106,7 +106,7 @@ static int moe_grouped_swiglu_precision(yvex_backend *backend)
 
 static void moe_rows_input(moe_rows_storage *s, unsigned int qtype,
                            unsigned long long blocks, unsigned int bytes, unsigned int scenario,
-                           unsigned long long pairs)
+                           unsigned long long pairs, unsigned long long experts)
 {
     for (size_t i = 0u; i < sizeof(s->weights); ++i) s->weights[i] = (unsigned char)(i * 31u + 7u);
     for (unsigned long long i = 0ull; i < MOE_ROWS_WIDTH * MOE_ROWS_EXPERTS * blocks; ++i) {
@@ -130,21 +130,21 @@ static void moe_rows_input(moe_rows_storage *s, unsigned int qtype,
         }
     }
     for (unsigned long long pair = 0ull; pair < pairs; ++pair) {
-        s->selected[pair] = pair % MOE_ROWS_EXPERTS;
+        s->selected[pair] = pair % experts;
         s->order[pair] = pairs - 1ull - pair;
     }
     if (scenario == 1u) s->status = 1;
-    if (scenario == 2u) s->selected[0] = MOE_ROWS_EXPERTS;
+    if (scenario == 2u) s->selected[0] = experts;
     s->before_canary = s->after_canary = 12345.0f;
 }
 
 static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
                           unsigned long long blocks, unsigned int scenario, int up_stage,
-                          unsigned long long pairs, int matrix)
+                          unsigned long long pairs, int matrix, unsigned long long experts)
 {
     const unsigned int bytes = qtype == YVEX_GGUF_QTYPE_Q2_K ? 84u : 66u;
     unsigned long long row_bytes = blocks * bytes, expert_bytes = row_bytes * MOE_ROWS_WIDTH;
-    unsigned long long topk = 2ull, experts = MOE_ROWS_EXPERTS;
+    unsigned long long topk = 2ull;
     unsigned long long width = MOE_ROWS_WIDTH, minimum = 0ull;
     int q8_input = 1, device_wide = 0, rc;
     moe_rows_storage *host = calloc(1u, sizeof(*host)), *observed = calloc(1u, sizeof(*observed));
@@ -157,13 +157,14 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
     double limit = 7.0;
     YVEX_TEST_ASSERT(host && observed, "allocate encoded expert oracle");
     YVEX_TEST_ASSERT(pairs && pairs <= MOE_ROWS_PAIRS, "bounded expert pair population");
-    moe_rows_input(host, qtype, blocks, bytes, scenario, pairs);
+    YVEX_TEST_ASSERT(experts && experts <= MOE_ROWS_EXPERTS, "bounded expert bucket population");
+    moe_rows_input(host, qtype, blocks, bytes, scenario, pairs, experts);
     memcpy(host->up_weights + 2u, host->weights, sizeof(host->weights));
     if (matrix) {
         unsigned long long cursor = 0ull;
         minimum = 4ull;
         host->summary.schema_version = YVEX_EXPERT_WORKLIST_OBSERVATION_SCHEMA_V1;
-        host->summary.bucket_count = MOE_ROWS_EXPERTS;
+        host->summary.bucket_count = experts;
         for (unsigned long long expert = 0ull; expert < experts; ++expert) {
             host->expert_ids[expert] = expert;
             host->offsets[expert] = cursor;
@@ -174,6 +175,11 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
             }
         }
         host->offsets[experts] = cursor;
+        for (unsigned long long expert = 0ull; expert < experts; ++expert)
+            if (host->populations[expert] >= minimum)
+                host->summary.matrix_tile_eligible_pairs += host->populations[expert];
+        if (scenario == 8u)
+            host->populations[experts - 1ull] = YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH + 1ull;
     }
     descriptor.bytes = descriptor.dims[0] = sizeof(*host);
     YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &descriptor, &arena, &err) == YVEX_OK &&
@@ -205,13 +211,17 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
     rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
         matrix ? (up_stage ? state->moe_grouped_up_tensorcore_function : state->moe_grouped_down_tensorcore_function) :
         up_stage ? state->moe_grouped_up_rows_function : state->moe_grouped_down_rows_function,
-        matrix ? 1u : (unsigned int)(pairs * 2ull), matrix ? 128u : 256u, 0u,
+        matrix ? (unsigned int)((((pairs + 7ull) / 8ull + experts) *
+            ((width + 15ull) / 16ull) + 3ull) / 4ull) :
+            (unsigned int)(pairs * ((width + 7ull) / 8ull)),
+        matrix ? 128u : 256u, 0u,
         matrix ? (up_stage ? matrix_up : matrix_down) : up_stage ? up_params : params,
         "cuda.test.moe-encoded-rows", &err);
     if (rc == YVEX_OK && matrix == 2)
         rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
             up_stage ? state->moe_grouped_up_rows_function : state->moe_grouped_down_rows_function,
-            (unsigned int)(experts * 2ull), 256u, 0u, up_stage ? up_params : params,
+            (unsigned int)(experts * ((width + 7ull) / 8ull)), 256u, 0u,
+            up_stage ? up_params : params,
             "cuda.test.moe-small-buckets", &err);
     if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
         &device_wide, "cuda.test.moe-encoded-rows", &err);
@@ -221,6 +231,10 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
         YVEX_TEST_ASSERT(observed->status != 0, "prior error/invalid expert/nonfinite input prevents publication");
     } else {
         YVEX_TEST_ASSERT(observed->status == 0, "valid expert row or exceptional exact recovery succeeds");
+        if (matrix)
+            YVEX_TEST_ASSERT(observed->summary.matrix_tile_executed_pairs ==
+                (up_stage ? 0ull : host->summary.matrix_tile_eligible_pairs),
+                "matrix output tiles account for every eligible pair exactly once");
         for (unsigned long long pair = 0ull; pair < pairs; ++pair)
             for (unsigned long long row = 0ull; row < width; ++row) {
                 unsigned long long source = host->order[pair], expert = host->selected[source];
@@ -269,7 +283,7 @@ static int moe_rows_check(yvex_backend *backend, unsigned int qtype,
                           unsigned long long blocks, unsigned int scenario,
                           int up_stage, unsigned long long pairs)
 {
-    return moe_rows_check_impl(backend, qtype, blocks, scenario, up_stage, pairs, 0);
+    return moe_rows_check_impl(backend, qtype, blocks, scenario, up_stage, pairs, 0, 3ull);
 }
 
 typedef struct {
@@ -382,19 +396,32 @@ int yvex_cuda_test_moe_rows(void)
     for (int up_stage = 0; up_stage <= 1; ++up_stage) {
         unsigned int qtype = up_stage ? YVEX_GGUF_QTYPE_IQ2_XXS : YVEX_GGUF_QTYPE_Q2_K;
         for (size_t i = 0u; i < sizeof(blocks) / sizeof(blocks[0]); ++i)
-            if (moe_rows_check_impl(backend, qtype, blocks[i], 0u, up_stage, 64ull, 1)) return 1;
+            if (moe_rows_check_impl(backend, qtype, blocks[i], 0u, up_stage, 64ull, 1, 3ull)) return 1;
         for (unsigned int scenario = 1u; scenario <= 7u; ++scenario)
-            if (moe_rows_check_impl(backend, qtype, 17ull, scenario, up_stage, 64ull, 1)) return 1;
+            if (moe_rows_check_impl(backend, qtype, 17ull, scenario, up_stage, 64ull, 1, 3ull)) return 1;
+        /* Fixed physical geometries must retain the same exceptional recovery
+         * and malformed-input refusals as the dynamic matrix realization. */
+        unsigned long long fixed_blocks = up_stage ? 16ull : 8ull;
+        for (unsigned int scenario = 1u; scenario <= 7u; ++scenario)
+            if (moe_rows_check_impl(backend, qtype, fixed_blocks, scenario,
+                    up_stage, 64ull, 1, 3ull)) return 1;
         /* Populations 3/3/2, 4/3/3 and 5/5/4 straddle the matrix threshold.
          * Both kernels consume one immutable worklist and must publish every
          * pair exactly once, including partial output-row tiles. */
-        const unsigned long long populations[] = {8ull, 10ull, 14ull, 64ull};
+        const unsigned long long populations[] = {8ull, 10ull, 14ull, 64ull, 512ull};
         for (size_t p = 0u; p < sizeof(populations) / sizeof(populations[0]); ++p)
             if (moe_rows_check_impl(backend, qtype, 17ull, 0u,
-                    up_stage, populations[p], 2)) return 1;
+                    up_stage, populations[p], 2, 3ull)) return 1;
         for (unsigned int scenario = 1u; scenario <= 7u; ++scenario)
             if (moe_rows_check_impl(backend, qtype, 17ull, scenario,
-                    up_stage, 10ull, 2)) return 1;
+                    up_stage, 10ull, 2, 3ull)) return 1;
+        /* Cross both 32-bucket prefix boundaries, including final partial
+         * bucket groups and a malformed population outside the first group. */
+        for (size_t i = 0u; i < sizeof(blocks) / sizeof(blocks[0]); ++i)
+            if (moe_rows_check_impl(backend, qtype, blocks[i], 0u,
+                    up_stage, 512ull, 2, 65ull)) return 1;
+        if (moe_rows_check_impl(backend, qtype, 17ull, 8u,
+                up_stage, 512ull, 1, 65ull)) return 1;
     }
     yvex_backend_close(backend);
     return 0;

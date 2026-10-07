@@ -112,7 +112,14 @@ static int test_program_populations(yvex_backend_kind kind, int bf16)
     YVEX_TEST_ASSERT(yvex_program_stage_open(&stage, decoded, &parameter, 1u, backend, 8u, 1,
         1048576u, 1048576u, &err) == YVEX_OK, "bind one model with distinct 8/4/2 populations");
     for (size_t run = 0u; run < 2u; ++run) {
+        if (kind == YVEX_BACKEND_KIND_CUDA && run == 0u)
+            YVEX_TEST_ASSERT(setenv("YVEX_TEST_CUDA_SYNC_FAILURE",
+                yvex_backend_operation_variant_name(YVEX_BACKEND_VARIANT_TENSOR_COPY), 1) == 0,
+                "make any obsolete intermediate copy barrier fail observably");
         rc = yvex_program_stage_host(stage, 8u, inputs, 1u, outputs, 1u, NULL, NULL, &facts, &err);
+        if (kind == YVEX_BACKEND_KIND_CUDA && run == 0u)
+            YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_CUDA_SYNC_FAILURE") == 0,
+                "remove the intermediate-copy barrier probe after checked program completion");
         if (rc != YVEX_OK) fprintf(stderr, "population execution: %s: %s\n",
             yvex_error_where(&err), yvex_error_message(&err));
         YVEX_TEST_ASSERT(rc == YVEX_OK, "execute distinct populations with identical linear widths");

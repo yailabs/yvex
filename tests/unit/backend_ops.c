@@ -889,6 +889,42 @@ static int attention_workspace_recipe_make(yvex_attention_workspace_recipe *reci
     return yvex_attention_workspace_recipe_seal(recipe, err);
 }
 
+/* Backend-private score tiles are charged without altering the sealed recipe
+ * or turning private scratch into caller-owned forensic output. */
+static int test_attention_selection_workspace(void)
+{
+    const unsigned long long capacities[] = {1ull, 7ull, 32ull, 512ull};
+    const yvex_attention_workspace_component_kind kinds[] = {
+        YVEX_ATTENTION_WORKSPACE_TOPK_SCORES, YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES};
+    for (size_t i = 0u; i < sizeof(capacities) / sizeof(capacities[0]); ++i) {
+        for (size_t j = 0u; j < sizeof(kinds) / sizeof(kinds[0]); ++j) {
+            unsigned long long capacity = capacities[i], device_bytes, host_bytes;
+            unsigned long long tile = capacity < 32ull ? capacity : 32ull;
+            yvex_attention_workspace_recipe recipe;
+            yvex_error err;
+            YVEX_TEST_ASSERT(attention_workspace_recipe_make(&recipe, capacity,
+                YVEX_ATTENTION_EVIDENCE_FULL, &err) == YVEX_OK, "sealed selection scratch recipe");
+            recipe.components[1].kind = kinds[j];
+            recipe.components[1].scales_with_tokens = 0;
+            YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK,
+                            "token-local semantic scratch retains its explicit identity");
+            char identity[YVEX_ATTENTION_IDENTITY_CAP];
+            (void)snprintf(identity, sizeof(identity), "%s", recipe.identity);
+            unsigned long long device_expected =
+                ((32ull + 80ull * tile + 8ull * (capacity + 1ull) + 15ull) & ~15ull) + 56ull * capacity;
+            unsigned long long host_expected =
+                ((32ull + 80ull + 8ull * (capacity + 1ull) + 15ull) & ~15ull) + 56ull * capacity;
+            YVEX_TEST_ASSERT(yvex_backend_attention_workspace_required_from_recipe(
+                &recipe, &device_bytes, &err) == YVEX_OK && device_bytes == device_expected,
+                "CUDA charges at most 32 private independent score rows, including scratch duplication");
+            YVEX_TEST_ASSERT(yvex_backend_attention_host_workspace_required_from_recipe(
+                &recipe, 0, &host_bytes, &err) == YVEX_OK && host_bytes == host_expected &&
+                !strcmp(identity, recipe.identity), "host bound and recipe identity remain unchanged");
+        }
+    }
+    return 0;
+}
+
 /* Prove recipe lowering is exact, deterministic, identity-bound, and checked. */
 static int test_attention_host_ingress_bound(void)
 {
@@ -934,6 +970,7 @@ static int test_attention_workspace_recipe_lowering(void)
     yvex_error err;
 
     YVEX_TEST_ASSERT(test_attention_host_ingress_bound() == 0, "ingress placement bounds");
+    YVEX_TEST_ASSERT(test_attention_selection_workspace() == 0, "bounded device selection tile capacity");
     YVEX_TEST_ASSERT(
         attention_workspace_recipe_make(&recipe, 4ull, YVEX_ATTENTION_EVIDENCE_NONE,
                                         &err) == YVEX_OK,

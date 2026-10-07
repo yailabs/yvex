@@ -547,7 +547,9 @@ int yvex_cuda_weighted_rms_bf16(yvex_backend *backend, const yvex_device_tensor 
                 "pure normalization cannot alias an operand");
     }
     output->is_written = 0;
-    int rc = yvex_backend_tensor_copy(backend, output, input, err);
+    /* Normalization consumes the copy on the same stream. Its checked status
+     * completion, or the enclosing program scope, owns publication. */
+    int rc = yvex_backend_tensor_copy_async(backend, output, input, err);
     output->is_written = 0;
     if (rc != YVEX_OK) return rc;
     rc = status_transaction_open(backend, &work, 0, "cuda.weighted-rms.status", err);

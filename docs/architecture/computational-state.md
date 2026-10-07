@@ -84,6 +84,14 @@ close. Transaction coordination uses a bounded participant collection; target
 state, draft state, token ledger, decoder, RNG, and publication remain distinct
 participants rather than one homogeneous KV object.
 
+The common attention provider distinguishes request cancellation from lifecycle
+invalidation. Cancellation before beginning a layer leaves committed continuity
+valid; cancellation within a model batch marks private work failed until abort.
+The session coordinator returns cancellation after successful cleanup, without
+poisoning target or draft state. Genuine cleanup/accounting failures remain
+fail-closed. Conversation-turn recovery remains an application lifetime above
+this provider guarantee.
+
 A conversation turn is an ordered collection of typed content parts, not one
 attachment and not one session. Parts distinguish text, image, audio, video,
 file, and tensor kinds; each has a content digest and may link a derived form to

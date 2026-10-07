@@ -5,6 +5,7 @@
 #include "tests/test.h"
 #include <yvex/internal/moe.h>
 #include <yvex/internal/program_stage.h>
+#include <yvex/internal/program_kernels.h>
 #include <yvex/internal/quant_numeric.h>
 #include <math.h>
 #include <stdint.h>
@@ -141,6 +142,48 @@ static void test_shared_q8_reference(const float *x, float *out)
     }
 }
 
+static int test_shared_packing_budget(yvex_backend *backend, const yvex_program_physical *target,
+    const yvex_program_kernel_parameter *params)
+{
+    yvex_program_kernels *kernels = NULL;
+    yvex_backend_memory_stats before, single, refused, grown, repeated, after;
+    yvex_error err;
+    unsigned long long initial, live, host;
+    YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK &&
+        yvex_program_kernels_open(&kernels, target, params, 3u, backend, 0u, 0u, &err) == YVEX_OK,
+        "packing budget fixture owns one prepared program");
+    yvex_program_kernels_resources(kernels, &host, &initial);
+    YVEX_TEST_ASSERT(yvex_program_kernels_prepare(kernels, 1u, 0u, initial + 291u, &err) == YVEX_ERR_BOUNDS &&
+        yvex_program_kernels_prepare(kernels, 1u, 0u, initial + 292u, &err) == YVEX_OK,
+        "one-byte-short packing budget refuses and exact single-row budget recovers");
+    yvex_program_kernels_resources(kernels, &host, &live);
+    YVEX_TEST_ASSERT(live == initial + 292u &&
+        yvex_backend_get_memory_stats(backend, &single, &err) == YVEX_OK &&
+        yvex_program_kernels_prepare(kernels, 3u, 0u, initial + 292u + 876u - 1u, &err) == YVEX_ERR_BOUNDS &&
+        yvex_backend_get_memory_stats(backend, &refused, &err) == YVEX_OK &&
+        refused.allocated_bytes == single.allocated_bytes && refused.allocation_events == single.allocation_events &&
+        refused.release_events == single.release_events &&
+        yvex_program_kernels_prepare(kernels, 1u, 0u, initial + 292u, &err) == YVEX_OK,
+        "growth accounts old/new overlap, refuses without allocation and retains previous prepared population");
+    YVEX_TEST_ASSERT(yvex_program_kernels_prepare(kernels, 3u, 0u, initial + 292u + 876u, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &grown, &err) == YVEX_OK &&
+        grown.allocation_events == single.allocation_events + 1u && grown.release_events == single.release_events + 1u,
+        "all three linear steps share one replacement buffer rather than one buffer per projection");
+    yvex_program_kernels_resources(kernels, &host, &live);
+    YVEX_TEST_ASSERT(live == initial + 876u &&
+        yvex_program_kernels_prepare(kernels, 2u, 0u, live, &err) == YVEX_OK &&
+        yvex_program_kernels_prepare(kernels, 3u, 0u, live, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &repeated, &err) == YVEX_OK &&
+        repeated.allocation_events == grown.allocation_events && repeated.release_events == grown.release_events,
+        "smaller and repeated populations reuse the bounded retained buffer");
+    YVEX_TEST_ASSERT(yvex_program_kernels_close(&kernels, &err) == YVEX_OK && !kernels &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes && after.allocation_count == before.allocation_count,
+        "packing preparation releases all program storage to the original baseline");
+    puts("program packing budget: steps=3 single=292 multi=876 peak-overlap=1168 refusal-atomic=true cleanup=true");
+    return 0;
+}
+
 static int test_shared_target(yvex_backend_kind kind)
 {
     enum { WIDTH = 256, ROWS = 3, COUNT = WIDTH * ROWS, ROW_BYTES = 8 * 34,
@@ -233,6 +276,7 @@ static int test_shared_target(yvex_backend_kind kind)
             (float *[]){actual}, 1u, NULL, NULL, &facts, &err) == YVEX_OK &&
             !memcmp(actual, single, sizeof(actual)), "cancelled Q8 execution does not publish and recovers exactly");
         YVEX_TEST_ASSERT(yvex_program_stage_close(&stage, &err) == YVEX_OK &&
+            test_shared_packing_budget(backend, target, params) == 0 &&
             yvex_backend_resident_detach(backend, &err) == YVEX_OK &&
             yvex_backend_tensor_release(backend, &resident, &err) == YVEX_OK, "Q8 target resources close");
     }

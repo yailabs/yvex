@@ -11,6 +11,136 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Start from the observed first iteration, then independently execute each
+ * ordered F64 sum/F32 publication on the host. No CUDA normalization helper
+ * supplies the expected continuation. Initial softmax is a separate control. */
+static void test_mhc_sinkhorn_continue(float *matrix, unsigned int streams,
+    unsigned long long iterations)
+{
+    for (unsigned long long iteration = 1u; iteration < iterations; ++iteration) {
+        for (unsigned int row = 0u; row < streams; ++row) {
+            double total = 0.0;
+            for (unsigned int column = 0u; column < streams; ++column)
+                total += (double)matrix[row * streams + column];
+            for (unsigned int column = 0u; column < streams; ++column)
+                matrix[row * streams + column] =
+                    (float)((double)matrix[row * streams + column] / (total + 1e-6));
+        }
+        for (unsigned int column = 0u; column < streams; ++column) {
+            double total = 0.0;
+            for (unsigned int row = 0u; row < streams; ++row)
+                total += (double)matrix[row * streams + column];
+            for (unsigned int row = 0u; row < streams; ++row)
+                matrix[row * streams + column] =
+                    (float)((double)matrix[row * streams + column] / (total + 1e-6));
+        }
+    }
+}
+
+static int test_mhc_matrix_bits(const float *values, size_t count, char identity[65])
+{
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "tests.cuda.mhc.matrix.f32-bits.v1") ||
+        !yvex_sha256_update_u64_be(&hash, count)) return 0;
+    for (size_t i = 0u; i < count; ++i) {
+        uint32_t bits;
+        memcpy(&bits, values + i, sizeof(bits));
+        if (!yvex_sha256_update_u64_be(&hash, bits)) return 0;
+    }
+    if (!yvex_sha256_final(&hash, digest)) return 0;
+    yvex_sha256_hex(digest, identity);
+    return 1;
+}
+
+static int test_mhc_sinkhorn_order(unsigned int streams)
+{
+    enum { ROWS = 3, WIDTH = 64, MAX_STREAMS = 16, MAX_MIXES = 288 };
+    float input[ROWS * MAX_STREAMS * WIDTH], mixes[ROWS * MAX_MIXES], base[MAX_MIXES];
+    float scale[3] = {0.25f, 0.5f, 0.75f}, seed[ROWS * MAX_STREAMS * MAX_STREAMS];
+    float expected[ROWS * MAX_STREAMS * MAX_STREAMS], actual[ROWS * MAX_STREAMS * MAX_STREAMS];
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
+    yvex_error err = {0};
+    yvex_backend_attention_failure failure = {0};
+    unsigned long long rows = ROWS, width = WIDTH, n = streams, mix_count = (n + 2u) * n;
+    unsigned long long iterations = 1u, cells = ROWS * n * n;
+    double epsilon = 1e-6, multiplier = 2.0;
+    CUdeviceptr x, linear, scalars, bias, collapsed, post, matrix, status;
+    int observed_status = -1;
+    YVEX_TEST_ASSERT(streams && streams <= MAX_STREAMS, "bounded generic Sinkhorn fixture");
+    for (size_t i = 0u; i < ROWS * n * WIDTH; ++i)
+        input[i] = (float)((int)(i * 19u % 97u) - 48) / 31.0f;
+    for (size_t i = 0u; i < ROWS * mix_count; ++i)
+        mixes[i] = (float)((int)(i * 11u % 127u) - 63) / 37.0f;
+    for (size_t i = 0u; i < mix_count; ++i)
+        base[i] = (float)((int)(i * 7u % 23u) - 11) / 16.0f;
+    YVEX_TEST_ASSERT(yvex_backend_open(&backend, &options, &err) == YVEX_OK,
+        "generic Sinkhorn control opens its own backend");
+    const yvex_cuda_attention_operations *ops = yvex_cuda_attention_operations_get();
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_cuda_work work = {.backend = backend, .state = state,
+        .variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED};
+    YVEX_TEST_ASSERT(ops->allocate(&work, &x, ROWS * n * WIDTH * sizeof(float), input, 0,
+        "test.sinkhorn.x", &failure, &err) == YVEX_OK &&
+        ops->allocate(&work, &linear, ROWS * mix_count * sizeof(float), mixes, 0,
+        "test.sinkhorn.linear", &failure, &err) == YVEX_OK &&
+        ops->allocate(&work, &scalars, sizeof(scale), scale, 0,
+        "test.sinkhorn.scale", &failure, &err) == YVEX_OK &&
+        ops->allocate(&work, &bias, mix_count * sizeof(float), base, 0,
+        "test.sinkhorn.base", &failure, &err) == YVEX_OK &&
+        ops->allocate(&work, &collapsed, ROWS * WIDTH * sizeof(float), NULL, 0,
+        "test.sinkhorn.collapsed", &failure, &err) == YVEX_OK &&
+        ops->allocate(&work, &post, ROWS * n * sizeof(float), NULL, 0,
+        "test.sinkhorn.post", &failure, &err) == YVEX_OK &&
+        ops->allocate(&work, &matrix, cells * sizeof(float), NULL, 0,
+        "test.sinkhorn.matrix", &failure, &err) == YVEX_OK &&
+        ops->allocate(&work, &status, sizeof(int), NULL, 1,
+        "test.sinkhorn.status", &failure, &err) == YVEX_OK,
+        "generic Sinkhorn control owns bounded numerical buffers");
+    void *args[] = {&x, &linear, &scalars, &bias, &n, &width, &mix_count,
+        &iterations, &epsilon, &epsilon, &multiplier, &collapsed, &post, &matrix, &rows, &status};
+    size_t shared_bytes = (n + 1u + 256u) * sizeof(double);
+    YVEX_TEST_ASSERT(ops->launch(&work, state->residual_mhc_pre_function, ROWS, 256u,
+        shared_bytes, args, "test.sinkhorn.seed", &failure, &err) == YVEX_OK &&
+        ops->download(&work, seed, matrix, cells * sizeof(float), "test.sinkhorn.seed",
+            &failure, &err) == YVEX_OK, "observe first column-normalized iteration");
+    char identity[YVEX_SHA256_HEX_BYTES];
+    YVEX_TEST_ASSERT(test_mhc_matrix_bits(seed, cells, identity), "seed bits are observable");
+    printf("CUDA Sinkhorn seed: streams=%u rows=%u f32_bits=%s\n", streams, ROWS, identity);
+    const unsigned long long steps[] = {2u, 20u, 31u};
+    for (size_t i = 0u; i < sizeof(steps) / sizeof(steps[0]); ++i) {
+        iterations = steps[i];
+        memcpy(expected, seed, cells * sizeof(float));
+        for (unsigned int row = 0u; row < ROWS; ++row)
+            test_mhc_sinkhorn_continue(expected + row * n * n, streams, iterations);
+        YVEX_TEST_ASSERT(ops->launch(&work, state->residual_mhc_pre_function, ROWS, 256u,
+            shared_bytes, args, "test.sinkhorn.normalization", &failure, &err) == YVEX_OK &&
+            ops->download(&work, actual, matrix, cells * sizeof(float), "test.sinkhorn.matrix",
+                &failure, &err) == YVEX_OK &&
+            ops->download(&work, &observed_status, status, sizeof(int), "test.sinkhorn.status",
+                &failure, &err) == YVEX_OK && observed_status == 0 &&
+            !memcmp(expected, actual, cells * sizeof(float)),
+            "each ordered F64 sum and F32 publication matches the independent host continuation");
+        YVEX_TEST_ASSERT(test_mhc_matrix_bits(actual, cells, identity), "normalized bits are observable");
+        printf("CUDA Sinkhorn normalization: streams=%u iterations=%llu exact=1 f32_bits=%s\n",
+            streams, iterations, identity);
+    }
+    --mix_count;
+    YVEX_TEST_ASSERT(ops->launch(&work, state->residual_mhc_pre_function, ROWS, 256u,
+        shared_bytes, args, "test.sinkhorn.malformed", &failure, &err) == YVEX_OK &&
+        ops->download(&work, &observed_status, status, sizeof(int), "test.sinkhorn.status",
+            &failure, &err) == YVEX_OK && observed_status == 2 &&
+        ops->download(&work, actual, matrix, cells * sizeof(float), "test.sinkhorn.matrix",
+            &failure, &err) == YVEX_OK && !memcmp(expected, actual, cells * sizeof(float)),
+        "malformed mixing extent refuses before normalization mutation");
+    YVEX_TEST_ASSERT(yvex_cuda_work_cleanup(&work, &err) == YVEX_OK,
+        "generic Sinkhorn control releases every device buffer");
+    yvex_backend_close(backend);
+    return 0;
+}
+
 static int test_mhc_cuda_control(unsigned int router_qtype)
 {
     enum { WIDTH = 4096, STREAMS = 4, EXPANDED = WIDTH * STREAMS,

@@ -35,7 +35,7 @@ static int cuda_encoded_matvec(
     unsigned long long, unsigned long long, unsigned long long, unsigned long long,
     const yvex_device_tensor *, const yvex_device_tensor *, unsigned long long,
     const yvex_device_tensor *, yvex_device_tensor *, yvex_encoded_input_policy,
-    yvex_encoded_reduction_policy, yvex_backend_operation_facts *, yvex_error *);
+    yvex_encoded_reduction_policy, const yvex_device_tensor *, yvex_backend_operation_facts *, yvex_error *);
 static int cuda_encoded_gather(
     yvex_backend *, const unsigned char *, unsigned long long, unsigned int,
     unsigned long long, unsigned long long, unsigned long long,
@@ -120,7 +120,22 @@ static const cuda_linear_implementation cuda_linear_implementations[] = {
     CUDA_BLAS_LT_STAGES_8X5},
 };
 
+static int cuda_encoded_workspace_bytes(unsigned int qtype, unsigned long long width,
+    unsigned long long rows, yvex_encoded_input_policy policy, unsigned long long *bytes, yvex_error *err)
+{
+    unsigned long long tasks;
+    *bytes = 0u;
+    if (policy == YVEX_ENCODED_INPUT_Q8 && width % 256u == 0u && yvex_cuda_q8_activation_eligible(qtype) &&
+        (!yvex_core_u64_mul(width / 256u, rows, &tasks) || tasks > UINT_MAX ||
+         !yvex_core_u64_mul(tasks, 292u, bytes) || *bytes > SIZE_MAX)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "cuda.encoded-workspace", "Q8 packing exceeds launch bounds");
+        return YVEX_ERR_BOUNDS;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
 static const yvex_backend_encoded_operations cuda_encoded_operations = {
+    .workspace_bytes = cuda_encoded_workspace_bytes,
     .matvec = cuda_encoded_matvec,
     .gather = cuda_encoded_gather,
 };
@@ -1447,7 +1462,7 @@ static int cuda_encoded_policy(unsigned int qtype, yvex_encoded_input_policy inp
 
 static int cuda_encoded_activation_pack(yvex_cuda_work *work,
     unsigned long long width, unsigned long long rows, CUdeviceptr input,
-    CUdeviceptr status, CUdeviceptr *packed, unsigned long long *temporary,
+    CUdeviceptr status, const yvex_device_tensor *workspace, CUdeviceptr *packed, unsigned long long *temporary,
     yvex_error *err)
 {
     unsigned long long tasks, bytes, groups = 1ull;
@@ -1458,7 +1473,9 @@ static int cuda_encoded_activation_pack(yvex_cuda_work *work,
                        "Q8 activation workspace exceeds launch bounds");
         return YVEX_ERR_BOUNDS;
     }
-    int rc = yvex_cuda_work_allocate(work, packed, (size_t)bytes,
+    int rc = YVEX_OK;
+    if (workspace) *packed = (CUdeviceptr)workspace->data;
+    else rc = yvex_cuda_work_allocate(work, packed, (size_t)bytes,
         NULL, 0, "cuda.encoded-matvec.q8", NULL, err);
     if (rc == YVEX_OK) {
         void *params[] = {packed, &input, &width, &rows, &groups, &width, &status};
@@ -1492,7 +1509,7 @@ static int cuda_encoded_matvec(
     const yvex_device_tensor *input, const yvex_device_tensor *input_tail,
     unsigned long long input_head_width, const yvex_device_tensor *additive,
     yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
-    yvex_encoded_reduction_policy reduction_policy,
+    yvex_encoded_reduction_policy reduction_policy, const yvex_device_tensor *workspace,
     yvex_backend_operation_facts *facts, yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
@@ -1570,6 +1587,17 @@ static int cuda_encoded_matvec(
                        "Tensor Core row-batch grid exceeds launch bounds");
         return YVEX_ERR_BOUNDS;
     }
+    if (workspace) {
+        unsigned long long a = (unsigned long long)(uintptr_t)workspace->data;
+        unsigned long long starts[] = {device_address, (unsigned long long)(uintptr_t)input->data,
+            (unsigned long long)(uintptr_t)output->data, additive ? (unsigned long long)(uintptr_t)additive->data : 0u};
+        unsigned long long sizes[] = {encoded_bytes, input->bytes, output->bytes, additive ? additive->bytes : 0u};
+        for (size_t i = 0u; i < 4u; ++i) if (sizes[i] &&
+            (a <= starts[i] ? starts[i] - a < workspace->bytes : a - starts[i] < sizes[i])) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "cuda.encoded-workspace", "packing storage aliases an operand");
+            return YVEX_ERR_FORMAT;
+        }
+    }
     output->is_written = 0;
     rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
                                       "cuda.encoded-matvec", err);
@@ -1587,9 +1615,8 @@ static int cuda_encoded_matvec(
     work.backend = backend;
     work.state = state;
     work.variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED;
-    /* This standalone projection does not own the enclosing operation's
-     * scratch arena. Its status and optional activation packing have a
-     * call-scoped lifetime, independent of that arena's current cursor. */
+    /* Never borrow an unrelated operation's arena. An explicit workspace is
+     * caller-owned through completion; otherwise packing remains call-owned. */
     work.raw_only = 1;
     if (rc == YVEX_OK)
         rc = yvex_cuda_work_status(&work, &status, "cuda.encoded-matvec.status", err);
@@ -1599,7 +1626,7 @@ static int cuda_encoded_matvec(
     output_ptr = (CUdeviceptr)output->data;
     if (rc == YVEX_OK && q8_path) {
         rc = cuda_encoded_activation_pack(&work, row_width, input_rows, input_ptr,
-            status, &quantized, &temporary_bytes, err);
+            status, workspace, &quantized, &temporary_bytes, err);
         if (rc == YVEX_OK) launches = 1ull;
     }
     if (rc == YVEX_OK) {

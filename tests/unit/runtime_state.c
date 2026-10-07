@@ -1363,6 +1363,127 @@ done:
     return result;
 }
 
+static int test_state_cancel_begin_scope(
+    const state_plan_fixture *fixture, yvex_tensor_scope scope, int staged)
+{
+    state_plan_fixture pair = *fixture;
+    yvex_runtime_execution_session session = {0};
+    yvex_attention_state_provider *provider = scope == YVEX_TENSOR_SCOPE_DRAFT
+        ? &session.draft_attention_state_provider : &session.attention_state_provider;
+    yvex_graph_attention_state_summary before, after;
+    yvex_attention_failure failure = {0};
+    yvex_error err = {0};
+    char delta[YVEX_SHA256_HEX_CAP], identity[2][YVEX_SHA256_HEX_CAP];
+    char current[YVEX_SHA256_HEX_CAP];
+    float committed[2][4];
+    unsigned long long extent[2];
+    int cancelled = 0, rc;
+    yvex_attention_cancellation cancellation = {
+        .requested = state_cancel_requested, .context = &cancelled};
+
+    pair.layers[1] = pair.layers[0];
+    pair.layers[1].layer_index = 1;
+    pair.plan.layers = pair.layers;
+    pair.plan.layer_count = pair.plan.summary.layer_count = 2;
+    pair.plan.summary.swa_layer_count = 2;
+    pair.plan.summary.csa_layer_count = pair.plan.summary.hca_layer_count = 0;
+    YVEX_TEST_ASSERT(pthread_mutex_init(&session.lifecycle_mutex, NULL) == 0 &&
+        pthread_cond_init(&session.idle_condition, NULL) == 0,
+        "cancellation fixture owns synchronized session lifetime");
+    session.lifecycle_mutex_ready = session.idle_condition_ready = 1;
+    session.summary.open = 1;
+    if (scope == YVEX_TENSOR_SCOPE_DRAFT) session.draft_attention_state_provider_ready = 1;
+    else session.attention_state_provider_ready = 1;
+    YVEX_TEST_ASSERT(state_open(provider, &pair.plan, ULLONG_MAX,
+        &failure, &err) == YVEX_OK, "prepare cancellation state owner");
+    for (unsigned int layer = 0; layer < 2; ++layer)
+        YVEX_TEST_ASSERT(state_prepare(provider, pair.layers + layer,
+            pair.plan.summary.attention_plan_identity), "prepare every layer before transaction");
+    for (unsigned int layer = 0; layer < 2; ++layer)
+        YVEX_TEST_ASSERT(state_begin(provider, pair.layers + layer, 0, 1, NULL,
+                &failure, &err) == YVEX_OK &&
+            state_apply_token(provider, pair.layers + layer, 0, 1, delta),
+            "stage two-layer prefix before cancellation");
+    YVEX_TEST_ASSERT(provider->commit(provider->context, &failure, &err) == YVEX_OK &&
+        state_summary(provider, &before, &err) == YVEX_OK,
+        "commit exact prefix before cancelled request");
+    for (unsigned int layer = 0; layer < 2; ++layer) {
+        const yvex_attention_history_view *view = state_view(provider, layer,
+            YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+        YVEX_TEST_ASSERT(view && view->token_count == 1 && view->local_kv_stride <= 4 &&
+            state_identity(provider, layer, identity[layer], &err) == YVEX_OK,
+            "retain independently observed committed K/V bytes and identity");
+        extent[layer] = view->local_kv_stride;
+        memcpy(committed[layer], view->local_kv, extent[layer] * sizeof(float));
+    }
+    session.summary.busy = session.execution_owner_ready = 1;
+    session.execution_owner = pthread_self();
+    if (staged)
+        YVEX_TEST_ASSERT(state_begin(provider, pair.layers, 1, 1, &cancellation,
+            &failure, &err) == YVEX_OK && state_apply_token(provider, pair.layers,
+            1, 1, delta), "stage first layer while keeping prior prefix private");
+    cancelled = 1;
+    rc = state_begin(provider, pair.layers + (staged ? 1 : 0), 1, 1,
+        &cancellation, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_CANCELLED && err.code == YVEX_ERR_CANCELLED &&
+        failure.code == YVEX_ATTENTION_FAILURE_CANCELLED,
+        "layer-boundary cancellation retains exact primary error class");
+    YVEX_TEST_ASSERT(yvex_runtime_session_finish_scope(&session, scope,
+        YVEX_ATTENTION_TRANSACTION_ABORT, rc, &err) == YVEX_ERR_CANCELLED &&
+        err.code == YVEX_ERR_CANCELLED && !session.summary.invalidated &&
+        !session.summary.busy && session.summary.cancellation_count == 1 &&
+        !session.summary.failure_count && state_summary(provider, &after, &err) == YVEX_OK &&
+        !after.invalidated && !after.cancelled && !after.transaction_active &&
+        !after.abort_required && after.next_position == before.next_position &&
+        after.generation == before.generation && after.commit_count == before.commit_count &&
+        strcmp(after.state_content_identity, before.state_content_identity) == 0,
+        "session finish aborts request cancellation without poisoning committed state");
+    for (unsigned int layer = 0; layer < 2; ++layer) {
+        const yvex_attention_history_view *view = state_view(provider, layer,
+            YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+        YVEX_TEST_ASSERT(view && view->token_count == 1 &&
+            !memcmp(committed[layer], view->local_kv, extent[layer] * sizeof(float)) &&
+            state_identity(provider, layer, current, &err) == YVEX_OK &&
+            strcmp(current, identity[layer]) == 0,
+            "aborted partial batch preserves every layer's committed bytes and identity");
+    }
+    cancelled = 0;
+    session.summary.busy = session.execution_owner_ready = 1;
+    session.execution_owner = pthread_self();
+    for (unsigned int layer = 0; layer < 2; ++layer)
+        YVEX_TEST_ASSERT(state_begin(provider, pair.layers + layer, 1, 1, &cancellation,
+            &failure, &err) == YVEX_OK && state_apply_token(provider,
+            pair.layers + layer, 1, 1, delta), "new request restages cleanly after cancellation");
+    YVEX_TEST_ASSERT(yvex_runtime_session_finish_scope(&session, scope,
+        YVEX_ATTENTION_TRANSACTION_COMMIT, YVEX_OK, &err) == YVEX_OK &&
+        state_summary(provider, &after, &err) == YVEX_OK && after.next_position == 2 &&
+        session.summary.execution_count == 1 && !session.summary.invalidated,
+        "subsequent request publishes once without reset or stale candidate state");
+    cancellation.requested = NULL;
+    YVEX_TEST_ASSERT(state_begin(provider, pair.layers, 2, 1, &cancellation,
+        &failure, &err) == YVEX_ERR_INVALID_ARG &&
+        provider->abort(provider->context, &failure, &err) == YVEX_OK &&
+        state_summary(provider, &after, &err) == YVEX_OK && !after.invalidated &&
+        !after.transaction_active && after.next_position == 2,
+        "malformed cancellation view refuses before mutation without reviving state");
+    ((attention_state *)provider->context)->summary.cancellation_count = ULLONG_MAX;
+    cancellation.requested = state_cancel_requested;
+    cancelled = 1;
+    YVEX_TEST_ASSERT(state_begin(provider, pair.layers, 2, 1, &cancellation,
+        &failure, &err) == YVEX_ERR_BOUNDS &&
+        provider->abort(provider->context, &failure, &err) == YVEX_OK &&
+        state_summary(provider, &after, &err) == YVEX_OK && after.invalidated &&
+        after.next_position == 2 && after.cancellation_count == ULLONG_MAX &&
+        state_begin(provider, pair.layers, 2, 1, NULL,
+            &failure, &err) == YVEX_ERR_STATE,
+        "cancellation accounting overflow still invalidates and cannot revive");
+    YVEX_TEST_ASSERT(state_close(provider) &&
+        pthread_cond_destroy(&session.idle_condition) == 0 &&
+        pthread_mutex_destroy(&session.lifecycle_mutex) == 0,
+        "scoped target/draft cancellation fixture closes every owner");
+    return 0;
+}
+
 static int test_state_lifecycle(const state_plan_fixture *fixture)
 {
     test_state state = {0};
@@ -3079,6 +3200,12 @@ int yvex_test_runtime_state(void)
     if (test_state_pages(&fixture) != 0) return 1;
     if (test_state_identity_geometry(&fixture) != 0) return 1;
     if (test_state_lifecycle(&fixture) != 0) return 1;
+    for (int staged = 0; staged < 2; ++staged) {
+        if (test_state_cancel_begin_scope(&fixture, YVEX_TENSOR_SCOPE_GLOBAL, staged) != 0)
+            return 1;
+        if (test_state_cancel_begin_scope(&fixture, YVEX_TENSOR_SCOPE_DRAFT, staged) != 0)
+            return 1;
+    }
     if (test_state_prefix_promotion(&fixture) != 0) return 1;
     if (test_state_prefix_extension(&fixture) != 0) return 1;
     if (test_state_identity_is_execution_shape_neutral(&fixture) != 0) return 1;
