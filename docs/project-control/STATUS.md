@@ -20,6 +20,15 @@ publication: {html: true, pdf: true, index: true}
 | 35 | 48 | 55 | 14 | 152 |
 <!-- maturity-counts:end -->
 
+## Compute product refoundation
+
+The separately selected `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` reconciles
+producer and independent-client scope. Public preparation now exposes typed
+assessment, selection basis and explicit unevaluated runtime/quality/performance
+boundaries. General hardware-aware compiler search and distributed realization
+remain OPEN; several connected Hosts do not qualify either. Training retains
+ADR 0013's future ownership. Consumer/native product acceptance remains separate.
+
 ## Platform control-plane convergence
 
 The selected milestone has qualified the independent MIT public SDK (`sdk/rust`

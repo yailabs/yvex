@@ -13,6 +13,65 @@ publication: {html: true, pdf: true, index: true}
 [Evaluation](README.md) · [Public contract](../contracts/product-management.md) ·
 [Lifecycle classification](../contracts/product-management-lifecycle-map.md)
 
+## Compute product refoundation — 2026-10-07
+
+`COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` starts from reconciled published
+`36c16dfb`. Its bounded producer change adds optional `yvex.build.planning.v1`
+to the existing preparation result. CLI and public management share the same
+preparation owner. No new operation, source ABI, scheduling owner, training or
+distributed execution implementation is introduced.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Typed assessment | Native status owner and canonical SDK enum | Six refusal classes; arbitrary contradictory prose; legacy result | Status classification, no readiness inferred from prose or missing field | Exact readiness; legacy optional absence; fabricated runtime admission rejected | Exact typed value | PASS | Producer/client assessment semantics |
+| Preparation management | Real native preparation and source/profile owners | Disposable acquired-record fixture, no weights; controlled registry provider | Ready recipe plan; same identity; stale fence before compile; incompatible known source | Exact plan survives repeat; stale refuses; blocked assessment has no executable plan; actual build still fails | No physical plan or source-byte mutation | PASS | Public Job/result semantics, not real compilation/model execution |
+| Sibling CLI | Same preparation owner | 14 existing preparation controls | Typed dry-run, nonzero blocked exit, retained blocker field, no output/source mutation | All controls pass | Exact contract/preservation | PASS | CLI compatibility |
+| Public independent SDK | `sdk/rust` with native credential feature | 40 unit/transport/profile controls | Typed projection and compatibility, exact recovery/security maintained | All pass | Exact contract | PASS | Independent client regression |
+| Contract inventory | Producer registry/operation map | Published main plus additive assessment | Every CLI entry classified; no accidental operation addition | 191 CLI entries, 36 management operations | Exact inventory | PASS | Public parity, not real endpoint availability |
+
+A planning assessment does not inspect actual hardware placement or prove memory
+fit. Native source verification, compilation, artifact admission, Engine load and
+runtime resource admission remain separate. Runtime/quality/performance are
+explicitly not evaluated, including when readiness is ready. Current build logic
+selects admitted source recipe/deployment defaults; generic hardware/workload/quality
+search is still the OPEN Physical Model Compiler research owner.
+
+The architecture audit found current public Sessions bound to one exact Host
+instance/Engine generation. Multiple connected Hosts and multiple Engines are real
+management/lifetime properties, not coordinated distributed execution. Unlocking
+that boundary requires runtime/compiler-owned logical realization, placement,
+state/transaction and partial-failure/recovery contracts. Existing Session fences
+cannot be weakened or replaced by client-local topology. Native adaptation is
+reconciled with ADR 0013 without advertising training capability.
+
+### Riproduzione operatore
+
+Sul server YVEX, nella stessa sessione/profilo del servizio osservato da Studio:
+
+```sh
+yvex model list --json
+yvex host status --json
+yvex model active --json
+yvex session list --model '<alias esatto osservato>' --json
+```
+
+Questi controlli leggono catalogo, Host, Engine e Sessioni. Confrontare identità
+modello, generazione, backend, numero e identità Sessioni con la UI; un errore di
+osservazione non significa inventario vuoto. Non copiare credenziali nell'output.
+Per il planner, dopo aver selezionato un modello esatto nel catalogo:
+
+```sh
+yvex model prepare '<modello esatto>' --dry-run --json
+```
+
+Il dry run prende il lease di preparazione e osserva il piano; non compila né
+carica un Engine. Confrontare `plan_id`, backend, quant, `planning.readiness`,
+`planning.basis` e motivi. BLOCKED ha exit nonzero e nessun piano eseguibile;
+ready non promette fit, qualità o prestazioni. Il listener remoto deve essere
+aggiornato a questa revisione prima che Studio possa osservare il nuovo campo.
+Nessun aggiornamento/restart del servizio DGX è stato eseguito per questa prova.
+La procedura UI/native e l'accettazione umana rimangono al consumer Studio.
+
 ## Qualified producer boundary
 
 `YVEX.STUDIO.COMPUTE.CONTROL.PLANE.0` starts from published YVEX `803dd98d`.

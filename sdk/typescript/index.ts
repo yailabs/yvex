@@ -621,6 +621,7 @@ export interface BuildResult {
   runtime_binding?: string;
   binding_published?: boolean;
   plan_id?: string;
+  planning?: BuildPlanning;
   [field: string]: unknown;
 }
 export interface JobSummary {
@@ -763,6 +764,21 @@ export interface LastKnownHost {
   observed_at_unix_ms: number;
   [field: string]: unknown;
 }
+export interface BuildPlanning {
+  schema: string;
+  readiness: ProfileReadiness;
+  basis: BuildPlanningBasis;
+  reason: string | null;
+  native_status: number | null;
+  owner: string | null;
+  execution_strategy: string | null;
+  runtime_admission: BuildEvidencePosture;
+  quality_evidence: BuildEvidencePosture;
+  performance_evidence: BuildEvidencePosture;
+  [field: string]: unknown;
+}
+export type BuildPlanningBasis = "admitted_recipe" | "verified_profile" | "not_admitted";
+export type BuildEvidencePosture = "not_evaluated";
 export interface JobResults {
   "engine.load": EngineResult;
   "engine.unload": EngineResult | Acknowledgement;

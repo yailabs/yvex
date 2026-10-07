@@ -69,3 +69,13 @@ no unsupported future capability is granted merely by reserving a screen.
 - A second standalone management executable: duplicates product installation.
 - Brand/version branching as capability authority: does not prove operation support.
 - One ambiguous Model object or a second acquisition scheduler: loses native identity.
+
+## Compute refoundation clarification — 2026-10-07
+
+The public logical-model/inference boundary stays independent from physical Host
+and Engine identity. Current Sessions remain honestly single-generation; no client
+aggregation is promoted into a distributed realization. Future placement/transaction
+and partial-failure semantics belong to the runtime/compiler owners. Preparation
+assessment exposes admitted recipe knowledge and exact refusal without claiming
+unimplemented hardware/quality search. This clarification adds no future feature
+grant and retains the same 36 ordinary product operations.

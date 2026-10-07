@@ -251,10 +251,16 @@ has not become visible.
 
 ## Current limits
 
+Public management has separately authenticated HTTPS/local/SSH transports under
+[its network contract](../contracts/network-management.md). This does not widen
+the computational Host's loopback inference listener into an authenticated remote
+inference service, and management authorization does not grant inference access.
+
+
 YVEX currently does not claim full ready-sequence continuous batching, a
 retained optimized selective DeepSeek layout or automatic resource-eviction
-policy, restart-persistent engine instances, distributed serving, public
-authentication/TLS, complete accelerator residency, load-aware DSpark
+policy, restart-persistent engine instances, distributed serving, complete
+accelerator residency, load-aware DSpark
 confidence scheduling, model evaluation, a release benchmark, or release
 qualification. Warm DeepSeek performance remains explicit optimization debt;
 the 20--24 token/s class is an initial engineering floor, not an optimization

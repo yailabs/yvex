@@ -642,7 +642,8 @@
       "creation_reproducible": "optional:bool",
       "runtime_binding": "optional:string",
       "binding_published": "optional:bool",
-      "plan_id": "optional:string"
+      "plan_id": "optional:string",
+      "planning": "optional:BuildPlanning"
     },
     "JobSummary": {
       "job_id": "string",
@@ -785,6 +786,30 @@
       "host_instance": "string",
       "status": "HostSnapshot",
       "observed_at_unix_ms": "u64"
+    },
+    "BuildPlanning": {
+      "schema": "string",
+      "readiness": "ProfileReadiness",
+      "basis": "BuildPlanningBasis",
+      "reason": "nullable:string",
+      "native_status": "nullable:i64",
+      "owner": "nullable:string",
+      "execution_strategy": "nullable:string",
+      "runtime_admission": "BuildEvidencePosture",
+      "quality_evidence": "BuildEvidencePosture",
+      "performance_evidence": "BuildEvidencePosture"
+    },
+    "BuildPlanningBasis": {
+      "$enum": [
+        "admitted_recipe",
+        "verified_profile",
+        "not_admitted"
+      ]
+    },
+    "BuildEvidencePosture": {
+      "$enum": [
+        "not_evaluated"
+      ]
     }
   },
   "operations": [

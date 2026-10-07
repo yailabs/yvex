@@ -110,6 +110,35 @@ compatibility does not promote another backend or model/input grammar. Real
 engine open revalidates source bytes and acquires the bounded physical stage.
 
 
+## Public computational identity and physical realization
+
+Public logical model/source and immutable package identities are independent of
+machine addresses and Host lifetimes. A deployment profile selects an admitted
+executable realization; the current realization is one Engine generation in one
+Host. A shared inference endpoint routes the logical served model identity to
+that realization. YAI Provider/Case consumers need not own its physical topology.
+Several independent management connections are several observed Hosts, not proof
+of a coordinated distributed deployment. Likewise several Engines in one Host
+are not a distributed model.
+
+The current public Session intentionally binds one exact Host instance and Engine
+generation. That is a current execution contract, not a claim that arbitrary future
+Sessions already support several physical Engines. Distributed execution requires
+the runtime/compiler owners to publish logical realization identity, participant
+placements, state/transaction ownership, routing and partial-failure/recovery
+semantics before clients can consume a distributed realization. An endpoint or
+client-local aggregation cannot supply that authority. Existing physical Session
+fences must not be weakened in anticipation of this work.
+
+The preparation assessment projects current recipe selection through public
+management; it does not synthesize compiler search or topology in the client.
+The OPEN Physical Model Compiler search and distributed runtime boundaries own
+hardware/workload/quality-aware candidates and topology admission respectively.
+Native adaptation follows [ADR 0013](../decisions/0013-native-model-adaptation-horizon.md):
+derived source/package lineage reuses this deployment path, while Dataset, optimizer,
+checkpoint and evaluation owners must first exist. No speculative Training or
+multi-host public DTO is advertised by this refoundation.
+
 ## Implementation and evidence
 
 [src/deployment](../../src/deployment) · [include/yvex/internal/deployment.h](../../include/yvex/internal/deployment.h) · [include/yvex/internal/deployment_compatibility.h](../../include/yvex/internal/deployment_compatibility.h)

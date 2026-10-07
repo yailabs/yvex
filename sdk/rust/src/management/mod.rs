@@ -395,6 +395,29 @@ mod tests {
         "submitted_at_unix_ms":10,"updated_at_unix_ms":11,"input":request.input,"result":null,"reason":null})
     }
     #[test]
+    fn typed_build_assessment_preserves_legacy_and_refuses_fabricated_evidence() {
+        let legacy = json!({"schema":"yvex.model.prepare.v1", "model":"m", "state":"PLANNED", "changed":false});
+        assert!(
+            serde_json::from_value::<BuildResult>(legacy.clone())
+                .unwrap()
+                .planning
+                .is_none()
+        );
+        let mut assessed = legacy;
+        assessed["planning"] = json!({"schema":"yvex.build.planning.v1", "readiness":"blocked",
+            "basis":"not_admitted", "reason":"missing input", "native_status":-10,
+            "owner":"model.prepare", "execution_strategy":null,
+            "runtime_admission":"not_evaluated", "quality_evidence":"not_evaluated",
+            "performance_evidence":"not_evaluated"});
+        let result = serde_json::from_value::<BuildResult>(assessed.clone()).unwrap();
+        assert_eq!(
+            result.planning.unwrap().readiness,
+            ProfileReadiness::Blocked
+        );
+        assessed["planning"]["runtime_admission"] = json!("admitted");
+        assert!(serde_json::from_value::<BuildResult>(assessed).is_err());
+    }
+    #[test]
     fn preparation_preserves_identity_and_fences_before_dispatch() {
         let input = EngineMutationInput {
             model: "exact-model".into(),

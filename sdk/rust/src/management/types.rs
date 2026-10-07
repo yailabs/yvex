@@ -877,6 +877,8 @@ pub struct BuildResult {
     pub binding_published: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planning: Option<BuildPlanning>,
     #[serde(flatten)]
     pub additional: std::collections::BTreeMap<String, serde_json::Value>,
 }
@@ -1076,6 +1078,37 @@ pub struct LastKnownHost {
     pub observed_at_unix_ms: u64,
     #[serde(flatten)]
     pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct BuildPlanning {
+    pub schema: String,
+    pub readiness: ProfileReadiness,
+    pub basis: BuildPlanningBasis,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub native_status: Option<i64>,
+    #[serde(default)]
+    pub owner: Option<String>,
+    #[serde(default)]
+    pub execution_strategy: Option<String>,
+    pub runtime_admission: BuildEvidencePosture,
+    pub quality_evidence: BuildEvidencePosture,
+    pub performance_evidence: BuildEvidencePosture,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildPlanningBasis {
+    AdmittedRecipe,
+    VerifiedProfile,
+    NotAdmitted,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildEvidencePosture {
+    NotEvaluated,
 }
 pub mod operations {
     use super::*;

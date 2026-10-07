@@ -167,3 +167,30 @@ compilation or publication. A changed plan fails with `build_plan_changed_review
 This is a concurrency fence, not a reservation of memory or promised compilation.
 Old unfenced clients retain their existing semantics; Studio's guided flow passes
 the observed fence when the producer supplies it.
+
+### Typed preparation assessment
+
+`BuildResult.planning` optionally carries `yvex.build.planning.v1`. The same
+preparation owner serves CLI and management. `readiness` uses ready, blocked,
+incompatible, unavailable or unknown; native status codes determine classification,
+never human message parsing. `basis` distinguishes admitted_recipe,
+verified_profile and not_admitted. Exact reason/owner/status remain inspectable.
+
+A known-model dry run can finish its observation Job with result state `BLOCKED`;
+that is a completed assessment, not completed compilation. It has no `plan_id`.
+An actual build under the same refusal still fails. Missing or ambiguous model
+identity remains an operation failure. CLI dry-run reports the typed assessment
+but retains a nonzero blocked exit. Older producers omit `planning`; clients must
+not manufacture a readiness assessment from that absence.
+
+Ready means the current recipe can be planned, or an existing local artifact was
+verified through its current profile. It does not assert that a model fits the
+connected Host. Runtime admission, quality and performance evidence remain
+explicitly `not_evaluated`. Source verification, compile, package verification,
+load and execution retain their existing independent gates. The assessment is
+attached after sealing the established plan identity and cannot alter its meaning.
+
+Current preparation selects the exact source's admitted recipe, quantization
+policy/default and execution deployment. It does not implement generic hardware,
+workload or quality-aware search. Connected management transport is not a target
+hardware selection or an admitted distributed topology.
