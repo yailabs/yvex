@@ -35,6 +35,24 @@ def canonical(value):
                                     ensure_ascii=False, allow_nan=False).encode()).hexdigest()
 
 
+def measurement_instrumentation(declared_profiled=False, environment=None):
+    """Retain declared/observed profiling state, never infer absence of attachment.
+
+    Only marker names cross into evidence. Environment values may contain local
+    paths and are neither disclosed nor hashed into the qualification target.
+    External/attached tools must be declared explicitly by the caller.
+    """
+    if type(declared_profiled) is not bool:
+        raise ValueError("profiling declaration must be boolean")
+    environment = os.environ if environment is None else environment
+    markers = [name for name in ("CUDA_INJECTION64_PATH", "YVEX_DIAGNOSTIC_CUPTI_OUTPUT", "LD_PRELOAD")
+               if environment.get(name)]
+    return dict(schema="yvex.qualification.instrumentation.v1",
+                profiled=declared_profiled or bool(markers), declared_profiled=declared_profiled,
+                observed_environment_markers=markers,
+                scope="caller declaration and invoking-process markers; not proof against external profiler attachment")
+
+
 def cuda_processes():
     """Read device/PID facts only; no CLI human output or operator content."""
     result = subprocess.run(["nvidia-smi", "--query-compute-apps=gpu_uuid,pid",
@@ -521,6 +539,14 @@ def native_receipts(args):
     import qualification_reference as independent
     run = args.run.resolve()
     identity, closed = independent.read(run / "identity.json"), independent.read(run / "closed.json")
+    instrumentation = identity.get("instrumentation")
+    q.require(isinstance(instrumentation, dict)
+              and instrumentation.get("schema") == "yvex.qualification.instrumentation.v1"
+              and instrumentation.get("profiled") is False
+              and instrumentation.get("declared_profiled") is False
+              and instrumentation.get("observed_environment_markers") == []
+              and closed.get("instrumentation") == instrumentation,
+              "profiled/unknown native capture cannot become performance evidence")
     config, engine, snapshot, adapter = (identity[k] for k in ("configuration", "engine", "source", "adapter"))
     q.require(closed.get("schema") == "yvex.qualification.native-closed.v1"
               and all(closed.get(k) is True for k in ("source_unchanged", "adapter_unchanged", "executable_unchanged")),
@@ -586,6 +612,7 @@ def native_receipts(args):
                             prompt_sha256=digest(prompt_paths[turn]))
             q.require(row.get("schema") == "yvex.qualification.measurement.v1"
                       and row["configuration"] == expected and row["source"] == snapshot and row["source_stable"] is True
+                      and row.get("instrumentation") == instrumentation
                       and row["resources"] == resources and row["metrics"] == metrics and row["lane"] == identity["lane"]
                       and 0 < metrics["generated_tokens"] <= config["output_bound"], "native observation differs from raw execution")
             input_identity = canonical(dict(prompt=expected["prompt_sha256"], previous_published_history=history,
@@ -613,7 +640,8 @@ def native_receipts(args):
         blockers=[]) for plane in q.PLANES}
     receipt = dict(schema=q.RECEIPT_SCHEMA, id=args.id, title=args.title, target=target,
         target_identity=q.target_id(target), origin=args.origin, claims=claims, measurements=measurements,
-        provenance=dict(source_stability="frozen", profiled=False, evidence_class="native-characterization",
+        provenance=dict(source_stability="frozen", profiled=instrumentation["profiled"],
+            instrumentation=instrumentation, evidence_class="native-characterization",
             raw_root=str(run), build=identity["build"], adapter=adapter, source_capture=identity["source_capture"],
             identity_sha256=digest(run / "identity.json"), closed_sha256=digest(run / "closed.json"),
             relationship_sha256=digest(args.relationship), relationship_target=relationship["target_identity"],
@@ -946,6 +974,7 @@ def http_lane(args):
         profile = next(p for p in read("profile", "list", "--json")["profiles"] if p["identity"] == args.model)
         sampling_request, sampling_facts = http_sampling(args.sampling)
         configuration = dict(transport="http-openai", model=args.model, engine=engine, profile=profile,
+                             instrumentation=measurement_instrumentation(getattr(args, "profiled", False)),
                              executable=binary, source=initial, source_capture=capture,
                              suite=canonical(suite), case=args.case,
                              host_version=read("version", "--json"),
@@ -1065,7 +1094,9 @@ def native(args):
                       sampling=args.sampling, transport=f"native-v{status['protocol']}", concurrency=1, corpus=digest(args.suite),
                       case=selected["id"], reasoning=args.reasoning, output_bound=selected["maximum_output"],
                       warm_state="resident-engine; first-request-and-repeats-separated")
+        instrumentation = measurement_instrumentation(getattr(args, "profiled", False))
         identity = dict(configuration=config, source=initial, build=build, adapter=adapter,
+                        instrumentation=instrumentation,
                         source_capture=capture, engine=engine, profile=profile,
                         source_authority=authority, client=digest(args.client), host_pid=pid,
                         binding_file_sha256=digest(profile["runtime_binding"]),
@@ -1108,10 +1139,12 @@ def native(args):
                                   configuration=dict(config, session_state="fresh" if index == 0 else "reused",
                                                      turn_index=index, prompt_sha256=digest(paths[index])),
                                   source=initial, source_stable=True, repetition=sample,
-                                  workload_class=selected["class"], resources=resource_facts, metrics=observation)
+                                  workload_class=selected["class"], instrumentation=instrumentation,
+                                  resources=resource_facts, metrics=observation)
                     stream.write(json.dumps(record, sort_keys=True, allow_nan=False) + "\n")
 
         closed = dict(schema="yvex.qualification.native-closed.v1", source_unchanged=source(producer_root) == initial,
+                      instrumentation=instrumentation,
                       adapter_unchanged=source() == adapter["source"],
                       executable_unchanged=digest(f"/proc/{pid}/exe") == executable,
                       engine=current, host=read("host", "status", "--json"))
@@ -1156,6 +1189,8 @@ def main():
         run.add_argument("--reasoning", required=True)
         run.add_argument("--repeats", type=int, default=3)
         run.add_argument("--sampling", choices=("product", "greedy"), default="product")
+        run.add_argument("--profiled", action="store_true",
+                         help="diagnostic capture only; prohibits native performance-receipt import")
         if lane == "native":
             run.add_argument("--client", type=Path, required=True)
             run.add_argument("--producer-source", type=Path,

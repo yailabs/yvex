@@ -60,7 +60,9 @@ class NativeReceiptTests(unittest.TestCase):
             context=32768, prefill_chunk=64, concurrency=1, sampling="greedy", transport="native-v25",
             corpus=measurement.digest(suite_path), case=case["id"], reasoning="none", strategy="speculative",
             output_bound=case["maximum_output"], warm_state="resident-engine; first-request-and-repeats-separated")
+        instrumentation = measurement.measurement_instrumentation(False, {})
         identity = dict(configuration=config, source=snapshot, source_capture=producer, engine=engine,
+            instrumentation=instrumentation,
             build=dict(schema="yvex.version.v1", build_commit=snapshot["head"], source_tree=snapshot["tree"],
                 source_state="clean", build_identity="fixture-native-build", shell_build_identity="fixture-shell"),
             adapter=dict(source=snapshot, source_capture=adapter, client_sha256=adapter["files"]["executable-0"]),
@@ -68,6 +70,7 @@ class NativeReceiptTests(unittest.TestCase):
             host_pid=42, lane="product-native", profile={"backend":"cuda"})
         independent.write(run / "identity.json", identity)
         independent.write(run / "closed.json", dict(schema="yvex.qualification.native-closed.v1",
+            instrumentation=instrumentation,
             source_unchanged=True, adapter_unchanged=True, executable_unchanged=True, engine=engine,
             host=dict(active_requests=0, active_http_requests=0, queue_depth=0)))
         prompt = run / "prompt-0.txt"
@@ -90,6 +93,7 @@ class NativeReceiptTests(unittest.TestCase):
                 state="OBSERVED_CLEAR", allowed_pids=[42], devices=[], observations=1, evidence=str(path))
             independent.write(run / f"native-{repetition}.resource-summary.json", resources)
             observations.append(dict(schema="yvex.qualification.measurement.v1", repetition=repetition,
+                instrumentation=instrumentation,
                 source=snapshot, source_stable=True, lane="product-native", resources=resources,
                 configuration=dict(config, session_state="fresh", turn_index=0, prompt_sha256=measurement.digest(prompt)),
                 metrics=measurement.summarize_native(events)[0]))
@@ -129,6 +133,10 @@ class NativeReceiptTests(unittest.TestCase):
             ("identity.json", lambda row: row["configuration"].update(specialization="another-specialization")),
             ("identity.json", lambda row: row["build"].update(source_tree="another-tree")),
             ("identity.json", lambda row: row["source_authority"].update(revision="another-checkpoint")),
+            ("identity.json", lambda row: row["instrumentation"].update(profiled=True)),
+            ("identity.json", lambda row: row.pop("instrumentation")),
+            ("closed.json", lambda row: row.pop("instrumentation")),
+            ("observations.jsonl", lambda rows: rows[0]["instrumentation"].update(profiled=True)),
             ("native-0.resource-summary.json", lambda row: row.update(state="CONTENDED")),
             ("native-0.resources.jsonl", lambda rows: rows[0]["processes"].append(dict(device="GPU-fixture", pid=77))),
             ("native-0.resources.jsonl", lambda rows: rows[0].update(state="UNKNOWN", error="TimeoutExpired")),
@@ -144,6 +152,19 @@ class NativeReceiptTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     measurement.native_receipts(args)
                 self.assertFalse(args.output.exists())
+
+    def test_profiling_declaration_and_injection_markers_never_become_timing(self):
+        self.assertFalse(measurement.measurement_instrumentation(False, {})["profiled"])
+        self.assertTrue(measurement.measurement_instrumentation(True, {})["profiled"])
+        for marker in ("CUDA_INJECTION64_PATH", "YVEX_DIAGNOSTIC_CUPTI_OUTPUT", "LD_PRELOAD"):
+            with self.subTest(marker=marker):
+                observation = measurement.measurement_instrumentation(False, {marker: "/private/local/path"})
+                self.assertTrue(observation["profiled"])
+                self.assertEqual(observation["observed_environment_markers"], [marker])
+                self.assertNotIn("/private/local/path", json.dumps(observation))
+        for value in (0, 1, None, "false"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                measurement.measurement_instrumentation(value, {})
 
     def test_source_capture_refuses_changed_bytes_and_symlink(self):
         for symlink in (False, True):

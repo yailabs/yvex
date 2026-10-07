@@ -218,6 +218,15 @@ remain external and hash-bound. A profiled turn is not silently imported as an
 unprofiled performance series. Both Python and Rust comparison gates require
 explicitly unprofiled performance samples; unknown profiling state also refuses.
 
+Native/HTTP measurement captures declare instrumentation separately from the
+qualification target. Pass `--profiled` for diagnostic runs, including externally
+attached profilers. Known CUDA-injection/preload environment markers conservatively
+mark the capture profiled without disclosing their values. The native importer
+requires the same explicit unprofiled declaration in admission, observation and
+closure records; legacy missing/unknown state refuses rather than becoming
+`profiled=false`. This declaration is not proof against undisclosed external
+attachment and does not alter the underlying model or metric denominator.
+
 For mapped weights, Linux mapping RSS, process major/minor faults and backing-I/O
 counters are diagnostic observations, not CUDA allocation or GPU paging facts.
 A sampled full RSS mapping is consistent with zero explicit device-copy bytes;
