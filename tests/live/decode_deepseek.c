@@ -178,25 +178,77 @@ static int live_decode_run(live_decode *execution,
     return rc;
 }
 
-static int live_compare(const live_decode *cpu, const live_decode *cuda,
+static int live_compare(const float *cpu, const float *cuda,
                         unsigned long long count, double *maximum, double *rmse)
 {
     unsigned long long index;
     double squared = 0.0;
+    int matched = 1;
     *maximum = 0.0;
     for (index = 0ull; index < count; ++index) {
-        double left = cpu->decode_hidden[index], right = cuda->decode_hidden[index];
+        double left = cpu[index], right = cuda[index];
         double difference = fabs(left - right);
         double scale = fmax(fabs(left), fabs(right));
         if (!isfinite(left) || !isfinite(right) ||
             difference > DECODE_LIVE_ABSOLUTE_TOLERANCE +
-                             DECODE_LIVE_RELATIVE_TOLERANCE * scale)
-            return 0;
+                             DECODE_LIVE_RELATIVE_TOLERANCE * scale) {
+            if (matched)
+                fprintf(stderr, "decode_live numeric first=%llu cpu=%.17g cuda=%.17g\n",
+                        index, left, right);
+            matched = 0;
+        }
+        if (!isfinite(difference)) difference = INFINITY;
         if (difference > *maximum) *maximum = difference;
         squared += difference * difference;
     }
     *rmse = sqrt(squared / (double)count);
-    return 1;
+    return matched;
+}
+
+/* A failed comparison retains numerical and layout provenance, not a single
+ * aggregate refusal that conflates output arithmetic with state identity. */
+static int live_cuda_compare(const live_decode *cpu, const live_decode *cuda,
+                             unsigned long long width, double *maximum,
+                             double *rmse, yvex_error *err)
+{
+    yvex_graph_attention_state_summary left = {0}, right = {0};
+    const yvex_runtime_session_view *cpu_view = yvex_runtime_session_view_get(cpu->session);
+    const yvex_runtime_session_view *cuda_view = yvex_runtime_session_view_get(cuda->session);
+    double prefill_maximum, prefill_rmse;
+    int prefill_match = live_compare(cpu->prefill_hidden, cuda->prefill_hidden,
+                                     width, &prefill_maximum, &prefill_rmse);
+    int hidden_match = live_compare(cpu->decode_hidden, cuda->decode_hidden,
+                                    2ull * width, maximum, rmse);
+    int state_match = strcmp(cpu->result.aggregate_state_digest,
+                             cuda->result.aggregate_state_digest) == 0;
+    /* This direct transformer consumer has no token-ledger/decoder transaction.
+     * Observe its actual attention owner, not a complete product-session claim. */
+    if (!cpu_view || !cuda_view || !cpu_view->attention_state_provider ||
+        !cuda_view->attention_state_provider || !cpu_view->attention_state_provider->summary ||
+        !cuda_view->attention_state_provider->summary) return YVEX_ERR_STATE;
+    int rc = cpu_view->attention_state_provider->summary(
+        cpu_view->attention_state_provider->context, &left, err);
+    if (rc == YVEX_OK)
+        rc = cuda_view->attention_state_provider->summary(
+            cuda_view->attention_state_provider->context, &right, err);
+    if (rc != YVEX_OK) return rc;
+    fprintf(stderr,
+            "decode_live comparison prefill_match=%d prefill_max_abs=%.17g prefill_rmse=%.17g "
+            "hidden_match=%d max_abs=%.17g rmse=%.17g state_match=%d layout_match=%d\n"
+            "decode_live cpu_layout=%s cuda_layout=%s\n"
+            "decode_live cpu_state=%s cuda_state=%s\n",
+            prefill_match, prefill_maximum, prefill_rmse, hidden_match, *maximum, *rmse,
+            state_match, strcmp(left.state_layout_identity, right.state_layout_identity) == 0,
+            left.state_layout_identity, right.state_layout_identity,
+            cpu->result.aggregate_state_digest, cuda->result.aggregate_state_digest);
+    if (!prefill_match || !hidden_match || !state_match) {
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "test.decode.cpu-cuda",
+                       "CPU/CUDA repeated decode comparison failed "
+                       "(prefill=%d hidden=%d state=%d max_abs=%.9g rmse=%.9g)",
+                       prefill_match, hidden_match, state_match, *maximum, *rmse);
+        return YVEX_ERR_FORMAT;
+    }
+    return YVEX_OK;
 }
 
 static int live_reference_run(live_decode *execution,
@@ -387,14 +439,8 @@ int main(int argc, char **argv)
         rc = live_decode_run(&cuda, prefill, decode, YVEX_BACKEND_KIND_CUDA,
                              plan->hidden_width, &err);
     }
-    if (rc == YVEX_OK &&
-        (!live_compare(&cpu, &cuda, 2ull * plan->hidden_width, &maximum, &rmse) ||
-         strcmp(cpu.result.aggregate_state_digest,
-                cuda.result.aggregate_state_digest) != 0)) {
-        yvex_error_set(&err, YVEX_ERR_FORMAT, "test.decode.cpu-cuda",
-                       "CPU/CUDA repeated decode comparison failed");
-        rc = YVEX_ERR_FORMAT;
-    }
+    if (rc == YVEX_OK)
+        rc = live_cuda_compare(&cpu, &cuda, plan->hidden_width, &maximum, &rmse, &err);
     if (rc != YVEX_OK) live_fail(step, rc, &err);
     else
         printf("decode_steps=2 layers=86 swa=4 csa=42 hca=40 hash=6 learned=80 "

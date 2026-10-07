@@ -307,6 +307,12 @@ static int program_cuda_execute(program_fixture *f)
     return 0;
 }
 
+static int program_cancel_after_submission(void *opaque)
+{
+    unsigned int *checks = opaque;
+    return ++*checks >= 2u;
+}
+
 static int program_cuda_failures(program_fixture *f)
 {
     yvex_program_device *limited = NULL;
@@ -314,7 +320,22 @@ static int program_cuda_failures(program_fixture *f)
     yvex_device_tensor output, *outputs[] = {&output};
     yvex_backend_memory_stats before, after;
     yvex_error err;
+    unsigned long long host_bytes, device_bytes;
     int rc;
+    yvex_program_device_resources(f->execution, &host_bytes, &device_bytes);
+    YVEX_TEST_ASSERT(host_bytes && device_bytes > 1u &&
+        yvex_backend_get_memory_stats(f->backend, &before, &err) == YVEX_OK &&
+        yvex_program_device_open(&limited, f->plan, f->backend, 3u, 0u, device_bytes,
+            implementations, 2u, f, &err) == YVEX_OK &&
+        yvex_program_device_close(&limited, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(f->backend, &after, &err) == YVEX_OK &&
+        before.allocated_bytes == after.allocated_bytes,
+        "exact executor budget includes owned completion storage and closes without leaks");
+    YVEX_TEST_ASSERT(yvex_program_device_open(&limited, f->plan, f->backend, 3u, 0u,
+        device_bytes - 1u, implementations, 2u, f, &err) == YVEX_ERR_BOUNDS && !limited &&
+        yvex_backend_get_memory_stats(f->backend, &after, &err) == YVEX_OK &&
+        before.allocated_bytes == after.allocated_bytes,
+        "one-byte-short executor budget refuses completion/storage without leaks");
     YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(f->backend, &before, &err) == YVEX_OK &&
         yvex_program_device_open(&limited, f->plan, f->backend, 3u, 1u, 0u,
             implementations, 2u, f, &err) == YVEX_ERR_BOUNDS &&
@@ -352,6 +373,27 @@ static int program_cuda_failures(program_fixture *f)
     YVEX_TEST_ASSERT(yvex_program_device_run(f->execution, 2u, &f->argument, 1u, outputs, 1u,
         NULL, NULL, &result, &err) == YVEX_OK && result.operations == 4u && output.is_written,
         "owner remains reusable after backend refusal");
+    float valid = f->input_values[0];
+    f->input_values[0] = NAN;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(f->backend, f->input, f->input_values,
+        sizeof(f->input_values), &err) == YVEX_OK, "stage invalid program input");
+    rc = yvex_program_device_run(f->execution, 2u, &f->argument, 1u, outputs, 1u,
+        NULL, NULL, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && !output.is_written,
+        "deferred numerical failure cannot publish a physical program result");
+    f->input_values[0] = valid;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(f->backend, f->input, f->input_values,
+        sizeof(f->input_values), &err) == YVEX_OK, "restore valid independent input");
+    unsigned int cancel_checks = 0u;
+    rc = yvex_program_device_run(f->execution, 2u, &f->argument, 1u, outputs, 1u,
+        program_cancel_after_submission, &cancel_checks, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_CANCELLED && result.operations == 1u && !output.is_written,
+        "cancellation drains already submitted work without publishing output");
+    YVEX_TEST_ASSERT(yvex_program_device_run(f->execution, 2u, &f->argument, 1u, outputs, 1u,
+        NULL, NULL, &result, &err) == YVEX_OK && output.is_written &&
+        yvex_backend_get_memory_stats(f->backend, &after, &err) == YVEX_OK &&
+        before.allocated_bytes == after.allocated_bytes,
+        "numerical failure and cancellation preserve subsequent execution and allocation balance");
     puts("Tensor program failures: host/device budgets refuse without leaks; compile failure -> non-runnable; "
          "execute failure -> unpublished output; retry -> 4 operations; all probes removed");
     return 0;
@@ -495,8 +537,253 @@ static int program_cuda_text(void)
     return 0;
 }
 
+static int program_pending_status_control(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
+    yvex_device_tensor *encoded = NULL, *embedding = NULL, *expanded = NULL;
+    yvex_device_tensor *arena = NULL, *completion = NULL;
+    yvex_backend_tensor_desc d = {.name = "pending-embedding", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {16u}, .bytes = 16u};
+    yvex_backend_operation_facts facts;
+    yvex_backend_memory_stats before, after;
+    yvex_error err = {0};
+    unsigned short weights[8];
+    float expected[8], actual[8];
+    YVEX_TEST_ASSERT(yvex_backend_open(&backend, &options, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK &&
+        yvex_backend_tensor_alloc(backend, &d, &encoded, &err) == YVEX_OK,
+        "pending-status control owns encoded embedding");
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    YVEX_TEST_ASSERT(ops && ops->initial && ops->program_begin && ops->program_complete,
+        "embedding and program completion share one backend");
+    d = (yvex_backend_tensor_desc){.name = "pending-activation", .dtype = YVEX_DTYPE_F32,
+        .rank = 1u, .dims = {8u}, .bytes = sizeof(actual)};
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &embedding, &err) == YVEX_OK &&
+        yvex_backend_tensor_alloc(backend, &d, &expanded, &err) == YVEX_OK,
+        "pending-status control owns disjoint activations");
+    d = (yvex_backend_tensor_desc){.name = "pending-arena", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {256u}, .bytes = 256u};
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &arena, &err) == YVEX_OK &&
+        yvex_backend_workspace_attach(backend, arena, 1u, &err) == YVEX_OK,
+        "executor workspace admits deferred initialization");
+    d.dims[0] = d.bytes = sizeof(int);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &completion, &err) == YVEX_OK,
+        "completion owns storage outside the arena");
+    for (unsigned int run = 0u; run < 3u; ++run) {
+        for (unsigned int i = 0u; i < 8u; ++i) {
+            weights[i] = yvex_quant_bf16_encode((float)i / 8.0f);
+            expected[i] = yvex_quant_bf16_decode(weights[i]);
+        }
+        if (run == 1u) weights[0] = yvex_quant_bf16_encode(INFINITY);
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, encoded, weights, sizeof(weights), &err) == YVEX_OK &&
+            ops->initial(backend, encoded, YVEX_GGUF_QTYPE_BF16, 1u, 8u, 1u,
+                embedding, expanded, &facts, &err) == YVEX_OK && !facts.download_count,
+            "initialization submits a deferred numerical check");
+        YVEX_TEST_ASSERT(ops->program_begin(backend, completion, &err) == YVEX_OK &&
+            ops->program_begin(backend, completion, &err) == YVEX_ERR_STATE &&
+            yvex_backend_tensor_release(backend, &completion, &err) == YVEX_ERR_STATE && completion,
+            "completion inherits pending status while refusing nesting and borrowed release");
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, expanded, expected, sizeof(expected), &err) == YVEX_OK &&
+            ops->bf16_round(backend, expanded, 8u, &facts, &err) == YVEX_OK && !facts.download_count,
+            "valid later work cannot erase an inherited numerical failure");
+        int rc = ops->program_complete(backend, &facts, &err);
+        YVEX_TEST_ASSERT(rc == (run == 1u ? YVEX_ERR_FORMAT : YVEX_OK) &&
+            facts.download_count == 1u && facts.queue_synchronizations + facts.device_synchronizations == 1u,
+            "one checked completion observes pending and program work, with recovery");
+        if (run != 1u)
+            YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, expanded, actual, sizeof(actual), &err) == YVEX_OK &&
+                !memcmp(actual, expected, sizeof(actual)), "finite handoff preserves exact BF16 output");
+    }
+    yvex_backend_workspace_detach(backend);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &completion, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &encoded, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &embedding, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &expanded, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes + sizeof(int) &&
+        yvex_backend_close_checked(&backend, &err) == YVEX_OK,
+        "only backend-owned status remains until checked backend close");
+    printf("pending_status handoff=ordered latched_failure=refused recovery=pass exact_bf16=true barriers=1\n");
+    return 0;
+}
+
+
+static int program_checked_scope_control(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
+    yvex_device_tensor *values = NULL, *completion = NULL;
+    yvex_backend_tensor_desc d = {.name = "scope-values", .dtype = YVEX_DTYPE_F32,
+        .rank = 1u, .dims = {8u}, .bytes = 8u * sizeof(float)};
+    yvex_backend_operation_facts facts;
+    yvex_backend_memory_stats before, after;
+    yvex_error err = {0};
+    float input[8] = {0.1f, -0.7f, 2.3f, 9.9f, -12.1f, 0.0f, 1.5f, -0.25f}, actual[8], expected[8];
+    YVEX_TEST_ASSERT(yvex_backend_open(&backend, &options, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK &&
+        yvex_backend_tensor_alloc(backend, &d, &values, &err) == YVEX_OK, "checked-scope owner prepares");
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    YVEX_TEST_ASSERT(ops && ops->program_begin && ops->program_complete &&
+        ops->program_workspace_bytes == sizeof(int), "bounded paired numerical scope is admitted");
+    d = (yvex_backend_tensor_desc){.name = "scope-completion", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {sizeof(int)}, .bytes = sizeof(int)};
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &completion, &err) == YVEX_OK &&
+        ops->program_complete(backend, &facts, &err) == YVEX_ERR_STATE &&
+        ops->program_begin(backend, values, &err) == YVEX_ERR_STATE,
+        "absent scope and foreign completion geometry refuse");
+    for (size_t i = 0u; i < 8u; ++i) expected[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(input[i]));
+    for (unsigned int run = 0u; run < 3u; ++run) {
+        float saved = input[0];
+        if (run == 1u) input[0] = INFINITY;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, values, input, values->bytes, &err) == YVEX_OK &&
+            ops->program_begin(backend, completion, &err) == YVEX_OK &&
+            ops->program_begin(backend, completion, &err) == YVEX_ERR_STATE &&
+            yvex_backend_tensor_release(backend, &completion, &err) == YVEX_ERR_STATE && completion,
+            "fresh scope opens and nested ownership refuses without resetting status");
+        for (unsigned int op = 0u; op < 3u; ++op) {
+            YVEX_TEST_ASSERT(ops->bf16_round(backend, values, 8u, &facts, &err) == YVEX_OK &&
+                facts.kernel_launches == 1u && !facts.device_synchronizations &&
+                !facts.queue_synchronizations && !facts.download_count,
+                "dependent finite checks defer only to the owned completion boundary");
+            if (run == 1u && op == 0u) {
+                input[0] = saved;
+                YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, values, input, values->bytes, &err) == YVEX_OK,
+                    "valid later input cannot clear a previously latched numerical failure");
+            }
+        }
+        int rc = ops->program_complete(backend, &facts, &err);
+        YVEX_TEST_ASSERT(rc == (run == 1u ? YVEX_ERR_FORMAT : YVEX_OK) &&
+            facts.queue_synchronizations + facts.device_synchronizations == 1u &&
+            facts.download_count == 1u && facts.d2h_bytes == sizeof(int),
+            "one checked barrier admits finite results or refuses the entire failed scope");
+        if (run != 1u) {
+            YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, values, actual, sizeof(actual), &err) == YVEX_OK &&
+                !memcmp(actual, expected, sizeof(actual)), "successful and recovered scope preserves exact BF16 bytes");
+        }
+        input[0] = saved;
+    }
+    YVEX_TEST_ASSERT(ops->bf16_round(backend, values, 8u, &facts, &err) == YVEX_OK &&
+        facts.queue_synchronizations + facts.device_synchronizations == 1u && facts.download_count == 1u,
+        "standalone consumer retains immediate checked completion");
+    YVEX_TEST_ASSERT(ops->program_begin(backend, completion, &err) == YVEX_OK &&
+        ops->bf16_round(backend, values, 8u, &facts, &err) == YVEX_OK &&
+        setenv("YVEX_TEST_CUDA_SYNC_FAILURE",
+            yvex_backend_operation_variant_name(YVEX_BACKEND_VARIANT_ATTENTION_ENCODED), 1) == 0,
+        "completion-failure control submits finite work before injecting the barrier failure");
+    int failed = ops->program_complete(backend, &facts, &err);
+    YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_CUDA_SYNC_FAILURE") == 0 && failed == YVEX_ERR_BACKEND &&
+        ops->program_begin(backend, completion, &err) == YVEX_ERR_STATE,
+        "unobserved completion makes the backend cleanup-only, never reusable");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &completion, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &values, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes && yvex_backend_close_checked(&backend, &err) == YVEX_OK,
+        "program-owned completion and failed/recovered scopes return to the allocation baseline");
+    printf("checked_scope operations=3 barriers=1 status_downloads=1 exact_bf16=true "
+        "latched_failure=refused nesting=refused recovery=pass sync_failure=cleanup-only allocation_delta=0\n");
+    return 0;
+}
+
+/* Analytic ingress populations straddle the warp/CTA boundary. This oracle
+ * does not execute the CUDA implementation to construct its expectations. */
+static int program_mhc_barrier_control(void)
+{
+    const unsigned long long populations[] = {1u, 4u, 31u, 32u, 33u, 64u};
+    enum { WIDTH = 128u, ROWS = 2u };
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
+    yvex_backend_memory_stats before, after;
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(yvex_backend_open(&backend, &options, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK,
+        "analytic mHC barrier backend prepares");
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    YVEX_TEST_ASSERT(ops && ops->residual_pre, "generic mHC ingress operation exists");
+    for (size_t arm = 0u; arm < sizeof(populations) / sizeof(*populations); ++arm) {
+        unsigned long long streams = populations[arm], mixing = (streams + 2u) * streams;
+        unsigned long long counts[] = {ROWS * streams * WIDTH, ROWS * mixing, 3u, mixing,
+            ROWS * WIDTH, ROWS * streams, ROWS * streams * streams, ROWS * streams * WIDTH};
+        yvex_device_tensor *t[8] = {0};
+        float *host[7] = {0};
+        for (size_t i = 0u; i < 8u; ++i) {
+            yvex_backend_tensor_desc d = {.name = "mhc-barrier-control", .dtype = YVEX_DTYPE_F32,
+                .rank = 1u, .dims = {counts[i]}, .bytes = counts[i] * sizeof(float)};
+            YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &t[i], &err) == YVEX_OK,
+                "analytic mHC disjoint tensor storage prepares");
+            if (i == 7u) continue;
+            host[i] = calloc((size_t)counts[i], sizeof(float));
+            YVEX_TEST_ASSERT(host[i], "analytic mHC host storage prepares");
+            if (i == 0u)
+                for (unsigned long long j = 0u; j < counts[i]; ++j)
+                    host[i][j] = j % 2u ? -0.25f : 0.5f;
+            if (i == 2u) host[i][0] = host[i][1] = host[i][2] = 1.0f;
+            if (i < 4u)
+                YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, t[i], host[i], d.bytes, &err) == YVEX_OK,
+                    "analytic mHC exact initialized operands upload");
+        }
+        yvex_mhc_device_request r = {.geometry = {streams, WIDTH, 20u, 1e-6, 1e-6, 2.0},
+            .rows = ROWS, .inputs = {t[0], t[1], t[2], t[3]},
+            .outputs = {t[4], t[5], t[6]}, .workspace = t[7]};
+        yvex_backend_operation_facts facts = {0};
+        YVEX_TEST_ASSERT(ops->residual_pre(backend, &r, &facts, &err) == YVEX_OK,
+            "analytic mHC executes warp and multi-warp populations");
+        for (size_t i = 4u; i < 7u; ++i)
+            YVEX_TEST_ASSERT(t[i]->is_written &&
+                yvex_backend_tensor_read(backend, t[i], host[i], t[i]->bytes, &err) == YVEX_OK,
+                "checked analytic mHC results download");
+        for (unsigned long long i = 0u; i < counts[4]; ++i) {
+            float expected = 0.0f;
+            for (unsigned long long s = 0u; s < streams; ++s)
+                expected += (float)((0.5 + 1e-6) * (double)(i % 2u ? -0.25f : 0.5f));
+            expected = yvex_quant_bf16_decode(yvex_quant_bf16_encode(expected));
+            YVEX_TEST_ASSERT(host[4][i] == expected, "analytic collapse is exact BF16");
+        }
+        for (unsigned long long i = 0u; i < counts[5]; ++i)
+            YVEX_TEST_ASSERT(host[5][i] == 1.0f, "analytic post sigmoid zero is exactly one");
+        /* The epsilon is part of every source-authored denominator, including
+         * the one-stream case; 1/streams alone is not its numerical oracle. */
+        float balanced = (float)(1.0 / (double)streams + 1e-6);
+        for (unsigned int iteration = 0u; iteration < 20u; ++iteration) {
+            for (unsigned int phase = iteration ? 0u : 1u; phase < 2u; ++phase) {
+                double sum = 0.0;
+                for (unsigned long long s = 0u; s < streams; ++s) sum += balanced;
+                balanced = (float)((double)balanced / (sum + 1e-6));
+            }
+        }
+        for (unsigned long long i = 0u; i < counts[6]; ++i)
+            YVEX_TEST_ASSERT(host[6][i] == balanced,
+                "analytic Sinkhorn matrix preserves exact epsilon and F32 publications");
+        host[0][WIDTH / 2u] = NAN;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, t[0], host[0], t[0]->bytes, &err) == YVEX_OK &&
+            ops->residual_pre(backend, &r, &facts, &err) == YVEX_ERR_FORMAT &&
+            !t[4]->is_written && !t[5]->is_written && !t[6]->is_written,
+            "nonfinite mHC refuses all three result publications");
+        host[0][WIDTH / 2u] = 0.5f;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, t[0], host[0], t[0]->bytes, &err) == YVEX_OK &&
+            ops->residual_pre(backend, &r, &facts, &err) == YVEX_OK,
+            "a subsequent independent mHC invocation recovers");
+        for (size_t i = 0u; i < 8u; ++i) {
+            YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &t[i], &err) == YVEX_OK,
+                "analytic mHC device storage releases");
+            if (i < 7u) free(host[i]);
+        }
+    }
+    YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        before.allocated_bytes == after.allocated_bytes &&
+        yvex_backend_close_checked(&backend, &err) == YVEX_OK,
+        "analytic mHC controls restore the allocation baseline");
+    puts("mHC barrier populations=1,4,31,32,33,64 rows=2 sinkhorn=20 "
+        "analytic_bf16=exact nonfinite=refused recovery=pass allocation_delta=0");
+    return 0;
+}
+
 int yvex_cuda_test_program(void)
 {
+    if (program_mhc_barrier_control()) return 1;
+    if (program_pending_status_control()) return 1;
+    if (program_checked_scope_control()) return 1;
     if (test_conditioning_program(YVEX_BACKEND_KIND_CUDA)) return 1;
     if (test_joint_compiler() || test_joint_execution()) return 1;
     if (test_spatial_programs(YVEX_BACKEND_KIND_CUDA) ||

@@ -199,6 +199,7 @@ src/backend/cuda/dot_recovery.h	backend.cuda	backend.cuda.dot_recovery	backend	p
 src/backend/cuda/attention_completion.c	backend.cuda	backend.cuda.attention-completion	backend	private	resource-lifecycle	graph,backend.cuda.attention	implementation	none
 src/backend/cuda/families/minimax_h3.c	backend.cuda.family	backend.cuda.family.minimax_h3	family	private	backend-implementation	graph.family,runtime	implementation	none
 src/backend/cuda/execution_arena.c	backend.cuda	backend.cuda.execution_arena	backend	private	resource-lifecycle	backend.cuda	implementation	none
+src/backend/cuda/attention_ops.h	backend.cuda	backend.cuda.attention_ops	backend	private	platform-interface	backend.cuda.attention,backend.cuda.moe,backend.cuda.ops	interface	none
 src/backend/cuda/info.c	backend.cuda	backend.cuda.info	backend	private	reusable-algorithm	backend,graph	implementation	none
 src/backend/cuda/kernel_primitives.h	backend.cuda	backend.cuda.kernel_primitives	backend	private	platform-interface	backend.cuda.kernels,backend.cuda.moe_kernels,backend.cuda.sampling_kernels,backend.cuda.tensorcore,backend.cuda.transformer	interface	none
 src/backend/cuda/sampling_layout.h	backend.cuda	backend.cuda.sampling_layout	backend	private	platform-interface	backend.cuda.sampling,backend.cuda.sampling_kernels	interface	none
@@ -206,6 +207,8 @@ src/backend/cuda/kernels.cu	backend.cuda	backend.cuda.kernels	backend	private	ba
 src/backend/cuda/moe_kernels.cu	backend.cuda	backend.cuda.moe_kernels	backend	private	backend-kernel	backend,graph	backend-kernel	none
 src/backend/cuda/sampling_kernels.cu	backend.cuda	backend.cuda.sampling_kernels	backend	private	backend-kernel	runtime,generation	backend-kernel	none
 src/backend/cuda/tensorcore.cu	backend.cuda	backend.cuda.tensorcore	backend	private	backend-kernel	backend.cuda.qtype,runtime.logits	backend-kernel	none
+src/backend/cuda/decoded.c	backend.cuda	backend.cuda.decoded	backend	private	reusable-algorithm	backend.cuda.ops	implementation	none
+src/backend/cuda/decoded_kernels.cu	backend.cuda	backend.cuda.decoded_kernels	backend	private	backend-kernel	backend.cuda.decoded	backend-kernel	none
 src/backend/cuda/ops.c	backend.cuda	backend.cuda.ops	backend	private	reusable-algorithm	backend,graph	implementation	none
 src/backend/cuda/private.h	backend.cuda	backend.cuda.private	backend	private	platform-interface	backend,graph	interface	none
 src/backend/cuda/qtype.c	backend.cuda	backend.cuda.qtype	backend	private	reusable-algorithm	backend,graph	implementation	none

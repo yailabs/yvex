@@ -1,6 +1,6 @@
 /* Execute compiled MoE work on resident weights without reconstructing model topology. */
 #include <yvex/internal/moe.h>
-#include "src/backend/cuda/private.h"
+#include "src/backend/cuda/attention_ops.h"
 #include "src/backend/cuda/device_results.h"
 #include <limits.h>
 #include <stdlib.h>
@@ -450,7 +450,8 @@ int yvex_backend_moe_begin(yvex_backend_moe_execution **out, yvex_backend *backe
     unsigned long long routed_subview, maximum;
     int rc;
     if (out) *out = NULL;
-    if (!out || !backend || !job || !layer || !result || !job->expanded_input ||
+    if (!out || !backend || !job || !layer || !result ||
+        (!job->expanded_input && !job->device_input) ||
         yvex_backend_kind_of(backend) != YVEX_BACKEND_KIND_CUDA ||
         !result->combined_output || result->combined_capacity < layer->hidden_width ||
         !result->post || result->post_capacity < layer->residual_streams ||
@@ -1105,19 +1106,24 @@ static int moe_cuda_batch_route(moe_cuda_batch *batch,
                                             ? job->worklist_policy->supported_width_mask
                                             : 2ull;
         unsigned long long width_scan = width_mask;
+        unsigned long long prefill_maximum = job->worklist_policy
+            ? job->worklist_policy->prefill_maximum_width : 0ull;
+        unsigned int phase = (unsigned int)rows->phase;
         unsigned long long tensor_core_minimum = job->worklist_policy
                                                      ? job->worklist_policy->matrix_tile_minimum
                                                      : 0ull;
         unsigned int provenance = job->execution_batch
                                       ? (unsigned int)job->execution_batch->provenance : 0u;
         while (width_scan >>= 1u) admitted_width++;
+        if (rows->phase == YVEX_EXECUTION_PHASE_PREFILL && prefill_maximum > admitted_width)
+            admitted_width = prefill_maximum;
         void *params[] = {
             &batch->selected, (void *)&rows->row_count,
             (void *)&layer->experts_per_token, (void *)&layer->routed_experts,
             &batch->order, &batch->expert_ids, &batch->bucket_offsets,
             &batch->bucket_populations, &batch->source_rows,
             &batch->destination_rows, &batch->worklist_summary,
-            &width_mask, &tensor_core_minimum,
+            &width_mask, &prefill_maximum, &phase, &tensor_core_minimum,
             &admitted_width, &provenance, &batch->status};
         rc = batch->ops->launch(
             &batch->work, batch->state->expert_worklist_build_cuda_function,
@@ -1146,6 +1152,7 @@ static int moe_cuda_batch_experts(moe_cuda_batch *batch,
     unsigned long long gate_expert_bytes, up_expert_bytes, down_expert_bytes, input_width = layer->hidden_width;
     unsigned long long up_input_extent, down_input_extent, up_shared = 0ull, down_shared = 0ull;
     unsigned long long up_tasks, down_tasks, reduce_tasks;
+    unsigned long long bucket_bound, scalar_bound;
     unsigned long long tensor_up_tasks = 0ull, tensor_down_tasks = 0ull;
     unsigned long long tensor_core_minimum =
         job->worklist_policy &&
@@ -1165,25 +1172,27 @@ static int moe_cuda_batch_experts(moe_cuda_batch *batch,
     int up_q8 = batch->routed_up_q8, down_q8 = batch->routed_down_q8;
     int rc;
     if (rows->row_count < tensor_core_minimum) tensor_core_minimum = 0ull;
+    bucket_bound = count < experts ? count : experts;
+    scalar_bound = tensor_core_minimum ? bucket_bound : count;
     up_input_extent = up_q8 ? input_width / YVEX_CUDA_Q8_K_BLOCK : input_width;
     down_input_extent = down_q8 ? intermediate_width / YVEX_CUDA_Q8_K_BLOCK
                                 : intermediate_width;
     if (!yvex_core_u64_mul(gate->row_bytes, intermediate_width, &gate_expert_bytes) ||
         !yvex_core_u64_mul(up->row_bytes, intermediate_width, &up_expert_bytes) ||
         !yvex_core_u64_mul(down->row_bytes, layer->hidden_width, &down_expert_bytes) ||
-        !yvex_core_u64_mul(count,
+        !yvex_core_u64_mul(scalar_bound,
                            intermediate_width / MOE_CUDA_ROWS_PER_BLOCK +
                                (intermediate_width % MOE_CUDA_ROWS_PER_BLOCK != 0),
                            &up_tasks) ||
-        !yvex_core_u64_mul(count,
+        !yvex_core_u64_mul(scalar_bound,
                            layer->hidden_width / MOE_CUDA_ROWS_PER_BLOCK +
                                (layer->hidden_width % MOE_CUDA_ROWS_PER_BLOCK != 0),
                            &down_tasks) ||
         !yvex_core_u64_mul(rows->row_count, layer->hidden_width, &reduce_tasks) ||
         (tensor_core_minimum &&
-         (!yvex_core_u64_mul(count, (intermediate_width + 15ull) / 16ull,
+         (!yvex_core_u64_mul(bucket_bound, (intermediate_width + 15ull) / 16ull,
                              &tensor_up_tasks) ||
-          !yvex_core_u64_mul(count, (layer->hidden_width + 15ull) / 16ull,
+          !yvex_core_u64_mul(bucket_bound, (layer->hidden_width + 15ull) / 16ull,
                              &tensor_down_tasks) ||
           !moe_cuda_grid(tensor_up_tasks, 4u,
                           &tensor_up_grid) ||
@@ -1613,8 +1622,7 @@ static int moe_cuda_execute_rows(yvex_backend *backend,
         return moe_cuda_refuse(err, YVEX_ERR_INVALID_ARG, "CUDA MoE row schema is unsupported");
     unsupported_width =
         job && rows && job->worklist_policy &&
-        (rows->row_count >= 63ull || !(job->worklist_policy->supported_width_mask &
-                                      (1ull << rows->row_count)));
+        !yvex_expert_worklist_width_admitted(job->worklist_policy, rows->phase, rows->row_count);
     if (!backend || !job || !rows || !output || !result ||
         ((job->execution_batch == NULL) != (job->worklist_policy == NULL)) ||
         (job->execution_batch &&

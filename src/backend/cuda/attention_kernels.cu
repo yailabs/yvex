@@ -7,6 +7,92 @@
 #include "src/backend/cuda/kernel_primitives.h"
 #include "src/backend/cuda/dot_recovery.h"
 
+/* Channels are independent; each channel visits the admitted token positions
+ * in order and owns its complete state lane. Checkpoints remain transaction
+ * private. This removes per-position launch/copy ownership handoffs without
+ * changing the ordered F64 compressor reduction or BF16 publication. */
+extern "C" __global__ void yvex_attention_rolling_rows(
+    float *state_kv, float *state_score, const float *token_kv, const float *token_score,
+    const unsigned char *ape, unsigned long long ape_row_bytes, unsigned int ape_qtype,
+    float *compressed, unsigned long long ratio, unsigned long long head_dim,
+    unsigned long long token_count, unsigned long long first_cursor,
+    int overlap, int checkpoints, int *status)
+{
+    unsigned long long lane = (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (!status || *status || lane >= head_dim) return;
+    if (!state_kv || !state_score || !token_kv || !token_score || !ape ||
+        !compressed || !ape_row_bytes || !ratio || !head_dim || !token_count ||
+        first_cursor >= ratio || (overlap != 0 && overlap != 1) ||
+        (checkpoints != 0 && checkpoints != 1) ||
+        head_dim > ~0ull / (overlap ? 2ull : 1ull) ||
+        ratio > ~0ull / (overlap ? 2ull : 1ull)) {
+        atomicCAS(status, 0, 2); return;
+    }
+    unsigned long long factor = overlap ? 2ull : 1ull;
+    unsigned long long width = head_dim * factor, slots = ratio * factor;
+    if (width > ~0ull / slots || token_count > ~0ull / width ||
+        (checkpoints && token_count >= ~0ull / (width * slots))) {
+        atomicCAS(status, 0, 2); return;
+    }
+    unsigned long long extent = width * slots, emitted = 0ull;
+    for (unsigned long long token = 0ull; token < token_count; ++token) {
+        unsigned long long cursor = (first_cursor + token) % ratio;
+        float *before_kv = state_kv + (checkpoints ? token * extent : 0ull);
+        float *before_score = state_score + (checkpoints ? token * extent : 0ull);
+        float *after_kv = state_kv + (checkpoints ? (token + 1ull) * extent : 0ull);
+        float *after_score = state_score + (checkpoints ? (token + 1ull) * extent : 0ull);
+        if (checkpoints)
+            for (unsigned long long slot = 0ull; slot < slots; ++slot)
+                for (unsigned long long component = 0ull; component < factor; ++component) {
+                    unsigned long long i = slot * width + component * head_dim + lane;
+                    after_kv[i] = before_kv[i]; after_score[i] = before_score[i];
+                }
+        for (unsigned long long component = 0ull; component < factor; ++component) {
+            unsigned long long column = component * head_dim + lane;
+            unsigned long long i = (overlap ? ratio + cursor : cursor) * width + column;
+            float kv = token_kv[token * width + column];
+            float bias = qtype_value(ape + cursor * ape_row_bytes, column, ape_qtype);
+            float score = __fadd_rn(token_score[token * width + column], bias);
+            if (!isfinite(kv) || !isfinite(bias) || !isfinite(score)) atomicCAS(status, 0, 1);
+            after_kv[i] = kv; after_score[i] = score;
+        }
+        if (cursor + 1ull != ratio) continue;
+        double maximum = -INFINITY, denominator = 0.0, value = 0.0;
+        for (unsigned long long slot = 0ull; slot < ratio; ++slot) {
+            double score = (double)after_score[slot * width + lane];
+            if (score > maximum) maximum = score;
+            if (overlap) {
+                score = (double)after_score[(ratio + slot) * width + lane + head_dim];
+                if (score > maximum) maximum = score;
+            }
+        }
+        for (unsigned long long slot = 0ull; slot < ratio; ++slot) {
+            double score = (double)after_score[slot * width + lane];
+            double weight = exp(__dadd_rn(score, -maximum));
+            denominator = __dadd_rn(denominator, weight);
+            value = __dadd_rn(value, __dmul_rn(weight, (double)after_kv[slot * width + lane]));
+            if (overlap) {
+                unsigned long long i = (ratio + slot) * width + lane + head_dim;
+                weight = exp(__dadd_rn((double)after_score[i], -maximum));
+                denominator = __dadd_rn(denominator, weight);
+                value = __dadd_rn(value, __dmul_rn(weight, (double)after_kv[i]));
+            }
+        }
+        float result = (float)__ddiv_rn(value, denominator);
+        if (!isfinite(denominator) || denominator <= 0.0 || !isfinite(value) || !isfinite(result))
+            atomicCAS(status, 0, 1);
+        else compressed[emitted * head_dim + lane] = float_to_bf16_rne(result);
+        ++emitted;
+        if (overlap)
+            for (unsigned long long slot = 0ull; slot < ratio; ++slot)
+                for (unsigned long long component = 0ull; component < factor; ++component) {
+                    unsigned long long i = slot * width + component * head_dim + lane;
+                    after_kv[i] = after_kv[ratio * width + i];
+                    after_score[i] = after_score[ratio * width + i];
+                }
+    }
+}
+
 typedef struct {
     const float *local;
     const unsigned long long *local_positions;
@@ -20,8 +106,8 @@ typedef struct {
     int candidate_block_visible;
 } attention_reduce_rows;
 
-/* One launch projects the same activation twice. Both projections retain the
- * ordinary decoded-input source-order F64 dot and F32 publication. */
+/* Both projections certify the ordinary ordered F64 dot's F32 publication;
+ * ambiguous rows retain ordered evaluation on CUDA. */
 extern "C" __global__ void yvex_attention_bf16_pair(
     const unsigned char *first, unsigned long long first_row_bytes,
     const unsigned char *second, unsigned long long second_row_bytes,
@@ -30,28 +116,23 @@ extern "C" __global__ void yvex_attention_bf16_pair(
 {
     unsigned int lane = threadIdx.x & 31u;
     unsigned long long row_index =
-        (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
-    double first_dot = 0.0, second_dot = 0.0;
+        ((unsigned long long)blockIdx.x * blockDim.x + threadIdx.x) / 32u;
     float first_sum, second_sum;
     if (!status) return;
     if (!first || !second || !first_row_bytes || !second_row_bytes ||
         !row_width || !row_count || !input || !first_out || !second_out ||
-        blockDim.x == 0u) {
+        blockDim.x == 0u || blockDim.x % 32u) {
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
-    if (*status || row_index >= row_count) return;
+    if (__shfl_sync(0xffffffffu, *status, 0) || row_index >= row_count) return;
     first += row_index * first_row_bytes;
     second += row_index * second_row_bytes;
-    /* Independent accumulators share the activation read and expose instruction
-     * parallelism, without reassociating either source-ordered F64 dot. */
-    for (unsigned long long column = 0ull; column < row_width; ++column) {
-        double activation = (double)input[column];
-        first_dot += (double)qtype_value(first, column, YVEX_GGUF_QTYPE_BF16) * activation;
-        second_dot += (double)qtype_value(second, column, YVEX_GGUF_QTYPE_BF16) * activation;
-    }
-    first_sum = (float)first_dot;
-    second_sum = (float)second_dot;
+    first_sum = qtype_certified_dot_f64<YVEX_GGUF_QTYPE_BF16>(
+        first, input, row_width, YVEX_GGUF_QTYPE_BF16);
+    second_sum = qtype_certified_dot_f64<YVEX_GGUF_QTYPE_BF16>(
+        second, input, row_width, YVEX_GGUF_QTYPE_BF16);
+    if (lane) return;
     if (!isfinite(first_sum) || !isfinite(second_sum)) atomicCAS(status, 0, 1);
     else {
         first_out[row_index] = first_sum;
@@ -237,6 +318,127 @@ extern "C" __global__ void yvex_attention_reduce(
                                            denominator);
         if (!isfinite(published)) atomicCAS(status, 0, 1);
         else out[offset] = float_to_bf16_rne(published);
+    }
+}
+
+/* The small-head prefill realization permutes the original reduction tree
+ * into lane-private registers, then warp shuffles. Original thread bits4,3,2
+ * reduce in registers; bits1,0,7,6,5 reduce across lanes. Thus each ordered
+ * FMA, addition, softmax recurrence and final BF16 publication is unchanged.
+ * No block-wide synchronization is needed between independent heads. */
+extern "C" __global__ void yvex_attention_reduce_native_warp(
+    const float *query, const float *local, const unsigned long long *local_positions,
+    unsigned long long initial_local_count, unsigned long long local_stride,
+    const float *compressed, const unsigned long long *compressed_positions,
+    unsigned long long compressed_stride, const unsigned long long *selected,
+    const unsigned long long *selected_count_ptr, unsigned long long topk_capacity,
+    const float *sinks, unsigned long long query_heads, unsigned long long head_dim,
+    unsigned long long sliding_window, unsigned long long ratio, unsigned int attention_class,
+    unsigned long long phase_start_position, unsigned long long token_count,
+    int candidate_block_visible, float *out, int *status)
+{
+    unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
+    unsigned long long task = (unsigned long long)blockIdx.x * 8ull + warp;
+    unsigned long long ordinal = query_heads ? task / query_heads : token_count;
+    unsigned long long head = query_heads ? task % query_heads : query_heads;
+    if (!status || ordinal >= token_count || head >= query_heads) return;
+    if (!query || !local || !local_positions || !sinks || !out || !query_heads ||
+        !head_dim || head_dim > 512ull || !sliding_window || !token_count || blockDim.x != 256u ||
+        attention_class > 2u || (candidate_block_visible != 0 && candidate_block_visible != 1) ||
+        phase_start_position > ~0ull - ordinal || local_stride < head_dim ||
+        (attention_class != 0u && (!compressed || !compressed_positions || compressed_stride < head_dim)) ||
+        (attention_class == 1u && (!selected || !selected_count_ptr || !topk_capacity)) ||
+        (attention_class == 1u && ratio != 4ull) || (attention_class == 2u && ratio != 128ull) ||
+        (attention_class == 0u && ratio != 0ull)) {
+        if (!lane) atomicCAS(status, 0, 2);
+        return;
+    }
+    unsigned long long position = phase_start_position + ordinal;
+    unsigned long long history = position < sliding_window - 1ull ? position : sliding_window - 1ull;
+    unsigned long long local_offset = candidate_block_visible ? 0ull : initial_local_count + ordinal - history;
+    unsigned long long count = candidate_block_visible ? initial_local_count + token_count : history + 1ull;
+    unsigned long long compressed_count = attention_class == 0u ? 0ull : attention_class == 1u ?
+        selected_count_ptr[ordinal] : position / ratio + ((position + 1ull) % ratio == 0ull);
+    attention_reduce_rows rows = {local, local_positions, compressed, compressed_positions, selected,
+        initial_local_count, local_stride, compressed_stride, topk_capacity, sliding_window, ratio,
+        phase_start_position, token_count, attention_class, candidate_block_visible};
+    const float *q = query + task * head_dim;
+    float *output = out + task * head_dim;
+    unsigned base = ((lane & 16u) >> 3u) + ((lane & 8u) >> 3u) + ((lane & 7u) << 5u);
+    float cached_query[16], cached_row[16], values[16] = {};
+#pragma unroll
+    for (unsigned part = 0u; part < 2u; ++part) {
+#pragma unroll
+        for (unsigned j = 0u; j < 8u; ++j) {
+            unsigned i = base + j * 4u + part * 256u;
+            cached_query[part * 8u + j] = i < head_dim ? q[i] : 0.0f;
+            if (i < head_dim) output[i] = 0.0f;
+        }
+    }
+    if (__shfl_sync(0xffffffffu, *status, 0)) return;
+    float maximum = sinks[head], denominator = 1.0f;
+    for (unsigned pass = 0u; pass < 2u; ++pass)
+        for (unsigned long long candidate = 0ull; candidate < (pass ? compressed_count : count); ++candidate) {
+            int visible;
+            const float *row = attention_reduce_row(&rows, pass, ordinal, candidate, local_offset, &visible);
+            if (!visible) continue;
+            float dots[8] = {};
+#pragma unroll
+            for (unsigned part = 0u; part < 2u; ++part) {
+#pragma unroll
+                for (unsigned j = 0u; j < 8u; ++j) {
+                    unsigned i = base + j * 4u + part * 256u;
+                    cached_row[part * 8u + j] = i < head_dim ? row[i] : 0.0f;
+                    if (i < head_dim) dots[j] = fmaf(cached_query[part * 8u + j], cached_row[part * 8u + j], dots[j]);
+                }
+            }
+#pragma unroll
+            for (unsigned j = 0u; j < 4u; ++j) dots[j] = __fadd_rn(dots[j], dots[j + 4u]);
+#pragma unroll
+            for (unsigned j = 0u; j < 2u; ++j) dots[j] = __fadd_rn(dots[j], dots[j + 2u]);
+            float dot = __fadd_rn(dots[0], dots[1]);
+            dot = __fadd_rn(dot, __shfl_down_sync(0xffffffffu, dot, 16));
+            dot = __fadd_rn(dot, __shfl_down_sync(0xffffffffu, dot, 8));
+            dot = __fadd_rn(__fadd_rn(dot, 0.0f), 0.0f);
+            dot = __fadd_rn(dot, __shfl_down_sync(0xffffffffu, dot, 4));
+            dot = __fadd_rn(dot, __shfl_down_sync(0xffffffffu, dot, 2));
+            dot = __fadd_rn(dot, __shfl_down_sync(0xffffffffu, dot, 1));
+            float probability = 0.0f, alpha = 1.0f;
+            int failed = 0;
+            if (!lane) {
+                float score = dot * rsqrtf((float)head_dim);
+                if (!isfinite(score)) { atomicCAS(status, 0, 1); failed = 1; }
+                else if (score > maximum) {
+                    alpha = expf(maximum - score); maximum = score; probability = 1.0f;
+                    denominator = denominator * alpha + probability;
+                } else { probability = expf(score - maximum); denominator += probability; }
+            }
+            if (__shfl_sync(0xffffffffu, failed, 0)) return;
+            probability = __shfl_sync(0xffffffffu, probability, 0);
+            alpha = __shfl_sync(0xffffffffu, alpha, 0);
+#pragma unroll
+            for (unsigned part = 0u; part < 2u; ++part) {
+#pragma unroll
+                for (unsigned j = 0u; j < 8u; ++j)
+                    if (base + j * 4u + part * 256u < head_dim)
+                        values[part * 8u + j] = fmaf(
+                            probability, cached_row[part * 8u + j],
+                            values[part * 8u + j] * alpha);
+            }
+        }
+    denominator = __shfl_sync(0xffffffffu, denominator, 0);
+    if (!isfinite(denominator) || denominator <= 0.0f) { if (!lane) atomicCAS(status, 0, 1); return; }
+#pragma unroll
+    for (unsigned part = 0u; part < 2u; ++part) {
+#pragma unroll
+        for (unsigned j = 0u; j < 8u; ++j) {
+            unsigned i = base + j * 4u + part * 256u;
+            if (i < head_dim) {
+                float value = values[part * 8u + j] / denominator;
+                if (!isfinite(value)) atomicCAS(status, 0, 1);
+                else output[i] = float_to_bf16_rne(value);
+            }
+        }
     }
 }
 

@@ -484,6 +484,7 @@ static int runtime_attention_execution_descriptor_identity(
             result->runtime_model_identity, session_summary->backend,
             request->maximum_host_bytes, request->maximum_device_bytes,
             session_summary->workspace_bytes, session_summary->host_workspace_bytes,
+            session_summary->device_workspace_bytes,
             session_summary->device_workspace_bytes ? capacity_summary->identity : NULL,
             expected_workspace_identity, err) != YVEX_OK ||
         strcmp(expected_workspace_identity, session_summary->workspace_identity) != 0)
@@ -1786,8 +1787,8 @@ int yvex_graph_attention_operator_execute(const yvex_graph_attention_operator_re
     if (rc == YVEX_OK && (request->compare_backends || request->backend == YVEX_BACKEND_KIND_CUDA))
         rc = yvex_runtime_session_prepare_attention_workspace(
             session, selected_mode, request->operation_scope,
-            runtime_attention_evidence_levels[request->trace_policy], capacity,
-            request->token_count, 0ull, &failure, err);
+            runtime_attention_evidence_levels[request->trace_policy], 0, capacity,
+            request->token_count, request->token_count, 0ull, &failure, err);
     if (rc == YVEX_OK)
         rc = runtime_attention_execution_descriptor_identity(
             request, model, session, capacity, result, result->execution_descriptor_identity, err);

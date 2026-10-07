@@ -793,7 +793,10 @@ int yvex_runtime_transformer_execute_block(
         attention->layer_index != layer->layer_index ||
         attention->token_count != token_count ||
         attention->envelope_output_width != s->expanded_width ||
-        !attention->envelope_output || !expanded_output || !result ||
+        (!attention->envelope_output &&
+         !(backend == YVEX_BACKEND_KIND_CUDA && device_attention &&
+           context->options.evidence_level == YVEX_ATTENTION_EVIDENCE_NONE)) ||
+        !expanded_output || !result ||
         !yvex_core_u64_mul(token_count, s->expanded_width, &output_elements) ||
         !yvex_core_u64_mul(token_count, s->hidden_width, &hidden_elements) ||
         !yvex_core_u64_mul(token_count, s->residual_streams, &post_elements) ||
@@ -1147,7 +1150,7 @@ static int transformer_attention_configure(
 }
 static int transformer_prepare(yvex_runtime_transformer_context *context,
     const yvex_transformer_input_summary *input, const yvex_runtime_transformer_request *request,
-    yvex_graph_attention_state_summary *state, yvex_error *err)
+    yvex_graph_attention_state_summary *state, int device_input, yvex_error *err)
 {
     const yvex_transformer_plan_summary *plan =
         yvex_transformer_plan_summary_get(context->plan);
@@ -1246,7 +1249,8 @@ static int transformer_prepare(yvex_runtime_transformer_context *context,
         if (rc == YVEX_OK)
             rc = yvex_runtime_session_prepare_attention_workspace(
                 context->session, mode, YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE,
-                YVEX_ATTENTION_EVIDENCE_NONE, capacity, workspace_tokens,
+                YVEX_ATTENTION_EVIDENCE_NONE, device_input, capacity, workspace_tokens,
+                request->retain_prefix_checkpoints ? workspace_tokens : 0ull,
                 workspace_bytes, &failure, err);
         yvex_graph_attention_capacity_plan_close(&capacity);
         if (rc == YVEX_OK)
@@ -1261,6 +1265,16 @@ static int transformer_prepare(yvex_runtime_transformer_context *context,
     if (rc != YVEX_OK) return rc;
     return transformer_attention_configure(context, input, request, state, &session, err);
 }
+static int transformer_execution_prepare(yvex_runtime_transformer_context *context,
+    const yvex_transformer_input_summary *input, const yvex_runtime_transformer_request *request,
+    yvex_graph_attention_state_summary *state, int device_input, yvex_error *err)
+{
+    int rc = transformer_state_summary(context, state, err);
+    if (rc == YVEX_OK)
+        rc = transformer_prepare(context, input, request, state, device_input, err);
+    return rc;
+}
+
 static int transformer_core_features_execute(
     yvex_runtime_transformer_context *context, const unsigned int *token_ids, unsigned long long token_start,
     const float *features, const yvex_device_tensor *device_features,
@@ -1309,14 +1323,13 @@ static int transformer_core_features_execute(
     }
     context->busy = 1;
     (void)pthread_mutex_unlock(&context->mutex);
-    rc = transformer_state_summary(context, &before, err);
     input = (yvex_transformer_input_summary){
         .token_start = token_start, .token_count = token_count};
     request = (yvex_runtime_transformer_request){
         .backend = yvex_backend_kind_of(context->session_view->backend),
         .phase = YVEX_TRANSFORMER_PHASE_PREFILL, .chunk_tokens = token_count,
         .transaction_disposition = disposition};
-    if (rc == YVEX_OK) rc = transformer_prepare(context, &input, &request, &before, err);
+    rc = transformer_execution_prepare(context, &input, &request, &before, device_features != NULL, err);
     if (rc == YVEX_OK && device_features)
         rc = yvex_runtime_device_view_bind(
             &device_view, YVEX_EXECUTION_DEVICE_FEATURE_TAP, context->model,
@@ -1766,8 +1779,8 @@ int yvex_runtime_transformer_execute(yvex_runtime_transformer_context *context,
                                 : request->phase;
     rc = yvex_runtime_transformer_context_validate_input(context, input, err);
     if (rc == YVEX_OK) rc = transformer_runtime_buffers(context, request->chunk_tokens, err);
-    if (rc == YVEX_OK) rc = transformer_state_summary(context, &before, err);
-    if (rc == YVEX_OK) rc = transformer_prepare(context, input_summary, request, &before, err);
+    if (rc == YVEX_OK) rc = transformer_execution_prepare(context, input_summary, request, &before,
+        request->backend == YVEX_BACKEND_KIND_CUDA, err);
     result->token_start = result->position_before = input_summary->token_start;
     result->token_count = input_summary->token_count;
     result->phase = request->phase;

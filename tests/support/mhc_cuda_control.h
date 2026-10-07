@@ -2,7 +2,7 @@
  * This is migration preservation, not an upstream numerical oracle. */
 #ifndef TESTS_SUPPORT_MHC_CUDA_CONTROL_H
 #define TESTS_SUPPORT_MHC_CUDA_CONTROL_H
-#include "src/backend/cuda/private.h"
+#include "src/backend/cuda/attention_ops.h"
 #include <yvex/internal/program_stage.h>
 #include <yvex/internal/moe.h>
 #include <yvex/internal/quant_numeric.h>

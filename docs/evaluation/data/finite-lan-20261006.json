@@ -98,7 +98,7 @@
   },
   "deepseek_preserved": {
     "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
-    "engine_generation": 7,
+    "engine_generation": 27,
     "context": 32768,
     "prefill_chunk": 64,
     "strategy": "speculative",
@@ -106,7 +106,7 @@
     "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
     "binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
     "specialization_identity": "6c3e33a0ea61e9a371dc551d595b5a68e6f28e3059cde0ee49fc1370939c8350",
-    "fresh_synthetic_recovery": "HTTP 200; 7 prompt / 1 committed output token; natural stop; explicit output bound 3",
+    "fresh_synthetic_recovery": "Historical post-window HTTP 200; 7 prompt / 1 committed output token; natural stop; explicit output bound 3, not replayed after every benchmark window",
     "case_prompt_replayed": false
   },
   "https_management": {
@@ -121,6 +121,17 @@
     "sessions": 0, "engine_work_leases_attached_clients": 0,
     "transient_current_bytes": 0,
     "finite_persistent_workspace_host_bytes": 214580740
+  },
+  "latest_coordinated_window": {
+    "observed_date_utc": "2026-10-07",
+    "source": "e771219f919bdb8d91a7a47702d5e252edf7fa13 plus frozen c4031f5a1b5fe42ccc9803a91a23ad608c27bff82dc1d5b310f78197d9dcadf0",
+    "gate": "live.deepseek.generation PASS; sequential isolated CPU/CUDA target-only and DSpark, not public finite remote requalification",
+    "finite_engine_generation_unchanged": 1,
+    "deepseek_restored_generation": 27,
+    "production_binary_replaced": false,
+    "listener_trust_grants_changed": false,
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/integrated-generation-lifecycle-v31",
+    "case_prompt_replayed": false
   },
   "consumer_rules": {
     "verify": ["approved host pin", "request/schema/alias", "engine generation", "ordered candidate IDs", "six model/input-policy identities"],

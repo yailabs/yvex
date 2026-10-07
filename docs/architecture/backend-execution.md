@@ -142,6 +142,23 @@ Unsupported mandatory semantics fail closed. A faster kernel is not evidence of
 faster model execution; compare complete workload latency, preparation, memory
 and numerical effect using the [benchmark methodology](../evaluation/benchmarks/methodology.md).
 
+At NONE evidence scope, attention with a device result does not manufacture an
+empty host output. Both portable CUDA row orchestration and admitted device-native
+execution consume that typed device view through MoE and the post block. The
+execution class selects orchestration, not whether the activation is host-backed.
+CPU still requires host input; unmatched device/result tuples, foreign storage,
+invalid geometry or unwritten operands refuse at their typed owners. This removes
+an obsolete host-pointer requirement, not numerical validation or transaction
+completion. Diagnostic host publication remains independently requested.
+
+CUDA attention workspace lowering distinguishes host ingress from borrowed
+device activation ingress. Ordinary device-ingress execution reserves no host
+copy of the ingress component; host-input and full forensic-evidence paths
+retain their complete staging bound. Runtime forwards this placement fact into
+capacity admission and workspace preparation. Persistent state, prefix
+checkpoints, status, publication and device scratch keep their original owners
+and lifetimes; the smaller host bound does not remove validation or state work.
+
 ## Backend boundary
 
 Upstream supplies legal operations, package representation, numerical
@@ -160,6 +177,30 @@ status storage likewise has its own lifetime: it cannot consume or rewind an
 enclosing executor's temporary arena. Shared status transactions retain their
 explicit begin/completion owner.
 
+The competitive candidate adds a checked completion scope to serialized physical
+SSA program execution. Its prepared program owner allocates a backend-declared
+completion workspace outside the temporary arena. CUDA uses one latched status
+word across participating projections, mHC and BF16 operations on the execution
+stream; dependent intermediate views are not public outputs. The runner always
+completes the scope, including after cancellation or refusal, before admitting
+outputs. Numerical failures invalidate all program outputs and a fresh scope
+resets the word only after completion. An unobserved device completion makes
+the backend cleanup-only. Nesting refuses, host observations retain their own
+checked barrier, and standalone calls retain immediate validation. CPU and
+other backends without paired scope hooks retain synchronous operation behavior.
+An earlier serialized transformer producer may hand off its pending numerical
+status through an ordered device copy into the program-owned word. Beginning
+the successor never clears an unobserved predecessor failure. Output-program
+admission charges this completion workspace along with all other compiled
+device storage; a one-byte-short budget still refuses before publication.
+This change alters submission/status lifetime, not arithmetic, reduction order,
+physical precision or state transactions. The source-stable complete-model
+generation gate additionally qualifies replay, target/DSpark equivalence,
+refusal, cancellation and cleanup at the exercised bounded scope.
+[Integration evidence](../evaluation/retained-observations.md#competitive-computational-integration-2026-10-07)
+separates that gate from coding timing and the successful repeated-8K control.
+The earlier 8K refusal did not reproduce; its historical cause is not inferred.
+
 CUDA does not branch on a family name, recover expert compatibility, select a
 numerically different activation representation, or reconstruct a missing
 physical computational or package plan from dimensions. An explicit CUDA
@@ -172,11 +213,12 @@ topology, not the numerical class; a finite F32 warp reduction is not an
 equivalent substitute. Q8 activation keeps its separately admitted reduction.
 Non-finite results still refuse through the device-status completion owner.
 
-Independent ordered decoded dots occupy independent CUDA threads rather than
+The earlier bounded launch-geometry repair mapped independent ordered decoded
+dots to independent CUDA threads rather than
 warps whose other lanes immediately return. Generic launch geometry maps each
 row/input pair once, bounds the task product and covers partial tiles; grouped
 projections preserve group and input strides. Paired BF16 projections likewise
-assign both dots for one row to one thread. Each dot still uses the canonical
+assigned both dots for one row to one thread. That repair used the canonical
 source-order F64 helper and the same publication cast. The separately admitted
 Q8 reduction and narrow block-owned F32 class are unchanged. This changes neither
 buffers nor runtime state, synchronization, routing populations or numerical
@@ -191,6 +233,15 @@ Neither change introduces a parallel sum, alternative precision or routing
 policy. [Pipeline characterization](../evaluation/retained-observations.md#deepseek-gb10-inference-pipeline-2026-09-30)
 separates these kernel gains from canonical arena sizing and complete-request
 preparation/teardown cost.
+
+The competitive computational integration subsequently adds the
+[certified equivalent decoded-dot realization](../contracts/numerical-abi.md#ordered-decoded-dot-publication).
+Parallel work is admitted only when conservative bounds prove identical F32
+publication to literal source-ordered F64. Otherwise the CUDA owner retains
+literal ordered evaluation. This supersedes the implementation shape, not the
+earlier earned evidence or its numerical contract. Prepared lossless digit
+layouts are bounded backend resources, not a new quantization; the unchanged
+artifact/binding and final F32-to-BF16 publication remain authoritative.
 
 Exact MiniMax output-linear requirements remain source/package numerical facts.
 Runtime component specialization resolves them to exact generic linear

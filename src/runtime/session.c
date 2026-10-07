@@ -14,7 +14,7 @@
 #include <yvex/internal/program_physical.h>
 
 typedef struct {
-    unsigned long long required, logical_required, host_total, device_total, generation;
+    unsigned long long required, logical_required, device_required, host_total, device_total, generation;
 } runtime_workspace_requirements;
 
 static int runtime_sequence_state_summary_record(
@@ -109,35 +109,6 @@ int yvex_runtime_device_view_bind(
     return yvex_execution_device_view_validate(out, err);
 }
 
-static int runtime_workspace_state_envelope(
-    const yvex_graph_attention_capacity_summary *summary,
-    const yvex_attention_state_recipe *layer,
-    yvex_attention_state_recipe *envelope, yvex_error *err) {
-    unsigned int index;
-    if (!summary || !layer || !envelope) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime.session.workspace",
-                       "capture capacity envelope requires complete recipes");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    *envelope = *layer;
-    for (index = 0u; index < envelope->component_count; ++index) {
-        yvex_attention_state_component_recipe *component =
-            &envelope->components[index];
-        unsigned long long maximum;
-        if (component->kind != YVEX_ATTENTION_STATE_COMPONENT_HISTORY)
-            continue;
-        if (component->binding >= YVEX_ATTENTION_STATE_BINDING_COUNT) {
-            yvex_error_set(err, YVEX_ERR_FORMAT, "runtime.session.workspace",
-                           "capture capacity envelope contains an invalid binding");
-            return YVEX_ERR_FORMAT;
-        }
-        maximum = summary->components[component->binding].maximum_capacity;
-        if (maximum > component->capacity) component->capacity = maximum;
-    }
-    envelope->identity[0] = '\0';
-    return yvex_attention_state_recipe_seal(envelope, err);
-}
-
 int yvex_runtime_private_attention_workspace_required(
     const yvex_attention_summary *summary,
     const yvex_attention_layer_plan *layers, unsigned long long layer_count,
@@ -145,7 +116,8 @@ int yvex_runtime_private_attention_workspace_required(
     yvex_attention_execution_mode mode,
     yvex_attention_operation_scope scope,
     yvex_attention_evidence_level evidence_level,
-    unsigned long long physical_row_capacity, int deferred,
+    unsigned long long physical_row_capacity, unsigned long long prefix_checkpoint_capacity,
+    int deferred, int device_input,
     unsigned long long *required_bytes, yvex_error *err)
 {
     const yvex_graph_attention_capacity_summary *capacity_summary =
@@ -153,7 +125,8 @@ int yvex_runtime_private_attention_workspace_required(
     unsigned long long index, staging_bytes = 0ull;
     if (required_bytes) *required_bytes = 0ull;
     if (!summary || !layers || !layer_count || !capacity_summary ||
-        !required_bytes || !physical_row_capacity ||
+        !required_bytes || !physical_row_capacity || prefix_checkpoint_capacity > physical_row_capacity ||
+        (device_input != 0 && device_input != 1) ||
         mode > YVEX_ATTENTION_EXECUTION_FULL ||
         scope > YVEX_ATTENTION_OPERATION_RELEASE_SET ||
         evidence_level > YVEX_ATTENTION_EVIDENCE_FULL ||
@@ -167,7 +140,6 @@ int yvex_runtime_private_attention_workspace_required(
     for (index = 0ull; index < layer_count; ++index) {
         const yvex_graph_attention_capacity_layer *capacity_layer =
             yvex_graph_attention_capacity_plan_layer(capacity, index);
-        yvex_attention_state_recipe envelope;
         yvex_attention_workspace_recipe recipe = {0};
         yvex_attention_failure graph_failure = {0};
         unsigned long long layer_bytes;
@@ -177,15 +149,22 @@ int yvex_runtime_private_attention_workspace_required(
                            "compiled attention staging layer is unavailable");
             return YVEX_ERR_STATE;
         }
-        rc = runtime_workspace_state_envelope(
-            capacity_summary, &capacity_layer->recipe, &envelope, err);
+        /* State publishes this layer's capacity into the backend request.
+         * A global maximum is not the allocation size of every layer. */
+        rc = yvex_attention_workspace_recipe_build(
+            &layers[index], &capacity_layer->recipe, mode, scope, evidence_level,
+            physical_row_capacity, &recipe, &graph_failure, err);
+        if (rc == YVEX_OK) {
+            recipe.prefix_checkpoint_capacity = prefix_checkpoint_capacity;
+            rc = yvex_attention_workspace_recipe_seal(&recipe, err);
+        }
         if (rc == YVEX_OK)
-            rc = yvex_attention_workspace_recipe_build(
-                &layers[index], &envelope, mode, scope, evidence_level,
-                physical_row_capacity, &recipe, &graph_failure, err);
-        if (rc == YVEX_OK)
-            rc = yvex_backend_attention_workspace_required_from_recipe(
-                &recipe, &layer_bytes, err);
+            rc = deferred == 2
+                ? yvex_attention_publication_workspace_required(&recipe, 1, &layer_bytes, err)
+                : deferred == 1
+                    ? yvex_backend_attention_host_workspace_required_from_recipe(
+                        &recipe, device_input, &layer_bytes, err)
+                    : yvex_backend_attention_workspace_required_from_recipe(&recipe, &layer_bytes, err);
         if (rc != YVEX_OK) return rc;
         if (deferred) {
             if (!yvex_core_u64_add(staging_bytes, layer_bytes,
@@ -306,9 +285,10 @@ int yvex_runtime_private_session_sequence_state_close(
 
 static int runtime_session_workspace_requirements(
     const yvex_runtime_execution_session *session, yvex_runtime_execution_mode mode,
-    yvex_runtime_execution_scope scope, yvex_attention_evidence_level evidence_level,
+    yvex_runtime_execution_scope scope, yvex_attention_evidence_level evidence_level, int device_input,
     const yvex_graph_attention_capacity_plan *capacity, const yvex_graph_attention_state_summary *state,
-    unsigned long long physical_row_capacity, unsigned long long minimum_bytes,
+    unsigned long long physical_row_capacity, unsigned long long prefix_checkpoint_capacity,
+    unsigned long long minimum_bytes,
     runtime_workspace_requirements *requirements,
     yvex_model_engine_failure *failure, yvex_error *err) {
     static const yvex_attention_execution_mode graph_modes[] = {
@@ -354,13 +334,27 @@ static int runtime_session_workspace_requirements(
     }
     if (yvex_runtime_private_attention_workspace_required(
             attention_summary, layers, count, capacity, graph_mode, graph_scope,
-            evidence_level, physical_row_capacity, deferred,
+            evidence_level, physical_row_capacity, prefix_checkpoint_capacity, deferred, device_input,
             &requirements->required, err) != YVEX_OK)
         return yvex_error_code(err);
-    /* Deferred layer completions retain graph publications until the whole transformer
-     * transaction resolves, so the logical arena owns the same summed lifetime envelope. */
+    /* Graph publications have a transaction lifetime but do not own the
+     * backend's staging histories or device scratch. Admit their own bound. */
     requirements->logical_required = requirements->required;
+    if (deferred && yvex_runtime_private_attention_workspace_required(
+            attention_summary, layers, count, capacity, graph_mode, graph_scope,
+            evidence_level, physical_row_capacity, prefix_checkpoint_capacity, 2, device_input,
+            &requirements->logical_required, err) != YVEX_OK)
+        return yvex_error_code(err);
+    /* Device attention scratch is reset between layers on the same ordered
+     * stream. Host publications remain transaction-owned until all deferred
+     * completions settle; they must not share that shorter device lifetime. */
+    if (yvex_runtime_private_attention_workspace_required(
+            attention_summary, layers, count, capacity, graph_mode, graph_scope,
+            evidence_level, physical_row_capacity, prefix_checkpoint_capacity, 0, device_input,
+            &requirements->device_required, err) != YVEX_OK)
+        return yvex_error_code(err);
     if (minimum_bytes > requirements->required) requirements->required = minimum_bytes;
+    if (minimum_bytes > requirements->device_required) requirements->device_required = minimum_bytes;
     if (deferred) {
         const yvex_moe_plan_summary *target =
             yvex_moe_plan_summary_get(session->engine->view.moe);
@@ -387,6 +381,8 @@ static int runtime_session_workspace_requirements(
         requirements->required = session->summary.host_workspace_bytes;
     if (session->summary.workspace_bytes > requirements->logical_required)
         requirements->logical_required = session->summary.workspace_bytes;
+    if (session->summary.device_workspace_bytes > requirements->device_required)
+        requirements->device_required = session->summary.device_workspace_bytes;
     if (!requirements->required ||
         !yvex_core_u64_add(session->summary.host_resident_bytes, requirements->logical_required,
                            &requirements->host_total) ||
@@ -403,7 +399,7 @@ static int runtime_session_workspace_requirements(
             requirements->host_total,
             "descriptor-bucket CUDA staging exceeds the session host budget",
             err, YVEX_ERR_BOUNDS);
-    if (!yvex_core_u64_add(session->summary.device_resident_bytes, requirements->required,
+    if (!yvex_core_u64_add(session->summary.device_resident_bytes, requirements->device_required,
                            &requirements->device_total) ||
         !yvex_core_u64_add(session->summary.workspace_generation, 1ull, &requirements->generation) ||
         (session->maximum_device_bytes && requirements->device_total > session->maximum_device_bytes))
@@ -459,8 +455,9 @@ static int runtime_session_workspace_rollback(
 
 int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_session *session,
     yvex_runtime_execution_mode mode, yvex_runtime_execution_scope scope,
-    yvex_attention_evidence_level evidence_level, const yvex_graph_attention_capacity_plan *capacity,
-    unsigned long long physical_row_capacity, unsigned long long minimum_bytes,
+    yvex_attention_evidence_level evidence_level, int device_input, const yvex_graph_attention_capacity_plan *capacity,
+    unsigned long long physical_row_capacity, unsigned long long prefix_checkpoint_capacity,
+    unsigned long long minimum_bytes,
     yvex_model_engine_failure *failure, yvex_error *err) {
     yvex_backend_tensor_desc device_descriptor;
     yvex_attention_workspace *logical_candidate = NULL;
@@ -476,7 +473,8 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
     yvex_attention_state_provider *state_provider;
     int rc = YVEX_OK;
     if (!session || !yvex_graph_attention_capacity_plan_summary(capacity) ||
-        !physical_row_capacity ||
+        !physical_row_capacity || prefix_checkpoint_capacity > physical_row_capacity ||
+        (device_input != 0 && device_input != 1) ||
         (unsigned int)mode > (unsigned int)YVEX_RUNTIME_MODE_FULL || evidence_level > YVEX_ATTENTION_EVIDENCE_FULL ||
         session->summary.backend != YVEX_BACKEND_KIND_CUDA || !session->backend)
         return yvex_runtime_private_reject(
@@ -530,13 +528,13 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
         }
     }
     rc = runtime_session_workspace_requirements(
-        session, mode, scope, evidence_level, capacity, &state,
-        physical_row_capacity, minimum_bytes, &requirements, failure, err);
+        session, mode, scope, evidence_level, device_input, capacity, &state,
+        physical_row_capacity, prefix_checkpoint_capacity, minimum_bytes, &requirements, failure, err);
     if (rc != YVEX_OK) goto done;
     rc = yvex_runtime_workspace_identity_compute(
         session->engine->summary.runtime_model_identity, session->summary.backend,
         session->maximum_host_bytes, session->maximum_device_bytes,
-        session->summary.workspace_bytes, requirements.required,
+        requirements.logical_required, requirements.required, requirements.device_required,
         yvex_graph_attention_capacity_plan_summary(capacity)->identity, workspace_identity, err);
     if (rc != YVEX_OK) goto done;
     if (requirements.logical_required > session->summary.workspace_bytes) {
@@ -554,7 +552,7 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
         if (!session->workspace || !session->summary.host_workspace_owned ||
             !session->summary.host_workspace_pinned ||
             session->summary.host_workspace_bytes != requirements.required ||
-            session->summary.device_workspace_bytes != requirements.required ||
+            session->summary.device_workspace_bytes != requirements.device_required ||
             !yvex_backend_host_workspace_summary_get(session->backend, &workspace) ||
             !workspace.attached || !workspace.owned || !workspace.pinned ||
             workspace.capacity != requirements.required) {
@@ -590,7 +588,7 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
     device_descriptor.name = "runtime-attention-workspace";
     device_descriptor.dtype = YVEX_DTYPE_I8;
     device_descriptor.rank = 1u;
-    device_descriptor.dims[0] = device_descriptor.bytes = requirements.required;
+    device_descriptor.dims[0] = device_descriptor.bytes = requirements.device_required;
     rc = yvex_backend_tensor_alloc(session->backend, &device_descriptor,
                                    &session->workspace, err);
     if (rc == YVEX_OK)
@@ -599,7 +597,7 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
     if (rc != YVEX_OK) {
         yvex_runtime_private_failure_record(
             failure, YVEX_MODEL_ENGINE_FAILURE_BACKEND, "device-workspace",
-            requirements.required, 0ull, "CUDA device workspace allocation failed");
+            requirements.device_required, 0ull, "CUDA device workspace allocation failed");
         goto rollback;
     }
     rc = yvex_backend_host_workspace_prepare_owned(
@@ -622,7 +620,7 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
     session->summary.host_workspace_peak_bytes = workspace.peak;
     session->summary.host_workspace_owned = workspace.owned;
     session->summary.host_workspace_pinned = workspace.pinned;
-    session->summary.device_workspace_bytes = requirements.required;
+    session->summary.device_workspace_bytes = requirements.device_required;
     session->summary.workspace_generation = requirements.generation;
     session->summary.peak_host_bytes = requirements.host_total;
     session->summary.peak_device_bytes = requirements.device_total;

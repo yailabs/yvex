@@ -13,12 +13,13 @@
 extern "C" {
 #endif
 
-#define YVEX_EXECUTION_BATCH_SCHEMA_V2 2u
-#define YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V2 2u
-#define YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V2 2u
+#define YVEX_EXECUTION_BATCH_SCHEMA_V3 3u
+#define YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V3 3u
+#define YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3 3u
 #define YVEX_EXPERT_WORKLIST_SCHEMA_V1 1u
 #define YVEX_EXPERT_WORKLIST_OBSERVATION_SCHEMA_V1 1u
 #define YVEX_EXPERT_WORKLIST_HISTOGRAM_CAP 17u
+#define YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH 1024ull
 
 typedef enum {
     YVEX_ENGINE_IMPLEMENTATION_PORTABLE_F32 = 0,
@@ -108,6 +109,9 @@ typedef struct {
 typedef struct {
     unsigned int schema_version;
     unsigned long long supported_width_mask;
+    /* Optional contiguous prefill extent above the sparse low-width mask.
+     * Zero retains mask-only admission. Never widens verification or sessions. */
+    unsigned long long prefill_maximum_width;
     unsigned long long matrix_tile_minimum;
     yvex_engine_implementation row_implementation, matrix_implementation;
     char identity[YVEX_SHA256_HEX_CAP];
@@ -169,6 +173,8 @@ int yvex_expert_worklist_policy_seal(yvex_expert_worklist_policy *policy,
                                      yvex_error *err);
 int yvex_expert_worklist_policy_validate(
     const yvex_expert_worklist_policy *policy, yvex_error *err);
+int yvex_expert_worklist_width_admitted(const yvex_expert_worklist_policy *policy,
+    yvex_execution_phase phase, unsigned long long width);
 int yvex_expert_worklist_build(const yvex_expert_worklist_request *request,
                                const yvex_expert_worklist_storage *storage,
                                yvex_expert_worklist *worklist, yvex_error *err);

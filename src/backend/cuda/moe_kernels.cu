@@ -309,6 +309,7 @@ extern "C" __global__ void yvex_expert_worklist_build_cuda(
     unsigned long long *source_rows, unsigned long long *destination_rows,
     yvex_expert_worklist_observation *summary,
     unsigned long long supported_width_mask,
+    unsigned long long prefill_maximum_width, unsigned int phase,
     unsigned long long tensor_core_minimum,
     unsigned long long admitted_width, unsigned int provenance, int *status)
 {
@@ -324,7 +325,11 @@ extern "C" __global__ void yvex_expert_worklist_build_cuda(
             expert_count > blockDim.x || !order || !expert_ids || !bucket_offsets ||
             !bucket_populations || !source_rows || !destination_rows || !summary ||
             !(supported_width_mask & 2ull) || supported_width_mask & 1ull ||
-            row_count >= 63ull || !(supported_width_mask & (1ull << row_count)) ||
+            (row_count < 63ull ? !(supported_width_mask & (1ull << row_count)) :
+             (phase != YVEX_EXECUTION_PHASE_PREFILL ||
+              supported_width_mask != 0x7ffffffffffffffeull ||
+              row_count > prefill_maximum_width ||
+              prefill_maximum_width > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH)) ||
             !admitted_width || provenance > YVEX_EXECUTION_BATCH_COMPILED_COMPATIBLE ||
             row_count > ~0ull / topk)) {
             atomicCAS(status, 0, 2);
@@ -411,31 +416,36 @@ extern "C" __global__ void yvex_expert_worklist_build_cuda(
         }
 }
 
-static __device__ int worklist_tensor_core_pair(
-    unsigned long long ordered_pair, const unsigned long long *bucket_offsets,
+/* Matrix and scalar work partition the same expert buckets. Scalar blocks
+ * visit only the sub-threshold bucket's real pairs; no binary search or
+ * pair-sized grid is needed to discover that a matrix bucket owns the work. */
+static __device__ int worklist_scalar_span(
+    unsigned long long task, unsigned long long pair_count,
+    unsigned long long expert_count, const unsigned long long *bucket_offsets,
     const unsigned long long *bucket_populations,
     const yvex_expert_worklist_observation *summary,
-    unsigned long long tensor_core_minimum, int *status)
+    unsigned long long tensor_core_minimum, unsigned long long *first,
+    unsigned long long *count, int *status)
 {
-    if (!tensor_core_minimum) return 0;
+    if (!tensor_core_minimum) {
+        *first = task;
+        *count = 1ull;
+        return task < pair_count;
+    }
     if (!bucket_offsets || !bucket_populations || !summary ||
-        !summary->bucket_count) {
+        !summary->bucket_count || summary->bucket_count > expert_count ||
+        summary->bucket_count > pair_count) {
         atomicCAS(status, 0, 2);
         return 0;
     }
-    unsigned long long low = 0ull, high = summary->bucket_count;
-    while (low + 1ull < high) {
-        unsigned long long middle = low + (high - low) / 2ull;
-        if (bucket_offsets[middle] <= ordered_pair) low = middle;
-        else high = middle;
-    }
-    unsigned long long offset = bucket_offsets[low];
-    unsigned long long population = bucket_populations[low];
-    if (ordered_pair < offset || ordered_pair - offset >= population) {
+    if (task >= summary->bucket_count) return 0;
+    *first = bucket_offsets[task];
+    *count = bucket_populations[task];
+    if (!*count || *first > pair_count || *count > pair_count - *first) {
         atomicCAS(status, 0, 2);
         return 0;
     }
-    return population >= tensor_core_minimum;
+    return *count < tensor_core_minimum;
 }
 
 extern "C" __global__ void yvex_moe_grouped_up_rows(
@@ -466,23 +476,25 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     }
     unsigned int lane = threadIdx.x & 31u;
     unsigned long long warp = (unsigned long long)(threadIdx.x >> 5u);
-    /* A row block stays within one ordered pair so its warps can reuse one exact activation. */
-    unsigned long long rows_per_pair = intermediate_width / 8ull +
-                                       (intermediate_width % 8ull != 0ull);
-    unsigned long long ordered_pair = (unsigned long long)blockIdx.x / rows_per_pair;
-    unsigned long long output_row = ((unsigned long long)blockIdx.x % rows_per_pair) *
-                                    8ull + warp;
-    if (!status || *status || ordered_pair >= pair_count) return;
+    if (!status || *status) return;
     if (!gate || !up || !input || !intermediate || !topk ||
         !gate_row_bytes || !up_row_bytes || !input_extent ||
-        !intermediate_width || !isfinite(limit) || limit <= 0.0) {
+        !intermediate_width || !isfinite(limit) || limit <= 0.0 ||
+        (tensor_core_minimum && !q8_input)) {
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
-    if (worklist_tensor_core_pair(
-            ordered_pair, bucket_offsets, bucket_populations, summary,
-            tensor_core_minimum, status)) return;
-    if (*status) return;
+    unsigned long long rows_per_pair = intermediate_width / 8ull +
+                                       (intermediate_width % 8ull != 0ull);
+    unsigned long long task = (unsigned long long)blockIdx.x / rows_per_pair;
+    unsigned long long output_row = ((unsigned long long)blockIdx.x % rows_per_pair) *
+                                    8ull + warp;
+    unsigned long long first, count;
+    if (!worklist_scalar_span(task, pair_count, expert_count,
+            bucket_offsets, bucket_populations, summary,
+            tensor_core_minimum, &first, &count, status)) return;
+    for (unsigned long long ordinal = 0ull; ordinal < count; ++ordinal) {
+    unsigned long long ordered_pair = first + ordinal;
     unsigned long long source_pair = order ? order[ordered_pair] : ordered_pair;
     if (source_pair >= pair_count) {
         if (!lane) atomicCAS(status, 0, 2);
@@ -528,6 +540,7 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
             atomicCAS(status, 0, 1);
         else intermediate[ordered_pair * intermediate_width + output_row] = value;
     }
+    }
 }
 
 extern "C" __global__ void yvex_moe_grouped_down_rows(
@@ -552,21 +565,23 @@ extern "C" __global__ void yvex_moe_grouped_down_rows(
     }
     unsigned int lane = threadIdx.x & 31u;
     unsigned long long warp = (unsigned long long)(threadIdx.x >> 5u);
-    /* The pair-local block contract also makes partial output-row groups synchronization-safe. */
-    unsigned long long rows_per_pair = hidden / 8ull + (hidden % 8ull != 0ull);
-    unsigned long long ordered_pair = (unsigned long long)blockIdx.x / rows_per_pair;
-    unsigned long long output_row = ((unsigned long long)blockIdx.x % rows_per_pair) *
-                                    8ull + warp;
-    if (!status || *status || ordered_pair >= pair_count) return;
-    if (!down || !intermediate || !pair_outputs || !topk || !row_bytes ||
-        !intermediate_extent || (q8_input && row_bytes % intermediate_extent)) {
+    if (!status || *status) return;
+    if (!down || !intermediate || !pair_outputs || !topk || !row_bytes || !hidden ||
+        !intermediate_extent || (q8_input && row_bytes % intermediate_extent) ||
+        (tensor_core_minimum && !q8_input)) {
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
-    if (worklist_tensor_core_pair(
-            ordered_pair, bucket_offsets, bucket_populations, summary,
-            tensor_core_minimum, status)) return;
-    if (*status) return;
+    unsigned long long rows_per_pair = hidden / 8ull + (hidden % 8ull != 0ull);
+    unsigned long long task = (unsigned long long)blockIdx.x / rows_per_pair;
+    unsigned long long output_row = ((unsigned long long)blockIdx.x % rows_per_pair) *
+                                    8ull + warp;
+    unsigned long long first, count;
+    if (!worklist_scalar_span(task, pair_count, expert_count,
+            bucket_offsets, bucket_populations, summary,
+            tensor_core_minimum, &first, &count, status)) return;
+    for (unsigned long long ordinal = 0ull; ordinal < count; ++ordinal) {
+    unsigned long long ordered_pair = first + ordinal;
     unsigned long long source_pair = order ? order[ordered_pair] : ordered_pair;
     if (source_pair >= pair_count) {
         if (!lane) atomicCAS(status, 0, 2);
@@ -599,6 +614,7 @@ extern "C" __global__ void yvex_moe_grouped_down_rows(
         float value = float_to_bf16_rne(dot);
         if (!isfinite(value)) atomicCAS(status, 0, 1);
         else pair_outputs[source_pair * hidden + output_row] = value;
+    }
     }
 }
 

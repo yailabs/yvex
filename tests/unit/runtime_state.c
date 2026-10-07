@@ -386,7 +386,7 @@ static int test_workspace_recipe_identity(void)
     unsigned int index;
 
     memset(&recipe, 0, sizeof(recipe));
-    recipe.schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1;
+    recipe.schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3;
     recipe.layer_index = 1ull;
     recipe.token_capacity = 4ull;
     recipe.mode = YVEX_ATTENTION_EXECUTION_FULL;
@@ -396,7 +396,7 @@ static int test_workspace_recipe_identity(void)
                    sizeof(recipe.state_recipe_identity), "%064x", 0x713u);
     for (index = 0u; index < recipe.component_count; ++index) {
         recipe.components[index].schema_version =
-            YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1;
+            YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3;
         recipe.components[index].ordinal = index;
         recipe.components[index].kind = index == 0u
                                             ? YVEX_ATTENTION_WORKSPACE_INGRESS
@@ -433,6 +433,11 @@ static int test_workspace_recipe_identity(void)
             strcmp(baseline, changed.identity) != 0,
         "component-extent mutation changes workspace recipe identity");
     changed = recipe;
+    changed.schema_version = 1u;
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_recipe_seal(&changed, &err) == YVEX_ERR_INVALID_ARG,
+        "superseded workspace recipe layout refuses before reading its components");
+    changed = recipe;
     changed.components[1].kind = changed.components[0].kind;
     YVEX_TEST_ASSERT(
         yvex_attention_workspace_recipe_seal(&changed, &err) == YVEX_ERR_FORMAT,
@@ -450,6 +455,7 @@ static int test_workspace_capture_geometry(const state_plan_fixture *fixture)
     const yvex_attention_workspace_component *candidate = NULL;
     const yvex_attention_workspace_component *positions = NULL;
     const yvex_attention_workspace_component *scores = NULL, *valid = NULL;
+    const yvex_attention_workspace_component *projected = NULL;
     yvex_attention_failure failure;
     yvex_error err;
     unsigned int index;
@@ -512,12 +518,23 @@ static int test_workspace_capture_geometry(const state_plan_fixture *fixture)
             scores = component;
         else if (component->kind == YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES)
             valid = component;
+        else if (component->kind == YVEX_ATTENTION_WORKSPACE_MAIN_PROJECTED_VALUES)
+            projected = component;
     }
     YVEX_TEST_ASSERT(
         positions && positions->element_count == 512ull && positions->scales_with_tokens &&
             scores && scores->element_count == 131073ull && !scores->scales_with_tokens &&
             valid && valid->element_count == scores->element_count && !valid->scales_with_tokens,
         "deep CSA recipe reserves selected positions and token-local candidate scratch");
+    YVEX_TEST_ASSERT(projected && projected->scales_with_tokens &&
+        projected->element_count > 0ull &&
+        projected->lifetime == YVEX_ATTENTION_WORKSPACE_EXECUTION,
+        "compressor projections reserve actual prompt rows independently from causal state");
+    for (index = 0u; index < index_state.component_count; ++index)
+        if (index_state.components[index].binding == YVEX_ATTENTION_STATE_BINDING_MAIN_ROLLING)
+            YVEX_TEST_ASSERT(projected->element_count ==
+                index_state.components[index].rolling.state_width,
+                "projected compressor width derives from its admitted state recipe");
     return 0;
 }
 
@@ -847,9 +864,15 @@ static int state_prepare(test_state *state, const yvex_attention_layer_plan *lay
                                  ? 384ull : 6ull;
     request.attention_plan_identity = plan_identity;
     yvex_error_clear(&err);
-    return state_recipe_project(layer, &request, &recipe, &failure, &err) == YVEX_OK &&
-           state->prepare(state->context, layer->layer_index, &recipe, NULL,
-                          &failure, &err) == YVEX_OK;
+    if (state_recipe_project(layer, &request, &recipe, &failure, &err) != YVEX_OK ||
+        state->prepare(state->context, layer->layer_index, &recipe, NULL,
+                       &failure, &err) != YVEX_OK) return 0;
+    const yvex_attention_history_view *view = state_view(
+        state, layer->layer_index, YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+    return view && view->capacity_known &&
+        view->local_capacity == state_recipe_capacity(&recipe, YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY) &&
+        view->compressed_capacity == state_recipe_capacity(&recipe, YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY) &&
+        view->indexer_capacity == state_recipe_capacity(&recipe, YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY);
 }
 
 /* Apply one generated token using either an outer chunk or one decode transaction. */
@@ -2518,7 +2541,7 @@ static int session_identity_open(
     session_identity_text(engine->summary.runtime_model_identity, 'a');
     session_identity_text(engine->summary.runtime_binding_identity, 'b');
     specialization->summary.schema_version =
-        YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2;
+        YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3;
     specialization->summary.backend = YVEX_BACKEND_KIND_CPU;
     session_identity_text(specialization->summary.identity, 'c');
     engine->specializations[YVEX_BACKEND_KIND_CPU] = specialization;
@@ -2983,6 +3006,61 @@ static int test_cpu_stateful_attention(void)
     return 0;
 }
 
+static int test_cuda_publication_arena_bound(const state_plan_fixture *fixture)
+{
+    const unsigned long long widths[] = {1ull, 4ull, 128ull, 256ull};
+    for (unsigned int layer_index = 0u; layer_index < 3u; ++layer_index)
+    for (unsigned int width = 0u; width < 4u; ++width)
+    for (unsigned int evidence = 0u; evidence <= YVEX_ATTENTION_EVIDENCE_FULL; ++evidence)
+    for (int prefix = 0; prefix <= 1; ++prefix)
+    for (int device_output = 0; device_output <= 1; ++device_output) {
+        yvex_attention_layer_plan layer = fixture->layers[layer_index];
+        yvex_attention_state_recipe_request request = {
+            .layer_ordinal = layer_index, .final_position = 32768ull,
+            .attention_plan_identity = fixture->plan.summary.attention_plan_identity};
+        yvex_attention_state_recipe state;
+        yvex_attention_workspace_recipe recipe;
+        yvex_attention_history_view history = {0};
+        yvex_attention_publication publication = {0};
+        yvex_attention_workspace *arena = NULL;
+        yvex_attention_failure failure;
+        yvex_error err;
+        unsigned long long bytes = 0ull, used = 0ull;
+        layer.residual_expanded_width = 16ull;
+        YVEX_TEST_ASSERT(state_recipe_project(&layer, &request, &state, &failure, &err) == YVEX_OK &&
+            yvex_attention_workspace_recipe_build(&layer, &state, YVEX_ATTENTION_EXECUTION_FULL,
+                YVEX_ATTENTION_OPERATION_ENVELOPE, (yvex_attention_evidence_level)evidence,
+                widths[width], &recipe, &failure, &err) == YVEX_OK, "publication recipe seals");
+        for (unsigned int i = 0u; i < state.component_count; ++i) {
+            const yvex_attention_state_component_recipe *c = &state.components[i];
+            if (c->binding == YVEX_ATTENTION_STATE_BINDING_MAIN_ROLLING)
+                history.main_rolling_state = c->rolling;
+            if (c->binding == YVEX_ATTENTION_STATE_BINDING_INDEXER_ROLLING)
+                history.indexer_rolling_state = c->rolling;
+        }
+        recipe.prefix_checkpoint_capacity = prefix ? widths[width] : 0ull;
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK &&
+            yvex_attention_publication_workspace_required(&recipe, device_output, &bytes, &err) == YVEX_OK &&
+            yvex_attention_workspace_open(&arena, bytes, &err) == YVEX_OK &&
+            yvex_attention_workspace_begin(arena, &err) == YVEX_OK, "exact publication arena prepares");
+        YVEX_TEST_ASSERT(yvex_attention_cuda_trace_open(&publication, &layer,
+            YVEX_ATTENTION_OPERATION_ENVELOPE, &history, 0ull, widths[width],
+            (yvex_attention_evidence_level)evidence, prefix, device_output, arena, bytes, &used, &failure, &err) == YVEX_OK,
+            "SWA/CSA/HCA publication fits its single owned arena at every evidence/prefix scope");
+        const yvex_attention_workspace_summary *summary = yvex_attention_workspace_summary_get(arena);
+        YVEX_TEST_ASSERT(summary && !summary->capacity_failure_count && summary->used_bytes <= bytes &&
+            used <= bytes, "real publication allocations remain inside the admitted extent");
+        YVEX_TEST_ASSERT((publication.output != NULL) == (!device_output || evidence != 0u) &&
+            (publication.envelope_output != NULL) == (!device_output || evidence != 0u),
+            "device-native NONE publication has no unused host output shadow; evidence keeps outputs");
+        yvex_attention_execution_trace_release(&publication);
+        YVEX_TEST_ASSERT(yvex_attention_workspace_rewind(arena, 0ull, &err) == YVEX_OK &&
+            yvex_attention_workspace_finish(arena, &err) == YVEX_OK, "publication retires its entire arena");
+        yvex_attention_workspace_close(&arena);
+    }
+    return 0;
+}
+
 int yvex_test_runtime_state(void)
 {
     state_plan_fixture fixture;
@@ -2994,6 +3072,7 @@ int yvex_test_runtime_state(void)
     if (test_direct_kv_state_width(&fixture) != 0) return 1;
     if (test_workspace_recipe_identity() != 0) return 1;
     if (test_workspace_capture_geometry(&fixture) != 0) return 1;
+    if (test_cuda_publication_arena_bound(&fixture) != 0) return 1;
     if (test_capacity_plan(&fixture) != 0) return 1;
     if (test_execution_descriptor_identity() != 0) return 1;
     if (test_operator_missing_binding_refusal() != 0) return 1;

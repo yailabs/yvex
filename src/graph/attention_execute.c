@@ -1415,6 +1415,7 @@ context->rc = yvex_attention_cuda_trace_open(
     &context->trace, context->layer, context->opts->operation_scope,
     context->history, context->opts->token_position, context->token_count,
     context->opts->evidence_level, context->opts->retain_prefix_checkpoints,
+    context->opts->device_output != NULL,
     context->opts->workspace,
     context->opts->scratch_limit_bytes, &context->trace_bytes,
     context->failure, context->err);
@@ -1530,6 +1531,10 @@ context->job.indexer_kv = context->history->indexer_kv;
 context->job.indexer_positions = context->history->indexer_positions;
 context->job.indexer_count = context->history->indexer_entry_count;
 context->job.indexer_stride = context->history->indexer_kv_stride;
+context->job.history_capacity_known = context->history->capacity_known;
+context->job.local_capacity = context->history->local_capacity;
+context->job.compressed_capacity = context->history->compressed_capacity;
+context->job.indexer_capacity = context->history->indexer_capacity;
 if (context->layer->attention_class != YVEX_ATTENTION_CLASS_SWA) {
     unsigned long long end = context->opts->token_position + context->token_count;
     context->compressed_capacity = end / context->layer->compression_ratio -

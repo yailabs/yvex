@@ -5,13 +5,14 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <yvex/api.h>
 #include <yvex/internal/backend.h>
 
-#include "src/backend/cuda/private.h"
+#include "src/backend/cuda/attention_ops.h"
 #include "tests/test.h"
 
 static void make_desc(yvex_backend_tensor_desc *desc, const char *name)
@@ -444,6 +445,7 @@ typedef struct {
     int prepare_failure;
     int probe_host_movement;
     unsigned int host_movement_refusals;
+    unsigned int signature_mismatch;
 } rope_graph_fixture;
 
 typedef struct {
@@ -486,9 +488,14 @@ static int enqueue_rope_fixture(void *opaque, int enqueue_kernels, yvex_error *e
         params[3] = &position;
         params[4] = &inverse_root;
         return yvex_cuda_graph_kernel_update(
-            fixture->backend, YVEX_BACKEND_VARIANT_ROPE_F32,
-            state->rope_function, 1u, 128u, 0u, params,
-            "cuda.rope.launch", err);
+            fixture->backend, fixture->signature_mismatch == 1u
+                ? YVEX_BACKEND_VARIANT_ATTENTION_ENCODED : YVEX_BACKEND_VARIANT_ROPE_F32,
+            fixture->signature_mismatch == 2u ? state->attention_rolling_state_function
+                                             : state->rope_function,
+            fixture->signature_mismatch == 3u ? 2u : 1u,
+            fixture->signature_mismatch == 4u ? 256u : 128u,
+            fixture->signature_mismatch == 5u ? 4u : 0u, params,
+            fixture->signature_mismatch == 6u ? "cuda.rope.changed" : "cuda.rope.launch", err);
     }
     return yvex_backend_op_rope(fixture->backend, fixture->input, fixture->position,
                                 10000.0f, fixture->output, err);
@@ -802,6 +809,29 @@ static int test_graph_prepare_lifecycle(yvex_backend *backend)
     YVEX_TEST_ASSERT(rc == YVEX_OK && info.capture_count == 1ull &&
                          info.replay_count == 3ull,
                      "preamble failure preserves the admitted executable");
+    for (unsigned int mismatch = 1u; mismatch <= 6u; ++mismatch) {
+        float before[8], after[8];
+        YVEX_TEST_ASSERT(yvex_backend_tensor_read(
+            backend, fixture.output, before, sizeof(before), &err) == YVEX_OK,
+            "snapshot output before incompatible launch tuple");
+        fixture.signature_mismatch = mismatch;
+        fixture.position = 100ull + mismatch;
+        rc = yvex_cuda_graph_execute(
+            backend, "cuda-graph-prepare-lifecycle-v1", prepare_rope_fixture,
+            enqueue_rope_fixture, &fixture, 1, &info, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE &&
+            yvex_backend_tensor_read(backend, fixture.output, after, sizeof(after), &err)
+                == YVEX_OK && memcmp(before, after, sizeof(before)) == 0,
+            "variant, function, grid, block, shared memory and stage mismatches refuse without launch");
+        fixture.signature_mismatch = 0u;
+        fixture.position = 5ull;
+        rc = yvex_cuda_graph_execute(
+            backend, "cuda-graph-prepare-lifecycle-v1", prepare_rope_fixture,
+            enqueue_rope_fixture, &fixture, 1, &info, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK && info.capture_count == 1ull &&
+            info.replay_count == 3ull + mismatch,
+            "exact admitted launch tuple remains replayable after refusal");
+    }
     YVEX_TEST_ASSERT(
         yvex_backend_tensor_release(backend, &fixture.output, &err) == YVEX_OK &&
             yvex_backend_tensor_release(backend, &fixture.input, &err) == YVEX_OK,
@@ -1334,6 +1364,24 @@ static int test_attention_graph_configuration(yvex_backend *backend)
     backend_workspace_reset(backend);
     memset(&job, 0, sizeof(job));
     job.phase = YVEX_BACKEND_ATTENTION_PHASE_PREFILL;
+    {
+        yvex_cuda_attention_configuration shape = {.local_capacity = 127ull,
+            .compressed_capacity = 8192ull, .indexer_capacity = 8192ull};
+        job.sliding_window = 128ull;
+        job.history_capacity_known = 1;
+        job.local_capacity = 127ull;
+        job.compressed_capacity = 256ull;
+        YVEX_TEST_ASSERT(yvex_cuda_attention_local_capacity(&shape, &job, 0) == 128ull &&
+            yvex_cuda_attention_local_capacity(&shape, &job, 1) == 127ull &&
+            yvex_cuda_attention_history_capacity(&shape, &job, 0) == 256ull &&
+            yvex_cuda_attention_history_capacity(&shape, &job, 1) == 0ull,
+            "sealed per-layer history extents do not inherit another layer's capacity");
+        job.history_capacity_known = 0;
+        YVEX_TEST_ASSERT(yvex_cuda_attention_history_capacity(&shape, &job, 0) == 8192ull,
+            "unbound diagnostic history retains the configured envelope");
+        memset(&job, 0, sizeof(job));
+        job.phase = YVEX_BACKEND_ATTENTION_PHASE_PREFILL;
+    }
     for (stage = 0u; stage < YVEX_CUDA_ATTENTION_STAGE_COUNT; ++stage) {
         char piece_key[160];
 
@@ -1413,8 +1461,22 @@ static int test_attention_graph_configuration(yvex_backend *backend)
     job.token_position = 3ull;
     rc = yvex_cuda_attention_graph_key(
         backend, &job, 0u, YVEX_CUDA_ATTENTION_STAGE_COUNT, dynamic_key, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK && strcmp(full_key, dynamic_key) == 0,
-                     "captured compressor predicates emission without changing topology");
+    YVEX_TEST_ASSERT(rc == YVEX_OK && strcmp(full_key, dynamic_key) != 0,
+                     "emitting compression owns normalization/rotation launch topology");
+    job.token_position = 7ull;
+    rc = yvex_cuda_attention_graph_key(
+        backend, &job, 0u, YVEX_CUDA_ATTENTION_STAGE_COUNT, first_key, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && strcmp(first_key, dynamic_key) == 0,
+                     "emission topology reuses graphs across absolute positions");
+    job.token_count = 8ull;
+    rc = yvex_cuda_attention_graph_key(
+        backend, &job, 0u, YVEX_CUDA_ATTENTION_STAGE_COUNT, full_key, &err);
+    job.token_position = 6ull;
+    rc = rc == YVEX_OK ? yvex_cuda_attention_graph_key(
+        backend, &job, 0u, YVEX_CUDA_ATTENTION_STAGE_COUNT, dynamic_key, &err) : rc;
+    YVEX_TEST_ASSERT(rc == YVEX_OK && strcmp(full_key, dynamic_key) != 0,
+                     "equal emission counts with different ordinal positions cannot alias");
+    job.token_count = 1ull;
     rc = yvex_cuda_attention_graph_key(
         backend, &job, 0u, YVEX_CUDA_ATTENTION_STAGE_COMPRESS, dynamic_key, &err);
     job.token_position = 1ull;
@@ -1425,6 +1487,34 @@ static int test_attention_graph_configuration(yvex_backend *backend)
              : rc;
     YVEX_TEST_ASSERT(rc == YVEX_OK && strcmp(first_key, dynamic_key) == 0,
                      "non-compression pieces ignore emission topology");
+    {
+        yvex_backend_attention_job csa = job;
+        csa.attention_class = YVEX_BACKEND_ATTENTION_CSA;
+        csa.token_position = 7ull;
+        csa.token_count = 1ull;
+        YVEX_TEST_ASSERT(yvex_cuda_attention_score_grid(&csa) == 2ull,
+            "CSA launch extent follows real reachable history, not context capacity");
+        rc = yvex_cuda_attention_graph_key(backend, &csa,
+            YVEX_CUDA_ATTENTION_STAGE_COMPRESS, YVEX_CUDA_ATTENTION_STAGE_COMPRESS + 1u,
+            first_key, &err);
+        csa.token_position = 11ull;
+        YVEX_TEST_ASSERT(yvex_cuda_attention_score_grid(&csa) == 4ull,
+            "CSA candidate growth crosses an explicit power-of-two launch bucket");
+        if (rc == YVEX_OK) rc = yvex_cuda_attention_graph_key(backend, &csa,
+            YVEX_CUDA_ATTENTION_STAGE_COMPRESS, YVEX_CUDA_ATTENTION_STAGE_COMPRESS + 1u,
+            dynamic_key, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK && strcmp(first_key, dynamic_key) != 0,
+            "different score grids cannot reuse an incompatible graph");
+        csa.token_position = 15ull;
+        rc = yvex_cuda_attention_graph_key(backend, &csa,
+            YVEX_CUDA_ATTENTION_STAGE_COMPRESS, YVEX_CUDA_ATTENTION_STAGE_COMPRESS + 1u,
+            first_key, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK && strcmp(first_key, dynamic_key) == 0,
+            "equivalent score grid and emission shape reuse the graph");
+        csa.token_position = ULLONG_MAX;
+        YVEX_TEST_ASSERT(yvex_cuda_attention_score_grid(&csa) == 0ull,
+            "overflowing candidate geometry fails closed");
+    }
     job.local_count = 5ull;
     job.sliding_window = 5ull;
     job.candidate_block_visible = 1;
@@ -1743,12 +1833,146 @@ static int test_attention_failure_preserves_cause(void)
     return 0;
 }
 
+/* Copy and insertion have different lane owners when state width is less than
+ * block width. A copied checkpoint must never overwrite the current token. */
+static int test_rolling_checkpoint_copy(yvex_backend *backend)
+{
+    enum { WIDTH = 128, RATIO = 128, EXTENT = WIDTH * RATIO };
+    yvex_device_tensor *buffers[9] = {0};
+    CUdeviceptr addresses[9];
+    yvex_backend_tensor_desc desc;
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    float *initial = malloc(EXTENT * sizeof(float));
+    float *actual = malloc(EXTENT * sizeof(float));
+    float token[WIDTH], zero[WIDTH] = {0};
+    unsigned long long ratio = RATIO, head = WIDTH, width = WIDTH;
+    unsigned long long slots = RATIO, cursor = RATIO - 1ull;
+    int status = 0, overlap = 0, emit = 0, device_wide = 0;
+    yvex_error err;
+    unsigned int i, repetition;
+    YVEX_TEST_ASSERT(initial && actual, "checkpoint host oracle storage");
+    for (i = 0u; i < EXTENT; ++i) initial[i] = -3.0f;
+    for (i = 0u; i < WIDTH; ++i) token[i] = 1.5f + (float)i / 256.0f;
+    for (i = 0u; i < 9u; ++i) {
+        unsigned long long count = i < 2u || (i >= 5u && i < 7u) ? EXTENT : WIDTH;
+        make_count_desc(&desc, "rolling_copy", i == 8u ? YVEX_DTYPE_I32 : YVEX_DTYPE_F32,
+                         i == 8u ? 1ull : count, sizeof(float));
+        YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &buffers[i], &err) == YVEX_OK,
+                         "checkpoint device fixture allocation");
+        addresses[i] = yvex_cuda_tensor_ptr(buffers[i]);
+    }
+    for (i = 0u; i < 5u; ++i)
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, buffers[i],
+            i < 2u ? initial : i < 4u ? token : zero,
+            (i < 2u ? EXTENT : WIDTH) * sizeof(float), &err) == YVEX_OK,
+            "immutable checkpoint and token inputs");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, buffers[8], &status, sizeof(status), &err) == YVEX_OK,
+                     "clear numerical status");
+    for (repetition = 0u; repetition < 64u; ++repetition) {
+        void *params[] = {&addresses[0], &addresses[1], &addresses[2], &addresses[3],
+            &addresses[4], &addresses[5], &addresses[6], &addresses[7], &ratio, &head,
+            &width, &slots, &cursor, &overlap, &emit, &addresses[8]};
+        YVEX_TEST_ASSERT(yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            state->attention_rolling_state_function, 1u, 256u, 0u, params,
+            "cuda.test.rolling_copy", &err) == YVEX_OK &&
+            yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                &device_wide, "cuda.test.rolling_copy", &err) == YVEX_OK,
+            "checkpoint transition completes");
+        for (i = 5u; i < 7u; ++i) {
+            unsigned int j;
+            YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, buffers[i], actual,
+                EXTENT * sizeof(float), &err) == YVEX_OK, "checkpoint output read");
+            for (j = 0u; j < EXTENT; ++j)
+                YVEX_TEST_ASSERT(actual[j] == (j < EXTENT - WIDTH ? -3.0f : token[j % WIDTH]),
+                    "checkpoint matches independent host copy then insertion");
+        }
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, buffers[8], &status, sizeof(status), &err) == YVEX_OK &&
+                     status == 0, "checkpoint remains numerically valid");
+    for (i = 0u; i < 9u; ++i)
+        YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &buffers[i], &err) == YVEX_OK,
+                         "checkpoint device fixture retires");
+    free(initial);
+    free(actual);
+    return 0;
+}
+
+typedef struct {
+    float *host;
+    unsigned long long device;
+} rolling_publication_fixture;
+
+static int rolling_publication_resolve(const void *context, const void *host,
+                                      unsigned long long bytes, unsigned long long *address)
+{
+    const rolling_publication_fixture *f = context;
+    uintptr_t start = (uintptr_t)f->host, value = (uintptr_t)host;
+    if (value < start || value - start >= 8u * sizeof(float)) return YVEX_BACKEND_RESIDENT_MISS;
+    if (bytes > 8u * sizeof(float) - (value - start)) return YVEX_BACKEND_RESIDENT_INVALID;
+    *address = f->device + value - start;
+    return YVEX_BACKEND_RESIDENT_HIT;
+}
+
+static int assert_rolling_publication_offset(yvex_backend *backend)
+{
+    float data[64] = {0}, observed[64], mapped[8] = {0};
+    yvex_backend_tensor_desc descriptor = {.name = "rolling-publication-offset", .dtype = YVEX_DTYPE_F32,
+        .rank = 1u, .dims = {64ull}, .bytes = sizeof(data)};
+    yvex_device_tensor *arena = NULL;
+    yvex_backend_attention_job job = {0};
+    yvex_cuda_attention_state_sources sources = {0};
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &descriptor, &arena, &err) == YVEX_OK,
+        "allocate rolling state publication source and candidate banks");
+    CUdeviceptr address = yvex_cuda_activation_pointer(backend, arena);
+    rolling_publication_fixture fixture = {mapped, address + 48ull * sizeof(float)};
+    YVEX_TEST_ASSERT(yvex_backend_state_residency_attach(backend, &fixture,
+        rolling_publication_resolve, 1ull, &err) == YVEX_OK, "attach exact rolling candidate residency");
+    job.token_count = 4ull;
+    job.main_rolling.kv_state = mapped;
+    job.main_rolling.score_state = mapped + 2;
+    job.indexer_rolling.kv_state = mapped + 4;
+    job.indexer_rolling.score_state = mapped + 6;
+    job.main_rolling.kv_state_capacity = job.main_rolling.score_state_capacity = 2ull;
+    job.indexer_rolling.kv_state_capacity = job.indexer_rolling.score_state_capacity = 2ull;
+    sources.main_extent = sources.index_extent = 2ull;
+    sources.main_kv = address;
+    sources.main_score = address + 10ull * sizeof(float);
+    sources.index_kv = address + 20ull * sizeof(float);
+    sources.index_score = address + 30ull * sizeof(float);
+    for (unsigned int retained = 0u; retained < 2u; ++retained) {
+        size_t copied = 0u;
+        int staged = 0;
+        job.retain_prefix_checkpoints = retained;
+        for (unsigned int i = 0u; i < 64u; ++i) data[i] = (float)(i + 1u);
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, data, sizeof(data), &err) == YVEX_OK,
+            "upload distinguishable live state, checkpoints and output canaries");
+        YVEX_TEST_ASSERT(yvex_cuda_attention_operations_get()->state_stage(backend, &job, &sources,
+            &copied, &staged, &err) == YVEX_OK && staged && copied == 8u * sizeof(float) &&
+            yvex_backend_tensor_read(backend, arena, observed, sizeof(observed), &err) == YVEX_OK,
+            "publish bounded rolling state into candidate bank");
+        for (unsigned int plane = 0u; plane < 4u; ++plane)
+            for (unsigned int column = 0u; column < 2u; ++column)
+                YVEX_TEST_ASSERT(observed[48u + plane * 2u + column] ==
+                    data[plane * 10u + retained * 8u + column],
+                    "no-checkpoint publication reads current rolling state, retained mode reads final checkpoint");
+        YVEX_TEST_ASSERT(observed[47] == data[47] && observed[56] == data[56],
+            "rolling publication preserves adjacent candidate canaries");
+    }
+    yvex_backend_state_residency_detach(backend);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+        "release rolling publication fixture");
+    return 0;
+}
+
 int yvex_cuda_test_graph(void)
 {
     yvex_backend *backend = NULL;
     int rc = open_cuda(&backend);
 
     if (rc != 0) return rc;
+    YVEX_TEST_ASSERT(assert_rolling_publication_offset(backend) == 0,
+                     "CUDA current-state versus retained-checkpoint publication");
     YVEX_TEST_ASSERT(test_attention_piece_inventory() == 0,
                      "CUDA attention piecewise semantic inventory");
     YVEX_TEST_ASSERT(test_capability_projection(backend) == 0,
@@ -1759,6 +1983,8 @@ int yvex_cuda_test_graph(void)
                      "CUDA attention graph mode configuration");
     YVEX_TEST_ASSERT(test_rolling_cursor_update(backend) == 0,
                      "CUDA rolling cursor replay update");
+    YVEX_TEST_ASSERT(test_rolling_checkpoint_copy(backend) == 0,
+                     "CUDA rolling checkpoint copy precedes insertion");
     YVEX_TEST_ASSERT(test_shared_graph_completion(backend) == 0,
                      "CUDA shared-stream graph completion");
     YVEX_TEST_ASSERT(test_graph_prepare_lifecycle(backend) == 0,

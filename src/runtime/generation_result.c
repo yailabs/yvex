@@ -1382,6 +1382,12 @@ int yvex_runtime_generation_operator_execute(
             &result->execution, &result->evidence, err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_generation_context_summary_copy(context, &result->context, err);
+    if (session) {
+        const yvex_runtime_session_view *session_view = yvex_runtime_session_view_get(session);
+        if (session_view && session_view->backend)
+            result->host_workspace_available = yvex_backend_host_workspace_summary_get(
+                session_view->backend, &result->host_workspace);
+    }
     if (result->execution.schema_version == YVEX_RUNTIME_GENERATION_RESULT_SCHEMA_V5) {
         result->token_count = result->execution.sampled_token_count;
         result->text_bytes = result->execution.generated_text_bytes;

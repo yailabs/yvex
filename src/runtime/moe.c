@@ -125,7 +125,7 @@ static int runtime_moe_worklist_contract(
                                         "expert worklist identity owners are unavailable")
                    : yvex_error_code(err);
     memset(batch, 0, sizeof(*batch));
-    batch->schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V2;
+    batch->schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V3;
     batch->provenance = rows->provenance;
     batch->phase = rows->phase;
     batch->row_count = rows->row_count;
@@ -161,13 +161,15 @@ static int runtime_moe_worklist_contract(
                                     physical, binding->tensor_id)
                               : NULL;
         if (!decisions[slot] ||
-            decisions[slot]->schema_version != YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2 ||
+            decisions[slot]->schema_version != YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3 ||
             !decisions[slot]->worklist_width_mask ||
             !decisions[slot]->prefill_worklist_width_mask ||
             (slot && (decisions[slot]->worklist_width_mask !=
                           decisions[0]->worklist_width_mask ||
                       decisions[slot]->prefill_worklist_width_mask !=
                           decisions[0]->prefill_worklist_width_mask ||
+                      decisions[slot]->prefill_maximum_width !=
+                          decisions[0]->prefill_maximum_width ||
                       decisions[slot]->matrix_tile_minimum !=
                           decisions[0]->matrix_tile_minimum ||
                       decisions[slot]->implementation !=
@@ -177,12 +179,17 @@ static int runtime_moe_worklist_contract(
                 "compiled routed-expert worklist policies disagree");
     }
     memset(policy, 0, sizeof(*policy));
-    policy->schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V2;
+    policy->schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3;
     policy->supported_width_mask = yvex_runtime_specialization_phase_width_mask(
         decisions[0], rows->phase, 1);
+    policy->prefill_maximum_width = rows->phase == YVEX_EXECUTION_PHASE_PREFILL
+        ? decisions[0]->prefill_maximum_width : 0ull;
     policy->matrix_tile_minimum = decisions[0]->matrix_tile_minimum;
+    if (policy->matrix_tile_minimum &&
+        !(policy->supported_width_mask & (1ull << policy->matrix_tile_minimum)))
+        policy->matrix_tile_minimum = 0ull;
     policy->row_implementation = decisions[0]->implementation;
-    policy->matrix_implementation = decisions[0]->matrix_tile_minimum
+    policy->matrix_implementation = policy->matrix_tile_minimum
                                       ? YVEX_ENGINE_IMPLEMENTATION_DEVICE_MATRIX_TILE
                                       : YVEX_ENGINE_IMPLEMENTATION_COUNT;
     return yvex_expert_worklist_policy_seal(policy, err);
@@ -730,12 +737,15 @@ static int runtime_moe_layer_owned(yvex_runtime_moe_context *context,
     const yvex_moe_layer_plan *layer = yvex_moe_plan_layer_at(context->plan, layer_index);
     yvex_moe_layer_job job;
     unsigned long long fixed_bytes = 0ull, slot;
+    int input_present = expanded_input ||
+        (device_input && device_results &&
+         yvex_backend_kind_of(context->session_view->backend) == YVEX_BACKEND_KIND_CUDA);
     int rc;
     memset(result, 0, sizeof(*result));
-    if (!layer || !expanded_input || !token_id_present ||
+    if (!layer || !input_present || !token_id_present ||
         (context->options.cancel_requested &&
          context->options.cancel_requested(context->options.cancel_context)))
-        return runtime_moe_refuse(err, !layer || !expanded_input || !token_id_present
+        return runtime_moe_refuse(err, !layer || !input_present || !token_id_present
                                            ? YVEX_ERR_INVALID_ARG : YVEX_ERR_CANCELLED,
                                   "MoE layer request is invalid or cancelled");
     rc = runtime_moe_load_layer(context, layer, token_id, 1ull, 0, &job,
@@ -1383,7 +1393,8 @@ static int runtime_moe_row_owned(yvex_runtime_moe_context *context, unsigned lon
     }
     if (batch->device_results && yvex_runtime_private_moe_result_views(batch->device_results,
         batch->row_count, row, 1u, views, &results, err) != YVEX_OK) return yvex_error_code(err);
-    return runtime_moe_layer_owned(context, layer_index, batch->expanded_rows + row * batch->row_stride,
+    const float *host_input = batch->expanded_rows ? batch->expanded_rows + row * batch->row_stride : NULL;
+    return runtime_moe_layer_owned(context, layer_index, host_input,
         input_ptr, batch->device_results ? &results : NULL, batch->token_ids[row], 1, result, err);
 }
 
@@ -1447,7 +1458,11 @@ static int runtime_moe_execute_layer_rows(yvex_runtime_moe_context *context, uns
         (batch->complete_after_operation != 0 &&
          batch->complete_after_operation != 1) ||
         batch->row_width != layer->expanded_width ||
-        batch->row_stride < batch->row_width || !batch->expanded_rows || !batch->token_ids ||
+        batch->row_stride < batch->row_width ||
+        (!batch->expanded_rows &&
+         !(batch->device_rows && batch->device_results &&
+           yvex_backend_kind_of(context->session_view->backend) == YVEX_BACKEND_KIND_CUDA)) ||
+        !batch->token_ids ||
         !batch->token_ids_present || batch->row_count > context->options.row_capacity ||
         (batch->execution_class != YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE &&
          batch->execution_class != YVEX_EXECUTION_CLASS_DEVICE_NATIVE) ||

@@ -1061,10 +1061,18 @@ static int compatible_moe_request_valid(
            request->row_count <= request->row_capacity &&
            ((request->device_rows == NULL) == (request->device_results == NULL)) &&
            ((request->device_results == NULL) == (request->batch_device_results == NULL)) &&
-           request->admitted_width < 64ull &&
+           (request->admitted_width < 64ull ||
+            (!request->compatible_scheduling &&
+             request->provenance == YVEX_EXECUTION_BATCH_PREFILL &&
+             request->phase == YVEX_EXECUTION_PHASE_PREFILL &&
+             request->admitted_width <= YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH)) &&
            request->attention->complete &&
            request->attention->token_count == request->row_count &&
-           request->attention->envelope_output && request->expanded_rows &&
+           (request->attention->envelope_output ||
+            (request->device_rows && request->device_results &&
+             yvex_backend_kind_of(request->backend) == YVEX_BACKEND_KIND_CUDA &&
+             request->attention->evidence_level == YVEX_ATTENTION_EVIDENCE_NONE)) &&
+           request->expanded_rows &&
            request->combined_rows && request->routed_rows &&
            request->shared_rows && request->post_rows &&
            request->combination_rows && request->batch_token_ids &&
@@ -1151,7 +1159,7 @@ static int compatible_moe_key_prepare(compatible_moe_ticket *ticket,
         return scheduler_refuse(err, YVEX_ERR_STATE,
                                "compatible MoE engine handle is unavailable");
     memset(key, 0, sizeof(*key));
-    key->schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V2;
+    key->schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V3;
     key->phase = request->phase;
     key->operation = YVEX_EXECUTION_COMPATIBILITY_MOE;
     key->backend_kind = yvex_backend_kind_of(request->backend);
@@ -1346,10 +1354,11 @@ static int compatible_moe_batch_execute(
             d2d_bytes += destination.bytes;
         if (rc != YVEX_OK) break;
         owner->batch_sources[source_index] = entry->source;
-        memcpy(owner->expanded_rows +
-                   row_next * owner->transformer->expanded_width,
-               request->attention->envelope_output,
-               (size_t)values * sizeof(float));
+        if (request->attention->envelope_output)
+            memcpy(owner->expanded_rows +
+                       row_next * owner->transformer->expanded_width,
+                   request->attention->envelope_output,
+                   (size_t)values * sizeof(float));
         memcpy(owner->batch_token_ids + row_next, request->token_ids,
                (size_t)request->row_count * sizeof(*request->token_ids));
         for (row_index = 0ull; row_index < request->row_count; ++row_index) {
@@ -1520,7 +1529,7 @@ static int compatible_logits_key_prepare(compatible_logits_ticket *ticket,
         !ticket->session->summary.engine_generation)
         return scheduler_refuse(err, YVEX_ERR_STATE,
                                "compatible output-head engine handle is unavailable");
-    key->schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V2;
+    key->schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V3;
     key->phase = compatible_logits_phase(ticket->source->source_phase);
     key->operation = YVEX_EXECUTION_COMPATIBILITY_OUTPUT_HEAD;
     key->backend_kind = yvex_backend_kind_of(ticket->backend);
@@ -1644,7 +1653,7 @@ static int compatible_step_rendezvous(
         !request->session->summary.engine_generation)
         return scheduler_refuse(err, YVEX_ERR_STATE,
                                "compatible execution step engine handle is unavailable");
-    key->schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V2;
+    key->schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V3;
     key->phase = request->phase;
     key->operation = YVEX_EXECUTION_COMPATIBILITY_TRANSFORMER_STEP;
     key->backend_kind = yvex_backend_kind_of(request->backend);
@@ -1826,9 +1835,8 @@ int yvex_model_engine_phase_maximum_width_copy(
     unsigned long long *width, yvex_error *err)
 {
     yvex_model_engine *owner = (yvex_model_engine *)model;
-    const yvex_physical_execution_summary *summary;
-    unsigned long long common = 0ull, consumers = 0ull, backend, index, candidate;
-    int initialized = 0;
+    const yvex_engine_specialization *specializations[2];
+    int rc;
     if (width) *width = 0ull;
     if (!owner || !width || (unsigned int)phase > YVEX_EXECUTION_PHASE_CORRECTION ||
         !owner->lifecycle_mutex_ready ||
@@ -1836,48 +1844,12 @@ int yvex_model_engine_phase_maximum_width_copy(
         return scheduler_refuse(
             err, YVEX_ERR_INVALID_ARG,
             "runtime model compatible width is unavailable");
-    summary = yvex_physical_execution_ir_summary(owner->physical_execution);
-    for (backend = YVEX_BACKEND_KIND_CPU;
-         summary && backend <= YVEX_BACKEND_KIND_CUDA; ++backend) {
-        const yvex_engine_specialization *specialization =
-            owner->specializations[backend];
-        if (!specialization) continue;
-        for (index = 0ull; index < summary->decision_count; ++index) {
-            const yvex_physical_execution_decision *package =
-                yvex_physical_execution_ir_decision_at(
-                    owner->physical_execution, index);
-            const yvex_engine_implementation_record *decision =
-                runtime_specialization_decision(specialization, index);
-            unsigned long long admitted;
-            if (!package || !decision ||
-                (package->consumer != YVEX_EXECUTION_CONSUMER_ROUTED_GATE_UP &&
-                 package->consumer != YVEX_EXECUTION_CONSUMER_ROUTED_DOWN))
-                continue;
-            if (decision->schema_version != YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2) {
-                (void)pthread_mutex_unlock(&owner->lifecycle_mutex);
-                return scheduler_refuse(err, YVEX_ERR_STATE,
-                                        "runtime model phase-width schema is stale");
-            }
-            admitted = yvex_runtime_specialization_phase_width_mask(decision, phase, 1);
-            if (!admitted) {
-                (void)pthread_mutex_unlock(&owner->lifecycle_mutex);
-                return scheduler_refuse(err, YVEX_ERR_STATE,
-                                        "runtime model phase-width policy is invalid");
-            }
-            common = initialized ? common & admitted : admitted;
-            initialized = 1;
-            consumers |= 1ull << (unsigned int)package->consumer;
-        }
-    }
-    *width = phase == YVEX_EXECUTION_PHASE_PREFILL && !initialized ? 0ull : 1ull;
-    if (initialized &&
-        (consumers & (1ull << YVEX_EXECUTION_CONSUMER_ROUTED_GATE_UP)) &&
-        (consumers & (1ull << YVEX_EXECUTION_CONSUMER_ROUTED_DOWN)))
-        for (candidate = 2ull; candidate < 63ull; ++candidate)
-            if (common & (1ull << candidate)) *width = candidate;
+    specializations[0] = owner->specializations[0];
+    specializations[1] = owner->specializations[1];
+    rc = yvex_runtime_private_specializations_phase_width(
+        owner->physical_execution, specializations, 2u, phase, width, err);
     (void)pthread_mutex_unlock(&owner->lifecycle_mutex);
-    yvex_error_clear(err);
-    return YVEX_OK;
+    return rc;
 }
 
 int yvex_model_engine_scheduler_maximum_width_copy(

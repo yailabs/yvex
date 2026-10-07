@@ -147,8 +147,10 @@ static int reduction_check(yvex_backend *backend, unsigned long long width,
         &c.stride, &selected, &counts, &c.topk, &sinks, &c.heads, &c.width, &c.window, &c.ratio,
         &c.attention_class, &c.start, &c.tokens, &c.block_visible, &output, &status};
     rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
-        exact ? state->attention_reduce_function : state->attention_reduce_native_function,
-        (unsigned int)(c.heads * c.tokens), 256u, exact ? 256u * sizeof(double) : 0u,
+        exact == 1 ? state->attention_reduce_function : exact == 2 ?
+            state->attention_reduce_native_warp_function : state->attention_reduce_native_function,
+        (unsigned int)(exact == 2 ? (c.heads * c.tokens + 7ull) / 8ull : c.heads * c.tokens),
+        256u, exact == 1 ? 256u * sizeof(double) : 0u,
         params, "cuda.test.attention-reduction", &err);
     if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
         &device_wide, "cuda.test.attention-reduction", &err);
@@ -182,11 +184,141 @@ static int reduction_check(yvex_backend *backend, unsigned long long width,
     for (unsigned long long i = c.heads * c.tokens * width; i < REDUCTION_VALUES; ++i)
         YVEX_TEST_ASSERT(observed->output[i] == 12345.0f, "output stays within admitted shape");
     printf("attention reduction: mode=%s class=%u width=%llu scenario=%u values=%llu status=%d max_abs=%.12g "
-           "worst_error_over_tolerance=%.9g analytic_exact=%s\n", exact ? "forensic" : "native",
+           "worst_error_over_tolerance=%.9g analytic_exact=%s\n",
+           exact == 1 ? "forensic" : exact == 2 ? "native-warp" : "native",
            attention_class, width, scenario,
            c.heads * c.tokens * width, observed->status, maximum_error, worst_ratio, scenario ? "n/a" : "true");
+    if (exact == 2) {
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, host, sizeof(*host), &err) == YVEX_OK &&
+            yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                state->attention_reduce_native_function, (unsigned int)(c.heads * c.tokens),
+                256u, 0u, params, "cuda.test.attention-reference", &err) == YVEX_OK &&
+            yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                &device_wide, "cuda.test.attention-reference", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, host, sizeof(*host), &err) == YVEX_OK,
+            "original block reduction remains an independently executed exact-tree reference");
+        YVEX_TEST_ASSERT(host->status == observed->status &&
+            (scenario >= 3u || !memcmp(host->output, observed->output, sizeof(host->output))),
+            "warp permutation preserves original reduction bits and refusal status");
+    }
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK, "release reduction fixture");
     free(host); free(observed);
+    return 0;
+}
+
+/* Independent ordered host transition: compare complete prefix states as well
+ * as compressed values. This is a component oracle, not upstream conformance. */
+static void rolling_oracle(float *kv, float *score, const float *input, const float *gates,
+    const float *ape, float *output, unsigned long long ratio, unsigned long long head,
+    unsigned long long rows, unsigned long long cursor, int overlap, int checkpoints)
+{
+    unsigned long long factor = overlap ? 2ull : 1ull, width = head * factor;
+    unsigned long long extent = width * ratio * factor, emitted = 0ull;
+    for (unsigned long long t = 0ull; t < rows; ++t) {
+        unsigned long long c = (cursor + t) % ratio;
+        unsigned long long before = checkpoints ? t * extent : 0ull;
+        unsigned long long after = checkpoints ? (t + 1ull) * extent : 0ull;
+        if (checkpoints) {
+            memcpy(kv + after, kv + before, (size_t)extent * sizeof(float));
+            memcpy(score + after, score + before, (size_t)extent * sizeof(float));
+        }
+        for (unsigned long long lane = 0ull; lane < width; ++lane) {
+            unsigned long long i = after + (overlap ? ratio + c : c) * width + lane;
+            kv[i] = input[t * width + lane];
+            score[i] = gates[t * width + lane] + ape[c * width + lane];
+        }
+        if (c + 1ull != ratio) continue;
+        for (unsigned long long lane = 0ull; lane < head; ++lane) {
+            double maximum = -INFINITY, denominator = 0.0, sum = 0.0;
+            for (unsigned long long slot = 0ull; slot < ratio; ++slot)
+                for (unsigned long long side = 0ull; side < factor; ++side) {
+                    unsigned long long i = after + (slot + side * ratio) * width + lane + side * head;
+                    if (score[i] > maximum) maximum = score[i];
+                }
+            for (unsigned long long slot = 0ull; slot < ratio; ++slot)
+                for (unsigned long long side = 0ull; side < factor; ++side) {
+                    unsigned long long i = after + (slot + side * ratio) * width + lane + side * head;
+                    double weight = exp((double)score[i] - maximum);
+                    volatile double product = weight * (double)kv[i];
+                    denominator += weight;
+                    sum += product;
+                }
+            output[emitted * head + lane] = reduction_bf16((float)(sum / denominator));
+        }
+        ++emitted;
+        if (overlap) {
+            memmove(kv + after, kv + after + ratio * width, (size_t)(ratio * width) * sizeof(float));
+            memmove(score + after, score + after + ratio * width, (size_t)(ratio * width) * sizeof(float));
+        }
+    }
+}
+
+static int rolling_rows_check(yvex_backend *backend, unsigned long long ratio,
+    unsigned long long head, unsigned long long rows, int checkpoints, unsigned int negative)
+{
+    unsigned long long cursor = ratio - 1ull, factor = ratio == 4ull ? 2ull : 1ull;
+    unsigned long long width = head * factor, extent = width * ratio * factor;
+    unsigned long long state_count = extent * (checkpoints ? rows + 1ull : 1ull);
+    unsigned long long offsets[] = {0ull, state_count, 2ull * state_count,
+        2ull * state_count + rows * width, 2ull * state_count + 2ull * rows * width,
+        2ull * state_count + 2ull * rows * width + ratio * width};
+    unsigned long long outputs = ((cursor + rows) / ratio + 1ull) * head;
+    unsigned long long status_offset = offsets[5] + outputs, count = status_offset + 1ull;
+    unsigned long long ape_bytes = width * sizeof(float), submitted_rows = negative == 2u ? 0ull : rows;
+    float *host = calloc((size_t)count, sizeof(float)), *actual = calloc((size_t)count, sizeof(float));
+    yvex_device_tensor *arena = NULL;
+    yvex_backend_tensor_desc desc = {.name = "rolling_rows", .dtype = YVEX_DTYPE_F32,
+        .rank = 1u, .dims = {count}, .bytes = count * sizeof(float)};
+    yvex_error err;
+    CUdeviceptr pointers[7], base;
+    unsigned int qtype = YVEX_GGUF_QTYPE_F32;
+    int overlap = ratio == 4ull, device_wide = 0, status = negative == 3u ? 17 : 0;
+    YVEX_TEST_ASSERT(host && actual, "rolling component host allocation");
+    for (unsigned long long i = 0ull; i < extent; ++i) {
+        host[i] = (float)((int)(i * 131ull % 251ull) - 125) / 128.0f;
+        host[offsets[1] + i] = (float)((int)(i * 17ull % 103ull) - 51) / 16.0f;
+    }
+    for (unsigned long long i = 0ull; i < rows * width; ++i) {
+        host[offsets[2] + i] = (float)((int)(i * 79ull % 251ull) - 125) / 64.0f;
+        host[offsets[3] + i] = (float)((int)(i * 41ull % 127ull) - 63) / 32.0f;
+    }
+    for (unsigned long long i = 0ull; i < ratio * width; ++i)
+        host[offsets[4] + i] = (float)((int)(i * 37ull % 97ull) - 48) / 64.0f;
+    for (unsigned long long i = 0ull; i < outputs; ++i) host[offsets[5] + i] = 12345.0f;
+    if (negative == 1u) host[offsets[2]] = NAN;
+    memcpy(host + status_offset, &status, sizeof(status));
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &arena, &err) == YVEX_OK &&
+        yvex_backend_tensor_write(backend, arena, host, (size_t)desc.bytes, &err) == YVEX_OK,
+        "rolling component device allocation");
+    base = yvex_cuda_tensor_ptr(arena);
+    for (unsigned int i = 0u; i < 6u; ++i) pointers[i] = base + offsets[i] * sizeof(float);
+    pointers[6] = base + status_offset * sizeof(float);
+    void *params[] = {&pointers[0], &pointers[1], &pointers[2], &pointers[3], &pointers[4],
+        &ape_bytes, &qtype, &pointers[5], &ratio, &head, &submitted_rows, &cursor,
+        &overlap, &checkpoints, &pointers[6]};
+    YVEX_TEST_ASSERT(yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        yvex_cuda_state(backend)->attention_rolling_rows_function, (unsigned int)((head + 255ull) / 256ull),
+        256u, 0u, params, "cuda.test.rolling_rows", &err) == YVEX_OK &&
+        yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            &device_wide, "cuda.test.rolling_rows", &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, arena, actual, (size_t)desc.bytes, &err) == YVEX_OK,
+        "rolling phase executes and completes");
+    memcpy(&status, actual + status_offset, sizeof(status));
+    if (!negative) {
+        YVEX_TEST_ASSERT(status == 0, "rolling phase numerical success");
+        rolling_oracle(host, host + offsets[1], host + offsets[2], host + offsets[3],
+            host + offsets[4], host + offsets[5], ratio, head, rows, cursor, overlap, checkpoints);
+        YVEX_TEST_ASSERT(!memcmp(host, actual, (size_t)status_offset * sizeof(float)),
+            "rolling emissions, all prefix states, immutable inputs and canaries match host oracle");
+    } else {
+        YVEX_TEST_ASSERT(status == (negative == 1u ? 1 : negative == 2u ? 2 : 17),
+            "nonfinite/malformed/prior-error rolling execution stays fail-closed");
+        if (negative > 1u) YVEX_TEST_ASSERT(!memcmp(host, actual, (size_t)status_offset * sizeof(float)),
+            "invalid geometry and prior failure do not mutate state/output");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+                     "rolling component storage retires");
+    free(host); free(actual);
     return 0;
 }
 
@@ -200,12 +332,23 @@ int yvex_cuda_test_attention_reduction(void)
     int rc = yvex_backend_open(&backend, &options, &err);
     if (rc == YVEX_ERR_UNSUPPORTED) return 77;
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open reduction CUDA backend");
+    for (unsigned long long ratio = 4ull; ratio <= 128ull; ratio *= 32ull)
+        for (unsigned long long head = 128ull; head <= 512ull; head *= 4ull)
+            for (int checkpoints = 0; checkpoints <= 1; ++checkpoints)
+                for (unsigned long long rows = 6ull; rows <= 128ull; rows += 122ull)
+                    if (rolling_rows_check(backend, ratio, head, rows, checkpoints, 0u)) return 1;
+    for (unsigned int negative = 1u; negative <= 3u; ++negative)
+        if (rolling_rows_check(backend, 4ull, 128ull, 6ull, 1, negative)) return 1;
     for (size_t i = 0u; i < sizeof(widths) / sizeof(widths[0]); ++i)
         for (unsigned int attention_class = 0u; attention_class < 3u; ++attention_class)
-            for (unsigned int scenario = 0u; scenario < 3u; ++scenario)
+            for (unsigned int scenario = 0u; scenario < 3u; ++scenario) {
                 if (reduction_check(backend, widths[i], attention_class, scenario, 0)) return 1;
+                if (widths[i] <= 512ull && reduction_check(backend, widths[i], attention_class, scenario, 2)) return 1;
+            }
     for (unsigned int scenario = 3u; scenario <= 7u; ++scenario)
         if (reduction_check(backend, 512ull, 1u, scenario, 0)) return 1;
+    for (unsigned int scenario = 3u; scenario <= 7u; ++scenario)
+        if (reduction_check(backend, 512ull, 1u, scenario, 2)) return 1;
     for (unsigned int attention_class = 0u; attention_class < 3u; ++attention_class)
         for (unsigned int scenario = 0u; scenario < 3u; ++scenario)
             if (reduction_check(backend, 512ull, attention_class, scenario, 1)) return 1;

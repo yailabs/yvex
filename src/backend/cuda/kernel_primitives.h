@@ -35,10 +35,19 @@ static __device__ float f16_bits_to_float(unsigned int h)
 }
 static __device__ unsigned int qtype_load_u16(const unsigned char *bytes)
 {
+    if (!((unsigned long long)bytes & 1ull))
+        return *(const unsigned short *)bytes;
     return (unsigned int)bytes[0] | ((unsigned int)bytes[1] << 8);
 }
 static __device__ unsigned int qtype_load_u32(const unsigned char *bytes)
 {
+    /* Preserve the exact four-byte extent, including unaligned row tails.
+     * Never align down or read an extra word outside the admitted payload. */
+    if (!((unsigned long long)bytes & 3ull))
+        return *(const unsigned int *)bytes;
+    if (!((unsigned long long)bytes & 1ull))
+        return (unsigned int)*(const unsigned short *)bytes |
+               ((unsigned int)*(const unsigned short *)(bytes + 2u) << 16u);
     return (unsigned int)bytes[0] |
            ((unsigned int)bytes[1] << 8) |
            ((unsigned int)bytes[2] << 16) |
@@ -370,21 +379,10 @@ static __device__ float q8_0_q8_k_dot_group(const unsigned char *weight,
     }
     return total;
 }
-static __device__ int q2_k_dot16_group(const unsigned char *weight,
-                                       const unsigned char *activation,
-                                       unsigned int shift, unsigned int group_lane,
-                                       unsigned int group_width)
-{
-    int sum = 0;
-#pragma unroll
-    for (unsigned int segment = group_lane; segment < 4u;
-         segment += group_width) {
-        unsigned int i = segment * 4u;
-        int packed = (int)((qtype_load_u32(weight + i) >> shift) & 0x03030303u);
-        sum = __dp4a(packed, (int)qtype_load_u32(activation + i), sum);
-    }
-    return q8_group_sum(sum, group_width);
-}
+/* Distribute complete integer terms, then communicate once. For arbitrary
+ * encoded bytes |dot| <= 256*3*128*15 and |minimum| <= 16*32768*15;
+ * every partial and total fits I32 exactly. Floating scale and row reduction
+ * order remain unchanged. No per-term shuffle is numerically necessary. */
 static __device__ float q2_k_q8_k_dot_group(const unsigned char *weight,
                                             const unsigned char *activation,
                                             unsigned int group_width)
@@ -395,21 +393,20 @@ static __device__ float q2_k_q8_k_dot_group(const unsigned char *weight,
     const unsigned char *q8 = activation + 4u;
     float activation_scale = __uint_as_float(qtype_load_u32(activation));
     int minimum_sum = 0, dot = 0;
-    for (unsigned int i = group_lane; i < 16u; i += group_width)
-        minimum_sum += q8_k_sum(activation, i) * (int)(scales[i] >> 4u);
-    minimum_sum = q8_group_sum(minimum_sum, group_width);
-#pragma unroll
-    for (unsigned int term = 0u; term < 16u; ++term) {
+    for (unsigned int term = group_lane; term < 16u; term += group_width) {
         unsigned int half = term >> 3u;
         unsigned int within = term & 7u;
         unsigned int group = within >> 1u;
         unsigned int side = within & 1u;
-        int term_dot = q2_k_dot16_group(
+        int term_dot = q2_k_dot16(
             quantized + half * 32u + side * 16u,
             q8 + half * 128u + group * 32u + side * 16u,
-            group * 2u, group_lane, group_width);
-        if (!group_lane) dot += (int)(scales[term] & 15u) * term_dot;
+            group * 2u);
+        dot += (int)(scales[term] & 15u) * term_dot;
+        minimum_sum += q8_k_sum(activation, term) * (int)(scales[term] >> 4u);
     }
+    dot = q8_group_sum(dot, group_width);
+    minimum_sum = q8_group_sum(minimum_sum, group_width);
     if (group_lane) return 0.0f;
     return activation_scale * f16_bits_to_float(qtype_load_u16(weight + 80u)) *
                (float)dot -
@@ -424,8 +421,10 @@ static __device__ float iq2_xxs_q8_k_dot_group(const unsigned char *weight,
     float weight_scale = f16_bits_to_float(qtype_load_u16(weight));
     float activation_scale = __uint_as_float(qtype_load_u32(activation));
     int total = 0;
-#pragma unroll
-    for (unsigned int group = 0u; group < 8u; ++group) {
+    /* The integer subtotal, including the odd group scale, is bounded by
+     * 256*43*128*31 < 2^31. Reassociation is exact before the unchanged
+     * float conversion/scaling; lanes own complete groups, not half a DP4A. */
+    for (unsigned int group = group_lane; group < 8u; group += group_width) {
         unsigned int grids = qtype_load_u32(weight + 2u + group * 8u);
         unsigned int sign_scale = qtype_load_u32(weight + 6u + group * 8u);
         int group_sum = 0;
@@ -436,16 +435,14 @@ static __device__ float iq2_xxs_q8_k_dot_group(const unsigned char *weight,
                 (sign_scale >> (7u * subgroup)) & 127u);
             unsigned short grid = grid_table ? grid_table[grid_index] : iq2_xxs_grid[grid_index];
             const unsigned char *q8 = activation + 4u + group * 32u + subgroup * 8u;
-            int subgroup_sum = group_lane < 2u
-                ? __dp4a(iq2_xxs_i8x4(grid, group_lane ? 4u : 0u, signs),
-                          (int)qtype_load_u32(q8 + group_lane * 4u), 0)
-                : 0;
-            subgroup_sum = q8_group_sum(subgroup_sum, group_width);
-            if (!group_lane) group_sum += subgroup_sum;
+            group_sum = __dp4a(iq2_xxs_i8x4(grid, 0u, signs),
+                                (int)qtype_load_u32(q8), group_sum);
+            group_sum = __dp4a(iq2_xxs_i8x4(grid, 4u, signs),
+                                (int)qtype_load_u32(q8 + 4u), group_sum);
         }
-        if (!group_lane)
-            total += group_sum * (int)(2u * (sign_scale >> 28u) + 1u);
+        total += group_sum * (int)(2u * (sign_scale >> 28u) + 1u);
     }
+    total = q8_group_sum(total, group_width);
     return group_lane ? 0.0f
                       : 0.125f * weight_scale * activation_scale * (float)total;
 }

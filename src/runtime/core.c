@@ -1879,7 +1879,7 @@ int yvex_runtime_session_open(yvex_runtime_execution_session **out,
     if (yvex_runtime_workspace_identity_compute(
             model->summary.runtime_model_identity, request->backend,
             request->maximum_host_bytes, request->maximum_device_bytes,
-            workspace_bytes, 0ull, NULL, session->summary.workspace_identity,
+            workspace_bytes, 0ull, 0ull, NULL, session->summary.workspace_identity,
             err) != YVEX_OK) {
         rc = yvex_runtime_private_reject_as(
             failure, YVEX_MODEL_ENGINE_FAILURE_BACKEND,

@@ -21,8 +21,8 @@ extern "C" {
 #define YVEX_GRAPH_ATTENTION_STATE_SCHEMA_V4 4u
 #define YVEX_ATTENTION_STATE_RECIPE_SCHEMA_V1 1u
 #define YVEX_ATTENTION_STATE_COMPONENT_CAP 8u
-#define YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1 1u
-#define YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP 37u
+#define YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3 3u
+#define YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP 41u
 
 typedef enum {
     YVEX_ATTENTION_STATE_COMPONENT_HISTORY = 0,
@@ -173,7 +173,11 @@ typedef enum {
     YVEX_ATTENTION_WORKSPACE_OUTPUT_LOW,
     YVEX_ATTENTION_WORKSPACE_TOPK_POSITIONS,
     YVEX_ATTENTION_WORKSPACE_TOPK_SCORES,
-    YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES
+    YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES,
+    YVEX_ATTENTION_WORKSPACE_MAIN_PROJECTED_VALUES,
+    YVEX_ATTENTION_WORKSPACE_MAIN_PROJECTED_SCORES,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_VALUES,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_SCORES
 } yvex_attention_workspace_component_kind;
 typedef enum {
     YVEX_ATTENTION_WORKSPACE_EXECUTION = 0,
@@ -190,6 +194,7 @@ typedef struct {
 struct yvex_attention_workspace_recipe {
     unsigned int schema_version;
     unsigned long long layer_index, token_capacity;
+    unsigned long long prefix_checkpoint_capacity;
     yvex_attention_execution_mode mode;
     yvex_attention_operation_scope scope;
     yvex_attention_evidence_level evidence_level;
@@ -200,6 +205,11 @@ struct yvex_attention_workspace_recipe {
 };
 int yvex_attention_workspace_recipe_seal(yvex_attention_workspace_recipe *recipe,
                                          yvex_error *err);
+/* Bound the graph-owned CUDA publication arena, excluding borrowed history
+ * and device intermediates. device_output omits host output only at NONE scope.
+ * Backend staging and candidate state are separate. */
+int yvex_attention_publication_workspace_required(
+    const yvex_attention_workspace_recipe *, int device_output, unsigned long long *, yvex_error *);
 
 typedef struct {
     yvex_attention_probe_scope scope;

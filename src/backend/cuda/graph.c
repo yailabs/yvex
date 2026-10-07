@@ -23,11 +23,19 @@ typedef struct {
     char identity[YVEX_SHA256_HEX_BYTES];
     CUfunction function;
     unsigned int grid, block, shared_bytes;
+    yvex_backend_operation_variant variant;
+    char *stage;
 } cuda_kernel_signature;
 typedef struct {
     CUgraphNode node;
-    char identity[YVEX_SHA256_HEX_BYTES];
+    cuda_kernel_signature signature;
 } cuda_kernel_binding;
+static void kernel_bindings_free(cuda_kernel_binding *bindings, size_t count)
+{
+    if (bindings)
+        for (size_t i = 0u; i < count; ++i) free(bindings[i].signature.stage);
+    free(bindings);
+}
 struct yvex_backend_cuda_graph {
     yvex_backend *backend;
     yvex_backend_cuda_graph *next;
@@ -280,11 +288,17 @@ int yvex_cuda_graph_kernel_capture(yvex_backend *backend,
                           graph->capture_kernels[graph->capture_kernel_count].identity, err);
     if (rc == YVEX_OK) {
         cuda_kernel_signature *signature =
-            &graph->capture_kernels[graph->capture_kernel_count++];
+            &graph->capture_kernels[graph->capture_kernel_count];
+        signature->stage = strdup(stage);
+        if (!signature->stage)
+            return graph_reject(err, YVEX_ERR_NOMEM, "cuda.graph.kernel_capture",
+                                "captured kernel stage allocation failed");
+        signature->variant = variant;
         signature->function = function;
         signature->grid = grid;
         signature->block = block;
         signature->shared_bytes = shared_bytes;
+        graph->capture_kernel_count++;
     }
     return rc;
 }
@@ -517,9 +531,14 @@ static int graph_inventory(yvex_backend_cuda_graph *owner, CUgraph candidate,
         index = order[position];
         if (types[index] != 0) continue;
         bindings[kernel].node = nodes[index];
-        memcpy(bindings[kernel].identity, owner->capture_kernels[kernel].identity,
-               sizeof(bindings[kernel].identity));
-        memcpy(node_identities[index], bindings[kernel].identity,
+        bindings[kernel].signature = owner->capture_kernels[kernel];
+        bindings[kernel].signature.stage = strdup(owner->capture_kernels[kernel].stage);
+        if (!bindings[kernel].signature.stage) {
+            rc = graph_reject(err, YVEX_ERR_NOMEM, "cuda.graph.kernel_nodes",
+                              "captured kernel stage allocation failed");
+            goto done;
+        }
+        memcpy(node_identities[index], bindings[kernel].signature.identity,
                sizeof(node_identities[index]));
         kernel++;
     }
@@ -538,7 +557,7 @@ static int graph_inventory(yvex_backend_cuda_graph *owner, CUgraph candidate,
     }
 done:
     free(node_identities);
-    free(bindings);
+    kernel_bindings_free(bindings, owner->capture_kernel_count);
     free(canonical);
     free(order);
     free(indegree);
@@ -872,6 +891,8 @@ static int graph_begin(yvex_backend_cuda_graph *graph, yvex_error *err)
     state->capture_owner = graph;
     state->capture_stream = graph->stream;
     graph->capture_origin_state = graph->state;
+    for (size_t i = 0u; i < graph->capture_kernel_count; ++i)
+        free(graph->capture_kernels[i].stage);
     graph->capture_kernel_count = 0u;
     graph->state = YVEX_BACKEND_CUDA_GRAPH_CAPTURING;
     graph->capture_started_ns = yvex_core_monotonic_ns();
@@ -951,7 +972,7 @@ static int graph_end(yvex_backend_cuda_graph *graph, yvex_error *err)
         rc = exec_identity(graph, graph_identity, new_exec_identity, err);
     }
     if (rc != YVEX_OK) {
-        free(candidate_kernel_bindings);
+        kernel_bindings_free(candidate_kernel_bindings, candidate_kernel_count);
         graph_capture_restore(graph, YVEX_BACKEND_CUDA_GRAPH_REASON_CAPTURE_FAILED);
         return candidate_destroy(graph, candidate, rc, err);
     }
@@ -967,7 +988,7 @@ static int graph_end(yvex_backend_cuda_graph *graph, yvex_error *err)
                                   "cuda.graph.instantiate", err);
         }
         if (rc != YVEX_OK) {
-            free(candidate_kernel_bindings);
+            kernel_bindings_free(candidate_kernel_bindings, candidate_kernel_count);
             graph_capture_restore(graph, YVEX_BACKEND_CUDA_GRAPH_REASON_INSTANTIATE_FAILED);
             return candidate_destroy(graph, candidate, rc, err);
         }
@@ -979,7 +1000,7 @@ static int graph_end(yvex_backend_cuda_graph *graph, yvex_error *err)
             graph->instantiate_elapsed_ns = now - instantiate_started;
     } else {
         if (candidate_kernel_count != graph->kernel_node_count) {
-            free(candidate_kernel_bindings);
+            kernel_bindings_free(candidate_kernel_bindings, candidate_kernel_count);
             yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "cuda.graph.update",
                             "CUDA graph kernel count changed; expected=%zu actual=%zu",
                             graph->kernel_node_count, candidate_kernel_count);
@@ -1000,17 +1021,18 @@ static int graph_end(yvex_backend_cuda_graph *graph, yvex_error *err)
         }
         update_finished = yvex_core_monotonic_ns();
         if (rc != YVEX_OK) {
-            free(candidate_kernel_bindings);
+            kernel_bindings_free(candidate_kernel_bindings, candidate_kernel_count);
             graph_capture_restore(graph, YVEX_BACKEND_CUDA_GRAPH_REASON_UPDATE_INCOMPATIBLE);
             yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "cuda.graph.update",
                             "CUDA graph update is incompatible; update_result=%d",
                             update_result.result);
             return candidate_destroy(graph, candidate, YVEX_ERR_UNSUPPORTED, err);
         }
-        for (kernel_index = 0u; kernel_index < candidate_kernel_count; ++kernel_index)
-            memcpy(graph->kernel_bindings[kernel_index].identity,
-                   candidate_kernel_bindings[kernel_index].identity,
-                   sizeof(graph->kernel_bindings[kernel_index].identity));
+        for (kernel_index = 0u; kernel_index < candidate_kernel_count; ++kernel_index) {
+            free(graph->kernel_bindings[kernel_index].signature.stage);
+            graph->kernel_bindings[kernel_index].signature =
+                candidate_kernel_bindings[kernel_index].signature;
+        }
         free(candidate_kernel_bindings);
         candidate_kernel_bindings = NULL;
         rc = candidate_destroy(graph, candidate, YVEX_OK, err);
@@ -1020,7 +1042,7 @@ static int graph_end(yvex_backend_cuda_graph *graph, yvex_error *err)
             graph->last_update_elapsed_ns = update_finished - update_started;
     }
     if (candidate_kernel_bindings) {
-        free(graph->kernel_bindings);
+        kernel_bindings_free(graph->kernel_bindings, graph->kernel_node_count);
         graph->kernel_bindings = candidate_kernel_bindings;
         graph->kernel_node_count = candidate_kernel_count;
     }
@@ -1210,7 +1232,7 @@ int yvex_cuda_graph_kernel_update(yvex_backend *backend,
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
     yvex_backend_cuda_graph *graph = state ? state->parameter_update_owner : NULL;
     yvex_cuda_kernel_node_params node_params;
-    char identity[YVEX_SHA256_HEX_BYTES];
+    const cuda_kernel_signature *signature;
     int rc;
     rc = backend_dispatch_admit(backend, stage, err);
     if (rc != YVEX_OK) return rc;
@@ -1220,10 +1242,13 @@ int yvex_cuda_graph_kernel_update(yvex_backend *backend,
         return graph_reject(err, YVEX_ERR_STATE, stage,
                             "CUDA graph kernel replay parameters are incomplete");
     }
-    if (kernel_signature(backend, variant, function, grid, block, shared_bytes, stage,
-                         identity, err) != YVEX_OK)
-        return YVEX_ERR_STATE;
-    if (strcmp(identity, graph->kernel_bindings[graph->kernel_update_cursor].identity) != 0) {
+    /* Bundle/functions are immutable within this backend lifetime. Compare the exact
+     * admitted transient tuple; durable pointer-free signatures remain capture-owned. */
+    signature = &graph->kernel_bindings[graph->kernel_update_cursor].signature;
+    if (variant != signature->variant || function != signature->function ||
+        grid != signature->grid || block != signature->block ||
+        shared_bytes != signature->shared_bytes || !stage ||
+        strcmp(stage, signature->stage) != 0) {
         yvex_error_setf(err, YVEX_ERR_STATE, stage,
                         "CUDA graph kernel schedule mismatch at ordinal %zu",
                         graph->kernel_update_cursor);
@@ -1444,8 +1469,8 @@ int yvex_cuda_attention_graph_key(const yvex_backend *backend,
           (!job->candidate_block_visible ||
            job->local_count - yvex_cuda_attention_local_capacity(configuration, job, 0) >
                job->token_count)) ||
-         job->compressed_count > configuration->compressed_capacity ||
-         job->indexer_count > configuration->indexer_capacity))
+         job->compressed_count > yvex_cuda_attention_history_capacity(configuration, job, 0) ||
+         job->indexer_count > yvex_cuda_attention_history_capacity(configuration, job, 1)))
         return graph_reject(err, YVEX_ERR_BOUNDS, "cuda.attention.graph_key",
                             "CUDA attention history exceeds its admitted capture bucket");
     activations[0] = &job->attention_kv_activation;
@@ -1455,7 +1480,7 @@ int yvex_cuda_attention_graph_key(const yvex_backend *backend,
     yvex_sha256_init(&hash);
 #define HASH(value) \
     do { if (!yvex_sha256_update_u64(&hash, (unsigned long long)(value))) goto failed; } while (0)
-    if (!yvex_sha256_update_text(&hash, "yvex.cuda.attention-topology.v14") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.cuda.attention-topology.v23") ||
         !yvex_sha256_update_text(&hash, configuration->compatibility_identity) ||
         !yvex_sha256_update_text(&hash, configuration->capture_bucket))
         goto failed;
@@ -1476,12 +1501,25 @@ int yvex_cuda_attention_graph_key(const yvex_backend *backend,
     HASH(job->compute_contract); HASH(job->hidden_width);
     HASH(job->q_rank); HASH(job->query_heads); HASH(job->head_dimension);
     HASH(job->kv_width); HASH(job->sliding_window); HASH(job->compression_ratio);
+    if (first <= YVEX_CUDA_ATTENTION_STAGE_COMPRESS &&
+        last > YVEX_CUDA_ATTENTION_STAGE_COMPRESS && job->compression_ratio) {
+        /* Only the emission pattern changes launch topology. A window with no
+         * emissions shares one graph regardless of absolute position/cursor. */
+        unsigned long long first_emit = job->compression_ratio - 1ull -
+            job->token_position % job->compression_ratio;
+        HASH(first_emit < job->token_count ? first_emit : job->token_count);
+        if (job->attention_class == YVEX_BACKEND_ATTENTION_CSA) {
+            unsigned long long score_grid = yvex_cuda_attention_score_grid(job);
+            if (!score_grid || score_grid > UINT_MAX) goto failed;
+            HASH(score_grid);
+        }
+    }
     HASH(job->output_groups); HASH(job->output_group_input_width); HASH(job->output_rank);
     HASH(job->indexer_heads); HASH(job->indexer_head_dimension); HASH(job->indexer_topk);
     HASH(yvex_cuda_attention_local_capacity(configuration, job, 0)); HASH(job->local_stride);
-    HASH(configuration->compressed_capacity);
+    HASH(yvex_cuda_attention_history_capacity(configuration, job, 0));
     HASH(job->compressed_stride);
-    HASH(configuration->indexer_capacity); HASH(job->indexer_stride);
+    HASH(yvex_cuda_attention_history_capacity(configuration, job, 1)); HASH(job->indexer_stride);
     HASH(job->main_rolling.present);
     HASH(job->main_rolling.ratio); HASH(job->main_rolling.head_dimension);
     HASH(job->main_rolling.state_width); HASH(job->main_rolling.state_slots);
@@ -1587,7 +1625,7 @@ static int graph_invalidate(yvex_backend_cuda_graph *graph, yvex_error *err)
         graph->pending_graph = NULL;
     }
     memset(&graph->inventory, 0, sizeof(graph->inventory));
-    free(graph->kernel_bindings);
+    kernel_bindings_free(graph->kernel_bindings, graph->kernel_node_count);
     graph->kernel_bindings = NULL;
     graph->kernel_node_count = 0u;
     graph->kernel_update_cursor = 0u;
@@ -1659,8 +1697,10 @@ static int graph_release(yvex_backend_cuda_graph **graph_ptr, yvex_error *err)
     }
     graph = *graph_ptr;
     if (!graph->backend) {
+        for (size_t i = 0u; i < graph->capture_kernel_count; ++i)
+            free(graph->capture_kernels[i].stage);
         free(graph->capture_kernels);
-        free(graph->kernel_bindings);
+        kernel_bindings_free(graph->kernel_bindings, graph->kernel_node_count);
         free(graph->compatibility_identity);
         free(graph);
         *graph_ptr = NULL;
@@ -1682,6 +1722,8 @@ static int graph_release(yvex_backend_cuda_graph **graph_ptr, yvex_error *err)
     graph->stream = NULL;
     graph_unlink(graph);
     graph->backend = NULL;
+    for (size_t i = 0u; i < graph->capture_kernel_count; ++i)
+        free(graph->capture_kernels[i].stage);
     free(graph->capture_kernels);
     free(graph->compatibility_identity);
     free(graph);

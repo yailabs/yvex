@@ -7,6 +7,7 @@
 #ifndef INCLUDE_YVEX_INTERNAL_GENERATION_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_GENERATION_H_INCLUDED
 #include <yvex/internal/core.h>
+#include <yvex/internal/backend.h>
 #include <yvex/internal/deployment.h>
 #include <yvex/internal/evidence.h>
 #include <yvex/internal/sampling.h>
@@ -341,6 +342,10 @@ typedef struct {
     yvex_runtime_generation_result execution;
     yvex_runtime_generation_evidence evidence;
     yvex_runtime_generation_context_summary context;
+    /* Observed after execution, before owned cleanup; unavailable is explicit.
+     * This is backend staging, not artifact residency or total process memory. */
+    int host_workspace_available;
+    yvex_backend_host_workspace_summary host_workspace;
     yvex_runtime_generation_token_result *tokens;
     unsigned long long token_count;
     unsigned char *text;

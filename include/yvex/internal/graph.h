@@ -139,6 +139,7 @@ typedef struct {
 
 typedef struct {
     unsigned long long token_count, local_tail_count, compressed_entry_count, indexer_entry_count;
+    unsigned long long local_capacity, compressed_capacity, indexer_capacity;
     const float *local_kv;
     unsigned long long local_kv_stride;
     const unsigned long long *local_positions;
@@ -150,7 +151,7 @@ typedef struct {
     const unsigned long long *indexer_positions;
     yvex_attention_rolling_state_view main_rolling_state;
     yvex_attention_rolling_state_view indexer_rolling_state;
-    int immutable;
+    int immutable, capacity_known;
 } yvex_attention_history_view;
 
 typedef enum {

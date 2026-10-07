@@ -43,6 +43,7 @@ int yvex_runtime_workspace_identity_compute(
     const char *runtime_model_identity, yvex_backend_kind backend,
     unsigned long long maximum_host_bytes, unsigned long long maximum_device_bytes,
     unsigned long long workspace_bytes, unsigned long long host_workspace_bytes,
+    unsigned long long device_workspace_bytes,
     const char *capacity_identity, char output[YVEX_SHA256_HEX_CAP], yvex_error *err) {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
@@ -56,13 +57,14 @@ int yvex_runtime_workspace_identity_compute(
         return YVEX_ERR_FORMAT;
     }
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.runtime.workspace.v2") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.runtime.workspace.v3") ||
         !yvex_sha256_update_text(&hash, runtime_model_identity) ||
         !yvex_sha256_update_u64(&hash, backend) ||
         !yvex_sha256_update_u64(&hash, maximum_host_bytes) ||
         !yvex_sha256_update_u64(&hash, maximum_device_bytes) ||
         !yvex_sha256_update_u64(&hash, workspace_bytes) ||
         !yvex_sha256_update_u64(&hash, host_workspace_bytes) ||
+        !yvex_sha256_update_u64(&hash, device_workspace_bytes) ||
         !yvex_sha256_update_text(&hash, capacity_identity ? capacity_identity : "") ||
         !yvex_sha256_final(&hash, digest)) {
         yvex_error_set(err, YVEX_ERR_STATE, "runtime.workspace.identity",

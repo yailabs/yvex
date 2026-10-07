@@ -422,8 +422,18 @@ static int moe_test_scheduler_results(void)
             YVEX_ERR_INVALID_ARG && !result.completed && sentinel == -99.0f,
             "scheduler refuses device populations without matching local and batch result tuples");
     }
+    attention.envelope_output = NULL;
+    request.device_rows = &device;
+    request.device_results = request.batch_device_results = &results;
+    for (unsigned int mode = 0u; mode < 2u; ++mode) {
+        request.execution_class = mode ? YVEX_EXECUTION_CLASS_DEVICE_NATIVE
+                                       : YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
+        YVEX_TEST_ASSERT(yvex_runtime_private_engine_scheduler_moe_execute(&request, &err) ==
+            YVEX_ERR_INVALID_ARG && !result.completed && sentinel == -99.0f,
+            "CPU admission refuses device-only activations in either execution class");
+    }
     YVEX_TEST_ASSERT(yvex_backend_close_checked(&backend, &err) == YVEX_OK, "scheduler test cleanup");
-    puts("MoE scheduler: 3 mismatched device/result populations refused before execution; output unchanged");
+    puts("MoE scheduler: 3 mismatched tuples and 2 CPU device-only inputs refused; output unchanged");
     return 0;
 }
 

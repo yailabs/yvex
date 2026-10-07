@@ -190,6 +190,14 @@ typedef struct yvex_transformer_attention_request {
     yvex_device_tensor *workspace;
 } yvex_transformer_attention_request;
 struct yvex_backend_transformer_operations {
+    /* Optional paired completion scope for serialized physical SSA work.
+     * Intermediate device values are not public results. The runner must
+     * complete even after refusal/cancellation, before admitting any output.
+     * Absent hooks retain synchronous operation behavior; nesting is refused.
+     * The runner owns the declared byte workspace until checked completion. */
+    unsigned long long program_workspace_bytes;
+    int (*program_begin)(yvex_backend *, yvex_device_tensor *, yvex_error *);
+    int (*program_complete)(yvex_backend *, yvex_backend_operation_facts *, yvex_error *);
     int (*modulate_bf16)(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
         const unsigned int *, yvex_device_tensor *, unsigned long long, unsigned long long,
         unsigned long long, unsigned long long, unsigned int, unsigned int,

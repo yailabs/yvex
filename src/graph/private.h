@@ -507,7 +507,7 @@ int yvex_attention_cuda_trace_open(yvex_attention_publication *trace,
     const yvex_attention_layer_plan *layer, yvex_attention_operation_scope scope,
     const yvex_attention_history_view *history, unsigned long long token_position,
     unsigned long long token_count, yvex_attention_evidence_level evidence_level,
-    int retain_prefix_checkpoints, yvex_attention_workspace *workspace,
+    int retain_prefix_checkpoints, int device_output, yvex_attention_workspace *workspace,
     unsigned long long limit_bytes,
     unsigned long long *owned_bytes, yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_cuda_publish(attention_cuda_context *context);

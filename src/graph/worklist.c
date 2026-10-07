@@ -84,10 +84,12 @@ static int execution_batch_sources_hash(yvex_sha256 *hash,
 int yvex_execution_batch_seal(yvex_execution_batch *batch, yvex_error *err)
 {
     yvex_sha256 hash;
-    if (!batch || batch->schema_version != YVEX_EXECUTION_BATCH_SCHEMA_V2 ||
+    if (!batch || batch->schema_version != YVEX_EXECUTION_BATCH_SCHEMA_V3 ||
         batch->provenance > YVEX_EXECUTION_BATCH_COMPILED_COMPATIBLE ||
         batch->phase >= YVEX_EXECUTION_PHASE_COUNT ||
-        !batch->row_count || batch->row_count >= 64ull ||
+        !batch->row_count || (batch->row_count >= 64ull &&
+         (batch->provenance != YVEX_EXECUTION_BATCH_PREFILL ||
+          batch->row_count > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH)) ||
         (batch->provenance == YVEX_EXECUTION_BATCH_SINGLE_ROW &&
          batch->row_count != 1ull) ||
         (batch->provenance == YVEX_EXECUTION_BATCH_SPECULATIVE_VERIFICATION &&
@@ -102,7 +104,7 @@ int yvex_execution_batch_seal(yvex_execution_batch *batch, yvex_error *err)
         return worklist_refuse(
             err, YVEX_ERR_INVALID_ARG, "execution batch identity or provenance is incomplete");
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.execution-batch.v2") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.execution-batch.v3") ||
         !yvex_sha256_update_u64(&hash, batch->schema_version) ||
         !yvex_sha256_update_u64(&hash, batch->provenance) ||
         !yvex_sha256_update_u64(&hash, batch->phase) ||
@@ -141,11 +143,13 @@ int yvex_execution_batch_validate(const yvex_execution_batch *batch,
 int yvex_execution_compatibility_key_validate(
     const yvex_execution_compatibility_key *key, yvex_error *err)
 {
-    if (!key || key->schema_version != YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V2 ||
+    if (!key || key->schema_version != YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V3 ||
         key->phase >= YVEX_EXECUTION_PHASE_COUNT ||
         key->operation >= YVEX_EXECUTION_COMPATIBILITY_OPERATION_COUNT ||
         !key->engine_generation || !key->row_width || !key->admitted_width ||
-        key->admitted_width >= 64ull)
+        (key->admitted_width >= 64ull &&
+         (key->phase != YVEX_EXECUTION_PHASE_PREFILL ||
+          key->admitted_width > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH)))
         return worklist_refuse(
             err, YVEX_ERR_INVALID_ARG,
             "execution compatibility geometry or engine handle is incomplete");
@@ -177,10 +181,14 @@ int yvex_expert_worklist_policy_seal(yvex_expert_worklist_policy *policy,
 {
     yvex_sha256 hash;
     int matrix_tile;
-    if (!policy || policy->schema_version != YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V2 ||
+    if (!policy || policy->schema_version != YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3 ||
         !(policy->supported_width_mask & 2ull) ||
         (policy->supported_width_mask & 1ull) ||
         (policy->supported_width_mask >> 63u) ||
+        (policy->prefill_maximum_width &&
+         (policy->prefill_maximum_width < 63ull ||
+          policy->prefill_maximum_width > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH ||
+          policy->supported_width_mask != 0x7ffffffffffffffeull)) ||
         policy->row_implementation >= YVEX_ENGINE_IMPLEMENTATION_COUNT)
         return worklist_refuse(err, YVEX_ERR_INVALID_ARG,
                                "expert worklist width policy is incomplete");
@@ -195,9 +203,10 @@ int yvex_expert_worklist_policy_seal(yvex_expert_worklist_policy *policy,
         return worklist_refuse(err, YVEX_ERR_INVALID_ARG,
                                "expert matrix-tile width policy is inconsistent");
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.expert-worklist-policy.v2") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.expert-worklist-policy.v3") ||
         !yvex_sha256_update_u64(&hash, policy->schema_version) ||
         !yvex_sha256_update_u64(&hash, policy->supported_width_mask) ||
+        !yvex_sha256_update_u64(&hash, policy->prefill_maximum_width) ||
         !yvex_sha256_update_u64(&hash, policy->matrix_tile_minimum) ||
         !yvex_sha256_update_u64(&hash, policy->row_implementation) ||
         !yvex_sha256_update_u64(&hash, policy->matrix_implementation) ||
@@ -213,7 +222,8 @@ int yvex_expert_worklist_policy_validate(
 {
     yvex_expert_worklist_policy expected;
     char identity[YVEX_SHA256_HEX_CAP];
-    if (!policy || !worklist_identity_valid(policy->identity))
+    if (!policy || policy->schema_version != YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3 ||
+        !worklist_identity_valid(policy->identity))
         return worklist_refuse(err, YVEX_ERR_INVALID_ARG,
                                "expert worklist policy identity is unavailable");
     expected = *policy;
@@ -227,6 +237,18 @@ int yvex_expert_worklist_policy_validate(
     return YVEX_OK;
 }
 
+int yvex_expert_worklist_width_admitted(const yvex_expert_worklist_policy *policy,
+    yvex_execution_phase phase, unsigned long long width)
+{
+    if (!policy || policy->schema_version != YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3 ||
+        !width || (unsigned int)phase >= YVEX_EXECUTION_PHASE_COUNT) return 0;
+    if (width < 63ull) return (policy->supported_width_mask & (1ull << width)) != 0ull;
+    return phase == YVEX_EXECUTION_PHASE_PREFILL &&
+           width <= policy->prefill_maximum_width &&
+           policy->prefill_maximum_width <= YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH &&
+           policy->supported_width_mask == 0x7ffffffffffffffeull;
+}
+
 static int worklist_request_valid(const yvex_expert_worklist_request *request,
                                   const yvex_expert_worklist_storage *storage)
 {
@@ -237,9 +259,8 @@ static int worklist_request_valid(const yvex_expert_worklist_request *request,
            yvex_expert_worklist_policy_validate(request->policy, NULL) == YVEX_OK &&
            request->expert_count && request->expert_count <= 256ull &&
            request->experts_per_row && request->experts_per_row <= request->expert_count &&
-           request->batch->row_count < 63ull &&
-           (request->policy->supported_width_mask &
-            (1ull << request->batch->row_count)) &&
+           yvex_expert_worklist_width_admitted(request->policy,
+               request->batch->phase, request->batch->row_count) &&
            yvex_core_u64_mul(request->batch->row_count, request->experts_per_row, &pairs) &&
            pairs == request->pair_count && request->selected_experts &&
            request->route_weights && storage->expert_ids && storage->bucket_offsets &&
@@ -301,6 +322,9 @@ int yvex_expert_worklist_build(const yvex_expert_worklist_request *request,
         return worklist_refuse(err, YVEX_ERR_INVALID_ARG,
                                "expert worklist request or storage is invalid");
     maximum_width = worklist_maximum_width(request->policy->supported_width_mask);
+    if (request->batch->phase == YVEX_EXECUTION_PHASE_PREFILL &&
+        request->policy->prefill_maximum_width > maximum_width)
+        maximum_width = request->policy->prefill_maximum_width;
     for (expert = 0ull; expert < request->expert_count; ++expert) {
         unsigned long long population = 0ull, start = cursor;
         for (pair = 0ull; pair < request->pair_count; ++pair) {

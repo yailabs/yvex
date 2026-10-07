@@ -177,7 +177,7 @@ static void workspace_recipe_add(
 {
     if (!count) return;
     recipe->components[recipe->component_count] = (yvex_attention_workspace_component){
-        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1,
+        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3,
         .ordinal = recipe->component_count++, .kind = slot->kind,
         .lifetime = slot->lifetime,
         .element_count = count, .element_width = width, .alignment = 256ull,
@@ -228,7 +228,11 @@ static const workspace_recipe_slot workspace_recipe_layout[] = {
     {YVEX_ATTENTION_WORKSPACE_OUTPUT_LOW, YVEX_ATTENTION_WORKSPACE_EXECUTION, 1},
     {YVEX_ATTENTION_WORKSPACE_TOPK_POSITIONS, YVEX_ATTENTION_WORKSPACE_EXECUTION, 1},
     {YVEX_ATTENTION_WORKSPACE_TOPK_SCORES, YVEX_ATTENTION_WORKSPACE_EXECUTION, 0},
-    {YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES, YVEX_ATTENTION_WORKSPACE_EXECUTION, 0}
+    {YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES, YVEX_ATTENTION_WORKSPACE_EXECUTION, 0},
+    {YVEX_ATTENTION_WORKSPACE_MAIN_PROJECTED_VALUES, YVEX_ATTENTION_WORKSPACE_EXECUTION, 1},
+    {YVEX_ATTENTION_WORKSPACE_MAIN_PROJECTED_SCORES, YVEX_ATTENTION_WORKSPACE_EXECUTION, 1},
+    {YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_VALUES, YVEX_ATTENTION_WORKSPACE_EXECUTION, 1},
+    {YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_SCORES, YVEX_ATTENTION_WORKSPACE_EXECUTION, 1}
 };
 
 /*
@@ -280,12 +284,13 @@ int yvex_attention_workspace_recipe_build(
     selected = candidates < layer->indexer_topk ? candidates : layer->indexer_topk;
     if (layer->indexer_required && !selected) selected = 1ull;
     memset(recipe, 0, sizeof(*recipe));
-    recipe->schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1;
+    recipe->schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3;
     recipe->layer_index = layer->layer_index;
     recipe->mode = mode;
     recipe->scope = scope;
     recipe->evidence_level = evidence_level;
     recipe->token_capacity = token_capacity;
+    recipe->prefix_checkpoint_capacity = token_capacity;
     yvex_core_text_copy(recipe->state_recipe_identity,
                         sizeof(recipe->state_recipe_identity), state->identity);
     counts[0] = 1ull;
@@ -325,6 +330,8 @@ int yvex_attention_workspace_recipe_build(
     counts[33] = output_low;
     counts[34] = selected;
     counts[35] = counts[36] = candidates;
+    counts[37] = counts[38] = main ? main->rolling.state_width : 0ull;
+    counts[39] = counts[40] = index ? index->rolling.state_width : 0ull;
     widths[0] = scope == YVEX_ATTENTION_OPERATION_CORE ||
                         attention_uses_dense_qkv(layer)
                     ? input_bytes
@@ -343,6 +350,7 @@ int yvex_attention_workspace_recipe_build(
         if (!widths[slot]) widths[slot] = sizeof(float);
     widths[34] = widths[36] = sizeof(unsigned long long);
     widths[35] = sizeof(float);
+    for (slot = 37u; slot < 41u; ++slot) widths[slot] = sizeof(float);
     for (slot = 0u;
          slot < sizeof(workspace_recipe_layout) / sizeof(workspace_recipe_layout[0]);
          ++slot)
@@ -355,6 +363,73 @@ malformed:
         layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
         YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err, YVEX_ERR_FORMAT,
         "attention workspace recipe is malformed");
+}
+
+int yvex_attention_publication_workspace_required(
+    const yvex_attention_workspace_recipe *recipe, int device_output,
+    unsigned long long *bytes, yvex_error *err)
+{
+    yvex_attention_workspace_recipe checked;
+    unsigned long long total = 0ull;
+    if (bytes) *bytes = 0ull;
+    if (!recipe || !bytes || (device_output != 0 && device_output != 1)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "attention.publication.workspace", "recipe and output required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    checked = *recipe;
+    int rc = yvex_attention_workspace_recipe_seal(&checked, err);
+    if (rc != YVEX_OK) return rc;
+    if (strcmp(checked.identity, recipe->identity)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.publication.workspace", "stale workspace identity");
+        return YVEX_ERR_STATE;
+    }
+    for (unsigned int i = 0u; i < recipe->component_count; ++i) {
+        const yvex_attention_workspace_component *c = &recipe->components[i];
+        unsigned long long count = c->element_count, scale = c->scales_with_tokens ? recipe->token_capacity : 1ull;
+        unsigned long long extent;
+        /* Histories are borrowed from committed state, never copied into the
+         * graph trace. CUDA owns projection scratch; this arena owns only
+         * publication/evidence and transactional state deltas. */
+        if (c->kind >= YVEX_ATTENTION_WORKSPACE_LOCAL_VALUES &&
+            c->kind <= YVEX_ATTENTION_WORKSPACE_INDEXER_POSITIONS) continue;
+        if (recipe->evidence_level < YVEX_ATTENTION_EVIDENCE_FULL &&
+            (c->kind == YVEX_ATTENTION_WORKSPACE_INGRESS ||
+             c->kind == YVEX_ATTENTION_WORKSPACE_TOPK_INDICES ||
+             c->kind == YVEX_ATTENTION_WORKSPACE_TOPK_POSITIONS)) continue;
+        if (recipe->evidence_level == YVEX_ATTENTION_EVIDENCE_NONE &&
+            device_output && (c->kind == YVEX_ATTENTION_WORKSPACE_OUTPUT ||
+                              c->kind == YVEX_ATTENTION_WORKSPACE_ENVELOPE_STAGING))
+            continue;
+        if (recipe->evidence_level == YVEX_ATTENTION_EVIDENCE_NONE &&
+            (c->kind == YVEX_ATTENTION_WORKSPACE_Q_LOW || c->kind == YVEX_ATTENTION_WORKSPACE_QUERY ||
+             c->kind == YVEX_ATTENTION_WORKSPACE_ATTENTION_VALUES ||
+             c->kind == YVEX_ATTENTION_WORKSPACE_INDEX_QUERY || c->kind == YVEX_ATTENTION_WORKSPACE_INDEX_WEIGHTS))
+            continue;
+        if (c->kind == YVEX_ATTENTION_WORKSPACE_ENVELOPE_OUTPUT ||
+            c->kind == YVEX_ATTENTION_WORKSPACE_OUTPUT_LOW ||
+            c->kind == YVEX_ATTENTION_WORKSPACE_TOPK_SCORES ||
+            c->kind == YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES ||
+            (c->kind >= YVEX_ATTENTION_WORKSPACE_MAIN_PROJECTED_VALUES &&
+             c->kind <= YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_SCORES)) continue;
+        if (c->kind >= YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_VALUES &&
+            c->kind <= YVEX_ATTENTION_WORKSPACE_INDEXER_ROLLING_SCORES) scale = 1ull;
+        if (c->kind >= YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_CANDIDATE_VALUES &&
+            c->kind <= YVEX_ATTENTION_WORKSPACE_INDEXER_ROLLING_CANDIDATE_SCORES)
+            scale = recipe->prefix_checkpoint_capacity ? recipe->prefix_checkpoint_capacity : 1ull;
+        /* CUDA publication moves the trace into its deferred completion slot;
+         * it does not clone it in this arena. The candidate-state owner has
+         * its own accounted storage. Each acquisition uses max_align_t. */
+        if (!yvex_core_u64_mul(count, scale, &count) ||
+            !yvex_core_u64_mul(count, c->element_width, &extent) ||
+            !yvex_core_u64_add(extent, _Alignof(max_align_t), &extent) ||
+            !yvex_core_u64_add(total, extent, &total)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "attention.publication.workspace", "publication extent overflowed");
+            return YVEX_ERR_BOUNDS;
+        }
+    }
+    *bytes = total;
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 static void attention_failure_set(

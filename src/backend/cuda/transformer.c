@@ -55,6 +55,8 @@ static int status_transaction_open(yvex_backend *backend, yvex_cuda_work *work,
     }
     *work = (yvex_cuda_work){.backend = backend, .state = state,
                              .variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED};
+    if (state->program_status_active)
+        return yvex_cuda_work_status(work, &work->status, stage, err);
     if (!begin && state->status_transaction_active) {
         work->status = state->transformer_status;
         work->status_deferred = 1;
@@ -84,12 +86,14 @@ static int status_transaction_close(yvex_cuda_work *work, int wait, int complete
     yvex_error cleanup;
     int host_status = 0, cleanup_rc, waited = 0, device_wide = 0;
     if (!work || !work->backend || !facts ||
-        (wait != 0 && wait != 1) || (complete != 0 && complete != 1)) {
+        (wait < 0 || wait > 2) || (complete != 0 && complete != 1)) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, stage,
                        "CUDA status transaction completion is invalid");
         return YVEX_ERR_INVALID_ARG;
     }
     state = work->state;
+    /* A host publication is an observation boundary even inside a scope. */
+    if (work->status_scoped && wait != 2) wait = 0;
     if (rc == YVEX_OK && wait) {
         rc = yvex_cuda_launch_synchronize(
             work->backend, work->variant, &device_wide, stage, err);
@@ -113,7 +117,7 @@ static int status_transaction_close(yvex_cuda_work *work, int wait, int complete
         rc = cleanup_rc;
         if (err) *err = cleanup;
     }
-    facts->temporary_bytes = sizeof(host_status);
+    facts->temporary_bytes = work->status_scoped ? 0u : sizeof(host_status);
     if (waited) {
         facts->d2h_bytes += sizeof(host_status);
         facts->download_count++;
@@ -121,6 +125,85 @@ static int status_transaction_close(yvex_cuda_work *work, int wait, int complete
         else facts->queue_synchronizations++;
     }
     return rc;
+}
+
+/* One checked boundary owns both the status lifetime and the final barrier.
+ * No arithmetic/reduction class changes, and failed scopes cannot publish. */
+int yvex_cuda_program_begin(yvex_backend *backend, yvex_device_tensor *workspace, yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_cuda_work work = {.backend = backend, .state = state};
+    int rc = backend_dispatch_admit(backend, "cuda.program.begin", err);
+    if (rc != YVEX_OK) return rc;
+    if (!state || state->program_status_active ||
+        (state->status_transaction_active && !state->transformer_status) ||
+        yvex_cuda_capture_active(backend) || state->parameter_update_owner ||
+        !backend_tensor_owner_is(backend, workspace) ||
+        workspace->dtype != YVEX_DTYPE_I8 || workspace->bytes != sizeof(int)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "cuda.program.begin",
+            "one non-nested physical program completion owner is required");
+        return YVEX_ERR_STATE;
+    }
+    rc = yvex_cuda_set_current(backend, "cuda.program.begin", err);
+    if (rc == YVEX_OK && state->status_transaction_active) {
+        /* An earlier producer on this serialized stream can leave a latched
+         * check for its successor. Transfer that word, never zero it: the
+         * physical program's completion must observe both populations. */
+        CUstream stream = yvex_cuda_launch_stream(backend);
+        CUresult copied = stream && state->driver.cuMemcpyDtoDAsync_v2
+            ? state->driver.cuMemcpyDtoDAsync_v2((CUdeviceptr)workspace->data,
+                state->transformer_status, sizeof(int), stream)
+            : !stream ? state->driver.cuMemcpyDtoD_v2((CUdeviceptr)workspace->data,
+                state->transformer_status, sizeof(int)) : (CUresult)1;
+        rc = yvex_cuda_status(&state->driver, copied, "cuda.program.status-handoff", err);
+    } else if (rc == YVEX_OK) {
+        rc = yvex_cuda_work_initialize(&work, (CUdeviceptr)workspace->data,
+            sizeof(int), NULL, 1, "cuda.program.status", err);
+    }
+    if (rc == YVEX_OK) {
+        state->status_transaction_active = 0;
+        state->program_status = (CUdeviceptr)workspace->data;
+        state->program_status_active = 1;
+    }
+    return rc;
+}
+
+int yvex_cuda_program_complete(yvex_backend *backend,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    int status = 0, device_wide = 0, rc;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (!state || !state->program_status_active || !facts) {
+        yvex_error_set(err, YVEX_ERR_STATE, "cuda.program.complete",
+            "one active physical program completion owner is required");
+        return YVEX_ERR_STATE;
+    }
+    state->program_status_active = 0;
+    rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        &device_wide, "cuda.program.complete", err);
+    if (rc == YVEX_OK) {
+        facts->queue_synchronizations = !device_wide;
+        facts->device_synchronizations = device_wide;
+        rc = yvex_cuda_status(&state->driver, state->driver.cuMemcpyDtoH_v2(
+            &status, state->program_status, sizeof(status)), "cuda.program.status", err);
+    }
+    state->program_status = 0u;
+    if (rc != YVEX_OK) {
+        /* An unobserved completion cannot become a fresh usable scope. Checked
+         * backend teardown retains responsibility for outstanding work. */
+        atomic_store_explicit(&backend->status, YVEX_BACKEND_STATUS_FAILED, memory_order_release);
+        return rc;
+    }
+    facts->download_count = 1u;
+    facts->d2h_bytes = facts->temporary_bytes = sizeof(status);
+    facts->compulsory_memory_facts_available = 1;
+    if (status) {
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "cuda.program.status",
+            "physical program reported invalid numerics (device status %d)", status);
+        return YVEX_ERR_FORMAT;
+    }
+    return YVEX_OK;
 }
 static int cuda_transformer_refuse(yvex_error *err, yvex_status status,
                                    const char *where, const char *reason)
@@ -297,7 +380,7 @@ int yvex_cuda_transformer_feature_mean(
             0u, params, "cuda.transformer.feature-mean", err);
     }
     rc = status_transaction_close(
-        &work, !work.status_deferred || host_output, 0, rc, facts,
+        &work, host_output ? 2 : !work.status_deferred, 0, rc, facts,
         "cuda.transformer.feature-mean.status", err);
     if (rc == YVEX_OK && host_output)
         rc = yvex_cuda_status(
@@ -331,7 +414,9 @@ int yvex_cuda_residual_pre(yvex_backend *backend, const yvex_mhc_device_request 
             "mHC geometry has no admitted launch implementation");
     /* The retained numerical kernel rounds its input in place. Operate on
      * prepared scratch so the pure IR operation never mutates an SSA operand. */
-    rc = yvex_backend_tensor_copy(backend, r->workspace, r->inputs[0], err);
+    /* The scratch and its consumer share this execution stream. Completion is
+     * owned by status_transaction_close below, not by an intermediate copy. */
+    rc = yvex_backend_tensor_copy_async(backend, r->workspace, r->inputs[0], err);
     if (rc != YVEX_OK) return rc;
     rc = status_transaction_open(backend, &work, 0, "cuda.mhc-pre.status", err);
     CUdeviceptr residual = (CUdeviceptr)r->workspace->data, mix = (CUdeviceptr)r->inputs[1]->data;
@@ -502,12 +587,12 @@ static int transformer_launch(yvex_backend *backend, CUfunction function,
     rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
                           function, grid, TRANSFORMER_BLOCK, shared_bytes,
                           parameters, stage, err);
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK && !yvex_cuda_state(backend)->program_status_active)
         rc = yvex_cuda_synchronize(
             backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, stage, err);
     if (rc == YVEX_OK) {
         facts->kernel_launches = 1ull;
-        facts->device_synchronizations = 1ull;
+        facts->device_synchronizations = !yvex_cuda_state(backend)->program_status_active;
         facts->compulsory_memory_facts_available = 1;
     }
     return rc;

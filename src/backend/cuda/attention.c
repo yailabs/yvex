@@ -1,6 +1,6 @@
 /* Execute admitted encoded attention with device-complete numerical work and publication. */
 #include <yvex/internal/backend.h>
-#include "src/backend/cuda/private.h"
+#include "src/backend/cuda/attention_ops.h"
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -76,7 +76,7 @@ typedef struct {
     CUdeviceptr history_indexer, history_indexer_positions;
     CUdeviceptr selected, selected_positions, selected_count, valid_count;
     CUdeviceptr topk_scores, valid_indexes, device_status;
-    unsigned long long query_width, candidate_capacity, topk_capacity, low_count;
+    unsigned long long query_width, candidate_capacity, score_grid, topk_capacity, low_count;
     unsigned long long local_extent, compressed_extent, history_index_extent;
     unsigned long long local_storage_extent, compressed_storage_extent, indexer_storage_extent;
     unsigned long long local_capacity, local_ring_capacity, compressed_capacity, indexer_capacity;
@@ -111,7 +111,8 @@ typedef enum {
     EXT_PHASE_COMPRESSED_POSITIONS, EXT_PHASE_INDEXER, EXT_PHASE_INDEXER_POSITIONS,
     EXT_MAIN_ROLLING, EXT_INDEX_ROLLING, EXT_MAIN_PUBLICATION, EXT_INDEX_PUBLICATION,
     EXT_LOCAL_USED, EXT_COMPRESSED_USED, EXT_INDEXER_USED,
-    EXT_MAIN_WIDTH, EXT_MAIN_HEAD, EXT_INDEX_WIDTH, EXT_INDEX_HEAD, EXT_MAIN_POSITION, EXT_INDEX_POSITION
+    EXT_MAIN_WIDTH, EXT_MAIN_HEAD, EXT_INDEX_WIDTH, EXT_INDEX_HEAD, EXT_MAIN_POSITION, EXT_INDEX_POSITION,
+    EXT_MAIN_PROJECTED, EXT_INDEX_PROJECTED
 } attn_extent_kind;
 typedef enum {
     SRC_NONE = 0, SRC_INPUT, SRC_LOCAL, SRC_LOCAL_POSITIONS, SRC_COMPRESSED, SRC_COMPRESSED_POSITIONS,
@@ -291,6 +292,24 @@ static const attn_upload_spec attn_uploads[] = {
     U(phase_index_score, SRC_INDEX_SCORE, EXT_INDEX_STATE, EXT_INDEX_ROLLING, sizeof(float), 0, "index_score_state")
 };
 #undef U
+/* Resolve committed state before preparing host staging that no device work
+ * consumes. Candidate local rows may alias only within the admitted ring. */
+static int attn_upload_resident(attn_run *run, const attn_upload *upload) {
+    unsigned long long address = 0ull;
+    int persistent = upload->device == &run->phase_compressed ||
+        upload->device == &run->phase_indexer ||
+        (upload->device == &run->phase_local &&
+         run->initial_local_count + run->job->token_count <= run->local_ring_capacity);
+    if (!persistent || !upload->source || upload->generated) return YVEX_OK;
+    int resident = yvex_backend_state_residency_resolve(run->backend, upload->source,
+        upload->used ? (size_t)(upload->used * upload->width) : 1u, &address);
+    if (resident == YVEX_BACKEND_RESIDENT_INVALID)
+        return attn_run_fail(run, YVEX_BACKEND_ATTENTION_FAILURE_COPY, upload->stage,
+            upload->count * upload->width, 0ull, YVEX_ERR_STATE,
+            "persistent device state mapping is invalid");
+    if (resident == YVEX_BACKEND_RESIDENT_HIT) *upload->device = (CUdeviceptr)address;
+    return YVEX_OK;
+}
 static int attn_upload_plan(attn_run *run) {
     size_t index;
     for (index = 0u; index < sizeof(attn_uploads) /
@@ -321,6 +340,9 @@ static int attn_upload_plan(attn_run *run) {
                 run, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT,
                 upload.stage, upload.count, upload.used, YVEX_ERR_BOUNDS,
                 "CUDA attention graph input is invalid");
+        int rc = attn_upload_resident(run, &upload);
+        if (rc != YVEX_OK) return rc;
+        if (*upload.device) continue;
         run->uploads[run->upload_count++] = upload;
     }
     return YVEX_OK;
@@ -544,10 +566,9 @@ static int attn_alloc_values(attn_run *run, CUdeviceptr *target,
                              const void *source, int zero, const char *stage) {
     const attn_upload *upload;
     const void *stable_source = source;
-    unsigned long long resident_address = 0ull;
     CUdeviceptr device_source = 0u;
-    size_t bytes, visible_bytes;
-    int captured = attn_graph_mode(run), persistent_input, resident, rc;
+    size_t bytes;
+    int captured = attn_graph_mode(run), rc;
     if (*target) return YVEX_OK;
     upload = attn_upload_find(run, target);
     if (!yvex_cuda_work_checked_bytes(count, (unsigned long long)width, &bytes))
@@ -557,22 +578,6 @@ static int attn_alloc_values(attn_run *run, CUdeviceptr *target,
             "CUDA attention allocation size overflowed");
     if (target == &run->phase_input)
         device_source = yvex_cuda_activation_pointer(run->backend, run->job->device_input);
-    visible_bytes = upload && upload->used ? (size_t)(upload->used * upload->width) : 1u;
-    /* Transient candidate capacity is wider; only committed ring rows may alias residency. */
-    persistent_input = upload && (target == &run->phase_compressed || target == &run->phase_indexer ||
-        (target == &run->phase_local && run->initial_local_count + run->job->token_count <= run->local_ring_capacity));
-    resident = source && !device_source && upload && !upload->generated && persistent_input
-        ? yvex_backend_state_residency_resolve(run->backend, source, visible_bytes,
-                                               &resident_address)
-        : YVEX_BACKEND_RESIDENT_MISS;
-    if (resident == YVEX_BACKEND_RESIDENT_INVALID)
-        return attn_run_fail(
-            run, YVEX_BACKEND_ATTENTION_FAILURE_COPY, stage, bytes, 0ull,
-            YVEX_ERR_STATE, "persistent device state mapping is invalid");
-    if (resident == YVEX_BACKEND_RESIDENT_HIT) {
-        *target = (CUdeviceptr)resident_address;
-        return YVEX_OK;
-    }
     if (source && !device_source) {
         rc = run->ops->account_transfer(
             count, width, &run->h2d_bytes, stage, run->failure, run->err);
@@ -650,13 +655,13 @@ static const attn_allocation_spec attn_allocations[] = {
     A(phase_main_score, EXT_MAIN_STATE, SRC_MAIN_SCORE, 0u, 0, 0, "main_score_state"),
     A(phase_index_kv, EXT_INDEX_STATE, SRC_INDEX_KV, 0u, 0, 0, "index_kv_state"),
     A(phase_index_score, EXT_INDEX_STATE, SRC_INDEX_SCORE, 0u, 0, 0, "index_score_state"),
-    A(rolling[ROLL_MAIN].kv, EXT_MAIN_WIDTH, SRC_NONE, 0u, 1, 0, "main_kv"),
-    A(rolling[ROLL_MAIN].score, EXT_MAIN_WIDTH, SRC_NONE, 0u, 1, 0, "main_score"),
+    A(rolling[ROLL_MAIN].kv, EXT_MAIN_PROJECTED, SRC_NONE, 0u, 1, 0, "main_kv"),
+    A(rolling[ROLL_MAIN].score, EXT_MAIN_PROJECTED, SRC_NONE, 0u, 1, 0, "main_score"),
     A(rolling[ROLL_MAIN].ape, EXT_MAIN_WIDTH, SRC_NONE, 0u, 1, 0, "main_ape"),
     A(rolling[ROLL_MAIN].scratch_value, EXT_MAIN_HEAD, SRC_NONE, 0u, 1, 0, "main_value"),
     A(rolling[ROLL_MAIN].positions, EXT_MAIN_POSITION, SRC_NONE, sizeof(unsigned long long), 1, 0, "main_position"),
-    A(rolling[ROLL_INDEX].kv, EXT_INDEX_WIDTH, SRC_NONE, 0u, 1, 0, "index_kv"),
-    A(rolling[ROLL_INDEX].score, EXT_INDEX_WIDTH, SRC_NONE, 0u, 1, 0, "index_score"),
+    A(rolling[ROLL_INDEX].kv, EXT_INDEX_PROJECTED, SRC_NONE, 0u, 1, 0, "index_kv"),
+    A(rolling[ROLL_INDEX].score, EXT_INDEX_PROJECTED, SRC_NONE, 0u, 1, 0, "index_score"),
     A(rolling[ROLL_INDEX].ape, EXT_INDEX_WIDTH, SRC_NONE, 0u, 1, 0, "index_ape"),
     A(rolling[ROLL_INDEX].scratch_value, EXT_INDEX_HEAD, SRC_NONE, 0u, 1, 0, "index_value"),
     A(rolling[ROLL_INDEX].positions, EXT_INDEX_POSITION, SRC_NONE, sizeof(unsigned long long), 1, 0, "index_position"),
@@ -727,8 +732,10 @@ static int attn_extent(const attn_run *run,
     case EXT_COMPRESSED_USED: left = run->compressed_extent; break;
     case EXT_INDEXER_USED: left = run->history_index_extent; break;
     case EXT_MAIN_WIDTH: left = run->job->main_rolling.state_width; break;
+    case EXT_MAIN_PROJECTED: right = run->job->main_rolling.state_width; break;
     case EXT_MAIN_HEAD: left = run->job->main_rolling.head_dimension; break;
     case EXT_INDEX_WIDTH: left = run->job->indexer_rolling.state_width; break;
+    case EXT_INDEX_PROJECTED: right = run->job->indexer_rolling.state_width; break;
     case EXT_INDEX_HEAD: left = run->job->indexer_rolling.head_dimension; break;
     case EXT_MAIN_POSITION: left = run->job->main_rolling.present ? 1ull : 0ull; break;
     case EXT_INDEX_POSITION: left = run->job->indexer_rolling.present ? 1ull : 0ull; break;
@@ -794,6 +801,7 @@ static int attn_prepare(attn_run *run) {
             run->job->phase, YVEX_BACKEND_ATTENTION_PHASE_COUNT, YVEX_ERR_BOUNDS,
             "CUDA attention phase has no active capacity configuration");
     run->phase_start_position = run->job->token_position;
+    run->score_grid = yvex_cuda_attention_score_grid(run->job);
     run->input_extent = run->job->operation_scope == YVEX_BACKEND_ATTENTION_SCOPE_ENVELOPE
                             ? run->job->residual_expanded_width : run->job->hidden_width;
     if ((run->job->device_input || run->job->device_output) &&
@@ -821,7 +829,7 @@ static int attn_prepare(attn_run *run) {
         run->job->sliding_window - (run->job->candidate_block_visible ? 0ull : 1ull);
     run->compressed_capacity = run->job->attention_class == YVEX_BACKEND_ATTENTION_SWA
         ? 0ull : (attn_graph_mode(run)
-                      ? run->configuration->compressed_capacity
+                      ? yvex_cuda_attention_history_capacity(run->configuration, run->job, 0)
                       : (run->job->token_position + run->job->token_count) /
                             run->job->compression_ratio);
     if (run->job->attention_class != YVEX_BACKEND_ATTENTION_SWA &&
@@ -829,7 +837,7 @@ static int attn_prepare(attn_run *run) {
         run->compressed_capacity = 1ull;
     run->indexer_capacity = run->job->attention_class == YVEX_BACKEND_ATTENTION_CSA
         ? (attn_graph_mode(run)
-               ? run->configuration->indexer_capacity : run->compressed_capacity)
+               ? yvex_cuda_attention_history_capacity(run->configuration, run->job, 1) : run->compressed_capacity)
         : 0ull;
     if (!yvex_core_u64_add(run->job->token_position, run->job->token_count, &phase_end) ||
         !yvex_core_u64_add(
@@ -1243,52 +1251,23 @@ static int attn_rolling_execute(attn_run *run, unsigned int kind) {
     const yvex_backend_attention_activation *activation = index
         ? &run->job->compressor_rotated_activation : &run->job->compressor_activation;
     const char *stage = index ? "cuda.attention.index_rolling" : "cuda.attention.main_rolling";
-    unsigned long long activation_width = rolling->head_dimension, rows = rolling->state_width;
-    int emit, rc;
-    if (run->job->weights[base].qtype == YVEX_GGUF_QTYPE_BF16 &&
-        run->job->weights[base + 1].qtype == YVEX_GGUF_QTYPE_BF16 &&
-        rows <= UINT_MAX * 8ull - 7ull) {
-        unsigned int grid = (unsigned int)((rows + 7ull) / 8ull);
-        void *params[] = {
-            &run->weight[base], &run->job->weights[base].row_bytes,
-            &run->weight[base + 1], &run->job->weights[base + 1].row_bytes,
-            &run->job->weights[base].row_width, &rows,
-            &run->core_input, &device->kv, &device->score, &run->device_status};
-        rc = run->ops->launch(&run->resources, run->state->attention_bf16_pair_function,
-                              grid, 8u, 0u, params, stage, run->failure, run->err);
-    } else {
-        rc = run->ops->matvec(&run->resources, &run->job->weights[base], run->weight[base],
-            0ull, rolling->state_width, 1ull, run->core_input, device->kv, 0,
-            run->device_status, stage, run->failure, run->err);
-        if (rc == YVEX_OK)
-            rc = run->ops->matvec(&run->resources, &run->job->weights[base + 1],
-                run->weight[base + 1], 0ull, rolling->state_width, 1ull,
-                run->core_input, device->score, 0, run->device_status, stage,
-                run->failure, run->err);
+    unsigned long long activation_width = rolling->head_dimension;
+    int emit = device->value_count != 0ull, rc = YVEX_OK;
+    if (!run->ordinal) {
+        /* The phase owns projected rows and candidate state. Batch only the
+         * causal transitions; emission normalization stays before its first
+         * consumer, and every retained prefix remains independently addressable. */
+        yvex_cuda_attention_rolling_phase phase = {
+            rolling, &run->job->weights[base], &run->weight[base],
+            run->phase_core_input, device->kv, device->score, device->ape,
+            device->before_kv, device->before_score,
+            index ? run->phase_new_indexer : run->phase_new_compressed,
+            run->device_status, run->job->token_count, run->job->retain_prefix_checkpoints};
+        rc = run->ops->rolling_phase(&run->resources, &phase, stage, run->failure, run->err);
     }
-    if (rc == YVEX_OK)
-        rc = run->ops->decode(
-            &run->resources, &run->job->weights[base + 2],
-            run->weight[base + 2], run->job->token_position % rolling->ratio,
-            rolling->state_width, device->ape, run->device_status, stage,
-            run->failure, run->err);
-    if (rc != YVEX_OK) return rc;
-    emit = device->value_count != 0ull;
-    if (!emit && attn_graph_mode(run)) device->value = device->scratch_value;
-    {
-        void *params[] = {
-            &device->before_kv, &device->before_score, &device->kv,
-            &device->score, &device->ape, &device->after_kv,
-            &device->after_score, &device->value, (void *)&rolling->ratio,
-            (void *)&rolling->head_dimension, (void *)&rolling->state_width,
-            (void *)&rolling->state_slots, (void *)&rolling->cursor,
-            (void *)&rolling->overlap, &emit, &run->device_status
-        };
-        rc = run->ops->launch(
-            &run->resources, run->state->attention_rolling_state_function, 1u,
-            YVEX_CUDA_ATTN_BLOCK, 0u, params, stage, run->failure, run->err);
-    }
-    if (rc != YVEX_OK || (!emit && !attn_graph_mode(run))) return rc;
+    /* Non-emitting transitions publish rolling state only. Graph compatibility
+     * binds the emission pattern, so no dummy normalization/rotation is needed. */
+    if (rc != YVEX_OK || !emit) return rc;
     rc = run->ops->weighted_norm(
         &run->resources, device->value, rolling->head_dimension, 1ull,
         &run->job->weights[base + 3], run->weight[base + 3],
@@ -1354,8 +1333,9 @@ static int attn_index_topk(attn_run *run) {
     const yvex_backend_attention_job *job = run->job;
     attn_rolling_run *rolling = &run->rolling[ROLL_INDEX];
     unsigned long long candidates = job->indexer_count + rolling->value_count, extent;
-    if (run->candidate_capacity > UINT_MAX || !yvex_core_power_of_two_capacity(candidates, 1ull, 1ull, 1ull, &extent) ||
-        extent > run->candidate_capacity) return attn_run_fail(run,
+    if (!run->score_grid || run->score_grid > UINT_MAX ||
+        !yvex_core_power_of_two_capacity(candidates, 1ull, 1ull, 1ull, &extent) ||
+        extent > run->candidate_capacity || extent > run->score_grid) return attn_run_fail(run,
         YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT, "cuda.attention.score",
         UINT_MAX, candidates, YVEX_ERR_BOUNDS, "candidate population exceeds launch geometry");
     void *score_params[] = {
@@ -1366,7 +1346,7 @@ static int attn_index_topk(attn_run *run) {
         (void *)&job->compression_ratio, (void *)&job->token_position, &run->topk_scores, &run->device_status
     };
     rc = run->ops->launch(&run->resources, run->state->attention_candidate_scores_function,
-        (unsigned int)run->candidate_capacity, YVEX_CUDA_ATTN_BLOCK,
+        (unsigned int)run->score_grid, YVEX_CUDA_ATTN_BLOCK,
         YVEX_CUDA_ATTN_BLOCK * sizeof(double), score_params, "cuda.attention.score", run->failure, run->err);
     if (rc != YVEX_OK) return rc;
     void *params[] = {
@@ -1413,6 +1393,11 @@ static int attn_reduce(attn_run *run) {
         CUfunction reduce = run->resources.activation_q8
             ? run->state->attention_reduce_native_function
             : run->state->attention_reduce_function;
+        if (run->resources.activation_q8 && run->job->head_dimension <= 512ull &&
+            run->job->token_count >= 16ull && batch_blocks >= 1024ull) {
+            reduce = run->state->attention_reduce_native_warp_function;
+            batch_blocks = (batch_blocks + 7ull) / 8ull;
+        }
         unsigned int reduce_shared = run->resources.activation_q8
             ? 0u : YVEX_CUDA_ATTN_BLOCK * sizeof(double);
         rc = run->ops->launch(

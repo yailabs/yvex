@@ -94,11 +94,14 @@ static int logits_program_invoke(void *context, const yvex_program_device_invoca
 }
 
 static int logits_program_open(yvex_runtime_logits_context *c, unsigned long long host_bytes,
-    yvex_error *err)
+    unsigned long long device_bytes, yvex_error *err)
 {
     static const yvex_program_device_kernel implementation = {"linear.encoded.f32.v1", logits_program_invoke};
     const yvex_program_physical_value *weight;
+    const yvex_backend_transformer_operations *ops =
+        yvex_backend_transformer_operations_get(c->session_view->backend);
     unsigned long long kh, kd, vh, vd, total;
+    unsigned long long completion = ops && ops->program_begin ? ops->program_workspace_bytes : 0u;
     unsigned long long rows = yvex_backend_kind_of(c->session_view->backend) == YVEX_BACKEND_KIND_CPU
         ? 1u : c->options.maximum_rows;
     yvex_program_kernel_parameter parameter = {0};
@@ -111,6 +114,9 @@ static int logits_program_open(yvex_runtime_logits_context *c, unsigned long lon
     parameter.weight = (yvex_component_encoded_weight){.encoded = c->resident_head,
         .encoded_bytes = c->resident_head_bytes, .row_width = c->plan.binding->row_width,
         .row_count = c->plan.binding->row_count, .row_bytes = c->plan.summary.row_bytes, .qtype = weight->qtype};
+    if (!yvex_core_u64_add(device_bytes, completion, &total) ||
+        (c->options.maximum_device_bytes && total > c->options.maximum_device_bytes))
+        return logits_refuse(err, YVEX_ERR_BOUNDS, "output completion exceeds admission budget");
     rc = yvex_program_kernels_open(&c->program_kernels, c->program, &parameter, 1u,
         c->session_view->backend, c->options.maximum_host_bytes, c->options.maximum_device_bytes, err);
     if (rc == YVEX_OK) rc = yvex_program_device_open(&c->program_device, c->program, c->session_view->backend,
@@ -118,7 +124,12 @@ static int logits_program_open(yvex_runtime_logits_context *c, unsigned long lon
     if (rc != YVEX_OK) return rc;
     yvex_program_kernels_resources(c->program_kernels, &kh, &kd);
     yvex_program_device_resources(c->program_device, &vh, &vd);
-    if (kd || vd || !yvex_core_u64_add(host_bytes, kh, &total) || !yvex_core_u64_add(total, vh, &total) ||
+    /* The output borrows its tensor slots, but a checked executor owns its
+     * declared completion storage. Admit that storage with the row buffers,
+     * not as an unbudgeted allocation or an assumption of zero VM resources. */
+    if (kd || vd != completion || !yvex_core_u64_add(device_bytes, vd, &total) ||
+        (c->options.maximum_device_bytes && total > c->options.maximum_device_bytes) ||
+        !yvex_core_u64_add(host_bytes, kh, &total) || !yvex_core_u64_add(total, vh, &total) ||
         (c->options.maximum_host_bytes && total > c->options.maximum_host_bytes))
         return logits_refuse(err, YVEX_ERR_BOUNDS, "compiled output resources exceed admission budget");
     return YVEX_OK;
@@ -268,7 +279,7 @@ static int logits_context_open(
     yvex_runtime_session_summary session_summary;
     yvex_runtime_residency_summary residency;
     unsigned long long candidate_bytes, hidden_elements, hidden_bytes;
-    unsigned long long logits_elements, device_elements, device_bytes, device_total, host_bytes;
+    unsigned long long logits_elements, device_elements, device_bytes, device_total = 0u, host_bytes;
     int rc;
     if (out) *out = NULL;
     if (!out || !model || !session || !options ||
@@ -424,7 +435,7 @@ static int logits_context_open(
             context->plan.summary.vocabulary_size, err);
         if (rc != YVEX_OK) goto failure;
     }
-    rc = logits_program_open(context, host_bytes, err);
+    rc = logits_program_open(context, host_bytes, device_total, err);
     if (rc != YVEX_OK) goto failure;
     if (pthread_mutex_init(&context->mutex, NULL) != 0) {
         rc = logits_refuse(err, YVEX_ERR_STATE,

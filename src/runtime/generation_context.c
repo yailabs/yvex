@@ -558,7 +558,7 @@ int yvex_runtime_generation_context_open(
     yvex_tokenizer_decode_options decoder_options = {0};
     const yvex_runtime_logits_plan_summary *logits_plan = NULL;
     unsigned long long hidden_bytes, logits_bytes, execution_workspace = 0ull;
-    unsigned long long physical_rows = 0ull;
+    unsigned long long physical_rows = 0ull, checkpoint_rows = 0ull;
     int rc = YVEX_OK;
     if (out) *out = NULL;
     if (!out || !model || !session || !generation_options_valid(options))
@@ -619,6 +619,14 @@ int yvex_runtime_generation_context_open(
     if (rc == YVEX_OK)
         physical_rows = context->capacity.physical_rows;
     if (rc != YVEX_OK) goto failure;
+    if (context->speculation) {
+        const yvex_speculation_family_policy *policy =
+            yvex_runtime_speculation_policy_get(context->speculation);
+        if (!policy || !yvex_core_u64_add(policy->block_size, 2ull, &checkpoint_rows)) {
+            rc = generation_context_refuse(err, YVEX_ERR_STATE, "verification workspace policy is unavailable");
+            goto failure;
+        }
+    }
     if (context->options.backend == YVEX_BACKEND_KIND_CUDA)
         rc = yvex_runtime_session_prepare_attention_workspace(
             context->session,
@@ -627,7 +635,8 @@ int yvex_runtime_generation_context_open(
                 YVEX_EXECUTION_RESOLUTION_EXACT
                 ? YVEX_RUNTIME_MODE_EAGER : YVEX_RUNTIME_MODE_FULL,
             YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE, YVEX_ATTENTION_EVIDENCE_NONE,
-            workspace_capacity, physical_rows, execution_workspace,
+            yvex_compiled_model_plan_forward(context->model_view->compiled_plan) == NULL,
+            workspace_capacity, physical_rows, checkpoint_rows, execution_workspace,
             &workspace_failure, err);
     yvex_graph_attention_capacity_plan_close(&workspace_capacity);
     if (rc != YVEX_OK) goto failure;

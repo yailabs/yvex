@@ -20,7 +20,7 @@ static int generation_phase_width_policy(void)
     yvex_engine_implementation_record policy = {0}, changed;
     const unsigned long long verification = (1ull << 7u) - 2ull;
     const unsigned long long prefill = (1ull << 33u) - 2ull;
-    policy.schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2;
+    policy.schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3;
     policy.supported_width_mask = policy.worklist_width_mask = verification;
     policy.prefill_width_mask = policy.prefill_worklist_width_mask = prefill;
     YVEX_TEST_ASSERT(yvex_runtime_specialization_phase_width_mask(
@@ -50,10 +50,38 @@ static int generation_phase_width_policy(void)
     changed.prefill_width_mask |= 1ull;
     YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
         &changed, YVEX_EXECUTION_PHASE_PREFILL, 1), "zero-row admission must refuse");
+    changed = policy;
+    changed.prefill_width_mask = changed.prefill_worklist_width_mask = 0x7ffffffffffffffeull;
+    changed.prefill_maximum_width = 256ull;
+    YVEX_TEST_ASSERT(yvex_runtime_specialization_phase_width_mask(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1) == 0x7ffffffffffffffeull &&
+        yvex_runtime_specialization_phase_width_mask(
+        &changed, YVEX_EXECUTION_PHASE_VERIFY, 1) == verification,
+        "dense prompt extent does not widen source verification");
+    changed.prefill_maximum_width = YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH + 1ull;
+    YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1), "excessive dense extent refuses");
     YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(NULL, YVEX_EXECUTION_PHASE_PREFILL, 1) &&
         !yvex_runtime_specialization_phase_width_mask(&policy, YVEX_EXECUTION_PHASE_MIXED, 1) &&
         !yvex_runtime_specialization_phase_width_mask(&policy, (yvex_execution_phase)-1, 1),
         "missing or ambiguous phase authority must refuse");
+    {
+        const yvex_engine_specialization *none = NULL;
+        unsigned long long width = 99ull;
+        yvex_error err;
+        YVEX_TEST_ASSERT(yvex_runtime_private_specializations_phase_width(
+            NULL, &none, 1u, YVEX_EXECUTION_PHASE_PREFILL, &width, &err) == YVEX_OK &&
+            width == 0ull,
+            "no routed implementation cannot impose its width on dense prefill");
+        YVEX_TEST_ASSERT(yvex_runtime_private_specializations_phase_width(
+            NULL, &none, 1u, YVEX_EXECUTION_PHASE_VERIFY, &width, &err) == YVEX_OK &&
+            width == 1ull,
+            "missing specialization never widens verification");
+        YVEX_TEST_ASSERT(yvex_runtime_private_specializations_phase_width(
+            NULL, &none, 1u, (yvex_execution_phase)-1, &width, &err) == YVEX_ERR_INVALID_ARG &&
+            width == 0ull,
+            "invalid phase refuses without an admitted width");
+    }
     return 0;
 }
 
@@ -88,7 +116,7 @@ static void generation_scheduler_key(yvex_execution_compatibility_key *key,
                                      unsigned long long layer)
 {
     memset(key, 0, sizeof(*key));
-    key->schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V2;
+    key->schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V3;
     key->phase = YVEX_EXECUTION_PHASE_DECODE;
     key->operation = YVEX_EXECUTION_COMPATIBILITY_MOE;
     key->backend_kind = 1u;

@@ -96,6 +96,20 @@ this view rather than independently resolving shapes. Runtime still validates
 actual backing, disjoint views and resource budgets. The view adds no persisted
 schema, resource reservation or model-context claim.
 
+The competitive execution candidate adds optional paired backend completion
+hooks to a synchronous physical-program invocation. The prepared executor owns
+the backend-declared byte workspace and accounts it against its device budget.
+Only checked completion admits output views; a submitted intermediate value is
+not a public result. Cancellation and operation refusal still discharge the
+scope, while a failed device barrier makes the backend cleanup-only. Nested
+scopes and release of borrowed completion storage refuse. This changes no
+persisted physical-program identity, public C layout or protocol version; it
+does not yet establish complete-model performance qualification.
+Serialized predecessor checks are transferred into the owned completion word
+without resetting their status. This is not nested scope admission. Compiled
+output executables include that word in their aggregate admission budget;
+neither a nonzero completion requirement nor a pending numerical failure may be
+discarded as an implementation convenience.
 
 ## Joint preparation and executable composition
 

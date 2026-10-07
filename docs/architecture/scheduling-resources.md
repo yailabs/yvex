@@ -138,6 +138,21 @@ engine specialization exists, memory preflight remains conservative: it cannot
 infer a wider or narrower executable population. This is arena sizing, not
 broader prefill or continuous batching admission.
 
+Internal specialization/worklist v3 can admit a bounded contiguous prompt-row
+extent separately from the sparse verification/decode width mask. Cold capacity
+planning and live scheduling consume the same authenticated phase policy;
+configured chunks do not themselves authorize wider execution. Routing still
+contains only real selected token/expert pairs. This does not widen speculative
+verification, multiply sequences or change the ordinary host's configured chunk.
+
+Attention workspace recipe v3 separates execution rows from source-required
+prefix-checkpoint capacity. Device scratch, host ingress and graph publication
+have distinct bounds. A device-owned input at ordinary evidence scope does not
+reserve an unused host ingress copy; host inputs and full forensic evidence
+retain it. Candidate state, status validation, checkpointing and transactional
+publication remain mandatory. Allocated capacity is not used bytes, physical RSS
+or observed memory traffic.
+
 The engine's resource summary distinguishes:
 
 - immutable mapped package bytes;

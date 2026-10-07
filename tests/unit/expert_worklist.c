@@ -16,7 +16,7 @@ static int worklist_test_compatibility(void)
 {
     yvex_execution_compatibility_key first = {0}, same, different;
     yvex_error err;
-    first.schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V2;
+    first.schema_version = YVEX_EXECUTION_COMPATIBILITY_SCHEMA_V3;
     first.phase = YVEX_EXECUTION_PHASE_DECODE;
     first.operation = YVEX_EXECUTION_COMPATIBILITY_MOE;
     first.backend_kind = 1u;
@@ -84,7 +84,7 @@ static int worklist_test_build(void)
     yvex_expert_worklist first, repeated;
     yvex_error err;
 
-    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V2;
+    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V3;
     batch.provenance = YVEX_EXECUTION_BATCH_SPECULATIVE_VERIFICATION;
     batch.phase = 3u;
     batch.row_count = 4ull;
@@ -105,7 +105,7 @@ static int worklist_test_build(void)
     YVEX_TEST_ASSERT(yvex_execution_batch_seal(&batch, &err) == YVEX_OK,
                      "verification execution batch should seal");
 
-    policy.schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V2;
+    policy.schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3;
     policy.supported_width_mask = 0x1feull;
     policy.matrix_tile_minimum = 3ull;
     policy.row_implementation = YVEX_ENGINE_IMPLEMENTATION_DEVICE_ENCODED_ROW;
@@ -174,7 +174,7 @@ static int worklist_test_refusals(void)
     char batch_identity[YVEX_SHA256_HEX_CAP];
     yvex_error err;
 
-    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V2;
+    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V3;
     batch.provenance = YVEX_EXECUTION_BATCH_SINGLE_ROW;
     batch.row_count = batch.source_count = batch.engine_generation = 1ull;
     batch.sources = &source;
@@ -198,7 +198,7 @@ static int worklist_test_refusals(void)
     YVEX_TEST_ASSERT(yvex_execution_batch_seal(&batch, &err) == YVEX_OK &&
                          strcmp(batch.identity, batch_identity) == 0,
                      "restored compact lineage should reproduce the batch identity");
-    policy.schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V2;
+    policy.schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3;
     policy.supported_width_mask = 2ull;
     policy.row_implementation = YVEX_ENGINE_IMPLEMENTATION_DEVICE_ENCODED_ROW;
     policy.matrix_implementation = YVEX_ENGINE_IMPLEMENTATION_COUNT;
@@ -312,7 +312,7 @@ static int worklist_test_multi_session_sources(void)
     yvex_error err;
     worklist_test_identity(sources[0].identity, '6');
     worklist_test_identity(sources[1].identity, '7');
-    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V2;
+    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V3;
     batch.provenance = YVEX_EXECUTION_BATCH_MULTI_SESSION;
     batch.phase = YVEX_EXECUTION_PHASE_DECODE;
     batch.row_count = batch.source_count = batch.engine_generation = 2ull;
@@ -332,14 +332,15 @@ static int worklist_test_multi_session_sources(void)
     return 0;
 }
 
-static int worklist_test_prompt_population(void)
+static int worklist_test_prompt_population(unsigned int count)
 {
-    enum { ROWS = 32, TOPK = 2, PAIRS = ROWS * TOPK };
-    unsigned long long selected[PAIRS], experts[2], offsets[3], populations[2];
-    unsigned long long pairs[PAIRS], rows[PAIRS], destinations[PAIRS];
-    float weights[PAIRS], ordered_weights[PAIRS];
+    enum { MAX_ROWS = 256, TOPK = 2, MAX_PAIRS = MAX_ROWS * TOPK };
+    const unsigned int ROWS = count, PAIRS = count * TOPK;
+    unsigned long long selected[MAX_PAIRS], experts[2], offsets[3], populations[2];
+    unsigned long long pairs[MAX_PAIRS], rows[MAX_PAIRS], destinations[MAX_PAIRS];
+    float weights[MAX_PAIRS], ordered_weights[MAX_PAIRS];
     yvex_execution_batch_source source = {1ull, 1ull, {0}};
-    yvex_execution_batch_row batch_rows[ROWS] = {{0}};
+    yvex_execution_batch_row batch_rows[MAX_ROWS] = {{0}};
     yvex_execution_batch batch = {0};
     yvex_expert_worklist_policy policy = {0};
     yvex_expert_worklist_request request = {0};
@@ -348,7 +349,7 @@ static int worklist_test_prompt_population(void)
         ordered_weights, 2ull, PAIRS};
     yvex_expert_worklist worklist = {0};
     yvex_error err = {0};
-    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V2;
+    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V3;
     batch.phase = YVEX_EXECUTION_PHASE_PREFILL;
     batch.provenance = YVEX_EXECUTION_BATCH_PREFILL;
     batch.row_count = ROWS;
@@ -368,13 +369,33 @@ static int worklist_test_prompt_population(void)
         }
     }
     YVEX_TEST_ASSERT(yvex_execution_batch_seal(&batch, &err) == YVEX_OK,
-                     "32 real prompt positions seal independently of verification");
-    policy.schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V2;
-    policy.supported_width_mask = (1ull << (ROWS + 1u)) - 2ull;
+                     "real prompt positions seal independently of verification");
+    policy.schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3;
+    policy.supported_width_mask = ROWS >= 63u ? 0x7ffffffffffffffeull
+        : (1ull << (ROWS + 1u)) - 2ull;
+    policy.prefill_maximum_width = ROWS >= 63u ? ROWS : 0ull;
     policy.row_implementation = YVEX_ENGINE_IMPLEMENTATION_DEVICE_ENCODED_ROW;
     policy.matrix_implementation = YVEX_ENGINE_IMPLEMENTATION_COUNT;
     YVEX_TEST_ASSERT(yvex_expert_worklist_policy_seal(&policy, &err) == YVEX_OK,
                      "bounded prompt geometry seals without matrix admission");
+    if (ROWS >= 63u) {
+        yvex_expert_worklist_policy changed = policy;
+        YVEX_TEST_ASSERT(yvex_expert_worklist_width_admitted(&policy,
+            YVEX_EXECUTION_PHASE_PREFILL, ROWS) &&
+            !yvex_expert_worklist_width_admitted(&policy, YVEX_EXECUTION_PHASE_PREFILL, ROWS + 1ull) &&
+            !yvex_expert_worklist_width_admitted(&policy, YVEX_EXECUTION_PHASE_VERIFY, ROWS),
+            "wide admission is bounded and phase-specific");
+        changed.prefill_maximum_width++;
+        YVEX_TEST_ASSERT(yvex_expert_worklist_policy_validate(&changed, &err) == YVEX_ERR_FORMAT,
+            "dense extent belongs to the sealed identity");
+        changed.prefill_maximum_width = YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH + 1ull;
+        YVEX_TEST_ASSERT(yvex_expert_worklist_policy_seal(&changed, &err) == YVEX_ERR_INVALID_ARG,
+            "out-of-range dense extent refuses");
+        changed = policy;
+        changed.supported_width_mask &= ~(1ull << 17u);
+        YVEX_TEST_ASSERT(yvex_expert_worklist_policy_seal(&changed, &err) == YVEX_ERR_INVALID_ARG,
+            "a dense extent cannot silently override a sparse hole");
+    }
     request.schema_version = YVEX_EXPERT_WORKLIST_SCHEMA_V1;
     request.batch = &batch;
     request.policy = &policy;
@@ -395,10 +416,13 @@ static int worklist_test_prompt_population(void)
                          "expert-major ordering preserves prompt position, route and publication");
     }
     policy.supported_width_mask = (1ull << 7u) - 2ull;
+    policy.prefill_maximum_width = 0ull;
     YVEX_TEST_ASSERT(yvex_expert_worklist_policy_seal(&policy, &err) == YVEX_OK &&
                          yvex_expert_worklist_build(&request, &storage, &worklist, &err) != YVEX_OK,
-                     "verification-only envelope must refuse 32 prompt rows");
-    policy.supported_width_mask = (1ull << (ROWS + 1u)) - 2ull;
+                     "verification-only envelope must refuse wide prompt rows");
+    policy.supported_width_mask = ROWS >= 63u ? 0x7ffffffffffffffeull
+        : (1ull << (ROWS + 1u)) - 2ull;
+    policy.prefill_maximum_width = ROWS >= 63u ? ROWS : 0ull;
     weights[PAIRS - 1u] = NAN;
     YVEX_TEST_ASSERT(yvex_expert_worklist_policy_seal(&policy, &err) == YVEX_OK &&
                          yvex_expert_worklist_build(&request, &storage, &worklist, &err) != YVEX_OK,
@@ -412,6 +436,7 @@ int yvex_test_expert_worklist(void)
     if (worklist_test_build() != 0) return 1;
     if (worklist_test_refusals() != 0) return 1;
     if (worklist_test_multi_session_sources() != 0) return 1;
-    if (worklist_test_prompt_population() != 0) return 1;
+    if (worklist_test_prompt_population(32u) != 0) return 1;
+    if (worklist_test_prompt_population(256u) != 0) return 1;
     return worklist_test_observation();
 }

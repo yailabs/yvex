@@ -226,6 +226,12 @@ static int test_shared_target(yvex_backend_kind kind)
             COUNT, maximum, !memcmp(actual, single, sizeof(actual)) ? "true" : "false");
         YVEX_TEST_ASSERT(maximum == 0.0f && !memcmp(actual, single, sizeof(actual)),
             "target precision matches independent codec and preserves chunk equivalence");
+        actual[0] = 12345.0f;
+        YVEX_TEST_ASSERT(yvex_program_stage_host(stage, ROWS, (const float *[]){x}, 1u,
+            (float *[]){actual}, 1u, test_shared_cancel, NULL, &facts, &err) == YVEX_ERR_CANCELLED &&
+            actual[0] == 12345.0f && yvex_program_stage_host(stage, ROWS, (const float *[]){x}, 1u,
+            (float *[]){actual}, 1u, NULL, NULL, &facts, &err) == YVEX_OK &&
+            !memcmp(actual, single, sizeof(actual)), "cancelled Q8 execution does not publish and recovers exactly");
         YVEX_TEST_ASSERT(yvex_program_stage_close(&stage, &err) == YVEX_OK &&
             yvex_backend_resident_detach(backend, &err) == YVEX_OK &&
             yvex_backend_tensor_release(backend, &resident, &err) == YVEX_OK, "Q8 target resources close");

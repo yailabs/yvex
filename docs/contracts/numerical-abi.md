@@ -33,6 +33,67 @@ not infer equivalence for operations requiring ordered F64 accumulation or
 other numerical classes. F16 conversion, matmul, normalization, attention and
 quantized variants remain explicitly unsupported by this Metal realization.
 
+## Ordered decoded-dot publication
+
+The ordinary decoded CUDA projection publishes F32 from a source-ordered F64
+dot over decoded F32 weights and F32 activations. Any subsequent additive or
+BF16 publication remains a separate, unchanged operation. Q8-activation
+reduction has its own admitted numerical class and is not this contract.
+
+The competitive execution Task integrates a **certified equivalent realization** at
+the CUDA owner; this is not a relaxed tolerance or an unordered-F32 class.
+For each result, a warp computes a parallel F64 dot and a conservative interval
+containing the literal source-ordered result. It may publish only if both
+interval endpoints round to the same F32 bit pattern. Otherwise it evaluates
+the original ordered dot on CUDA. Forensic projection retains literal ordered
+evaluation. No CPU fallback, changed weights or changed routing is involved.
+
+For finite F32 operands, each product is exact in F64. With `u = 2^-53`, width
+`n`, and parallel depth `d = ceil(n / 32) + 5`, the serial and parallel forward
+error bounds are respectively `gamma_n * A` and `gamma_d * A`, where
+`gamma_k = k*u / (1-k*u)` and `A` is the sum of absolute products. For
+`n <= 2^50`, `2*(n+d)*u*A` conservatively bounds their difference. The norm is
+bounded upward using directed F32 multiplication/addition; it is **only a proof
+bound**, not the dot accumulator. Norm overflow disables certification. The
+radius is rounded upward in F64, and interval subtraction/addition downward
+and upward respectively before round-to-nearest-even F32 conversion.
+
+For narrow block-owned F32 matrices of width at most 32768, an inconclusive
+global-norm/lattice proof may use a tighter prefix enclosure before literal
+recalculation. Each 256-term chunk has a parallel F64 sum of depth at most 13
+and an upward norm `N`. Let `T` approximate the real prefix with error `E`, and
+let `F` bound the difference between the literal ordered prefix and the real
+prefix. With `g_m = m * 2^-52 >= gamma_m` for the bounded chunk length:
+
+```
+F_next = (1 + g_m) * F + g_m * (abs(T) + E + N)
+E_next = E + g_13 * N + g_1 * (abs(T) + abs(chunk_sum))
+T_next = RN_F64(T + chunk_sum)
+```
+
+All bound arithmetic rounds upward. Final publication requires identical F32
+bits at `T - (E + F)` and `T + (E + F)`, with outward rounding. This certifies
+the original ordered computation, not just the exact mathematical sum.
+An unproved endpoint, nonfinite bound or unsupported geometry retains literal
+ordered CUDA evaluation. No epsilon is used to accept a different result.
+
+Products of finite F32 values and these bounded sums cannot underflow or
+overflow F64. Upward F32 norm underflow remains conservative. Distinct signed
+zeros do not certify equality; a zero upper norm separately proves the ordered
+result is positive zero. Nonfinite operands and nonfinite publication retain
+fail-closed semantics. Direct BF16 endpoint certification is insufficient:
+the intervening F32 rounding must be preserved.
+
+The obligation is bitwise F32 equality to the ordered oracle, including
+rounding ties, severe cancellation, subnormals, partial row populations and
+exceptional refusal. Kernel/build identity distinguishes the implementation;
+artifact and binding contents are unchanged. Component evidence is not
+upstream model conformance or full-model quality qualification. Component
+oracles and the bounded complete-model generation/lifecycle gate pass at the
+[documented integration snapshot](../evaluation/retained-observations.md#competitive-computational-integration-2026-10-07).
+Current broader qualification state belongs to the selected competitive Task
+and its independent Evaluation planes.
+
 ## Internal Activation-Prefill Boundary
 
 `include/yvex/internal/runtime_prefill.h` owns the non-installed production

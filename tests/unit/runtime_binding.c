@@ -2026,6 +2026,22 @@ static int test_prepare_reopen_import(const binding_fixture *fixture, const char
     return 0;
 }
 
+static int test_planned_prefill_width(yvex_model_engine *model)
+{
+    const yvex_model_engine_view *view = yvex_model_engine_view_get(model);
+    unsigned long long planned = ULLONG_MAX, live = ULLONG_MAX;
+    yvex_error err;
+    YVEX_TEST_ASSERT(view && yvex_runtime_private_binding_prefill_width(
+        view->compiled_binding, YVEX_BACKEND_KIND_CPU, NULL, &planned, &err) == YVEX_OK &&
+        yvex_model_engine_phase_maximum_width_copy(
+            model, YVEX_EXECUTION_PHASE_PREFILL, &live, &err) == YVEX_OK && planned == live,
+        "pre-residency row admission equals the live canonical specialization policy");
+    YVEX_TEST_ASSERT(yvex_runtime_private_binding_prefill_width(
+        NULL, YVEX_BACKEND_KIND_CPU, NULL, &planned, &err) == YVEX_ERR_INVALID_ARG &&
+        planned == 0ull, "missing binding cannot grant a planned physical population");
+    return 0;
+}
+
 static int test_compiled_model_binding_v16(const char *root)
 {
     binding_fixture fixture;
@@ -2092,6 +2108,7 @@ static int test_compiled_model_binding_v16(const char *root)
             strcmp(model->specializations[YVEX_BACKEND_KIND_CPU]->summary.identity,
                    model_summary.physical_execution_identity) != 0,
         "v16 package truth opens through one distinct engine specialization");
+    YVEX_TEST_ASSERT(test_planned_prefill_width(model) == 0, "startup and live row policies agree");
     YVEX_TEST_ASSERT(
         runtime_specialization_tensor(
             model->specializations[YVEX_BACKEND_KIND_CPU],
@@ -5086,7 +5103,7 @@ static int test_runtime_cuda_workspace_transaction(
     runtime_thread_gate gate;
     pthread_t thread;
     yvex_error err;
-    unsigned long long row_one_bytes, row_two_bytes;
+    unsigned long long row_one_bytes, row_two_bytes, device_bytes, device_two_bytes;
     int ready, rc;
 
     rc = runtime_cuda_test_ready(&ready);
@@ -5117,14 +5134,14 @@ static int test_runtime_cuda_workspace_transaction(
                 binding->summary.layer_count, capacity,
                 YVEX_ATTENTION_EXECUTION_EAGER,
                 YVEX_ATTENTION_OPERATION_ENVELOPE,
-                YVEX_ATTENTION_EVIDENCE_NONE, 1ull, 1, &row_one_bytes,
+                YVEX_ATTENTION_EVIDENCE_NONE, 1ull, 1ull, 1, 0, &row_one_bytes,
                 &err) == YVEX_OK &&
                 yvex_runtime_private_attention_workspace_required(
                     &binding->attention, binding->layers,
                     binding->summary.layer_count, capacity,
                     YVEX_ATTENTION_EXECUTION_EAGER,
                     YVEX_ATTENTION_OPERATION_ENVELOPE,
-                    YVEX_ATTENTION_EVIDENCE_NONE, 2ull, 1,
+                    YVEX_ATTENTION_EVIDENCE_NONE, 2ull, 2ull, 1, 0,
                     &row_two_bytes, &err) == YVEX_OK &&
                 row_two_bytes > row_one_bytes &&
                 yvex_runtime_private_attention_workspace_required(
@@ -5132,16 +5149,44 @@ static int test_runtime_cuda_workspace_transaction(
                     binding->summary.layer_count, capacity,
                     YVEX_ATTENTION_EXECUTION_EAGER,
                     YVEX_ATTENTION_OPERATION_ENVELOPE,
-                    YVEX_ATTENTION_EVIDENCE_NONE, 0ull, 1,
+                    YVEX_ATTENTION_EVIDENCE_NONE, 1ull, 1ull, 0, 0,
+                    &device_bytes, &err) == YVEX_OK &&
+                device_bytes > 0ull &&
+                yvex_runtime_private_attention_workspace_required(
+                    &binding->attention, binding->layers,
+                    binding->summary.layer_count, capacity,
+                    YVEX_ATTENTION_EXECUTION_EAGER,
+                    YVEX_ATTENTION_OPERATION_ENVELOPE,
+                    YVEX_ATTENTION_EVIDENCE_NONE, 2ull, 2ull, 0, 0,
+                    &device_two_bytes, &err) == YVEX_OK &&
+                device_two_bytes >= device_bytes &&
+                yvex_runtime_private_attention_workspace_required(
+                    &binding->attention, binding->layers,
+                    binding->summary.layer_count, capacity,
+                    YVEX_ATTENTION_EXECUTION_EAGER,
+                    YVEX_ATTENTION_OPERATION_ENVELOPE,
+                    YVEX_ATTENTION_EVIDENCE_NONE, 0ull, 0ull, 1, 0,
                     &row_two_bytes, &err) == YVEX_ERR_INVALID_ARG,
-            "physical row capacity scales staging independently of state capacity");
+            "host staging and device scratch independently cover physical rows");
+        /* Device-only decoded preparation and aggregate host publications have
+         * different lifetimes; neither byte extent must be smaller than the
+         * other. Compare each arena against its own row population instead. */
     }
     YVEX_TEST_ASSERT(yvex_runtime_session_summary_copy(session, &before, &err) == YVEX_OK,
                      "capture session summary before workspace transaction");
     rc = yvex_runtime_session_prepare_attention_workspace(
+        session, YVEX_RUNTIME_MODE_EAGER, YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE,
+        YVEX_ATTENTION_EVIDENCE_NONE, 2, capacity, capacity_request.token_count,
+        capacity_request.token_count, 0ull, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG &&
+        failure.code == YVEX_MODEL_ENGINE_FAILURE_INVALID_ARGUMENT &&
+        yvex_runtime_session_summary_copy(session, &after, &err) == YVEX_OK &&
+        memcmp(&before, &after, sizeof(before)) == 0,
+        "invalid ingress placement refuses before workspace or state mutation");
+    rc = yvex_runtime_session_prepare_attention_workspace(
         session, (yvex_runtime_execution_mode)-1,
-        YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE, YVEX_ATTENTION_EVIDENCE_NONE,
-        capacity, capacity_request.token_count, 0ull, &failure, &err);
+        YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE, YVEX_ATTENTION_EVIDENCE_NONE, 0,
+        capacity, capacity_request.token_count, capacity_request.token_count, 0ull, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG &&
                          failure.code == YVEX_MODEL_ENGINE_FAILURE_INVALID_ARGUMENT &&
                          yvex_runtime_session_summary_copy(session, &after, &err) == YVEX_OK &&
@@ -5153,7 +5198,7 @@ static int test_runtime_cuda_workspace_transaction(
                      "inject workspace publication and pre-release cleanup failures");
     rc = yvex_runtime_session_prepare_attention_workspace(
         session, YVEX_RUNTIME_MODE_EAGER, YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE,
-        YVEX_ATTENTION_EVIDENCE_NONE, capacity, capacity_request.token_count,
+        YVEX_ATTENTION_EVIDENCE_NONE, 0, capacity, capacity_request.token_count, capacity_request.token_count,
         0ull, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_BACKEND &&
                          failure.code == YVEX_MODEL_ENGINE_FAILURE_CLEANUP &&
@@ -5164,7 +5209,7 @@ static int test_runtime_cuda_workspace_transaction(
                      "clear workspace pre-release cleanup failure");
     rc = yvex_runtime_session_prepare_attention_workspace(
         session, YVEX_RUNTIME_MODE_EAGER, YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE,
-        YVEX_ATTENTION_EVIDENCE_NONE, capacity, capacity_request.token_count,
+        YVEX_ATTENTION_EVIDENCE_NONE, 0, capacity, capacity_request.token_count, capacity_request.token_count,
         0ull, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE &&
                          failure.code == YVEX_MODEL_ENGINE_FAILURE_BACKEND &&
@@ -5175,7 +5220,7 @@ static int test_runtime_cuda_workspace_transaction(
                      "clear workspace publication failure");
     rc = yvex_runtime_session_prepare_attention_workspace(
         session, YVEX_RUNTIME_MODE_EAGER, YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE,
-        YVEX_ATTENTION_EVIDENCE_NONE, capacity, capacity_request.token_count,
+        YVEX_ATTENTION_EVIDENCE_NONE, 0, capacity, capacity_request.token_count, capacity_request.token_count,
         0ull, &failure, &err);
     YVEX_TEST_ASSERT(
         rc == YVEX_OK &&
@@ -5184,13 +5229,14 @@ static int test_runtime_cuda_workspace_transaction(
             after.capabilities.cuda_prefill_eager_ready == 1 &&
             after.capabilities.cuda_decode_eager_ready == 1 &&
             after.host_workspace_owned && after.host_workspace_pinned &&
-            after.host_workspace_bytes > 0ull && after.device_workspace_bytes > 0ull,
+            after.host_workspace_bytes == row_one_bytes &&
+            after.device_workspace_bytes == device_bytes,
         "real resident binding admits CUDA workspace after complete rollback");
     before = after;
     rc = yvex_runtime_session_prepare_attention_workspace(
         session, YVEX_RUNTIME_MODE_EAGER,
         YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE,
-        YVEX_ATTENTION_EVIDENCE_NONE, capacity, capacity_request.token_count,
+        YVEX_ATTENTION_EVIDENCE_NONE, 0, capacity, capacity_request.token_count, capacity_request.token_count,
         0ull, &failure, &err);
     YVEX_TEST_ASSERT(
         rc == YVEX_OK &&
@@ -5208,8 +5254,8 @@ static int test_runtime_cuda_workspace_transaction(
             yvex_runtime_session_prepare_attention_workspace(
                 session, YVEX_RUNTIME_MODE_EAGER,
                 YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE,
-                YVEX_ATTENTION_EVIDENCE_NONE, capacity,
-                capacity_request.token_count, 0ull, &failure, &err) ==
+                YVEX_ATTENTION_EVIDENCE_NONE, 0, capacity,
+                capacity_request.token_count, capacity_request.token_count, 0ull, &failure, &err) ==
                 YVEX_OK &&
             yvex_runtime_session_finish(session, YVEX_OK, &err) == YVEX_OK,
         "the transaction owner may prepare persistent state and shared workspace");
@@ -5225,7 +5271,7 @@ static int test_runtime_cuda_workspace_transaction(
     rc = yvex_runtime_session_prepare_attention_workspace(
         session, YVEX_RUNTIME_MODE_EAGER,
         YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE,
-        YVEX_ATTENTION_EVIDENCE_NONE, capacity, capacity_request.token_count,
+        YVEX_ATTENTION_EVIDENCE_NONE, 0, capacity, capacity_request.token_count, capacity_request.token_count,
         0ull, &failure, &err);
     YVEX_TEST_ASSERT(
         execution.begin_status == YVEX_OK && rc == YVEX_ERR_STATE &&

@@ -323,8 +323,9 @@ int yvex_attention_workspace_recipe_seal(yvex_attention_workspace_recipe *recipe
     unsigned long long seen = 0ull;
     unsigned int index;
     if (!recipe ||
-        recipe->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1 ||
+        recipe->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3 ||
         !recipe->token_capacity || !recipe->component_count ||
+        recipe->prefix_checkpoint_capacity > recipe->token_capacity ||
         recipe->component_count > YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP ||
         recipe->mode > YVEX_ATTENTION_EXECUTION_FULL ||
         recipe->scope > YVEX_ATTENTION_OPERATION_RELEASE_SET ||
@@ -335,22 +336,23 @@ int yvex_attention_workspace_recipe_seal(yvex_attention_workspace_recipe *recipe
         return YVEX_ERR_INVALID_ARG;
     }
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.graph.attention.workspace-recipe.v1") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.graph.attention.workspace-recipe.v3") ||
         !yvex_sha256_update_u64(&hash, recipe->schema_version) ||
         !yvex_sha256_update_u64(&hash, recipe->layer_index) ||
         !yvex_sha256_update_u64(&hash, recipe->mode) ||
         !yvex_sha256_update_u64(&hash, recipe->scope) ||
         !yvex_sha256_update_u64(&hash, recipe->evidence_level) ||
         !yvex_sha256_update_u64(&hash, recipe->token_capacity) ||
+        !yvex_sha256_update_u64(&hash, recipe->prefix_checkpoint_capacity) ||
         !yvex_sha256_update_u64(&hash, recipe->component_count) ||
         !yvex_sha256_update_text(&hash, recipe->state_recipe_identity))
         goto identity_failure;
     for (index = 0u; index < recipe->component_count; ++index) {
         yvex_attention_workspace_component *component = &recipe->components[index];
         unsigned long long bit;
-        if (component->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1 ||
+        if (component->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3 ||
             component->ordinal != index ||
-            component->kind > YVEX_ATTENTION_WORKSPACE_TOPK_VALID_INDICES ||
+            component->kind > YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_SCORES ||
             component->lifetime > YVEX_ATTENTION_WORKSPACE_GRAPH_STABLE ||
             !component->element_count || !component->element_width ||
             !component->alignment ||
@@ -1095,6 +1097,7 @@ int yvex_attention_cuda_trace_open(yvex_attention_publication *trace,
                                    unsigned long long token_count,
                                    yvex_attention_evidence_level evidence_level,
                                    int retain_prefix_checkpoints,
+                                   int device_output,
                                    yvex_attention_workspace *workspace,
                                    unsigned long long limit_bytes,
                                    unsigned long long *owned_bytes,
@@ -1107,6 +1110,7 @@ int yvex_attention_cuda_trace_open(yvex_attention_publication *trace,
     attention_trace_shape shape;
     unsigned long long input_width;
     if (!trace || !layer || !history || !owned_bytes || !token_count ||
+        (device_output != 0 && device_output != 1) ||
         !yvex_core_u64_add(token_position, token_count, &end))
         goto invalid;
     input_width = scope == YVEX_ATTENTION_OPERATION_ENVELOPE
@@ -1141,6 +1145,14 @@ int yvex_attention_cuda_trace_open(yvex_attention_publication *trace,
     if (!attention_trace_counts(trace, &shape, floats, integers) ||
         !attention_trace_counts_filter(evidence_level, floats, integers))
         goto fail;
+    /* CUDA consumers borrow the produced device view, including portable row
+     * orchestration without an execution profile. No output is
+     * downloaded at NONE scope: allocating a zero-filled host shadow neither
+     * publishes evidence nor participates in transactional state. */
+    if (device_output && evidence_level == YVEX_ATTENTION_EVIDENCE_NONE) {
+        floats[ATTENTION_TRACE_OUTPUT] = 0ull;
+        floats[ATTENTION_TRACE_ENVELOPE_OUTPUT] = 0ull;
+    }
     {
         int rc = attention_trace_storage_open(trace, floats, NULL, integers, NULL, workspace,
                                               limit_bytes, owned_bytes);

@@ -307,10 +307,8 @@ static int cuda_blas_lt_bias(
     return YVEX_OK;
 }
 
-/* A sealed split-K algorithm may require workspace proportional to the independent batch-row
- * extent even though each output element reduces over the same immutable K dimension. Retry a
- * refused batch geometry at smaller row extents and preserve the exact per-element reduction,
- * bias epilogue, and source order. Completed chunks never overlap and share one ordered stream. */
+/* Retry refused split-K batch extents without changing per-element reduction,
+ * bias or source order; disjoint chunks share the ordered execution stream. */
 static int cuda_blas_lt_bias_f32_batches(
     cuda_blas_lt *lt, CUdeviceptr weight, CUdeviceptr input, CUdeviceptr bias,
     CUdeviceptr output, unsigned long long rows, unsigned long long columns,
@@ -903,15 +901,15 @@ int yvex_cuda_qtype_matvec_geometry(
         *block_row = 1;
         return 1;
     }
-    /* Independent ordered dots occupy threads, not otherwise idle warps.
+    /* One complete warp certifies each ordered decoded-dot publication.
      * Keep the narrow block-owned class above and Q8 reduction below intact. */
     if (decoded_input) {
         if (!yvex_core_u64_mul(rows, input_rows, &blocks) ||
-            blocks > ULLONG_MAX - 31ull) return 0;
-        blocks = (blocks + 31ull) / 32ull;
+            blocks > ULLONG_MAX - 7ull) return 0;
+        blocks = (blocks + 7ull) / 8ull;
         if (!blocks || blocks > UINT_MAX) return 0;
         *grid = (unsigned int)blocks;
-        *block = 32u;
+        *block = 256u;
         return 1;
     }
     if (input_rows <= 8ull) {
@@ -939,7 +937,8 @@ int yvex_cuda_qtype_tensorcore_geometry(
     if (!rows || !input_rows || !grid || !block ||
         rows > ULLONG_MAX - 15ull || input_rows > ULLONG_MAX - 15ull) return 0;
     row_tiles = (rows + 15ull) / 16ull;
-    input_tiles = (input_rows + 15ull) / 16ull;
+    input_tiles = (input_rows + cuda_qtype_tensorcore_columns(rows, input_rows) - 1ull) /
+                  cuda_qtype_tensorcore_columns(rows, input_rows);
     warps = input_tiles > 4ull ? 4u : (unsigned int)input_tiles;
     input_groups = (input_tiles + warps - 1ull) / warps;
     if (!yvex_core_u64_mul(row_tiles, input_groups, &blocks) ||
@@ -1446,6 +1445,30 @@ static int cuda_encoded_policy(unsigned int qtype, yvex_encoded_input_policy inp
     return YVEX_OK;
 }
 
+static int cuda_encoded_activation_pack(yvex_cuda_work *work,
+    unsigned long long width, unsigned long long rows, CUdeviceptr input,
+    CUdeviceptr status, CUdeviceptr *packed, unsigned long long *temporary,
+    yvex_error *err)
+{
+    unsigned long long tasks, bytes, groups = 1ull;
+    if (!yvex_core_u64_mul(width / 256ull, rows, &tasks) || tasks > UINT_MAX ||
+        !yvex_core_u64_mul(tasks, 292ull, &bytes) || bytes > SIZE_MAX ||
+        !yvex_core_u64_add(*temporary, bytes, temporary)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "cuda.encoded-matvec",
+                       "Q8 activation workspace exceeds launch bounds");
+        return YVEX_ERR_BOUNDS;
+    }
+    int rc = yvex_cuda_work_allocate(work, packed, (size_t)bytes,
+        NULL, 0, "cuda.encoded-matvec.q8", NULL, err);
+    if (rc == YVEX_OK) {
+        void *params[] = {packed, &input, &width, &rows, &groups, &width, &status};
+        rc = yvex_cuda_launch(work->backend, work->variant,
+            work->state->q8_quantize_function, (unsigned int)tasks,
+            CUDA_QTYPE_MATVEC_BLOCK, 0u, params, "cuda.encoded-matvec.q8", err);
+    }
+    return rc;
+}
+
 static void cuda_encoded_matvec_status_error(
     yvex_error *err, int status, unsigned int qtype,
     unsigned long long rows, unsigned long long width,
@@ -1460,11 +1483,7 @@ static void cuda_encoded_matvec_status_error(
         tensorcore, q8, split, additive);
 }
 
-/*
- * Project one resident encoded matrix through the generic CUDA qtype matvec.
- *
- * Exact resident span/geometry and stable backend-owned F32 input/output tensors.
- */
+/* Project an exact resident encoded matrix without changing its reduction class. */
 static int cuda_encoded_matvec(
     yvex_backend *backend, const unsigned char *resident_encoded,
     unsigned long long encoded_bytes, unsigned int qtype,
@@ -1481,13 +1500,13 @@ static int cuda_encoded_matvec(
     unsigned long long device_address = 0ull, input_bytes, output_bytes, activation_bytes;
     unsigned long long input_elements, input_head_elements, input_tail_elements;
     unsigned long long input_head_bytes, input_tail_bytes, output_elements;
-    unsigned long long temporary_bytes = sizeof(int), q8_workspace_bytes = 0ull;
+    unsigned long long temporary_bytes = sizeof(int);
     CUdeviceptr encoded_ptr, input_ptr, input_tail_ptr = 0ull, additive_ptr = 0ull, output_ptr;
     CUdeviceptr status = 0ull, quantized = 0ull;
     unsigned long long start_row = 0ull, launches = 0ull;
     unsigned long long group_count = 1ull, group_rows = row_count;
     int output_bf16 = 0, host_status = 0, rc, cleanup_rc, q8_path, q8_input = 0;
-    int tensorcore_path;
+    int tensorcore_path, row_matrix_path;
     int block_row = 0;
     int forensic_numeric = 0, split_input = input_tail != NULL;
     unsigned int matvec_grid, matvec_block, tensorcore_grid = 0u, tensorcore_block = 0u;
@@ -1505,6 +1524,9 @@ static int cuda_encoded_matvec(
     tensorcore_path = reduction_policy == YVEX_ENCODED_REDUCTION_DEFAULT &&
                       q8_path && state && state->qtype_tensorcore_rows_function &&
                       cuda_qtype_tensorcore_eligible(input_rows);
+    row_matrix_path = reduction_policy == YVEX_ENCODED_REDUCTION_ROW && q8_path &&
+        qtype == YVEX_GGUF_QTYPE_MXFP4 && row_width <= 8192ull && row_count <= 16384ull &&
+        input_rows >= 32ull && input_rows <= 1024ull;
     if (!state || !resident_encoded || !encoded_bytes || !row_count || !input_rows ||
         !row_width || !row_bytes || !facts || split_input != (input_head_width != 0ull) ||
         (split_input && input_head_width >= row_width) ||
@@ -1570,34 +1592,15 @@ static int cuda_encoded_matvec(
      * call-scoped lifetime, independent of that arena's current cursor. */
     work.raw_only = 1;
     if (rc == YVEX_OK)
-        rc = yvex_cuda_work_allocate(&work, &status, sizeof(int), NULL, 1,
-                                     "cuda.encoded-matvec.status", NULL, err);
+        rc = yvex_cuda_work_status(&work, &status, "cuda.encoded-matvec.status", err);
     input_ptr = (CUdeviceptr)input->data;
     if (input_tail) input_tail_ptr = (CUdeviceptr)input_tail->data;
     if (additive) additive_ptr = (CUdeviceptr)additive->data;
     output_ptr = (CUdeviceptr)output->data;
     if (rc == YVEX_OK && q8_path) {
-        unsigned long long blocks = row_width / 256ull, quantize_tasks;
-        if (!yvex_core_u64_mul(blocks, input_rows, &quantize_tasks) ||
-            quantize_tasks > UINT_MAX ||
-            !yvex_core_u64_mul(quantize_tasks, 292ull, &q8_workspace_bytes) ||
-            q8_workspace_bytes > SIZE_MAX ||
-            !yvex_core_u64_add(temporary_bytes, q8_workspace_bytes, &temporary_bytes)) {
-            yvex_error_set(err, YVEX_ERR_BOUNDS, "cuda.encoded-matvec",
-                           "Q8 activation workspace exceeds launch bounds");
-            rc = YVEX_ERR_BOUNDS;
-        } else
-            rc = yvex_cuda_work_allocate(&work, &quantized, (size_t)q8_workspace_bytes,
-                                         NULL, 0, "cuda.encoded-matvec.q8", NULL, err);
-        if (rc == YVEX_OK) {
-            void *params[] = {&quantized, &input_ptr, &row_width, &input_rows,
-                              &group_count, &row_width, &status};
-            rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
-                                  state->q8_quantize_function, (unsigned int)quantize_tasks,
-                                  CUDA_QTYPE_MATVEC_BLOCK, 0u, params,
-                                  "cuda.encoded-matvec.q8", err);
-            if (rc == YVEX_OK) launches = 1ull;
-        }
+        rc = cuda_encoded_activation_pack(&work, row_width, input_rows, input_ptr,
+            status, &quantized, &temporary_bytes, err);
+        if (rc == YVEX_OK) launches = 1ull;
     }
     if (rc == YVEX_OK) {
         void *params[] = {&encoded_ptr, &row_bytes, &row_width, &start_row,
@@ -1619,20 +1622,22 @@ static int cuda_encoded_matvec(
         q8_input = q8_path;
         rc = yvex_cuda_launch(
             backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
-            tensorcore_path ? state->qtype_tensorcore_rows_function
+            tensorcore_path ? cuda_qtype_tensorcore_function(state, row_count, input_rows, qtype)
+                            : row_matrix_path ? state->mxfp4_q8_matrix_function
                             : split_input ? state->qtype_split_matvec_function
                                           : state->qtype_matvec_function,
-            tensorcore_path ? tensorcore_grid : matvec_grid,
-            tensorcore_path ? tensorcore_block : matvec_block, 0u,
+            tensorcore_path ? tensorcore_grid : row_matrix_path ?
+                (unsigned int)(((row_count + 15ull) / 16ull) * ((input_rows + 31ull) / 32ull)) : matvec_grid,
+            tensorcore_path ? tensorcore_block : row_matrix_path ? 128u : matvec_block, 0u,
             tensorcore_path ? tensorcore_params
                             : split_input ? split_params : q8_path ? q8_params : params,
             "cuda.encoded-matvec.launch", err);
         if (rc == YVEX_OK) launches++;
     }
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK && !work.status_scoped)
         rc = yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
                                    "cuda.encoded-matvec.sync", err);
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK && !work.status_scoped)
         rc = yvex_cuda_status(
             &state->driver,
             state->driver.cuMemcpyDtoH_v2(&host_status, status, sizeof(host_status)),
@@ -1651,14 +1656,14 @@ static int cuda_encoded_matvec(
     }
     if (rc == YVEX_OK) {
         output->is_written = 1;
-        facts->d2h_bytes = sizeof(host_status);
+        facts->d2h_bytes = work.status_scoped ? 0u : sizeof(host_status);
         facts->kernel_launches = launches;
-        facts->download_count = 1ull;
-        facts->device_synchronizations = 1ull;
+        facts->download_count = !work.status_scoped;
+        facts->device_synchronizations = !work.status_scoped;
         facts->active_weight_bytes = encoded_bytes;
         facts->activation_bytes = activation_bytes;
-        facts->temporary_bytes = temporary_bytes;
-        facts->accelerated_matrix_launches = tensorcore_path ? 1ull : 0ull;
+        facts->temporary_bytes = temporary_bytes - (work.status_scoped ? sizeof(int) : 0u);
+        facts->accelerated_matrix_launches = (tensorcore_path || row_matrix_path) ? 1ull : 0ull;
         facts->compulsory_memory_facts_available = 1;
         yvex_error_clear(err);
     }

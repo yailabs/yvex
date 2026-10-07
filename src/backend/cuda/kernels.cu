@@ -537,13 +537,23 @@ extern "C" __global__ void yvex_qtype_matvec(
     int *status)
 {
     __shared__ float warp_sums[8];
+    __shared__ int block_status;
     unsigned int lane = threadIdx.x & 31u;
     unsigned int warp = threadIdx.x >> 5u;
     unsigned long long input_row = input_rows, row = row_count;
     const unsigned char *row_data;
     const void *input;
     float sum;
-    if (!status || *status != 0) return;
+    if (!status) return;
+    if (blockDim.x % 32u) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
+    if (block_row && !forensic_numeric) {
+        if (!threadIdx.x) block_status = *status;
+        __syncthreads();
+        if (block_status != 0) return;
+    } else if (__shfl_sync(0xffffffffu, *status, 0) != 0) return;
     if (!encoded || !vector || !out || !row_bytes || !row_width ||
         !row_count || !input_rows || input_stride < row_width ||
         output_stride < row_count || (q8_input && input_stride != row_width) ||
@@ -561,7 +571,7 @@ extern "C" __global__ void yvex_qtype_matvec(
         input_row = task % input_rows;
     } else if (forensic_numeric || !q8_input) {
         unsigned long long task =
-            (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
+            (unsigned long long)blockIdx.x * (blockDim.x / 32u) + warp;
         if (row_count > ~0ull / input_rows || task >= row_count * input_rows) return;
         row = task / input_rows;
         input_row = task % input_rows;
@@ -572,12 +582,21 @@ extern "C" __global__ void yvex_qtype_matvec(
         ? (const void *)((const unsigned char *)vector +
                          input_row * (row_width / YVEX_CUDA_Q8_K_BLOCK) * YVEX_CUDA_Q8_K_BYTES)
         : (const void *)((const float *)vector + input_row * input_stride);
-    /* This decoded-input row path follows source-order F64 accumulation.
-       Q8 activation retains its separately admitted quantized reduction. */
+    /* Ordinary decoded rows certify the exact ordered F64 publication, with
+       ordered CUDA evaluation whenever certification is inconclusive.
+       Forensic execution remains literal; Q8 keeps its own numeric class. */
     if (forensic_numeric || !q8_input) {
-        if (block_row && threadIdx.x != 0u) return;
-        sum = qtype_dot_recover_f64(
-            row_data, (const float *)input, row_width, qtype);
+        if (forensic_numeric) {
+            if (lane || (block_row && warp)) return;
+            sum = qtype_dot_recover_f64(row_data, (const float *)input, row_width, qtype);
+        } else if (block_row) {
+            sum = qtype_block_dot_certified_f64(
+                (const float *)row_data, (const float *)input, row_width);
+            if (threadIdx.x) return;
+        } else {
+            sum = qtype_dot_certified_f64(row_data, (const float *)input, row_width, qtype);
+            if (lane) return;
+        }
     } else if (block_row) {
         const float *weight = (const float *)row_data;
         const float *values = (const float *)input;
@@ -710,7 +729,12 @@ extern "C" __global__ void yvex_qtype_grouped_rows(
     const float *input;
     float sum;
 
-    if (!status || *status != 0) return;
+    if (!status) return;
+    if (threads % 32u) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
+    if (__shfl_sync(0xffffffffu, *status, 0) != 0) return;
     if (!encoded || !vector || !out || !row_bytes || !row_width ||
         !group_count || !group_rows || !blocks_per_group || !input_rows || !threads ||
         group_count > ~0ull / group_rows ||
@@ -723,16 +747,15 @@ extern "C" __global__ void yvex_qtype_grouped_rows(
     group = (unsigned long long)blockIdx.x / blocks_per_group;
     local_block = (unsigned long long)blockIdx.x % blocks_per_group;
     if (group >= group_count) return;
-    unsigned long long task = local_block * threads + threadIdx.x;
+    unsigned long long task = local_block * (threads / 32u) + (threadIdx.x / 32u);
     if (task >= group_rows * input_rows) return;
     local_row = task / input_rows;
     input_row = task % input_rows;
     row = group * group_rows + local_row;
     row_data = encoded + row * row_bytes;
     input = vector + input_row * input_stride + group * row_width;
-    /* Grouping changes launch topology only. The ordinary decoded-input
-     * projection uses source-order F64 accumulation, including finite rows. */
-    sum = qtype_dot_recover_f64(row_data, input, row_width, qtype);
+    sum = qtype_dot_certified_f64(row_data, input, row_width, qtype);
+    if (lane) return;
     if (!isfinite(sum)) atomicCAS(status, 0, 1);
     else out[input_row * output_stride + row] =
         output_bf16 ? float_to_bf16_rne(sum) : sum;
@@ -1568,6 +1591,10 @@ extern "C" __global__ void yvex_attention_rolling_state(
             after_kv[i] = before_kv[i];
             after_score[i] = before_score[i];
         }
+    /* A destination slot may be copied by a different thread from its insert
+     * owner (for example width 128 in a 256-thread block). Finish the copy
+     * before any insertion can overwrite that slot. */
+    __syncthreads();
     for (unsigned long long lane = (unsigned long long)thread;
          lane < state_width; lane += (unsigned long long)blockDim.x) {
         float kv = token_kv[lane];

@@ -1251,10 +1251,14 @@ static int kernel_f32_execute(yvex_program_kernels *c, const yvex_program_device
         return c->ops->clamped_swiglu_bf16(c->backend, input, &r->values[s->operands[1]], output,
             yvex_program_physical_attribute(s, "limit")->value.real, facts, err);
     if (!strcmp(s->implementation, "cast.exact.f32.v1") || !strcmp(s->implementation, "cast.rne.bf16.v1")) {
-        int rc = yvex_backend_tensor_copy(c->backend, output, input, err);
+        int rounded = !strcmp(s->implementation, "cast.rne.bf16.v1");
+        /* The rounding operation is a completing consumer of the same owned
+         * storage. Backends without queued copies retain synchronous copy. */
+        int rc = rounded ? yvex_backend_tensor_copy_async(c->backend, output, input, err) : YVEX_ERR_UNSUPPORTED;
+        if (rc == YVEX_ERR_UNSUPPORTED) rc = yvex_backend_tensor_copy(c->backend, output, input, err);
         if (rc == YVEX_OK && yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU)
             facts->d2d_bytes = input->bytes;
-        return !strcmp(s->implementation, "cast.rne.bf16.v1") ? kernel_round_result(c, output, rc, facts, err) : rc;
+        return rounded ? kernel_round_result(c, output, rc, facts, err) : rc;
     }
     if (!strcmp(s->implementation, "silu.bf16.v1") || !strcmp(s->implementation, "silu.f32.v1"))
         return c->ops->silu(c->backend, input, output, output->bytes / sizeof(float),

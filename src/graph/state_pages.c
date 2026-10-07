@@ -1190,6 +1190,7 @@ void yvex_graph_state_bank_pages_bind(
     unsigned int index;
 
     if (!components || !view || !recipe) return;
+    view->local_capacity = view->compressed_capacity = view->indexer_capacity = 0ull;
     for (index = 0u; index < recipe->component_count; ++index) {
         const yvex_attention_state_component_recipe *component =
             &recipe->components[index];
@@ -1209,19 +1210,23 @@ void yvex_graph_state_bank_pages_bind(
                              storage->start * component->value_width;
             view->local_positions = storage->positions + storage->start;
             view->local_kv_stride = component->value_width;
+            view->local_capacity = component->capacity;
         } else if (component->binding ==
                    YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY) {
             view->compressed_kv = storage->values;
             view->compressed_positions = storage->positions;
             view->compressed_kv_stride = component->value_width;
+            view->compressed_capacity = component->capacity;
         } else if (component->binding ==
                    YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY) {
             view->indexer_kv = storage->values;
             view->indexer_positions = storage->positions;
             view->indexer_kv_stride = component->value_width;
+            view->indexer_capacity = component->capacity;
         }
     }
     view->immutable = 1;
+    view->capacity_known = 1;
 }
 
 int yvex_graph_state_bank_pages_transfer(

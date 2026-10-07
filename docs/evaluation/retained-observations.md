@@ -1142,3 +1142,76 @@ target details. Those frozen candidate receipts do not describe the installed
 producer or qualify an unexecuted configuration. Numerical, representation and
 hardware gates remain independent; competitive execution/residency is still
 IN PROGRESS.
+
+## Competitive computational integration (2026-10-07)
+
+The accepted computational integration belongs to
+`V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4`, not a new Task
+or a complete throughput exit. It combines the already measured generic
+certified decoded-dot realization, bounded prepared layouts, phase-specific
+row/checkpoint/workspace geometry, structural CUDA-graph reuse, checked program
+completion and device attention ingress. Artifact, binding, routing populations,
+source-authored reasoning and ordered F64/F32/BF16 publication obligations are
+unchanged. This is not a physical-variant or precision promotion.
+
+The measured integration snapshot is `e771219f919bdb8d91a7a47702d5e252edf7fa13`,
+base tree `fc34ea9ab1e2121ae2911296ecd857058ce77202`, frozen delta
+`c4031f5a1b5fe42ccc9803a91a23ad608c27bff82dc1d5b310f78197d9dcadf0`.
+Executable SHA-256 is
+`9c42bc28f38993045bec4c5466e6c8e39c2581229e8d8a726d2e993278026377`;
+native library is
+`2615a9ebbbbc4b64507d048c82d8827acf096cd2b2a063aec392edbed6fd7ee1`.
+The version projection now exposes the exact canonical QA source-delta
+identity; Make consumes that same owner instead of encoding dirty files with
+another hash. An unbound earlier build was refused before model execution and
+its raw failure retained. A dirty source receipt is not described as a clean
+commit merely because accepted files are subsequently published.
+
+The [integrated product-native coding receipt](benchmarks/generated/qualification-deepseek-integrated-native-coding-29.md)
+uses the same authored coding case, fresh sessions, greedy sampling, 256 output
+bound, context 32768, chunk 64 and DSpark as the
+[installed baseline](benchmarks/generated/qualification-deepseek-installed-native-coding-21.md).
+Four sequential samples retain the initial sample separately and three-sample
+warm median/MAD. Every 256-token output has the same SHA-256
+`ccc7ed7525af5370a1d13dd86253f051d5d8cf974cc9deb249f588b45486fe9d`;
+the proposal/acceptance population is also unchanged. Source/build/backend
+implementation differ. The improvement is a complete-request observation, not
+an isolated-kernel attribution or a claim for every prompt. Unknown typed
+hardware/kernel dimensions stay explicit; the strict all-dimension comparator
+still refuses to promote these records into a fully qualified ranking. External
+device witnesses do not silently fill missing producer facts.
+
+The [repeated 8K control](benchmarks/generated/qualification-deepseek-integrated-prefill-repeat-27.md)
+is a separate frozen candidate with target-only, context 32768, chunk 512 and
+8192 newly executed positions. All three independent fresh requests succeed
+and produce the same bounded 16-token continuation. The earlier failure after
+512 positions does not reproduce in this control; no historical root cause is
+claimed. A 16-token tail is not sustained-decode evidence. Timed requests have
+no profiler or periodic `smaps` walk; boundary residency and sampled process
+witnesses remain diagnostics, not proof of uninterrupted exclusive hardware.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Decoded projections | Independent host ordered F64 and literal CUDA realization | F32/BF16, cancellation, rounding ties, subnormal/exceptional inputs, partial populations and prepared MXFP4 | Identical admitted F32/BF16 publication or typed refusal | Component gate `2972095` and encoded-row gate `3f905e` pass | Zero bit differences in exact publication controls; other classes keep their own tolerances | PASS | Certified numerical realization at exercised component geometries, not upstream logits |
+| Program/graph/state | Typed scope, unchanged predecessor failure and independent compiled-program controls | Graph structural reuse, changed emission/history shape, workspace shortage, cancellation, stale schemas and source populations | No stale graph, forgotten status, partial publication or leaked owner | Program `495fda`, graph `b8ab8`, binding `68e181`, sequence `92d640` pass | Exact state/publication and zero owned allocation deltas where asserted | PASS | Generic CUDA lifecycle; other family-shaped fixtures retain their limited scope |
+| Current computational consumers | Canonical memory/planner/prefill/decode/logits/speculation and session contracts | Seventeen mapped CPU/software controls plus tiny vertical and native observer | Correct geometry, refusal, independent state and recovery | All 17 PASS on frozen integration snapshot; tiny vertical receipt `e434b14c97021e47044e6ec95e1b553365dabfc95fab83075cac966e715685d8` | Existing per-owner assertions; no fabricated model-quality oracle | PASS | Exercised common consumers and CPU/Metal-refusal regressions |
+| Real admitted model | Canonical `live.deepseek.generation`; component/manual composition and target semantic reference | Exact current mixed artifact/binding; CPU and CUDA, target-only/DSpark, deterministic/stochastic replay, acceptance and reasoning-mode controls | Equivalent admitted continuation, fail-closed mutation/capacity, cancellation and cleanup | Receipt `26f1884c3ac8755593676f2ff3385bd1f58184b4c76064f24fabfe2b0d2bcb8a`: PASS, zero FAIL/SKIP/BLOCKED/ERROR | Exact replay/target equivalence under the gate; not cross-precision upstream equivalence | PASS | Bounded full-model numerical/lifecycle execution, not quality or release qualification |
+| Device memory safety | CUDA Compute Sanitizer memcheck, unsuppressed | Changed decoded-dot, program and graph controls | No invalid device memory access or leaked allocation | `integrated-memcheck-v32.log`: zero errors, zero bytes leaked | Three selected component owners; full qtype diagnostic is not substituted | PASS | Device memory safety at exercised paths |
+| Official family vectors | Pinned upstream DeepSeek conversation code and native tokenizer | Four immutable upstream encoding cases and supported prefixes | Exact encoding/parsing/token identity | Official gate receipt `a6c9a569d072f77ca885aed5a898c7050bd36a5ea352c76b79118f7b16b2ccc8` PASS | Exact tokens and source-authored grammar | PASS | Official input conformance only, not authored coding/output reference |
+
+Raw replayable source captures, benchmark observations, lifecycle wrapper and
+device logs remain outside Git under
+`/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL`.
+The complete-model lifecycle window is `integrated-generation-lifecycle-v31`;
+native coding is `integrated-native-product-coding-v29`. The production binary
+was not replaced: supported unload/restore keeps finite generation 1, approved
+listeners/grants and the unchanged DeepSeek profile, restored as generation 27.
+No user/Case prompt is replayed. Current producer facts are in the
+[operational handoff](data/finite-lan-20261006.json).
+
+The 20 target-only decode and 700 uncached-prefill objectives remain unearned.
+Fresh final-owner profiling, broader none/high/maximum product observations,
+independent representation-quality qualification and complete competitive
+decomposition remain open. The missing historical bootstrap-Q2 gate and optional
+full-qtype memcheck diagnostic retain their separate status. No CUDA result
+qualifies Metal, another checkpoint, A03 or release readiness.

@@ -275,15 +275,16 @@ int yvex_runtime_private_residency_backing_bytes(
     yvex_runtime_weight_placement placement, unsigned long long *bytes,
     yvex_error *err);
 
-#define YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2 2u
+#define YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3 3u
 #define YVEX_ENGINE_IMPLEMENTATION_CAP 8u
-#define YVEX_ENGINE_PREFILL_MAXIMUM_WIDTH 32ull
+#define YVEX_ENGINE_PREFILL_MAXIMUM_WIDTH 1024ull
 typedef struct {
     unsigned int schema_version;
     yvex_engine_implementation implementation, fallback_implementation;
     yvex_execution_activation_class activation, fallback_activation;
     unsigned long long supported_width_mask, worklist_width_mask, matrix_tile_minimum;
     unsigned long long prefill_width_mask, prefill_worklist_width_mask;
+    unsigned long long prefill_maximum_width;
     char identity[YVEX_SHA256_HEX_CAP];
 } yvex_engine_implementation_record;
 unsigned long long yvex_runtime_specialization_phase_width_mask(
@@ -302,6 +303,11 @@ typedef struct yvex_engine_specialization {
     unsigned int *decision_handles;
     yvex_engine_specialization_summary summary;
 } yvex_engine_specialization;
+int yvex_runtime_private_specializations_phase_width(const yvex_physical_execution_ir *,
+    const yvex_engine_specialization *const *, unsigned int, yvex_execution_phase,
+    unsigned long long *, yvex_error *);
+int yvex_runtime_private_binding_prefill_width(const yvex_runtime_binding *,
+    yvex_backend_kind, yvex_backend *, unsigned long long *, yvex_error *);
 
 static inline void runtime_specialization_release(yvex_engine_specialization **specialization)
 {
@@ -505,14 +511,16 @@ int yvex_runtime_private_generation_capacity_preflight(
     const yvex_runtime_generation_options *options,
     unsigned long long *required_bytes, unsigned long long *available_bytes,
     yvex_error *err);
+/* workspace class: 0 ordered device scratch, 1 retained backend host staging,
+ * 2 retained graph publications; host owners sum layers, device reuses them. */
 int yvex_runtime_private_attention_workspace_required(
     const yvex_attention_summary *summary,
     const yvex_attention_layer_plan *layers, unsigned long long layer_count,
     const yvex_graph_attention_capacity_plan *capacity,
-    yvex_attention_execution_mode mode,
-    yvex_attention_operation_scope scope,
+    yvex_attention_execution_mode mode, yvex_attention_operation_scope scope,
     yvex_attention_evidence_level evidence_level,
-    unsigned long long physical_row_capacity, int deferred,
+    unsigned long long physical_row_capacity, unsigned long long prefix_checkpoint_capacity,
+    int deferred, int device_input,
     unsigned long long *required_bytes, yvex_error *err);
 int yvex_runtime_private_session_invalidate(
     yvex_runtime_execution_session *session, int include_state, yvex_error *err);

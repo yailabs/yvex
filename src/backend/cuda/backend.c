@@ -966,6 +966,11 @@ static int cuda_tensor_free(yvex_backend *backend, yvex_device_tensor *tensor,
                        "tensor does not belong to this backend");
         return YVEX_ERR_STATE;
     }
+    if (state->program_status_active && state->program_status == (CUdeviceptr)tensor->data) {
+        yvex_error_set(err, YVEX_ERR_STATE, "cuda.tensor_free",
+            "physical program completion still borrows this workspace");
+        return YVEX_ERR_STATE;
+    }
     rc = yvex_cuda_set_current(backend, "cuda.tensor_free", err);
     if (rc != YVEX_OK) {
         return rc;
@@ -1183,7 +1188,7 @@ static int cuda_tensor_copy(yvex_backend *backend,
         return rc;
     }
     rc = yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_TENSOR_COPY,
-                               "yvex_backend_tensor_copy", err);
+                                "yvex_backend_tensor_copy", err);
     if (rc != YVEX_OK) {
         return rc;
     }

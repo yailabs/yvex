@@ -1,5 +1,6 @@
 /* Physical values, slot lifetime and operation dispatch. No model topology. */
 #include <yvex/internal/program_device.h>
+#include <yvex/internal/neural_operations.h>
 
 #include <limits.h>
 #include <stdlib.h>
@@ -11,7 +12,7 @@ struct yvex_program_device {
     yvex_backend *backend;
     yvex_program_device_kernel *kernels;
     void *kernel_context;
-    yvex_device_tensor **storage, *values;
+    yvex_device_tensor **storage, *values, *completion;
     unsigned int **index_storage;
     yvex_program_index_value *indices;
     unsigned long long capacity, host_bytes, device_bytes;
@@ -80,6 +81,22 @@ static int program_index_storage_open(yvex_program_device *c, unsigned long long
     return YVEX_OK;
 }
 
+static int program_completion_open(yvex_program_device *c, unsigned long long limit, yvex_error *err)
+{
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(c->backend);
+    unsigned long long total;
+    if (!ops || (!ops->program_begin && !ops->program_complete)) return YVEX_OK;
+    if (!ops->program_begin || !ops->program_complete || !ops->program_workspace_bytes)
+        return program_device_refuse(err, YVEX_ERR_UNSUPPORTED, "physical completion hooks must be paired");
+    if (!yvex_core_u64_add(c->device_bytes, ops->program_workspace_bytes, &total) || (limit && total > limit))
+        return program_device_refuse(err, YVEX_ERR_BOUNDS, "program completion exceeds device budget");
+    yvex_backend_tensor_desc d = {.name = "program-completion", .dtype = YVEX_DTYPE_I8, .rank = 1u,
+        .dims = {ops->program_workspace_bytes}, .bytes = ops->program_workspace_bytes};
+    int rc = yvex_backend_tensor_alloc(c->backend, &d, &c->completion, err);
+    if (rc == YVEX_OK) c->device_bytes = total;
+    return rc;
+}
+
 int yvex_program_device_open(yvex_program_device **out, const yvex_program_physical *p, yvex_backend *backend,
     unsigned long long capacity, unsigned long long host_limit, unsigned long long device_limit,
     const yvex_program_device_kernel *kernels, size_t count, void *context, yvex_error *err)
@@ -128,6 +145,7 @@ int yvex_program_device_open(yvex_program_device **out, const yvex_program_physi
     }
     if (rc == YVEX_OK) rc = program_device_storage_open(c, device_limit, err);
     if (rc == YVEX_OK) rc = program_index_storage_open(c, host_limit, err);
+    if (rc == YVEX_OK) rc = program_completion_open(c, device_limit, err);
     if (rc != YVEX_OK) (void)yvex_program_device_close(&c, NULL);
     *out = c; /* Retain a failed cleanup owner for checked retry. */
     return rc;
@@ -239,7 +257,8 @@ int yvex_program_device_run(yvex_program_device *c, unsigned long long rows,
     int (*cancel)(void *), void *cancel_context, yvex_program_device_result *result, yvex_error *err)
 {
     size_t i, j, output = 0u;
-    int rc;
+    const yvex_backend_transformer_operations *ops = c ? yvex_backend_transformer_operations_get(c->backend) : NULL;
+    int rc, scoped = 0;
     if (result) memset(result, 0, sizeof(*result));
     if (!c || !args || !result || (output_count && !outputs) || argument_count != c->summary->input_count ||
         rows < c->summary->minimum_rows || rows > c->capacity || rows % c->summary->row_multiple)
@@ -250,6 +269,12 @@ int yvex_program_device_run(yvex_program_device *c, unsigned long long rows,
     result->backend.compulsory_memory_facts_available = 1;
     result->host_bytes = c->host_bytes;
     result->device_bytes = c->device_bytes;
+    if (ops && (ops->program_begin || ops->program_complete)) {
+        if (!ops->program_begin || !ops->program_complete)
+            return program_device_refuse(err, YVEX_ERR_UNSUPPORTED, "physical completion hooks must be paired");
+        rc = ops->program_begin(c->backend, c->completion, err);
+        scoped = rc == YVEX_OK;
+    }
     for (i = 0u; rc == YVEX_OK && i < c->summary->step_count; ++i) {
         const yvex_program_physical_step *s = yvex_program_physical_step_at(c->program, i);
         yvex_program_device_invocation r = {
@@ -281,6 +306,17 @@ int yvex_program_device_run(yvex_program_device *c, unsigned long long rows,
         result->operations++;
         if (!program_device_facts(&result->backend, &facts))
             rc = program_device_refuse(err, YVEX_ERR_BOUNDS, "program operation counters overflowed");
+    }
+    if (scoped) {
+        yvex_backend_operation_facts facts = {0};
+        yvex_error completion = {0};
+        int completed = ops->program_complete(c->backend, &facts, &completion);
+        if (completed != YVEX_OK && rc == YVEX_OK) {
+            rc = completed;
+            if (err) *err = completion;
+        }
+        if (!program_device_facts(&result->backend, &facts) && rc == YVEX_OK)
+            rc = program_device_refuse(err, YVEX_ERR_BOUNDS, "program completion counters overflowed");
     }
     /* Cancellation may become visible during the final kernel. Check the
      * invocation boundary before returning publishable outputs to its runner. */
@@ -315,6 +351,10 @@ int yvex_program_device_close(yvex_program_device **out, yvex_error *err)
     size_t i;
     int rc;
     if (!c) return YVEX_OK;
+    if (c->completion) {
+        rc = yvex_backend_tensor_release(c->backend, &c->completion, err);
+        if (rc != YVEX_OK) return rc;
+    }
     for (i = 0u; c->storage && i < c->summary->storage_count; ++i) if (c->storage[i]) {
         rc = yvex_backend_tensor_release(c->backend, &c->storage[i], err);
         if (rc != YVEX_OK) return rc;

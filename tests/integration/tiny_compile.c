@@ -850,12 +850,15 @@ static int tiny_generation_capacity_refusal(
         }
     }
     if (rc == YVEX_OK) {
+        unsigned long long required = 0ull, available = 0ull;
         rc = yvex_runtime_generation_context_open(
             &generation, model, session, &options, err);
         if (rc == YVEX_ERR_BOUNDS && !generation &&
             strcmp(yvex_error_where(err), "runtime.capacity") == 0 &&
-            strcmp(yvex_error_message(err),
-                   "live process memory cannot preserve the admitted runtime reserve") == 0) {
+            sscanf(yvex_error_message(err),
+                   "live process memory cannot preserve the admitted runtime reserve "
+                   "(required=%llu available=%llu bytes)", &required, &available) == 2 &&
+            required > 1ull && available == 1ull) {
             rc = YVEX_OK;
             yvex_error_clear(err);
         } else if (rc == YVEX_OK) {

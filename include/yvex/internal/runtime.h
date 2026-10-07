@@ -545,9 +545,10 @@ int yvex_runtime_session_open(yvex_runtime_execution_session **out, yvex_model_e
     yvex_error *err);
 int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_session *session,
     yvex_runtime_execution_mode mode, yvex_runtime_execution_scope scope,
-    yvex_attention_evidence_level evidence_level,
+    yvex_attention_evidence_level evidence_level, int device_input,
     const yvex_graph_attention_capacity_plan *capacity,
-    unsigned long long physical_row_capacity, unsigned long long minimum_bytes,
+    unsigned long long physical_row_capacity, unsigned long long prefix_checkpoint_capacity,
+    unsigned long long minimum_bytes,
     yvex_model_engine_failure *failure, yvex_error *err);
 int yvex_runtime_session_summary_copy(const yvex_runtime_execution_session *session,
                                       yvex_runtime_session_summary *out, yvex_error *err);
@@ -580,6 +581,7 @@ int yvex_runtime_workspace_identity_compute(
     const char *runtime_model_identity, yvex_backend_kind backend,
     unsigned long long maximum_host_bytes, unsigned long long maximum_device_bytes,
     unsigned long long workspace_bytes, unsigned long long host_workspace_bytes,
+    unsigned long long device_workspace_bytes,
     const char *capacity_identity, char output[YVEX_SHA256_HEX_CAP], yvex_error *err);
 #ifdef __cplusplus
 }

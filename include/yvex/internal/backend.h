@@ -15,7 +15,7 @@ typedef struct yvex_backend_moe_operations yvex_backend_moe_operations;
 typedef struct yvex_backend_sampling_operations yvex_backend_sampling_operations;
 typedef struct yvex_backend_transformer_operations yvex_backend_transformer_operations;
 /* Encoded attention is a private graph/backend ABI, never installed capability surface. */
-#define YVEX_BACKEND_ATTENTION_JOB_SCHEMA 3u
+#define YVEX_BACKEND_ATTENTION_JOB_SCHEMA 4u
 typedef enum {
     YVEX_BACKEND_ATTENTION_WEIGHT_Q_A = 0,
     YVEX_BACKEND_ATTENTION_WEIGHT_Q_A_NORM,
@@ -114,12 +114,13 @@ typedef struct {
     const unsigned long long *local_positions, *compressed_positions, *indexer_positions;
     unsigned long long local_count, local_stride, compressed_count, compressed_stride;
     unsigned long long indexer_count, indexer_stride;
+    unsigned long long local_capacity, compressed_capacity, indexer_capacity;
     yvex_backend_attention_rolling main_rolling, indexer_rolling;
     const yvex_backend_cancellation *cancellation;
     yvex_backend_attention_completion *device_completion;
     unsigned int evidence_level;
     int measure_device_time;
-    int candidate_block_visible, retain_prefix_checkpoints, native_execution;
+    int candidate_block_visible, retain_prefix_checkpoints, native_execution, history_capacity_known;
     unsigned long long max_host_bytes, max_device_bytes;
 } yvex_backend_attention_job;
 typedef struct {
@@ -345,7 +346,7 @@ void yvex_backend_workspace_detach(yvex_backend *backend);
 int yvex_backend_workspace_acquire(yvex_backend *backend, unsigned long long bytes,
                                    unsigned long long alignment, unsigned long long *device_address);
 int yvex_backend_host_workspace_prepare_owned(yvex_backend *backend, unsigned long long bytes,
-                                              yvex_error *err);
+    yvex_error *err);
 int yvex_backend_host_workspace_detach(yvex_backend *backend, yvex_error *err);
 int yvex_backend_host_workspace_acquire(yvex_backend *, unsigned long long,
                                         unsigned long long, void **);
@@ -468,6 +469,9 @@ struct yvex_attention_workspace_recipe;
 int yvex_backend_attention_workspace_required_from_recipe(
     const struct yvex_attention_workspace_recipe *recipe,
     unsigned long long *required_bytes, yvex_error *err);
+int yvex_backend_attention_host_workspace_required_from_recipe(
+    const struct yvex_attention_workspace_recipe *recipe,
+    int device_input, unsigned long long *required_bytes, yvex_error *err);
 typedef struct {
     unsigned int schema;
     int configured, kernel_bundle_native;

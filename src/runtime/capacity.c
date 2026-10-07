@@ -191,6 +191,7 @@ typedef struct {
     const yvex_model_engine_view *model_view;
     yvex_runtime_capacity_options options;
     yvex_runtime_capacity result;
+    unsigned long long planned_prefill_width;
 } runtime_capacity_context;
 
 static int capacity_context_refuse(yvex_error *err, yvex_status status,
@@ -801,8 +802,7 @@ static int capacity_physical_row_capacity(
     *capacity = context->options.prefill_chunk_tokens;
     /* Logical prompt chunks do not widen the sealed routed-row population.
      * Match generation_prefill before sizing per-row activation/staging arenas. */
-    /* Before specialization exists, pre-residency admission retains the
-     * conservative configured width. A live engine supplies the sealed bound. */
+    admitted_width = context->planned_prefill_width;
     if (context->model && yvex_model_engine_phase_maximum_width_copy(
             context->model, YVEX_EXECUTION_PHASE_PREFILL, &admitted_width, err) != YVEX_OK)
         return yvex_error_code(err);
@@ -956,18 +956,21 @@ static int capacity_attention_workspace(
     yvex_backend *backend,
     const yvex_graph_attention_capacity_plan *capacity,
     unsigned long long physical_rows, unsigned long long *workspace,
+    unsigned long long *device_workspace, unsigned long long *publication_workspace,
     yvex_error *err)
 {
     const yvex_runtime_binding *binding =
         context ? context->model_view->compiled_binding : NULL;
     const yvex_attention_summary *summaries[2];
     const yvex_attention_layer_plan *layers[2];
-    unsigned long long layer_counts[2], plan_count, plan_index;
+    unsigned long long layer_counts[2], plan_count, plan_index, checkpoint_rows = 0ull;
     int deferred = context &&
         context->options.backend == YVEX_BACKEND_KIND_CUDA &&
         runtime_attention_evidence(context->options.evidence_profile) ==
             YVEX_ATTENTION_EVIDENCE_NONE;
     if (workspace) *workspace = 0ull;
+    if (device_workspace) *device_workspace = 0ull;
+    if (publication_workspace) *publication_workspace = 0ull;
     if (context && yvex_compiled_model_plan_forward(
                        context->model_view->compiled_plan)) {
         yvex_program_token_interface interface;
@@ -980,7 +983,7 @@ static int capacity_attention_workspace(
         return capacity_decoder_attention_workspace(
             context, backend, workspace, err);
     }
-    if (!binding || !capacity || !physical_rows || !workspace)
+    if (!binding || !capacity || !physical_rows || !workspace || !device_workspace || !publication_workspace)
         return capacity_context_refuse(
             err, YVEX_ERR_INVALID_ARG,
             "compiled attention workspace facts are incomplete");
@@ -991,6 +994,12 @@ static int capacity_attention_workspace(
     layer_counts[0] = binding->summary.layer_count;
     layer_counts[1] = binding->summary.draft_layer_count;
     plan_count = context->options.mode == YVEX_EXECUTION_GENERATION_SPECULATIVE ? 2ull : 1ull;
+    if (plan_count == 2ull) {
+        const yvex_speculation_family_policy *policy = NULL;
+        if (!yvex_runtime_binding_policies(binding, NULL, NULL, &policy) || !policy ||
+            !yvex_core_u64_add(policy->block_size, 2ull, &checkpoint_rows))
+            return capacity_context_refuse(err, YVEX_ERR_STATE, "verification workspace policy is unavailable");
+    }
     for (plan_index = 0ull; plan_index < plan_count; ++plan_index) {
         yvex_graph_attention_capacity_plan *owned_capacity = NULL;
         const yvex_graph_attention_capacity_plan *selected_capacity = capacity;
@@ -1022,8 +1031,28 @@ static int capacity_attention_workspace(
                 (yvex_attention_execution_mode)mode,
                 YVEX_ATTENTION_OPERATION_ENVELOPE,
                 runtime_attention_evidence(context->options.evidence_profile),
-                physical_rows, deferred, &bytes, err);
+                physical_rows, checkpoint_rows, deferred,
+                yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA, &bytes, err);
             if (rc == YVEX_OK && bytes > *workspace) *workspace = bytes;
+            if (rc == YVEX_OK && deferred) {
+                rc = yvex_runtime_private_attention_workspace_required(
+                    summaries[plan_index], layers[plan_index], layer_counts[plan_index],
+                    selected_capacity, (yvex_attention_execution_mode)mode,
+                    YVEX_ATTENTION_OPERATION_ENVELOPE,
+                    runtime_attention_evidence(context->options.evidence_profile),
+                    physical_rows, checkpoint_rows, 0,
+                    yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA, &bytes, err);
+                if (rc == YVEX_OK && bytes > *device_workspace) *device_workspace = bytes;
+                if (rc == YVEX_OK)
+                    rc = yvex_runtime_private_attention_workspace_required(
+                        summaries[plan_index], layers[plan_index], layer_counts[plan_index],
+                        selected_capacity, (yvex_attention_execution_mode)mode,
+                        YVEX_ATTENTION_OPERATION_ENVELOPE,
+                        runtime_attention_evidence(context->options.evidence_profile),
+                        physical_rows, checkpoint_rows, 2,
+                        yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA, &bytes, err);
+                if (rc == YVEX_OK && bytes > *publication_workspace) *publication_workspace = bytes;
+            }
         }
         yvex_graph_attention_capacity_plan_close(&owned_capacity);
         if (rc != YVEX_OK) return rc;
@@ -1045,7 +1074,8 @@ static int capacity_build_for(
     yvex_execution_state_class_request states[YVEX_MODEL_STATE_CLASS_COUNT];
     yvex_execution_capacity_plan_request request = {0};
     unsigned long long workspace, sampling_workspace = 0ull;
-    unsigned long long attention_workspace = 0ull, moe_workspace = 0ull;
+    unsigned long long attention_workspace = 0ull, moe_workspace = 0ull, device_workspace = 0ull;
+    unsigned long long publication_workspace = 0ull;
     unsigned long long physical_rows, draft_rows = 0ull, index, count = 0ull;
     unsigned long long graph_bytes, scheduler_bytes, live_available, live_required;
     int rc;
@@ -1103,13 +1133,24 @@ static int capacity_build_for(
     if (sampling_workspace > workspace) workspace = sampling_workspace;
     if (capacity_attention_workspace(
             context, backend, *workspace_capacity, physical_rows,
-            &attention_workspace, err) != YVEX_OK ||
+            &attention_workspace, &device_workspace, &publication_workspace, err) != YVEX_OK ||
         capacity_moe_workspace(
             context, backend, physical_rows,
             draft_rows, &moe_workspace, err) != YVEX_OK)
         return yvex_error_code(err);
     if (attention_workspace > workspace) workspace = attention_workspace;
     if (moe_workspace > workspace) workspace = moe_workspace;
+    /* Deferred CUDA owns separate logical, pinned-host and stream-local device
+     * arenas. Unified memory admission must account for their sum, not their
+     * maximum. Other execution paths retain their existing capacity model. */
+    if (device_workspace) {
+        if (moe_workspace > device_workspace) device_workspace = moe_workspace;
+        if (sampling_workspace > device_workspace) device_workspace = sampling_workspace;
+        if (!yvex_core_u64_add(workspace, publication_workspace, &workspace) ||
+            !yvex_core_u64_add(workspace, device_workspace, &workspace))
+            return capacity_context_refuse(err, YVEX_ERR_BOUNDS,
+                "independently owned attention workspace extents overflowed");
+    }
     request.schema_version = YVEX_EXECUTION_CAPACITY_PLAN_SCHEMA_V1;
     request.model_execution_identity = semantic.identity;
     request.semantic_maximum_context = semantic.maximum_context;
@@ -1153,12 +1194,16 @@ static int capacity_build_for(
             err, YVEX_ERR_BOUNDS,
             "transient admission peak accounting overflowed");
     if (required_out) *required_out = live_required;
-    if (live_required > live_available)
-        return capacity_context_refuse(
-            err, YVEX_ERR_BOUNDS,
+    if (live_required > live_available) {
+        yvex_error_setf(
+            err, YVEX_ERR_BOUNDS, "runtime.capacity",
+            "%s (required=%llu available=%llu bytes)",
             model_resident
                 ? "live process memory cannot preserve the admitted runtime reserve"
-                : "pre-residency peak cannot preserve the admitted runtime reserve");
+                : "pre-residency peak cannot preserve the admitted runtime reserve",
+            live_required, live_available);
+        return YVEX_ERR_BOUNDS;
+    }
     return YVEX_OK;
 }
 
@@ -1239,6 +1284,9 @@ int yvex_runtime_capacity_preflight(
     capacity_options_copy(&context, options);
     rc = yvex_runtime_private_weight_placement_select(
         binding, options->backend, backend, &placement, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_private_binding_prefill_width(
+            binding, options->backend, backend, &context.planned_prefill_width, err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_private_residency_backing_bytes(
             binding, backend, placement, &model_bytes, err);

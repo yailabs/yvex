@@ -21,7 +21,7 @@ source-authored rendering may add policy-specific instructions. Synthetic cases 
 
 | Case | Class | speculative / high | target-only / high | speculative / maximum | target-only / maximum | speculative / none | target-only / none |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| coding.hash-table | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-device-ingress-speculative-coding-25: product-path CHARACTERIZED](qualification-deepseek-device-ingress-speculative-coding-25.md)<br>[deepseek-installed-native-coding-21: product-path CHARACTERIZED](qualification-deepseek-installed-native-coding-21.md)<br>[deepseek-published-native-coding-16: product-path CHARACTERIZED](qualification-deepseek-published-native-coding-16.md) | [deepseek-candidate-explicit-warm-coding-11: product-path CHARACTERIZED](qualification-deepseek-candidate-explicit-warm-coding-11.md)<br>[deepseek-candidate-native-coding-17: product-path CHARACTERIZED](qualification-deepseek-candidate-native-coding-17.md)<br>[deepseek-device-ingress-coding-23: product-path CHARACTERIZED](qualification-deepseek-device-ingress-coding-23.md) |
+| coding.hash-table | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-device-ingress-speculative-coding-25: product-path CHARACTERIZED](qualification-deepseek-device-ingress-speculative-coding-25.md)<br>[deepseek-installed-native-coding-21: product-path CHARACTERIZED](qualification-deepseek-installed-native-coding-21.md)<br>[deepseek-integrated-native-coding-29: product-path CHARACTERIZED](qualification-deepseek-integrated-native-coding-29.md)<br>[deepseek-published-native-coding-16: product-path CHARACTERIZED](qualification-deepseek-published-native-coding-16.md) | [deepseek-candidate-explicit-warm-coding-11: product-path CHARACTERIZED](qualification-deepseek-candidate-explicit-warm-coding-11.md)<br>[deepseek-candidate-native-coding-17: product-path CHARACTERIZED](qualification-deepseek-candidate-native-coding-17.md)<br>[deepseek-device-ingress-coding-23: product-path CHARACTERIZED](qualification-deepseek-device-ingress-coding-23.md) |
 
 Native adapter exclusions:
 
@@ -31,7 +31,7 @@ Native adapter exclusions:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | prefill.promessi-512 | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-candidate-prefill-512-09: product-path CHARACTERIZED](qualification-deepseek-candidate-prefill-512-09.md) |
 | prefill.promessi-2048 | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-candidate-prefill-2048-09: product-path CHARACTERIZED](qualification-deepseek-candidate-prefill-2048-09.md) |
-| prefill.promessi-8192 | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+| prefill.promessi-8192 | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-integrated-prefill-repeat-27: product-path CHARACTERIZED](qualification-deepseek-integrated-prefill-repeat-27.md) |
 
 Native adapter exclusions:
 

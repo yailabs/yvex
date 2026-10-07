@@ -271,7 +271,7 @@ static int moe_test_execution_contract(
         !row_count || row_count > 8ull)
         return 0;
     memset(batch, 0, sizeof(*batch));
-    batch->schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V2;
+    batch->schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V3;
     batch->provenance = row_count == 1ull
                             ? YVEX_EXECUTION_BATCH_SINGLE_ROW
                             : YVEX_EXECUTION_BATCH_COMPILED_COMPATIBLE;
@@ -294,7 +294,7 @@ static int moe_test_execution_contract(
     memset(batch->execution_profile_identity, 'd', YVEX_SHA256_HEX_CAP - 1u);
     memset(batch->operation_identity, 'e', YVEX_SHA256_HEX_CAP - 1u);
     memset(policy, 0, sizeof(*policy));
-    policy->schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V2;
+    policy->schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3;
     policy->supported_width_mask = 0x1feull;
     policy->row_implementation = YVEX_ENGINE_IMPLEMENTATION_DEVICE_ENCODED_ROW;
     policy->matrix_implementation = YVEX_ENGINE_IMPLEMENTATION_COUNT;
@@ -1768,9 +1768,27 @@ int yvex_cuda_test_info(void)
     YVEX_TEST_ASSERT(
         strcmp(yvex_cuda_kernel_function_identity(
                    yvex_cuda_state(backend),
+                   yvex_cuda_state(backend)->qtype_tensorcore_wide_rows_function),
+               "yvex_qtype_tensorcore_wide_rows") == 0,
+        "wide Tensor Core topology resolves its distinct immutable kernel identity");
+    YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
+        yvex_cuda_state(backend), yvex_cuda_state(backend)->mxfp4_tensorcore_wide_rows_function),
+        "yvex_mxfp4_tensorcore_wide_rows") == 0,
+        "format-specialized projection resolves its distinct exact kernel identity");
+    YVEX_TEST_ASSERT(
+        strcmp(yvex_cuda_kernel_function_identity(
+                   yvex_cuda_state(backend),
                    yvex_cuda_state(backend)->mxfp4_q8_rows_function),
                "yvex_mxfp4_q8_rows") == 0,
         "graph identity resolves the admitted exact MXFP4 narrow-row kernel");
+    YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
+        yvex_cuda_state(backend), yvex_cuda_state(backend)->mxfp4_q8_matrix_function),
+        "yvex_mxfp4_q8_matrix") == 0,
+        "row-class matrix resolves its distinct exact kernel identity");
+    YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
+        yvex_cuda_state(backend), yvex_cuda_state(backend)->attention_reduce_native_warp_function),
+        "yvex_attention_reduce_native_warp") == 0,
+        "warp-permuted attention resolves its distinct exact kernel identity");
     if (required_native && required_native[0]) {
         YVEX_TEST_ASSERT(kernel_summary.kernel_bundle_native,
                          "native CUDA validation refuses a PTX-only bundle");

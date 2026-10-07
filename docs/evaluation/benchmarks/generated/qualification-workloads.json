@@ -413,6 +413,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-integrated-native-coding-29",
+          "target_identity": "417305bdd2bbdf7a1da09f3e6a7ed75ebe6c6714de69577d325850de4093bd48",
+          "path": "product-native/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-published-native-coding-16",
           "target_identity": "3983ced4306be4bd695917b703f306a424668da0da339da10d6e07009ed64742",
           "path": "product-native-v24",
@@ -608,7 +616,16 @@
       "strategy": "target-only",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-integrated-prefill-repeat-27",
+          "target_identity": "ee7478d3ed0b99827c770a0726791b2fd89c2c8d78fcb45645e104b3182a44bb",
+          "path": "controlled-engine/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-prefill",

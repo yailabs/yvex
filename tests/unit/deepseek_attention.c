@@ -100,7 +100,7 @@ static int test_cpu_resource_guards(void)
     memset(&history, 0, sizeof(history));
     rc = yvex_attention_cuda_trace_open(
         &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
-        YVEX_ATTENTION_EVIDENCE_FULL, 0, NULL, ULLONG_MAX, &trace_bytes, &failure, &err);
+        YVEX_ATTENTION_EVIDENCE_FULL, 0, 0, NULL, ULLONG_MAX, &trace_bytes, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && trace_bytes != 0ull,
                      "CUDA trace reports its complete owned bytes");
     yvex_attention_execution_trace_release(&trace);
@@ -109,7 +109,7 @@ static int test_cpu_resource_guards(void)
                      "attention publication release is idempotent");
     rc = yvex_attention_cuda_trace_open(
         &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
-        YVEX_ATTENTION_EVIDENCE_FULL, 0, NULL, trace_bytes - 1ull,
+        YVEX_ATTENTION_EVIDENCE_FULL, 0, 0, NULL, trace_bytes - 1ull,
         &row_bytes, &failure, &err);
     YVEX_TEST_ASSERT(
         rc == YVEX_ERR_BOUNDS && row_bytes == 0ull && !trace.owned &&
@@ -117,14 +117,14 @@ static int test_cpu_resource_guards(void)
         "CUDA trace refuses budget minus one before allocation");
     rc = yvex_attention_cuda_trace_open(
         &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
-        YVEX_ATTENTION_EVIDENCE_FULL, 0, NULL, trace_bytes, &row_bytes, &failure, &err);
+        YVEX_ATTENTION_EVIDENCE_FULL, 0, 0, NULL, trace_bytes, &row_bytes, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && row_bytes == trace_bytes && trace.owned,
                      "CUDA trace admits its exact host budget");
     yvex_attention_execution_trace_release(&trace);
 
     rc = yvex_attention_cuda_trace_open(
         &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
-        YVEX_ATTENTION_EVIDENCE_STAGES, 0, NULL, trace_bytes, &row_bytes, &failure, &err);
+        YVEX_ATTENTION_EVIDENCE_STAGES, 0, 0, NULL, trace_bytes, &row_bytes, &failure, &err);
     YVEX_TEST_ASSERT(
         rc == YVEX_OK && !trace.input && trace.q_low && trace.query &&
             trace.attention_values && !trace.topk_counts && !trace.topk_positions,
@@ -137,7 +137,7 @@ static int test_cpu_resource_guards(void)
         "FAST CUDA publication borrows one prepared graph workspace");
     rc = yvex_attention_cuda_trace_open(
         &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
-        YVEX_ATTENTION_EVIDENCE_NONE, 0, workspace, trace_bytes, &row_bytes, &failure, &err);
+        YVEX_ATTENTION_EVIDENCE_NONE, 0, 0, workspace, trace_bytes, &row_bytes, &failure, &err);
     YVEX_TEST_ASSERT(
         rc == YVEX_OK && trace.workspace == workspace && !trace.input &&
             !trace.q_low && !trace.query && !trace.index_query &&
@@ -145,6 +145,14 @@ static int test_cpu_resource_guards(void)
             !trace.topk_counts && !trace.topk_positions && trace.raw_kv &&
             trace.output,
         "FAST CUDA publication retains production output/state and omits evidence-only spans");
+    yvex_attention_execution_trace_release(&trace);
+    rc = yvex_attention_cuda_trace_open(
+        &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
+        YVEX_ATTENTION_EVIDENCE_NONE, 0, 1, workspace, trace_bytes, &row_bytes, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_OK && trace.workspace == workspace && trace.raw_kv &&
+            !trace.output && !trace.core_output && !trace.envelope_output,
+        "device-only NONE publication retains state without fabricating host output");
     yvex_attention_execution_trace_release(&trace);
     YVEX_TEST_ASSERT(
         yvex_attention_workspace_rewind(workspace, 0ull, &err) == YVEX_OK &&
