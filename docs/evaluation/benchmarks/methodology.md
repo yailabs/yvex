@@ -299,7 +299,10 @@ resource admission and lifecycle safety under its exact target identity.
 The comparison validator refuses implicit differences in relevant identities,
 workload, reference or denominator. A declared experiment may vary permitted
 axes but does not automatically rank results. Quality regression never changes
-checkpoint or reference corpus. Reports follow the permanent
+checkpoint or reference corpus. A fully bound CHARACTERIZED performance record
+may be compared at its measured scope; comparability does not promote any plane
+to QUALIFIED. An incomplete identity or unknown/profiled timing still refuses.
+Reports follow the permanent
 [agent qualification protocol](../../../AGENTS.md#model-representation-and-performance-qualification-reports).
 
 ## Operator inspection and local measurement

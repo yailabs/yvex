@@ -647,22 +647,72 @@ mod tests {
         );
     }
     #[test]
-    fn published_records_validate_and_missing_provenance_refuses_comparison() {
+    fn published_records_validate_without_promoting_characterized_evidence() {
         let receipts: Vec<Value> = serde_json::from_str(CATALOG).unwrap();
         for receipt in receipts {
             validate(&receipt).unwrap();
-            if let Some(m) = receipt["measurements"].as_array().unwrap().first() {
-                assert!(
-                    compare(
-                        &receipt,
-                        &receipt,
-                        m["metric"].as_str().unwrap(),
-                        m["case"].as_str().unwrap(),
-                        ""
-                    )
-                    .is_err()
-                );
-            }
+        }
+    }
+    #[test]
+    fn complete_performance_context_compares_but_missing_context_refuses() {
+        let receipts: Vec<Value> = serde_json::from_str(CATALOG).unwrap();
+        let rules: Value = serde_json::from_str(RULES).unwrap();
+        let metric = "decode.post-first.committed";
+        let reference = receipts
+            .iter()
+            .find(|r| {
+                r["target"]
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .all(|v| !v.is_null())
+                    && r["claims"]
+                        .as_object()
+                        .unwrap()
+                        .values()
+                        .all(|c| c["state"] != "QUALIFIED")
+                    && r["provenance"]["profiled"] == false
+                    && r["measurements"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|m| m["metric"] == metric)
+            })
+            .expect("catalog must retain a fully bound characterized performance control");
+        let case = reference["measurements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["metric"] == metric)
+            .unwrap()["case"]
+            .as_str()
+            .unwrap();
+        let direct = compare(reference, reference, metric, case, "").unwrap();
+        assert_eq!(direct["kind"], "direct");
+        assert_eq!(direct["automatic_ranking"], false);
+        for key in rules["fields"].as_object().unwrap().keys() {
+            let mut incomplete = reference.clone();
+            incomplete["target"][key] = Value::Null;
+            incomplete["target_identity"] =
+                json!(target_identity(&incomplete["target"], &rules).unwrap());
+            // Absence is a valid unqualified record, not comparable evidence.
+            validate(&incomplete).unwrap();
+            let error = compare(reference, &incomplete, metric, case, "").unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("comparison lacks {key}"))
+            );
+        }
+        for profiled in [Value::Null, json!(true), json!("false")] {
+            let mut ambiguous = reference.clone();
+            ambiguous["provenance"]["profiled"] = profiled;
+            assert!(
+                compare(reference, &ambiguous, metric, case, "")
+                    .unwrap_err()
+                    .to_string()
+                    .contains("explicitly unprofiled")
+            );
         }
     }
     #[test]
