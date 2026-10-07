@@ -1,0 +1,815 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-rejected-small-row-20261007-target-only-coding-hash-table",
+  "title": "REJECTED execution candidate / GB10 controlled native coding.hash-table / target-only",
+  "origin": "yvex-published",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "source_commit": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+    "source_tree": "82b6643866c9882819107aee2354139ee1046b49",
+    "source_delta": "0936ec14a3a0724243e9ef6ef586d5d26323d23e7c9901c06c72a7246774908b",
+    "build": "89bc7905cb5d37d14d6e79c87999102a7a80b3f5946276bf13df9ce232bb496b",
+    "executable": "480bee09cae23d70afd061fc54be79fb7dfd2ad16a0a375be24579aed7364606",
+    "backend": "cuda",
+    "backend_implementation": "backend.cuda@36c16dfb1a944d359fa7136cee0497cc7e2f3d6e+0936ec14a3a0724243e9ef6ef586d5d26323d23e7c9901c06c72a7246774908b",
+    "kernel_bundle": "2f3edc518d155bf1e8402bdfb962e2dd98fca479167b9c4d83079d118c706c36",
+    "hardware_model": "NVIDIA GB10",
+    "device_count": 1,
+    "topology": "single-node single-device coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA Driver API; toolkit 13.0 / NVCC V13.0.88",
+    "memory_configuration": "coherent unified memory; CUDA-reported global memory bytes=130663170048",
+    "runtime_configuration": "e201048c20721dc281de4724cf6deeec9d420c4fb4db081deb5bc630ba2fee5c",
+    "context": 4096,
+    "prefill_geometry": "chunk=512",
+    "sequence_geometry": "width=1",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none",
+    "sampling": "native stochastic=0, temperature=0; no stochastic draws",
+    "product_path": "controlled-engine/public-C-host/native-v25",
+    "suite": "94f29d3a9002bfc3b2d91d3427268099ce7659430d32030c9747e1bf00582a01"
+  },
+  "target_identity": "f889ceafb190cd0752a16f617f4d15a27caf40e7aed3bf4a06a036698e961909",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No admitted independent checkpoint-matched full-model numerical/quality comparison in this timing series"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No admitted independent checkpoint-matched full-model numerical/quality comparison in this timing series"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "required_evidence": [],
+      "evidence": {
+        "complete-native-series": {
+          "sha256": "bf7fc11b14051d8e86094b194c93ec34fb382a4c15eccd8381ec2e9dc79ad531",
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table/identity.json",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "required_evidence": [],
+      "evidence": {
+        "complete-native-series": {
+          "sha256": "bf7fc11b14051d8e86094b194c93ec34fb382a4c15eccd8381ec2e9dc79ad531",
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table/identity.json",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "measurements": [
+    {
+      "metric": "admission.client",
+      "unit": "s",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        0.758827966,
+        0.725216535,
+        0.749716752
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 0.749716752,
+        "minimum": 0.725216535,
+        "maximum": 0.758827966,
+        "median_absolute_deviation": 0.009111214000000034
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "prefill.wall",
+      "unit": "s",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        1.089304553,
+        1.109984854,
+        1.082118632
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 1.089304553,
+        "minimum": 1.082118632,
+        "maximum": 1.109984854,
+        "median_absolute_deviation": 0.0071859210000000395
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "ttft.server",
+      "unit": "s",
+      "definition": "turn start to first committed model-token callback",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        1.229466282,
+        1.23954941,
+        1.212148918
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 1.229466282,
+        "minimum": 1.212148918,
+        "maximum": 1.23954941,
+        "median_absolute_deviation": 0.010083127999999997
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "ttft.client-visible",
+      "unit": "s",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        1.988265853,
+        1.964887213,
+        1.961877414
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 1.964887213,
+        "minimum": 1.961877414,
+        "maximum": 1.988265853,
+        "median_absolute_deviation": 0.0030097989999999797
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "request.client-complete",
+      "unit": "s",
+      "definition": "client dispatch including connect through terminal response",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        32.053910275,
+        32.062204974,
+        32.041775887
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 32.053910275,
+        "minimum": 32.041775887,
+        "maximum": 32.062204974,
+        "median_absolute_deviation": 0.008294698999996797
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "final.first.server",
+      "unit": "s",
+      "definition": "server turn start to first source-classified final token",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        1.229466282,
+        1.23954941,
+        1.212148918
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 1.229466282,
+        "minimum": 1.212148918,
+        "maximum": 1.23954941,
+        "median_absolute_deviation": 0.010083127999999997
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "final.first.client",
+      "unit": "s",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        1.988265853,
+        1.964887213,
+        1.961877414
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 1.964887213,
+        "minimum": 1.961877414,
+        "maximum": 1.988265853,
+        "median_absolute_deviation": 0.0030097989999999797
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "prefill.uncached",
+      "unit": "token/s",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        28.458524216,
+        27.928309011,
+        28.647505997
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 28.458524216,
+        "minimum": 27.928309011,
+        "maximum": 28.647505997,
+        "median_absolute_deviation": 0.18898178099999896
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "decode.post-first.committed",
+      "unit": "token/s",
+      "definition": "committed tokens after first / elapsed decode wall after first",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        8.481654995,
+        8.472695958,
+        8.47763747
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 8.47763747,
+        "minimum": 8.472695958,
+        "maximum": 8.481654995,
+        "median_absolute_deviation": 0.004017525000000077
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "final.phase-rate",
+      "unit": "token/s",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "case": "coding.hash-table/turn-0",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Loaded engine; no explicit warming; first post-load request and subsequent fresh sessions retained; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        8.475545254283093,
+        8.469501369405059,
+        8.47428920099285
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 8.47428920099285,
+        "minimum": 8.469501369405059,
+        "maximum": 8.475545254283093,
+        "median_absolute_deviation": 0.001256053290243031
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table"
+    },
+    {
+      "metric": "load.complete",
+      "unit": "s",
+      "definition": "load admission to execution-ready engine",
+      "case": "coding.hash-table/load",
+      "prompt_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf",
+      "reference_identity": null,
+      "session_state": "none",
+      "warm_state": "File/page-cache state uncontrolled; no cold-load claim",
+      "output_bound": 256,
+      "samples": [
+        5.881658332
+      ],
+      "statistics": {
+        "count": 1,
+        "median": 5.881658332,
+        "minimum": 5.881658332,
+        "maximum": 5.881658332,
+        "median_absolute_deviation": 0.0
+      },
+      "scope": "Controlled engine/public-C host/native protocol v25; explicit greedy configuration; NOT installed Rust/chat or HTTP performance",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/load.json"
+    }
+  ],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "evidence_class": "controlled-native-characterization",
+    "raw_root": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table",
+    "build": {
+      "core": {
+        "head": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "state": "dirty",
+        "delta_identity": "0936ec14a3a0724243e9ef6ef586d5d26323d23e7c9901c06c72a7246774908b",
+        "tree": "82b6643866c9882819107aee2354139ee1046b49"
+      },
+      "product": {
+        "build_commit": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "build_identity": "89bc7905cb5d37d14d6e79c87999102a7a80b3f5946276bf13df9ce232bb496b",
+        "local_protocol_version": 25,
+        "registry_identity": "1bf91cd6c95e5b1dbec21613e0b41d8a6ef061478d60648ef808afbba51cc2cc",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "4f15838840cb24dcd9b211c829e6002c97536396d4cbbafa178111fff012c4d2",
+        "source_delta_identity": "0936ec14a3a0724243e9ef6ef586d5d26323d23e7c9901c06c72a7246774908b",
+        "source_state": "dirty",
+        "source_tree": "82b6643866c9882819107aee2354139ee1046b49",
+        "version": "0.1.0"
+      },
+      "native_library_sha256": "576ae9ae17908c9bd79ce8eff1d7b35fd2ce98dde796117a7c758409c5ec76d6",
+      "controlled_host_executable_sha256": "480bee09cae23d70afd061fc54be79fb7dfd2ad16a0a375be24579aed7364606",
+      "controlled_host_source_sha256": "8bdc1f40f4f82ede449c22a2c8b9494036f66290a6a1aca7b697b2078a4e232f",
+      "orchestrator_sha256": "8382bafc53dd8223b8af4a434f17e41d783b8eed39a9490e378005998ff71949",
+      "command": [
+        "cc",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-I/tmp/yvex-competitive-followup.1r5xbl/source/include",
+        "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/controlled_native_host.c",
+        "/tmp/yvex-competitive-followup.1r5xbl/source/build/lib/libyvex.a",
+        "-ldl",
+        "-pthread",
+        "-lm",
+        "-lz",
+        "-o",
+        "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/controlled-native-host-small-row-attention"
+      ],
+      "scope": "External public-C host and canonical native test client; NOT the installed Rust product executable"
+    },
+    "kernel_owner_receipt": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/backend-identity-candidate.json",
+      "sha256": "607e5f8701eb75decaea6d93cc9898df86b4632464070377072ee1dfab8795ee"
+    },
+    "canonical_relationship": {
+      "target": "dabeca3de6df34f8a3333f1b4ba9142c9f8b3c51e74aa756b57d356ae46d3ee1",
+      "sha256": "22152c76b2871cb29a92ee29cdd39f60f0ae54be1eedacf3d3c67536449252c0"
+    },
+    "suite_sha256": "4e295a7265dbf1b8d40e56bc63053103054cf1ca41ed1a455fc38b476c638227",
+    "source_capture": {
+      "schema": "yvex.qualification.source-capture.v1",
+      "source": {
+        "head": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "state": "dirty",
+        "delta_identity": "0936ec14a3a0724243e9ef6ef586d5d26323d23e7c9901c06c72a7246774908b"
+      },
+      "tree": "82b6643866c9882819107aee2354139ee1046b49",
+      "executables": {
+        "executable-0": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/yvex",
+          "sha256": "903b2363e0bf599f77b883f62d3990470ec91cdf57d6b59b269a91f66cc622ad"
+        },
+        "executable-1": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/build/lib/libyvex.a",
+          "sha256": "576ae9ae17908c9bd79ce8eff1d7b35fd2ce98dde796117a7c758409c5ec76d6"
+        },
+        "executable-2": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/build/tests/product_client",
+          "sha256": "3671ab6ffb9eeea4b8b7c433da4276282b72cee56f4356a01befaf7687f045a7"
+        }
+      },
+      "files": {
+        "base.tar": "542b529fecda6e1a5ad7b2de08f72ca8ff2563e037516aa472f3df70f9107968",
+        "delta.patch": "19587cbff43d3ad9f49b7c5375ab3b27f72dbb80ab424bea4f256bb681ccb296",
+        "executable-0": "903b2363e0bf599f77b883f62d3990470ec91cdf57d6b59b269a91f66cc622ad",
+        "executable-1": "576ae9ae17908c9bd79ce8eff1d7b35fd2ce98dde796117a7c758409c5ec76d6",
+        "executable-2": "3671ab6ffb9eeea4b8b7c433da4276282b72cee56f4356a01befaf7687f045a7",
+        "untracked.tar": "df2034bf67524c9723862b2df8a33724484aed8ccf2e4523425f47fabb101d4a"
+      },
+      "scope": "observed source and executable bytes; build relationship separately required"
+    },
+    "raw_files": {
+      "native-0.jsonl": "6626e1a42700303130330e80b2f92bcf6b6462e4c4a96cb0e7eacedcc44e30ce",
+      "observation-0.json": "edf252809b7b1e2da8eb4339d24f50b4818bd7a07207a532b49af4bab90eff5c",
+      "native-0.resources.jsonl": "851918607d0ef86f9b42a1e7cd476c0e6666d9fc06c899625926322c64c32ac2",
+      "native-0.resource-summary.json": "6a2d8666313180298c1164b70695bce6a4085a28a7cb912a74f6ed92f4ae63be",
+      "memory-0.json": "c43b6804c6598c0bb88f7d629b5868e1668f97563887f3bfd98f5b836cf93760",
+      "native-1.jsonl": "686b909ceb8325ebb6afa54643275d5aa7dc506b7631a1c656ce1e9504861bad",
+      "observation-1.json": "1fd084b9b6661dddca1f884974472deba6f1afd86ccc24bdff12302320a6fbfa",
+      "native-1.resources.jsonl": "ec67c04644e1574f5d0ee2e2db42c1da4a0ba8bfa8455e34e0f8733977c18408",
+      "native-1.resource-summary.json": "af6687334ba6384bb2f3f4bf6b79d9443ab058279cd0c5d474ad3c814ef0066f",
+      "memory-1.json": "c1afaf427d8ed784e6195fd7aa2a05af1e74a20eaac039087c56cdb36e64b551",
+      "native-2.jsonl": "527183a0d25b97ce5b868b741ff269e7e25f10b20a15961a6b4883252c8c4277",
+      "observation-2.json": "f9d59dc440ae2f2413b3f0f4d00310cf0787ec7fdbe6f5d1da4bf2f1aed6d940",
+      "native-2.resources.jsonl": "b6d28b41abbc946545de7a7bb38060aa8027d2ca8552e4ab64f8a9560d6647f1",
+      "native-2.resource-summary.json": "b58f1eeec9653de31006419f0d80887debd448726a2efce63c0708ad2fbc9911",
+      "memory-2.json": "c4d0371003df90957fdbc7299afc6efe79d27a7fba4aed02bf4bf23f62dc76ba"
+    },
+    "resources": [
+      {
+        "schema": "yvex.qualification.resource-observation.v1",
+        "adapter": "cuda-process-list-v1",
+        "state": "OBSERVED_CLEAR",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table/native-0.resources.jsonl",
+        "allowed_pids": [
+          1106120
+        ],
+        "devices": [],
+        "interval_seconds": 1,
+        "observations": 33,
+        "probe_seconds": 0.7868008049554192,
+        "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence"
+      },
+      {
+        "schema": "yvex.qualification.resource-observation.v1",
+        "adapter": "cuda-process-list-v1",
+        "state": "OBSERVED_CLEAR",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table/native-1.resources.jsonl",
+        "allowed_pids": [
+          1106120
+        ],
+        "devices": [],
+        "interval_seconds": 1,
+        "observations": 33,
+        "probe_seconds": 0.7953411439957563,
+        "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence"
+      },
+      {
+        "schema": "yvex.qualification.resource-observation.v1",
+        "adapter": "cuda-process-list-v1",
+        "state": "OBSERVED_CLEAR",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-small-row-attention-target-window-02/yvex-coding-target/coding.hash-table/native-2.resources.jsonl",
+        "allowed_pids": [
+          1106120
+        ],
+        "devices": [],
+        "interval_seconds": 1,
+        "observations": 33,
+        "probe_seconds": 0.8017808089207392,
+        "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence"
+      }
+    ],
+    "observations": [
+      {
+        "kind": "turn",
+        "request": 2,
+        "client_complete_seconds": 32.053910275,
+        "prompt_tokens": 31,
+        "reused_tokens": 0,
+        "prefill_tokens": 31,
+        "generated_tokens": 256,
+        "initial_position": 0,
+        "final_position": 287,
+        "prefill_seconds": 1.089304553,
+        "prefill_rate": 28.458524216,
+        "server_first_token_seconds": 1.229466282,
+        "decode_seconds": 30.204546412,
+        "decode_rate": 8.475545254,
+        "publication_seconds": 0.0,
+        "publication_timing_available": 0,
+        "reasoning_tokens": 0,
+        "final_tokens": 256,
+        "first_reasoning_seconds": 0.0,
+        "first_final_seconds": 1.229466282,
+        "reasoning_seconds": 0.0,
+        "final_seconds": 30.204546412,
+        "total_completion_seconds": 31.295155522,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "proposed_tokens": 0,
+        "selected_verification_tokens": 0,
+        "target_verifications": 0,
+        "accepted_tokens": 0,
+        "rejected_tokens": 0,
+        "discarded_tokens": 0,
+        "correction_or_bonus_tokens": 0,
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "draft_seconds": 0.0,
+        "verification_seconds": 0.0,
+        "post_first_decode_scope": 6,
+        "post_first_decode_available": 13,
+        "post_first_decode_units": 255,
+        "post_first_decode_ns": 30064887118,
+        "post_first_decode_rate": 8.481654995,
+        "commit_seconds": 0.0,
+        "stop_reason": 3,
+        "strategy": 1,
+        "turn_identity": "a8ad811b75e944671482592577480fe7c79c4e8fbdef20153b32ebc89a3b51b9",
+        "token_identity": "1457e4b8f43218c89ca1f356d2ced51350c702264fbfe77a57dfc857aa9c238e",
+        "client_first_visible_seconds": 1.988265853,
+        "client_admitted_seconds": 0.758827966,
+        "client_first_final_seconds": 1.988265853,
+        "client_first_reasoning_seconds": null,
+        "first_fragment_publication_seconds": null,
+        "first_fragment_publication_status": "not-projected-by-terminal-summary",
+        "content_sha256": {
+          "1": "ccc7ed7525af5370a1d13dd86253f051d5d8cf974cc9deb249f588b45486fe9d",
+          "2": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "case": "coding.hash-table/turn-0",
+        "input_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf"
+      },
+      {
+        "kind": "turn",
+        "request": 2,
+        "client_complete_seconds": 32.062204974,
+        "prompt_tokens": 31,
+        "reused_tokens": 0,
+        "prefill_tokens": 31,
+        "generated_tokens": 256,
+        "initial_position": 0,
+        "final_position": 287,
+        "prefill_seconds": 1.109984854,
+        "prefill_rate": 27.928309011,
+        "server_first_token_seconds": 1.23954941,
+        "decode_seconds": 30.22610055,
+        "decode_rate": 8.469501369,
+        "publication_seconds": 0.0,
+        "publication_timing_available": 0,
+        "reasoning_tokens": 0,
+        "final_tokens": 256,
+        "first_reasoning_seconds": 0.0,
+        "first_final_seconds": 1.23954941,
+        "reasoning_seconds": 0.0,
+        "final_seconds": 30.22610055,
+        "total_completion_seconds": 31.337033241,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "proposed_tokens": 0,
+        "selected_verification_tokens": 0,
+        "target_verifications": 0,
+        "accepted_tokens": 0,
+        "rejected_tokens": 0,
+        "discarded_tokens": 0,
+        "correction_or_bonus_tokens": 0,
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "draft_seconds": 0.0,
+        "verification_seconds": 0.0,
+        "post_first_decode_scope": 6,
+        "post_first_decode_available": 13,
+        "post_first_decode_units": 255,
+        "post_first_decode_ns": 30096677758,
+        "post_first_decode_rate": 8.472695958,
+        "commit_seconds": 0.0,
+        "stop_reason": 3,
+        "strategy": 1,
+        "turn_identity": "a8ad811b75e944671482592577480fe7c79c4e8fbdef20153b32ebc89a3b51b9",
+        "token_identity": "1457e4b8f43218c89ca1f356d2ced51350c702264fbfe77a57dfc857aa9c238e",
+        "client_first_visible_seconds": 1.964887213,
+        "client_admitted_seconds": 0.725216535,
+        "client_first_final_seconds": 1.964887213,
+        "client_first_reasoning_seconds": null,
+        "first_fragment_publication_seconds": null,
+        "first_fragment_publication_status": "not-projected-by-terminal-summary",
+        "content_sha256": {
+          "1": "ccc7ed7525af5370a1d13dd86253f051d5d8cf974cc9deb249f588b45486fe9d",
+          "2": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "case": "coding.hash-table/turn-0",
+        "input_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf"
+      },
+      {
+        "kind": "turn",
+        "request": 2,
+        "client_complete_seconds": 32.041775887,
+        "prompt_tokens": 31,
+        "reused_tokens": 0,
+        "prefill_tokens": 31,
+        "generated_tokens": 256,
+        "initial_position": 0,
+        "final_position": 287,
+        "prefill_seconds": 1.082118632,
+        "prefill_rate": 28.647505997,
+        "server_first_token_seconds": 1.212148918,
+        "decode_seconds": 30.209023309,
+        "decode_rate": 8.474289201,
+        "publication_seconds": 0.0,
+        "publication_timing_available": 0,
+        "reasoning_tokens": 0,
+        "final_tokens": 256,
+        "first_reasoning_seconds": 0.0,
+        "first_final_seconds": 1.212148918,
+        "reasoning_seconds": 0.0,
+        "final_seconds": 30.209023309,
+        "total_completion_seconds": 31.292093952,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "proposed_tokens": 0,
+        "selected_verification_tokens": 0,
+        "target_verifications": 0,
+        "accepted_tokens": 0,
+        "rejected_tokens": 0,
+        "discarded_tokens": 0,
+        "correction_or_bonus_tokens": 0,
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "draft_seconds": 0.0,
+        "verification_seconds": 0.0,
+        "post_first_decode_scope": 6,
+        "post_first_decode_available": 13,
+        "post_first_decode_units": 255,
+        "post_first_decode_ns": 30079134771,
+        "post_first_decode_rate": 8.47763747,
+        "commit_seconds": 0.0,
+        "stop_reason": 3,
+        "strategy": 1,
+        "turn_identity": "a8ad811b75e944671482592577480fe7c79c4e8fbdef20153b32ebc89a3b51b9",
+        "token_identity": "1457e4b8f43218c89ca1f356d2ced51350c702264fbfe77a57dfc857aa9c238e",
+        "client_first_visible_seconds": 1.961877414,
+        "client_admitted_seconds": 0.749716752,
+        "client_first_final_seconds": 1.961877414,
+        "client_first_reasoning_seconds": null,
+        "first_fragment_publication_seconds": null,
+        "first_fragment_publication_status": "not-projected-by-terminal-summary",
+        "content_sha256": {
+          "1": "ccc7ed7525af5370a1d13dd86253f051d5d8cf974cc9deb249f588b45486fe9d",
+          "2": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "case": "coding.hash-table/turn-0",
+        "input_identity": "071ee0a8a81bb642221d6bed47106268043c559aa7f128d6214a03b6eb9bdebf"
+      }
+    ],
+    "load": {
+      "pid": 1106120,
+      "generation": 1,
+      "configuration": {
+        "active_work": 0,
+        "activity": "idle",
+        "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+        "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+        "attached_clients": 0,
+        "backend": 1,
+        "capabilities": {
+          "input_mask": 1,
+          "inputs": [
+            "text"
+          ],
+          "maximum_input_parts": 32,
+          "output_mask": 1,
+          "outputs": [
+            "text"
+          ],
+          "properties": 15
+        },
+        "capacity": {
+          "compatible_operation_batching": false,
+          "continuous_batching": false,
+          "cooperative_scheduling": false,
+          "physical_sequence_width": 1,
+          "runnable_work": 1,
+          "sessions": 8
+        },
+        "capacity_plan_identity": "e201048c20721dc281de4724cf6deeec9d420c4fb4db081deb5bc630ba2fee5c",
+        "configured_physical_sequence_width": 1,
+        "context_capacity": 4096,
+        "continuous_batching": false,
+        "engine_kind": "text",
+        "execution_ready": true,
+        "execution_strategy": "target-only",
+        "generation": 1,
+        "mapped_package_bytes": 95050210272,
+        "maximum_new_tokens": 4096,
+        "maximum_sessions": 8,
+        "model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+        "model_leases": 0,
+        "prefill_chunk_tokens": 512,
+        "prepared_bytes": 0,
+        "resident_device_bytes": 0,
+        "resident_host_bytes": 0,
+        "resources": {
+          "activation_arena_current_bytes": 0,
+          "activation_arena_peak_bytes": 0,
+          "available": 129,
+          "components": 1,
+          "logical_download_bytes": 0,
+          "logical_upload_bytes": 0,
+          "model_artifact_bytes": 95050210272,
+          "model_device_addressable_bytes": 95050210272,
+          "model_explicit_device_bytes": 0,
+          "model_explicit_host_bytes": 0,
+          "model_mapped_bytes": 95050210272,
+          "model_prepared_bytes": 0,
+          "physical_residency_known": false,
+          "placement": "mapped-device-addressable",
+          "process_rss_current_bytes": 0,
+          "process_rss_peak_bytes": 0,
+          "schema_version": 1,
+          "session_attention_allocated_bytes": 0,
+          "session_attention_page_table_bytes": 0,
+          "session_attention_resident_bytes": 0,
+          "session_attention_virtual_bytes": 0,
+          "session_candidate_state_bytes": 0,
+          "session_convolution_state_bytes": 0,
+          "session_physical_state_bytes": 0,
+          "session_recurrent_state_bytes": 0,
+          "transient_current_bytes": 0,
+          "transient_peak_bytes": 0,
+          "unified_memory": true,
+          "workspace_current_bytes": 0,
+          "workspace_peak_bytes": 0
+        },
+        "runtime_binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+        "sessions": 0,
+        "specialization_identity": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+        "state": "loaded",
+        "target": "deepseek4-v4-flash-dspark"
+      }
+    },
+    "preparation_policy": "none",
+    "preparation": null,
+    "preparation_evidence": null,
+    "resource_scope": "Sampled clear process witness; not uninterrupted hardware reservation",
+    "sample_admission": null,
+    "sample_admission_sha256": null,
+    "first_fragment_publication": "NOT MEASURED by this terminal-summary consumer",
+    "candidate_disposition": "rejected"
+  },
+  "limitations": [
+    "Timing is bound to one exact checkpoint/artifact/backend/device/configuration; no 20/700 gate or quality claim.",
+    "This is a controlled public-C host consumed over native v25, not the installed Rust/chat product or HTTP adapter.",
+    "Fresh sessions and exact uncached input counts; 16-token prefill controls do not publish sustained decode.",
+    "Load is N=1 with uncontrolled file/cache state; it cannot qualify cold load latency or a residency speedup.",
+    "Server first committed token and client-visible content are separate clocks; first fragment publication remains unavailable.",
+    "Checkpoint/reference quality and successful high/maximum transitions are not qualified by non-thinking captures.",
+    "Sampled clear lists cannot prove uninterrupted reservation. Raw observations remain independently reopenable.",
+    "Rejected after complete-model comparison: no material sustained target-only, DSpark or prefill benefit over reusable packing. Bit-exact component PASS does not justify additional dispatch geometry. Initial target-only series overlapping compilation is excluded and replaced by a clean three-sample series."
+  ]
+}

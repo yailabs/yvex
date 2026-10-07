@@ -128,6 +128,10 @@ def qualification_populations(record):
                 require(isinstance(identity, str) and bool(identity),
                         'grouped observation population lacks exact input identity')
                 case += '/input-' + identity
+        elif 'case' in row:
+            # Native imports already retain the fully qualified turn/history
+            # key. A separate load measurement must not make it ambiguous.
+            case = row['case']
         else:
             require(len(cases) == 1, 'ambiguous observation case population')
             case = next(iter(cases))

@@ -1338,3 +1338,363 @@ scope, not the competitive Task. Successful longer-bound reasoning, independent
 representation quality and the measured software execution owners remain open;
 20 target-only decode / 700 uncached prefill remain unearned. No YAI/SDK/Studio
 code, Case prompt, indeterminate SEND, Metal or A03 work is advanced.
+
+## Controlled physical-geometry and page-warming experiments (2026-10-07)
+
+The frozen public-C host, consumed over native protocol 25, has its own
+controlled lane. It is not the installed Rust/chat product or the HTTP adapter.
+The exact checkpoint, mixed artifact, binding, sampling, sequence width,
+workload and preparation state remain bound in each structured receipt.
+The clean computational baseline uses `a444bcdd`; the geometry candidate uses
+`36c16dfb` plus its retained source delta and separately authenticated kernel
+bundle. Each non-thinking cell contains three unprofiled fresh-session samples.
+
+| Control | Baseline | Batched geometry candidate | Scoped CPU page-touch arm |
+| --- | --- | --- | --- |
+| Hash-table target-only, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-baseline-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-emissions-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-page-warm-20261007-target-only-coding-hash-table.md) |
+| Hash-table DSpark, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-baseline-20261007-speculative-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-emissions-20261007-speculative-coding-hash-table.md) | NOT MEASURED |
+| Uncached 2K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-baseline-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-emissions-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-page-warm-20261007-target-only-prefill-promessi-2048.md) |
+| Uncached 8K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-baseline-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-emissions-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-page-warm-20261007-target-only-prefill-promessi-8192.md) |
+
+Batched query ranking, tiled expert columns, cooperative bucket lookup and
+batched compressor-emission transforms reduce unnecessary physical work without
+changing routing populations or numerical publication. The candidate improves
+these prefill controls; it does not improve sustained coding decode. All
+repetitions preserve exact published channel-content hashes and transaction
+populations against the internal baseline. This is not an independent upstream
+logit, continuation or representation-quality oracle.
+
+The page-touch arm retains the baseline kernels and artifact. Scoped `mincore`
+observes every mapped file page resident before and after the read-only CPU
+touch in both load windows; no major CPU fault occurs. Its timed controls show
+no material prefill or sustained-decode benefit. This rules out page population
+as the dominant steady-state cost in these already file-resident intervals,
+not in cold loads or all deployments. CPU page presence does not prove CUDA
+page locking, GPU TLB state or absence of accelerator faults. No CUDA advice,
+prefetch, cache eviction, duplicate weight allocation or permanent product mode
+was introduced. The warming state is an explicit experimental difference;
+strict direct-comparison keys refuse pooling it with the unwarmed series.
+
+Load observations are single samples with uncontrolled file/cache state, not
+cold-load or causal load-speed claims. The short prefill completion tails do
+not publish sustained decode. Kernel profiles remain separate diagnostics;
+API waits overlap device activity and cannot be added as removable overhead.
+Raw evidence, replayable source captures, content comparisons, page observations
+and cleanup remain outside Git under
+`/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR`.
+Finite generation 1 and public listeners remain unchanged; DeepSeek is restored
+with the exact artifact/binding and operator-selected context/chunk/strategy.
+Independent quality, successful high/maximum transitions, broader product and
+competitive performance exits remain open. The selected Task stays IN PROGRESS;
+no hardware ceiling or 20/700 qualification is claimed.
+
+## Submission lifetime and rejected decoded candidates (2026-10-07)
+
+The same controlled public-C/native-v25 workload, artifact, numerical classes,
+geometry and sampling were repeated at frozen source deltas. Each timing cell
+contains three unprofiled samples; target-only and DSpark remain separate.
+The installed Rust/chat producer is not replaced by these experimental hosts.
+
+| Controlled case | Same-stream intermediate copies | Rejected wider decoded realization | Rejected five-digit realization |
+| --- | --- | --- | --- |
+| Hash-table target-only, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-stream-copy-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-wide-decoded-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-five-digit-20261007-target-only-coding-hash-table.md) |
+| Hash-table DSpark, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-stream-copy-20261007-speculative-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-wide-decoded-20261007-speculative-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-five-digit-20261007-speculative-coding-hash-table.md) |
+| Uncached 2K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-stream-copy-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-wide-decoded-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-five-digit-20261007-target-only-prefill-promessi-2048.md) |
+| Uncached 8K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-stream-copy-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-wide-decoded-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-five-digit-20261007-target-only-prefill-promessi-8192.md) |
+
+The wider decoded candidates preserve the retained bounded publication hashes
+and target/speculative transaction populations but worsen complete prefill
+relative to the retained geometry candidate. Their source captures, preparation
+costs, numerical checks and timing receipts remain recoverable; their production
+implementation changes were reverted. Parameter-only digit eligibility is not
+activation eligibility or proof of complete-model speed. Neither experiment
+changes or relaxes the ordered decoded numerical contract.
+
+Same-stream physical SSA copying preserves outputs and populations and removes
+intermediate copy barriers. Correlated diagnostic stacks show waits moving to
+the final block/MoE completion owner instead of disappearing from the critical
+path. Its complete-request timings are materially neutral: barrier counts alone
+are not an earned latency gain. Standalone synchronous copying remains unchanged.
+The registered program, CUDA projection, graph and binding controls pass at this
+snapshot; the runtime sanitizer rerun is independently retained. Those checks
+do not qualify a later unmeasured workspace candidate.
+
+The [controlled geometry profile](benchmarks/generated/qualification-deepseek-controlled-emissions-profile-20261007.md)
+retains kernel populations and diagnostic durations separately from timed model
+measurements. Subsequent stack/CUPTI correlation and same-stream profile payloads
+remain outside Git under the evidence root cited above. Nested API waits overlap
+device execution and are not summed as removable host time. Occupancy, achieved
+bandwidth and a hardware ceiling are not inferred from this profile.
+
+Reusable encoded-packing storage binds backend-declared extent to prepared-program
+lifetime and aggregate device budget, including overlap during growth. Focused
+registered CUDA tests pass malformed/aliased storage, exact numerical preservation,
+allocation-free serialized reuse, nonfinite refusal/recovery and cleanup.
+
+| Controlled case | Reusable packing; three unprofiled samples |
+| --- | --- |
+| Hash-table target-only, context 4096 / chunk 512 | [Exact result and configuration](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-coding-hash-table.md) |
+| Hash-table DSpark, context 4096 / chunk 512 | [Exact result and configuration](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-speculative-coding-hash-table.md) |
+| Uncached 2K, context 16384 / chunk 512 | [Exact result and configuration](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-2048.md) |
+| Uncached 8K, context 16384 / chunk 512 | [Exact result and configuration](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-8192.md) |
+
+All four cases retain the baseline's emitted channel-content hashes and real
+target/speculative populations. The DSpark coding series improves complete
+request latency modestly; target-only coding and prefill remain close to the
+retained geometry candidate. These are controlled native measurements, not a
+new installed-product headline or an earned performance gate.
+The [correlated packing profile](benchmarks/generated/qualification-deepseek-controlled-packing-profile-20261007.md)
+observes no packing allocation/free calls inside prefill or post-first decode;
+prepared buffers move their bounded storage into program lifetime. Remaining
+block/MoE completion waits are still present. Diagnostic intervals overlap
+device work and cannot be summed into a hypothetical removable overhead.
+No user conversation is replayed or retired merely to obtain a sample.
+
+### Request cancellation at an attention-layer boundary
+
+The operator's `main/r98` ended with attention-state invalidation at the same
+wall-clock second as the explicitly authorized cancellation and subsequent
+closure of `main` and `test-51cd5e94`. This is a cancelled operator observation,
+not a benchmark sample or proof of spontaneous failure after a particular
+output length. The conversation contents are not replayed.
+
+An isolated state-provider reproduction proves the generic defect: cancellation
+before `begin` invalidated committed state even though abort succeeded. The
+session finalizer then returned `YVEX_ERR_STATE` instead of the original
+`YVEX_ERR_CANCELLED`. Removing that invalidation preserves committed bytes and
+identities, without hiding a genuine cleanup failure. Canonical
+`unit.runtime_state` controls cover first-layer and between-layer cancellation
+in both target and draft scopes, subsequent computational reuse, malformed
+cancellation views and fail-closed counter overflow. The new controls fail
+before the change and pass after it. This does not relax incomplete conversation
+turn recovery; the installed host does not acquire the fix merely because the
+candidate tests pass.
+
+## Rejected small-row attention geometry (2026-10-07)
+
+The bounded candidate substitutes a one-warp reduction for admitted small query
+populations while retaining the existing reduction tree and large-prefill path.
+Independent component controls pass with exact output bits, but that is not a
+complete-model performance benefit. The candidate is rejected and its production
+dispatch changes are removed; reusable packing remains the accepted predecessor.
+
+| Controlled case | Accepted packing predecessor | Rejected small-row candidate |
+| --- | --- | --- |
+| Hash-table target-only, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-small-row-20261007-target-only-coding-hash-table.md) |
+| Hash-table DSpark, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-speculative-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-small-row-20261007-speculative-coding-hash-table.md) |
+| Uncached 2K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-small-row-20261007-target-only-prefill-promessi-2048.md) |
+| Uncached 8K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-small-row-20261007-target-only-prefill-promessi-8192.md) |
+
+Each published cell contains three unprofiled, fresh-session measurements over
+the captured public-C/native-v25 controlled path. This is an explicit source,
+build, kernel and capacity-plan experiment, not a strict identical-target
+comparison. The candidate also contains the separately tested cancellation
+repair; it is not claimed to isolate that repair's performance effect. Prompt,
+published channel-content hashes and real target/speculative populations match
+the internal predecessor. Execution-bound token-result identities differ and
+are not treated as a token-ID or independent checkpoint-quality comparison.
+
+The initial target-only series overlapped another worktree's native compilation.
+All three samples are excluded from the comparable series, even though the GPU
+observer saw no competing inference. Their raw evidence and explicit admission
+sidecar remain retained. A later source-identical three-sample repetition is the
+published target-only series. Prefill remains neutral and coding does not earn
+a material complete-model improvement. No 20/700 performance gate, independent
+representation quality or installed Rust/chat speed claim follows.
+
+Raw source/build captures, the excluded intervals, corrected series, resource
+observations and cleanup remain under the existing competitive evidence root in
+`followup-20261007.iiQ6tR/yvex-small-row-attention-window-01` and
+`yvex-small-row-attention-target-window-02`. The approved public listeners and
+finite generation remain unchanged. Production restoration does not authorize
+retiring a subsequently created operator or Studio session.
+
+## Cross-engine admission of the YVEX representation (2026-10-07)
+
+The pinned external reader `9139e2ae` is tested read-only against the exact
+YVEX mixed GGUF, without source edits, inference or weight preparation. It
+refuses the indexer metadata namespace before execution. The pre-existing,
+authenticated target-only reader projection supplies those aliases, excludes
+draft tensors and losslessly widens BF16 to F32; its complete file digest is
+`1f50e95021db52069b0a9eacbfbf00065e37e0cef8793e5c3d59959e40874c98`.
+That projection is also refused: the external reader requires an F16 embedding,
+where the exact YVEX BF16 embedding is represented without loss as F32.
+
+The reader's admission contract additionally restricts several dense material
+roles to layouts unlike the mixed YVEX representation. Neither a BF16-to-F16
+conversion nor a differently quantized artifact is silently substituted. These
+are container/physical admission observations, not numerical failure, model
+execution or a same-checkpoint engine A/B. The independent checkpoint mismatch
+of the engines' normal artifacts remains a separate experimental axis.
+Authenticated reader/executable/source and file observations remain external in
+`shared-representation-inspection-01` and
+`shared-target-projection-inspection-01` under the same follow-up evidence root.
+
+## Rejected warp-row mixing normalization (2026-10-07)
+
+The candidate stores each small mixing-matrix row in one CUDA warp lane and
+replaces repeated global-matrix passes and block barriers with register values
+and shuffles. Ordered F64 sums, each F32 publication, the initial softmax,
+residual normalization and all larger-matrix behavior retain their existing
+contract. No family-name dispatch, quantization or model identity changes.
+
+The independent host continuation checks every output bit after the observed
+first iteration at several iteration counts and stream geometries. A separately
+frozen pre-change CUDA library supplies the first-iteration preservation control;
+the complete bounded consumer output agrees exactly. Compute Sanitizer memcheck
+and synccheck report zero errors at that component scope. Neither test is an
+independent full-model checkpoint oracle or a performance sample.
+
+| Controlled case | Packing predecessor | Rejected warp-row candidate |
+| --- | --- | --- |
+| Hash-table target-only, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-mhc-row-20261007-target-only-coding-hash-table.md) |
+| Hash-table DSpark, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-speculative-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-mhc-row-20261007-speculative-coding-hash-table.md) |
+| Uncached 2K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-mhc-row-20261007-target-only-prefill-promessi-2048.md) |
+| Uncached 8K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-mhc-row-20261007-target-only-prefill-promessi-8192.md) |
+
+Each cell retains three unprofiled complete requests, including the slower first
+DSpark request; no favorable repetition is substituted. The explicit comparison
+varies only source-delta, build, executable, backend/kernel and capacity-plan
+identities. Prompt, artifact/binding, numerical class, declared context/chunk,
+published channel-content hashes and real target/speculative populations match
+the predecessor. Coding and prefill do not establish a material complete-model
+gain, so this row-register implementation is rejected rather than promoted on
+component correctness. A separately instrumented full-model profile observes
+that normalization still contributes execution time; that diagnostic is not
+included in the timed series or treated as a removable-time sum.
+
+The comparison gate first refused an incompletely joined tokenizer lineage.
+The corrected import uses the existing authenticated artifact/binding lineage;
+the raw samples are unchanged and missing identities are not waived. Source
+captures, numerical/sanitizer controls, diagnostic profiles, all samples and
+restoration facts remain outside Git under `followup-20261007.iiQ6tR` in
+`mhc-normalization-order-control-01`, `mhc-normalization-sanitizer-control-01`,
+`yvex-mhc-ordered-window-01` and `yvex-mhc-ordered-control-profile-01`.
+The operator explicitly authorized closing the remaining idle Studio-created
+runtime session for this window. Its session state is retired, not replayed.
+The installed host, approved listeners and finite generation are preserved;
+the same DeepSeek artifact/binding and product profile are restored afterwards.
+No independent representation-quality, installed-product speed or 20/700
+performance exit follows from these observations.
+
+## Warp-cell mixing normalization (2026-10-07)
+
+The subsequent generic candidate keeps one matrix cell per warp lane for at
+most four streams. Both row and column divisions retain ordered F64 sums and
+each intermediate F32 publication; the first iteration still omits row
+normalization. Larger matrices retain the prior block-wide algorithm. The
+initial softmax, residual RMS and model/state identities are unchanged.
+
+Frozen pre-change CUDA output and the independent host continuation agree
+exactly across the bounded stream/iteration controls, including the unchanged
+larger-matrix path. Registered `cuda.program` and separate Compute Sanitizer
+memcheck/synccheck controls pass. These are component preservation tests, not an
+independent checkpoint or quantization-quality qualification.
+
+| Controlled case | Packing predecessor | Warp-cell candidate |
+| --- | --- | --- |
+| Hash-table target-only, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-coding-hash-table.md) |
+| Hash-table DSpark, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-speculative-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-speculative-coding-hash-table.md) |
+| Uncached 2K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-prefill-promessi-2048.md) |
+| Uncached 8K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-prefill-promessi-8192.md) |
+
+All three unprofiled fresh-session samples per cell are retained, including the
+slower first speculative sample. Explicit source/build/kernel/capacity-plan
+experimental axes pass the comparison gate; checkpoint, artifact, binding,
+numerical class, prompt and declared context/chunk remain matched. Channel-content
+hashes, committed populations and speculative acceptance agree exactly with the
+internal predecessor. This is bounded internal preservation, not independent
+full-model quality or token-ID equivalence inferred from result hashes.
+
+The candidate is retained as a small controlled coding improvement; prefill
+remains effectively neutral at the measured scale. A separate
+[full-model CUPTI diagnostic](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-profile-20261007.md)
+attributes less execution time to the mixing kernel while attention,
+encoded experts and projections remain material costs. Profiler samples are
+excluded from the unprofiled series. API waits overlap GPU execution and are not
+summed as independently removable overhead. No occupancy, effective-bandwidth,
+installed Rust/chat speed or 20/700 exit is inferred from that diagnostic.
+
+Replayable source/build captures, the failed relative-path receipt import,
+corrected absolute-path import, exact numerical/sanitizer controls, all timing
+samples and restoration remain under `followup-20261007.iiQ6tR` in
+`mhc-cell-order-control-02`, `mhc-cell-sanitizer-control-02`,
+`yvex-mhc-cell-window-01`, `qualification-mhc-cell` and
+`yvex-mhc-cell-control-profile-01`. The first incomplete disposable comparison
+is not evidence; the corrected comparison requires all four case receipts.
+The same installed DeepSeek artifact/profile is restored after each isolated
+window; finite generation and approved listeners remain unchanged.
+
+## Rejected fixed expert-matrix geometry (2026-10-07)
+
+The experiment supplies compile-time encoded format, block count and ordered
+activation selection for already admitted IQ2_XXS/Q2_K expert matrix geometries.
+Integer MMA fragments, the F32 block reduction tree and exceptional ordered-F64
+recovery retain their original definition. The numerical implementation and
+fallback are shared; no family-name branch or new physical policy is introduced.
+
+Registered `cuda.moe_rows` and `cuda.program` controls pass. The expert controls
+now also exercise malformed inputs, nonfinite scales and exceptional recovery
+at both common block geometries in the matrix path, rather than exercising only
+the dynamic geometry for those negatives. These regression controls remain;
+the extra production template instantiations are removed.
+
+| Controlled case | Warp-cell predecessor | Rejected expert-geometry candidate |
+| --- | --- | --- |
+| Hash-table target-only, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-expert-geometry-20261007-target-only-coding-hash-table.md) |
+| Hash-table DSpark, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-speculative-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-expert-geometry-20261007-speculative-coding-hash-table.md) |
+| Uncached 2K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-expert-geometry-20261007-target-only-prefill-promessi-2048.md) |
+| Uncached 8K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-expert-geometry-20261007-target-only-prefill-promessi-8192.md) |
+
+All three complete unprofiled samples per cell are retained. Exact prompt,
+artifact/binding, channel-content hashes, committed populations and speculative
+acceptance match the internal predecessor. Only the explicit source/build/kernel
+and capacity-plan identities vary in the machine-checked comparison. Neither
+long-prefill band improves and the coding tradeoff is neutral at the measured
+scale; no material complete-model gain justifies retaining the extra variants.
+This does not prove that a prepared layout or different admitted representation
+would be neutral. It is not an independent quality comparison, installed-product
+speed claim or 20/700 performance exit.
+
+Frozen source/build captures, all raw native requests, process-boundary witnesses,
+memory observations and restoration remain outside Git in
+`followup-20261007.iiQ6tR/yvex-expert-geometry-window-01`,
+`qualification-rejected-expert-geometry` and `expert-geometry-comparison.json`.
+The installed host was not replaced; the same product DeepSeek profile was
+restored and the finite generation and public listeners remained unchanged.
+
+## Rejected certified MXFP4 matrix reuse (2026-10-07)
+
+A generic small-population candidate reuses each encoded MXFP4 fragment across
+eight independent activation rows using exact integer MMA. Its block products
+retain lossless activation digits, an outward ordered-F64 interval/lattice
+certificate and literal ordered fallback; neither quantization nor publication
+precision changes. It is not the Q8-activation numerical class.
+
+Registered `cuda.quant_qtype` and `cuda.program` controls pass at the frozen
+candidate. Grouped projection controls compare original per-group CUDA output
+bits and an independent CPU dot, including partial column tiles, multiple
+groups, the untiled tail and nonfinite refusal. These broadened controls remain;
+the experimental matrix implementation and launch selection are removed.
+
+| Controlled case | Warp-cell predecessor | Rejected MXFP4 matrix candidate |
+| --- | --- | --- |
+| Hash-table target-only, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-mxfp4-matrix-20261007-target-only-coding-hash-table.md) |
+| Hash-table DSpark, context 4096 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-speculative-coding-hash-table.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-mxfp4-matrix-20261007-speculative-coding-hash-table.md) |
+| Uncached 2K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-prefill-promessi-2048.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-mxfp4-matrix-20261007-target-only-prefill-promessi-2048.md) |
+| Uncached 8K, context 16384 / chunk 512 | [Detail](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-prefill-promessi-8192.md) | [Detail](benchmarks/generated/qualification-deepseek-rejected-mxfp4-matrix-20261007-target-only-prefill-promessi-8192.md) |
+
+All three complete unprofiled requests per cell retain identical bounded
+content and committed/speculative populations. The configuration-aware
+comparison explicitly varies only source/build/kernel/resource-plan identities.
+Despite component correctness, the matrix candidate materially slows DSpark
+coding while long-prefill throughput remains neutral. A fragment reuse or
+Tensor Core label is therefore not evidence of a superior complete-model path.
+No independent representation-quality, installed Rust/chat, reasoning transition
+or 20/700 claim follows.
+
+Raw source/build captures, native observations, memory/process witnesses and
+restoration remain in `followup-20261007.iiQ6tR/yvex-mxfp4-matrix-window-01`,
+`qualification-rejected-mxfp4-matrix` and `mxfp4-matrix-comparison.json` outside Git.
+The same installed DeepSeek profile is restored at generation 37; finite remains
+at generation 1 and the approved public listeners are unchanged.

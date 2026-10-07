@@ -1,0 +1,1145 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-controlled-mhc-cell-profile-20261007",
+  "title": "Warp-cell normalization / controlled native CUDA activity and API lifetimes",
+  "origin": "yvex-published",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "source_commit": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+    "source_tree": "82b6643866c9882819107aee2354139ee1046b49",
+    "source_delta": "04dd6492cc93875c2c8ef96ca7c4bfaade617af267372ebfcc558c91de0e9885",
+    "build": "a99d1ea8d68a593bd1e4b9fb5c8b222b2aaa59eea9a4c3852758c2730528b3e7",
+    "executable": "ed57d8cf9eb823aa2b0d308d62618dd707088cd594159140983a7729f2530097",
+    "backend": "cuda",
+    "backend_implementation": "backend.cuda@36c16dfb1a944d359fa7136cee0497cc7e2f3d6e+04dd6492cc93875c2c8ef96ca7c4bfaade617af267372ebfcc558c91de0e9885",
+    "kernel_bundle": "121843052bf4a7d8df5f2d850f807fbabd0b698c8da45281a936eb9f531da99b",
+    "hardware_model": "NVIDIA GB10",
+    "device_count": 1,
+    "topology": "single-node single-device coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA Driver API; toolkit 13.0 / NVCC V13.0.88",
+    "memory_configuration": "coherent unified memory; CUDA-reported global memory bytes=130663170048",
+    "runtime_configuration": "cdc7652f23f512697cf5a027cd51acd3dc8774c387f9f1105239d6481cc87958",
+    "context": 16384,
+    "prefill_geometry": "chunk=512",
+    "sequence_geometry": "width=1",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none",
+    "sampling": "native stochastic=0, temperature=0; no stochastic draws",
+    "product_path": "controlled-engine/public-C-host/native-v25",
+    "suite": "30d56bb8992dffccc0ca9bb269d96c03f99d234e4b04e1bf0279875f01f8ab77"
+  },
+  "target_identity": "285b5fb70acc9ee691c8f490f2fd25da83c926f91651334929211b90b9fa5954",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "Correlated source-stable CUDA API lifetimes; no unprofiled speed or numerical qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Correlated source-stable CUDA API lifetimes; no unprofiled speed or numerical qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No admitted independent checkpoint-matched full-model numerical/quality comparison in this timing series"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Correlated source-stable CUDA API lifetimes; no unprofiled speed or numerical qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No admitted independent checkpoint-matched full-model numerical/quality comparison in this timing series"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Correlated source-stable CUDA API lifetimes; no unprofiled speed or numerical qualification",
+      "required_evidence": [],
+      "evidence": {
+        "profile": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json",
+          "sha256": "9ad7e18cb7f6c35dce4f5560bf905323c2698bb0ea8d1e47286c193f6dc337cb",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "Correlated source-stable CUDA API lifetimes; no unprofiled speed or numerical qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "Correlated source-stable CUDA API lifetimes; no unprofiled speed or numerical qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": true,
+    "diagnostics": [
+      {
+        "id": "request_setup.0.count",
+        "case": "request_setup",
+        "value": 688,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_program_device_open > yvex_program_stage_open > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.0.overlap",
+        "case": "request_setup",
+        "value": 0.202758164,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_program_device_open > yvex_program_stage_open > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.1.count",
+        "case": "request_setup",
+        "value": 387,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > stage_buffer > yvex_program_stage_open > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.1.overlap",
+        "case": "request_setup",
+        "value": 0.121002241,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > stage_buffer > yvex_program_stage_open > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.2.count",
+        "case": "request_setup",
+        "value": 86,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_program_kernels_prepare > yvex_program_stage_prepare > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.2.overlap",
+        "case": "request_setup",
+        "value": 0.056258639,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_program_kernels_prepare > yvex_program_stage_prepare > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.3.count",
+        "case": "request_setup",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_runtime_session_prepare_attention_workspace > yvex_runtime_generation_context_open > session_turn > yvex_server_sessions_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.3.overlap",
+        "case": "request_setup",
+        "value": 0.016545271,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_runtime_session_prepare_attention_workspace > yvex_runtime_generation_context_open > session_turn > yvex_server_sessions_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.4.count",
+        "case": "request_setup",
+        "value": 688,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_program_device_open > yvex_program_stage_open > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.4.overlap",
+        "case": "request_setup",
+        "value": 0.010144467,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_program_device_open > yvex_program_stage_open > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.5.count",
+        "case": "request_setup",
+        "value": 387,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > stage_buffer > yvex_program_stage_open > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.5.overlap",
+        "case": "request_setup",
+        "value": 0.006414172,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > stage_buffer > yvex_program_stage_open > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.6.count",
+        "case": "request_setup",
+        "value": 9,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > transformer_runtime_buffers > yvex_runtime_transformer_context_open > yvex_runtime_generation_context_open > session_turn; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.6.overlap",
+        "case": "request_setup",
+        "value": 0.004673436,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > transformer_runtime_buffers > yvex_runtime_transformer_context_open > yvex_runtime_generation_context_open > session_turn; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.7.count",
+        "case": "request_setup",
+        "value": 86,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_program_kernels_prepare > yvex_program_stage_prepare > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.7.overlap",
+        "case": "request_setup",
+        "value": 0.003639113,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_program_kernels_prepare > yvex_program_stage_prepare > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.8.count",
+        "case": "request_setup",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_runtime_session_prepare_attention_workspace > yvex_runtime_generation_context_open > session_turn > yvex_server_sessions_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.8.overlap",
+        "case": "request_setup",
+        "value": 0.002551649,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_runtime_session_prepare_attention_workspace > yvex_runtime_generation_context_open > session_turn > yvex_server_sessions_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.9.count",
+        "case": "request_setup",
+        "value": 6,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open > yvex_runtime_transformer_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.9.overlap",
+        "case": "request_setup",
+        "value": 0.001740582,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open > yvex_runtime_transformer_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.10.count",
+        "case": "request_setup",
+        "value": 129,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > yvex_runtime_moe_programs_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.10.overlap",
+        "case": "request_setup",
+        "value": 0.000844791,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > yvex_runtime_moe_programs_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.11.count",
+        "case": "request_setup",
+        "value": 9,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > transformer_runtime_buffers > yvex_runtime_transformer_context_open > yvex_runtime_generation_context_open > session_turn; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.11.overlap",
+        "case": "request_setup",
+        "value": 0.000414087,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > transformer_runtime_buffers > yvex_runtime_transformer_context_open > yvex_runtime_generation_context_open > session_turn; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.12.count",
+        "case": "request_setup",
+        "value": 6,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open > yvex_runtime_transformer_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.12.overlap",
+        "case": "request_setup",
+        "value": 0.000145266,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_runtime_moe_programs_open > yvex_runtime_moe_context_open > yvex_runtime_transformer_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.13.count",
+        "case": "request_setup",
+        "value": 129,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > yvex_runtime_moe_programs_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.13.overlap",
+        "case": "request_setup",
+        "value": 9.557e-05,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > yvex_runtime_moe_programs_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.14.count",
+        "case": "request_setup",
+        "value": 129,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > yvex_runtime_moe_programs_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.14.overlap",
+        "case": "request_setup",
+        "value": 8.6625e-05,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > yvex_runtime_moe_programs_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.15.count",
+        "case": "request_setup",
+        "value": 4,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > transformer_runtime_buffers; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.15.overlap",
+        "case": "request_setup",
+        "value": 3.1344e-05,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > transformer_runtime_buffers; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.16.count",
+        "case": "request_setup",
+        "value": 3,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_program_device_open > yvex_program_stage_open > transformer_runtime_buffers > yvex_runtime_transformer_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.16.overlap",
+        "case": "request_setup",
+        "value": 1.0848e-05,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_program_device_open > yvex_program_stage_open > transformer_runtime_buffers > yvex_runtime_transformer_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.17.count",
+        "case": "request_setup",
+        "value": 2,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > logits_device_open > logits_context_open > yvex_runtime_logits_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.17.overlap",
+        "case": "request_setup",
+        "value": 6.737e-06,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > logits_device_open > logits_context_open > yvex_runtime_logits_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.18.count",
+        "case": "request_setup",
+        "value": 4,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > transformer_runtime_buffers; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.18.overlap",
+        "case": "request_setup",
+        "value": 3.776e-06,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > transformer_runtime_buffers; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.19.count",
+        "case": "request_setup",
+        "value": 4,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > transformer_runtime_buffers; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.19.overlap",
+        "case": "request_setup",
+        "value": 2.768e-06,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > kernel_small_prepare > yvex_program_kernels_open > yvex_program_stage_open > transformer_runtime_buffers; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.20.count",
+        "case": "request_setup",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_program_device_open > logits_context_open > yvex_runtime_logits_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.20.overlap",
+        "case": "request_setup",
+        "value": 2.624e-06,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via yvex_cuda_work_allocate > cuda_tensor_alloc > yvex_program_device_open > logits_context_open > yvex_runtime_logits_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.21.count",
+        "case": "request_setup",
+        "value": 3,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_program_device_open > yvex_program_stage_open > transformer_runtime_buffers > yvex_runtime_transformer_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.21.overlap",
+        "case": "request_setup",
+        "value": 2.032e-06,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_program_device_open > yvex_program_stage_open > transformer_runtime_buffers > yvex_runtime_transformer_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.22.count",
+        "case": "request_setup",
+        "value": 2,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > logits_device_open > logits_context_open > yvex_runtime_logits_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.22.overlap",
+        "case": "request_setup",
+        "value": 1.456e-06,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > logits_device_open > logits_context_open > yvex_runtime_logits_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.23.count",
+        "case": "request_setup",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_program_device_open > logits_context_open > yvex_runtime_logits_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.23.overlap",
+        "case": "request_setup",
+        "value": 7.68e-07,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_alloc > yvex_program_device_open > logits_context_open > yvex_runtime_logits_context_open > yvex_runtime_generation_context_open; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.cuMemAlloc_v2.count",
+        "case": "request_setup",
+        "value": 1316,
+        "unit": "count",
+        "definition": "Correlated observed cuMemAlloc_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.cuMemFree_v2.count",
+        "case": "request_setup",
+        "value": 0,
+        "unit": "count",
+        "definition": "Correlated observed cuMemFree_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "tokenizer.cuMemAlloc_v2.count",
+        "case": "tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Correlated observed cuMemAlloc_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "tokenizer.cuMemFree_v2.count",
+        "case": "tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Correlated observed cuMemFree_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.0.count",
+        "case": "prefill",
+        "value": 344,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_moe_programs_device > runtime_moe_execute_layer_rows; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.0.overlap",
+        "case": "prefill",
+        "value": 12.416196703,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_moe_programs_device > runtime_moe_execute_layer_rows; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.1.count",
+        "case": "prefill",
+        "value": 172,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_transformer_execute_block > transformer_layer_evidence; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.1.overlap",
+        "case": "prefill",
+        "value": 6.557831661,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_transformer_execute_block > transformer_layer_evidence; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.2.count",
+        "case": "prefill",
+        "value": 4,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > transformer_layer_evidence > yvex_attention_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.2.overlap",
+        "case": "prefill",
+        "value": 0.004306454,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > transformer_layer_evidence > yvex_attention_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.3.count",
+        "case": "prefill",
+        "value": 46,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_commit > state_resident_commit_range > state_residency_begin > bridge_begin > yvex_attention_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.3.overlap",
+        "case": "prefill",
+        "value": 0.000223827,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_commit > state_resident_commit_range > state_residency_begin > bridge_begin > yvex_attention_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.4.count",
+        "case": "prefill",
+        "value": 248,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > state_resident_upload.part.0 > yvex_runtime_state_residency_prepare > yvex_runtime_private_session_prepare_persistent_scope_state_locked > yvex_runtime_session_prepare_persistent_scope_state; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.4.overlap",
+        "case": "prefill",
+        "value": 0.000136288,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > state_resident_upload.part.0 > yvex_runtime_state_residency_prepare > yvex_runtime_private_session_prepare_persistent_scope_state_locked > yvex_runtime_session_prepare_persistent_scope_state; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.5.count",
+        "case": "prefill",
+        "value": 124,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_commit > state_resident_upload.part.0 > yvex_runtime_state_residency_prepare > yvex_runtime_private_session_prepare_persistent_scope_state_locked > yvex_runtime_session_prepare_persistent_scope_state; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.5.overlap",
+        "case": "prefill",
+        "value": 0.000127297,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_commit > state_resident_upload.part.0 > yvex_runtime_state_residency_prepare > yvex_runtime_private_session_prepare_persistent_scope_state_locked > yvex_runtime_session_prepare_persistent_scope_state; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.6.count",
+        "case": "prefill",
+        "value": 4,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > yvex_runtime_transformer_execute > yvex_runtime_generation_turn_begin > session_turn > yvex_server_sessions_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.6.overlap",
+        "case": "prefill",
+        "value": 5.805e-05,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > yvex_runtime_transformer_execute > yvex_runtime_generation_turn_begin > session_turn > yvex_server_sessions_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.7.count",
+        "case": "prefill",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuMemAlloc_v2 via status_transaction_open > yvex_cuda_transformer_initial > yvex_runtime_transformer_execute > yvex_runtime_generation_turn_begin > session_turn > yvex_server_sessions_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.7.overlap",
+        "case": "prefill",
+        "value": 2.3232e-05,
+        "unit": "s",
+        "definition": "cuMemAlloc_v2 via status_transaction_open > yvex_cuda_transformer_initial > yvex_runtime_transformer_execute > yvex_runtime_generation_turn_begin > session_turn > yvex_server_sessions_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.8.count",
+        "case": "prefill",
+        "value": 4,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_backend_attention_complete > yvex_attention_device_completion_resolve > attention_probe_pending_complete > yvex_attention_execute > yvex_runtime_attention_probe_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.8.overlap",
+        "case": "prefill",
+        "value": 1.44e-06,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_backend_attention_complete > yvex_attention_device_completion_resolve > attention_probe_pending_complete > yvex_attention_execute > yvex_runtime_attention_probe_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.cuMemAlloc_v2.count",
+        "case": "prefill",
+        "value": 1,
+        "unit": "count",
+        "definition": "Correlated observed cuMemAlloc_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "prefill.cuMemFree_v2.count",
+        "case": "prefill",
+        "value": 0,
+        "unit": "count",
+        "definition": "Correlated observed cuMemFree_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.0.count",
+        "case": "first_decode",
+        "value": 86,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_moe_programs_device > runtime_moe_execute_layer_rows; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.0.overlap",
+        "case": "first_decode",
+        "value": 0.069585083,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_moe_programs_device > runtime_moe_execute_layer_rows; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.1.count",
+        "case": "first_decode",
+        "value": 43,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_transformer_execute_block > transformer_layer_evidence; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.1.overlap",
+        "case": "first_decode",
+        "value": 0.015666391,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_transformer_execute_block > transformer_layer_evidence; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.2.count",
+        "case": "first_decode",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > logits_program_run > logits_project_cuda > yvex_runtime_logits_project; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.2.overlap",
+        "case": "first_decode",
+        "value": 0.006206254,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > logits_program_run > logits_project_cuda > yvex_runtime_logits_project; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.3.count",
+        "case": "first_decode",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > transformer_layer_evidence > yvex_attention_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.3.overlap",
+        "case": "first_decode",
+        "value": 0.000301492,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > transformer_layer_evidence > yvex_attention_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.4.count",
+        "case": "first_decode",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > yvex_runtime_transformer_execute > decode_step_locked.constprop.0 > yvex_runtime_decode_step > generation_target_step; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.4.overlap",
+        "case": "first_decode",
+        "value": 2.1984e-05,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > yvex_runtime_transformer_execute > decode_step_locked.constprop.0 > yvex_runtime_decode_step > generation_target_step; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.5.count",
+        "case": "first_decode",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > sampling_cuda_select_greedy_rows > sampling_select_device_greedy_batch > sampling_select_owned > yvex_runtime_sampling_select > generation_target_step; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.5.overlap",
+        "case": "first_decode",
+        "value": 3.52e-07,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > sampling_cuda_select_greedy_rows > sampling_select_device_greedy_batch > sampling_select_owned > yvex_runtime_sampling_select > generation_target_step; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.6.count",
+        "case": "first_decode",
+        "value": 1,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_backend_attention_complete > yvex_attention_device_completion_resolve > attention_probe_pending_complete > yvex_attention_execute > yvex_runtime_attention_probe_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.6.overlap",
+        "case": "first_decode",
+        "value": 3.52e-07,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_backend_attention_complete > yvex_attention_device_completion_resolve > attention_probe_pending_complete > yvex_attention_execute > yvex_runtime_attention_probe_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.cuMemAlloc_v2.count",
+        "case": "first_decode",
+        "value": 0,
+        "unit": "count",
+        "definition": "Correlated observed cuMemAlloc_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "first_decode.cuMemFree_v2.count",
+        "case": "first_decode",
+        "value": 0,
+        "unit": "count",
+        "definition": "Correlated observed cuMemFree_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.0.count",
+        "case": "post_first_decode",
+        "value": 1290,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_moe_programs_device > runtime_moe_execute_layer_rows; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.0.overlap",
+        "case": "post_first_decode",
+        "value": 1.062684899,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_moe_programs_device > runtime_moe_execute_layer_rows; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.1.count",
+        "case": "post_first_decode",
+        "value": 645,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_transformer_execute_block > transformer_layer_evidence; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.1.overlap",
+        "case": "post_first_decode",
+        "value": 0.233639334,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > yvex_runtime_transformer_execute_block > transformer_layer_evidence; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.2.count",
+        "case": "post_first_decode",
+        "value": 15,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > logits_program_run > logits_project_cuda > yvex_runtime_logits_project; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.2.overlap",
+        "case": "post_first_decode",
+        "value": 0.094937954,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > logits_program_run > logits_project_cuda > yvex_runtime_logits_project; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.3.count",
+        "case": "post_first_decode",
+        "value": 15,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > transformer_layer_evidence > yvex_attention_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.3.overlap",
+        "case": "post_first_decode",
+        "value": 0.004578234,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_cuda_program_complete > yvex_program_device_run > yvex_program_stage_device > transformer_layer_evidence > yvex_attention_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.4.count",
+        "case": "post_first_decode",
+        "value": 15,
+        "unit": "count",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > yvex_runtime_transformer_execute > decode_step_locked.constprop.0 > yvex_runtime_decode_step > generation_target_step; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.4.overlap",
+        "case": "post_first_decode",
+        "value": 0.000419221,
+        "unit": "s",
+        "definition": "cuCtxSynchronize via yvex_cuda_synchronize > cuda_tensor_write > yvex_runtime_transformer_execute > decode_step_locked.constprop.0 > yvex_runtime_decode_step > generation_target_step; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.5.count",
+        "case": "post_first_decode",
+        "value": 15,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_backend_attention_complete > yvex_attention_device_completion_resolve > attention_probe_pending_complete > yvex_attention_execute > yvex_runtime_attention_probe_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.5.overlap",
+        "case": "post_first_decode",
+        "value": 6.208e-06,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > yvex_backend_attention_complete > yvex_attention_device_completion_resolve > attention_probe_pending_complete > yvex_attention_execute > yvex_runtime_attention_probe_execute; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.6.count",
+        "case": "post_first_decode",
+        "value": 15,
+        "unit": "count",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > sampling_cuda_select_greedy_rows > sampling_select_device_greedy_batch > sampling_select_owned > yvex_runtime_sampling_select > generation_target_step; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.6.overlap",
+        "case": "post_first_decode",
+        "value": 6.08e-06,
+        "unit": "s",
+        "definition": "cuStreamSynchronize via yvex_cuda_launch_synchronize > sampling_cuda_select_greedy_rows > sampling_select_device_greedy_batch > sampling_select_owned > yvex_runtime_sampling_select > generation_target_step; observed profiled API interval, not additive removable time",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.cuMemAlloc_v2.count",
+        "case": "post_first_decode",
+        "value": 0,
+        "unit": "count",
+        "definition": "Correlated observed cuMemAlloc_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "post_first_decode.cuMemFree_v2.count",
+        "case": "post_first_decode",
+        "value": 0,
+        "unit": "count",
+        "definition": "Correlated observed cuMemFree_v2 calls within server phase; not a claim outside this capture",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/control-stack-summary.json"
+      },
+      {
+        "id": "request_setup.wall",
+        "case": "request_setup",
+        "value": 0.782872155,
+        "unit": "s",
+        "definition": "Server-authored profiled phase interval; excluded from unprofiled benchmark",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.kernel-union",
+        "case": "request_setup",
+        "value": 0.0,
+        "unit": "s",
+        "definition": "Union of clipped CUDA kernel activity; not occupancy or additive API overhead",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.wall",
+        "case": "tokenizer",
+        "value": 0.0012288,
+        "unit": "s",
+        "definition": "Server-authored profiled phase interval; excluded from unprofiled benchmark",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.kernel-union",
+        "case": "tokenizer",
+        "value": 0.0,
+        "unit": "s",
+        "definition": "Union of clipped CUDA kernel activity; not occupancy or additive API overhead",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.wall",
+        "case": "prefill",
+        "value": 20.06661005,
+        "unit": "s",
+        "definition": "Server-authored profiled phase interval; excluded from unprofiled benchmark",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel-union",
+        "case": "prefill",
+        "value": 18.695617795,
+        "unit": "s",
+        "definition": "Union of clipped CUDA kernel activity; not occupancy or additive API overhead",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.mixing-kernel",
+        "case": "prefill",
+        "value": 0.197945772,
+        "unit": "s",
+        "definition": "Observed mixing-kernel activity in this profiled phase; not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.wall",
+        "case": "first_decode",
+        "value": 0.144669621,
+        "unit": "s",
+        "definition": "Server-authored profiled phase interval; excluded from unprofiled benchmark",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel-union",
+        "case": "first_decode",
+        "value": 0.095914488,
+        "unit": "s",
+        "definition": "Union of clipped CUDA kernel activity; not occupancy or additive API overhead",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.mixing-kernel",
+        "case": "first_decode",
+        "value": 0.005828711,
+        "unit": "s",
+        "definition": "Observed mixing-kernel activity in this profiled phase; not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.wall",
+        "case": "post_first_decode",
+        "value": 1.977706865,
+        "unit": "s",
+        "definition": "Server-authored profiled phase interval; excluded from unprofiled benchmark",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel-union",
+        "case": "post_first_decode",
+        "value": 1.456664054,
+        "unit": "s",
+        "definition": "Union of clipped CUDA kernel activity; not occupancy or additive API overhead",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.mixing-kernel",
+        "case": "post_first_decode",
+        "value": 0.087720354,
+        "unit": "s",
+        "definition": "Observed mixing-kernel activity in this profiled phase; not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/profile-summary.json"
+      }
+    ],
+    "build": {
+      "core": {
+        "head": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "state": "dirty",
+        "delta_identity": "04dd6492cc93875c2c8ef96ca7c4bfaade617af267372ebfcc558c91de0e9885",
+        "tree": "82b6643866c9882819107aee2354139ee1046b49"
+      },
+      "product": {
+        "build_commit": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "build_identity": "a99d1ea8d68a593bd1e4b9fb5c8b222b2aaa59eea9a4c3852758c2730528b3e7",
+        "local_protocol_version": 25,
+        "registry_identity": "1bf91cd6c95e5b1dbec21613e0b41d8a6ef061478d60648ef808afbba51cc2cc",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "784cf127aabbf7fc106b9265ef4c8fbb97fdc91980672fb0943f12a08b5b0a51",
+        "source_delta_identity": "04dd6492cc93875c2c8ef96ca7c4bfaade617af267372ebfcc558c91de0e9885",
+        "source_state": "dirty",
+        "source_tree": "82b6643866c9882819107aee2354139ee1046b49",
+        "version": "0.1.0"
+      },
+      "library_sha256": "2b12cc3613aaafbdc6b4412546d16b712ca9b055484cb6e7e4d6ec3515a1bd56",
+      "consumer_sha256": "81291ed88c4c17b4530b1b335228f875d98857bcc2e767166495fa154c73e28b",
+      "executable_sha256": "ed57d8cf9eb823aa2b0d308d62618dd707088cd594159140983a7729f2530097",
+      "client_sha256": "3671ab6ffb9eeea4b8b7c433da4276282b72cee56f4356a01befaf7687f045a7",
+      "command": [
+        "cc",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-I/tmp/yvex-competitive-followup.1r5xbl/source/include",
+        "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/controlled_profile_host.c",
+        "/tmp/yvex-competitive-followup.1r5xbl/source/build/lib/libyvex.a",
+        "-ldl",
+        "-pthread",
+        "-lm",
+        "-lz",
+        "-o",
+        "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/controlled-profile-host"
+      ]
+    },
+    "source_capture": {
+      "schema": "yvex.qualification.source-capture.v1",
+      "source": {
+        "head": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "state": "dirty",
+        "delta_identity": "04dd6492cc93875c2c8ef96ca7c4bfaade617af267372ebfcc558c91de0e9885"
+      },
+      "tree": "82b6643866c9882819107aee2354139ee1046b49",
+      "executables": {
+        "executable-0": {
+          "observed_path": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01/controlled-profile-host",
+          "sha256": "ed57d8cf9eb823aa2b0d308d62618dd707088cd594159140983a7729f2530097"
+        },
+        "executable-1": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/yvex",
+          "sha256": "3bfd62d567ad070e6f3892f04b1944fd7e1d5515b0ea8aedcbaf0b09e8f5334f"
+        },
+        "executable-2": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/build/lib/libyvex.a",
+          "sha256": "2b12cc3613aaafbdc6b4412546d16b712ca9b055484cb6e7e4d6ec3515a1bd56"
+        },
+        "executable-3": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/build/tests/product_client",
+          "sha256": "3671ab6ffb9eeea4b8b7c433da4276282b72cee56f4356a01befaf7687f045a7"
+        }
+      },
+      "files": {
+        "base.tar": "542b529fecda6e1a5ad7b2de08f72ca8ff2563e037516aa472f3df70f9107968",
+        "delta.patch": "44960b34d5e0e0e5e10f2aa9b20c22648db9563b77b559ad706050e5acced665",
+        "executable-0": "ed57d8cf9eb823aa2b0d308d62618dd707088cd594159140983a7729f2530097",
+        "executable-1": "3bfd62d567ad070e6f3892f04b1944fd7e1d5515b0ea8aedcbaf0b09e8f5334f",
+        "executable-2": "2b12cc3613aaafbdc6b4412546d16b712ca9b055484cb6e7e4d6ec3515a1bd56",
+        "executable-3": "3671ab6ffb9eeea4b8b7c433da4276282b72cee56f4356a01befaf7687f045a7",
+        "untracked.tar": "39f37f5faf9d518b76ba9f2c8d497b057f9d94ded308238f5142e865b96e0e93"
+      },
+      "scope": "observed source and executable bytes; build relationship separately required"
+    },
+    "raw_root": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-mhc-cell-control-profile-01",
+    "profile_sha256": "9ad7e18cb7f6c35dce4f5560bf905323c2698bb0ea8d1e47286c193f6dc337cb",
+    "kernel_profile_sha256": "0ad5b1fc9badaa1333ee1a79de74cb93de73883438d839f2029591d2cad3a739",
+    "raw_files": {
+      "api-stacks.tsv": "2b4caa22005b3c3c6ee8aff0f9c3c3f2d92ca5363998cbd5f74fd9bcd947c3d5",
+      "cupti.tsv": "ef39dd3e9eb9a05446f1d806504c2b8c7865729bad1155aff2c0e44fe1da6f6a",
+      "host.jsonl": "7611cabea5a7257b66f6436ee80b862ca037f87d78884b7f24a134fc8dcc9dd2",
+      "build.json": "8dfe972bc68748666a913dc3131e3305da04ab513d542f90b25a2f1d18d2b05d",
+      "identity.json": "9354bd419d3c6be25e081a61332e7a1446e3a6c2687d3aeb499b748b50493e4d",
+      "profile-summary.json": "0ad5b1fc9badaa1333ee1a79de74cb93de73883438d839f2029591d2cad3a739"
+    },
+    "observer": {
+      "profiled": true,
+      "sha256": "6b7fff8fcb035d034c69e46565a6f30ebc0d537277f6f222f3c3522ba88db777",
+      "orchestrator_sha256": "ecb30bb9fd51e558e8f2b27402fd8ce59d3bd8eee5a427cc97c18847f0722806"
+    }
+  },
+  "limitations": [
+    "Captured profiled run only; never used in unprofiled performance statistics.",
+    "API intervals overlap device work and nested driver calls; not additive removable overhead.",
+    "First six native frames retain attribution even when optimized frames were inlined.",
+    "No inference of residency, occupancy or measured bandwidth from these stacks.",
+    "Controlled public-C/native-v25 target-only non-thinking 2K input and 16 output tokens; not installed Rust/chat.",
+    "No profiled timing enters a performance series. Checkpoint and representation quality remain BLOCKED.",
+    "Mixing-kernel activity is diagnostic, not independent numerical conformance or removable-time roofline proof.",
+    "No bandwidth, occupancy, hardware roofline, or 20/700 qualification claim."
+  ]
+}

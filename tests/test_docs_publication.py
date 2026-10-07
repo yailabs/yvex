@@ -141,6 +141,24 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'mixed grouped and ungrouped'):
             benchmarks.qualification_populations(record)
 
+    def test_qualification_population_accepts_explicit_case_with_load(self):
+        record = dict(measurements=[
+            dict(case='coding/turn-0', prompt_identity='expected'),
+            dict(case='coding/load', prompt_identity='expected')],
+            provenance=dict(observations=[dict(case='coding/turn-0',
+                input_identity='expected', generated_tokens=256)]))
+        text = '\n'.join(benchmarks.qualification_populations(record))
+        self.assertIn('### coding/turn-0', text)
+        self.assertNotIn('### coding/load', text)
+        self.assertIn('| Committed output | 256 | token | 1 |', text)
+        record['provenance']['observations'][0]['case'] = 'unmatched/turn-0'
+        with self.assertRaisesRegex(ValueError, 'lacks matching measurement'):
+            benchmarks.qualification_populations(record)
+        record['provenance']['observations'][0]['case'] = 'coding/turn-0'
+        record['provenance']['observations'][0]['input_identity'] = 'different'
+        with self.assertRaisesRegex(ValueError, 'differs from measurement input identity'):
+            benchmarks.qualification_populations(record)
+
     def test_qualification_population_refuses_wrong_input_identity(self):
         record = dict(measurements=[dict(case='coding/turn-0', prompt_identity='expected')],
                       provenance=dict(observations=[dict(case='coding', turn_index=0,

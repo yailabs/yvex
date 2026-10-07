@@ -1,0 +1,1168 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-controlled-emissions-profile-20261007",
+  "title": "Frozen batched geometry / 2K controlled native diagnostic profile",
+  "origin": "yvex-published",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "source_commit": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+    "source_tree": "82b6643866c9882819107aee2354139ee1046b49",
+    "source_delta": "6ec17a3c151733a135b2f46d063e4a49b65948e288fc3035ddceed48fa18e05b",
+    "build": "28dfaa292efd6891a9b06541109ef7633f0909d216d2b6f61666a570939f9159",
+    "executable": "87cfaee9a0ead3fc44b7540f7029425c2feabe48b821e9c814ab4736ece7ce61",
+    "backend": "cuda",
+    "backend_implementation": "backend.cuda@36c16dfb1a944d359fa7136cee0497cc7e2f3d6e+6ec17a3c151733a135b2f46d063e4a49b65948e288fc3035ddceed48fa18e05b",
+    "kernel_bundle": "c6564e2eeb74331722c155f18e00d736d6f9b61117f7a8cb132700819d7addc8",
+    "hardware_model": "NVIDIA GB10",
+    "device_count": 1,
+    "topology": "single-node single-device coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA Driver API; toolkit 13.0 / NVCC V13.0.88",
+    "memory_configuration": "coherent unified memory; CUDA-reported global memory bytes=130663170048",
+    "runtime_configuration": "d17961844d6abc9d3cc7a7d3b776458cb0119920025e712e0ca3019b01fb9c33",
+    "context": 16384,
+    "prefill_geometry": "chunk=512",
+    "sequence_geometry": "width=1",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none",
+    "sampling": "native stochastic=0, temperature=0; no stochastic draws",
+    "product_path": "controlled-engine/public-C-host/native-v25",
+    "suite": "30d56bb8992dffccc0ca9bb269d96c03f99d234e4b04e1bf0279875f01f8ab77"
+  },
+  "target_identity": "7253d3018f1145bfd59b38a205137999625dc43b8537c26e9a2865fd887f5184",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "Source-frozen kernel/API activity; no numerical, quality or performance qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Source-frozen kernel/API activity; no numerical, quality or performance qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No admitted independent checkpoint-matched full-model numerical/quality comparison in this timing series"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Source-frozen kernel/API activity; no numerical, quality or performance qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No admitted independent checkpoint-matched full-model numerical/quality comparison in this timing series"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Source-frozen kernel/API activity; no numerical, quality or performance qualification",
+      "required_evidence": [],
+      "evidence": {
+        "profile": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json",
+          "sha256": "e55a947b94c6e7d4f6c2cb81ec390e507afefd1a74f4af571a3033406d9d91a8",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "Source-frozen kernel/API activity; no numerical, quality or performance qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "Source-frozen kernel/API activity; no numerical, quality or performance qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": true,
+    "diagnostics": [
+      {
+        "id": "request_setup.wall",
+        "case": "request_setup",
+        "value": 0.809500752,
+        "unit": "s",
+        "definition": "Server-authored phase span under CUPTI; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.kernel-union",
+        "case": "request_setup",
+        "value": 0.0,
+        "unit": "s",
+        "definition": "Union of clipped GPU kernel intervals; not occupancy or measured bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.kernel.count",
+        "case": "request_setup",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed clipped kernel population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.kernel.overlapping",
+        "case": "request_setup",
+        "value": 0,
+        "unit": "s",
+        "definition": "Sum of clipped kernel spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.count",
+        "case": "request_setup",
+        "value": 8043,
+        "unit": "count",
+        "definition": "Observed clipped api population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.overlapping",
+        "case": "request_setup",
+        "value": 0.752793872,
+        "unit": "s",
+        "definition": "Sum of clipped api spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.0.count",
+        "case": "request_setup",
+        "value": 1273,
+        "unit": "count",
+        "definition": "api cuMemAlloc_v2 grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.0.seconds",
+        "case": "request_setup",
+        "value": 0.453797461,
+        "unit": "s",
+        "definition": "api cuMemAlloc_v2 grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.1.count",
+        "case": "request_setup",
+        "value": 1,
+        "unit": "count",
+        "definition": "api cuMemHostAlloc grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.1.seconds",
+        "case": "request_setup",
+        "value": 0.208926999,
+        "unit": "s",
+        "definition": "api cuMemHostAlloc grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.2.count",
+        "case": "request_setup",
+        "value": 1406,
+        "unit": "count",
+        "definition": "api cuCtxSynchronize grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.2.seconds",
+        "case": "request_setup",
+        "value": 0.064792437,
+        "unit": "s",
+        "definition": "api cuCtxSynchronize grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.3.count",
+        "case": "request_setup",
+        "value": 1275,
+        "unit": "count",
+        "definition": "api cuMemGetInfo_v2 grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.api.3.seconds",
+        "case": "request_setup",
+        "value": 0.014572155,
+        "unit": "s",
+        "definition": "api cuMemGetInfo_v2 grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.copy.count",
+        "case": "request_setup",
+        "value": 133,
+        "unit": "count",
+        "definition": "Observed clipped copy population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "request_setup.copy.overlapping",
+        "case": "request_setup",
+        "value": 0.000130078,
+        "unit": "s",
+        "definition": "Sum of clipped copy spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.wall",
+        "case": "tokenizer",
+        "value": 0.001298668,
+        "unit": "s",
+        "definition": "Server-authored phase span under CUPTI; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.kernel-union",
+        "case": "tokenizer",
+        "value": 0.0,
+        "unit": "s",
+        "definition": "Union of clipped GPU kernel intervals; not occupancy or measured bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.kernel.count",
+        "case": "tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed clipped kernel population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.kernel.overlapping",
+        "case": "tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Sum of clipped kernel spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.api.count",
+        "case": "tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed clipped api population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.api.overlapping",
+        "case": "tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Sum of clipped api spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.copy.count",
+        "case": "tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed clipped copy population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "tokenizer.copy.overlapping",
+        "case": "tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Sum of clipped copy spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.wall",
+        "case": "prefill",
+        "value": 20.221219809,
+        "unit": "s",
+        "definition": "Server-authored phase span under CUPTI; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel-union",
+        "case": "prefill",
+        "value": 18.665559833,
+        "unit": "s",
+        "definition": "Union of clipped GPU kernel intervals; not occupancy or measured bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.count",
+        "case": "prefill",
+        "value": 14196,
+        "unit": "count",
+        "definition": "Observed clipped kernel population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.overlapping",
+        "case": "prefill",
+        "value": 18.666264206,
+        "unit": "s",
+        "definition": "Sum of clipped kernel spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.0.count",
+        "case": "prefill",
+        "value": 172,
+        "unit": "count",
+        "definition": "kernel yvex_moe_grouped_up_tensorcore grid/copy-bytes=20480 block/copy-kind=128; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.0.seconds",
+        "case": "prefill",
+        "value": 3.5586715,
+        "unit": "s",
+        "definition": "kernel yvex_moe_grouped_up_tensorcore grid/copy-bytes=20480 block/copy-kind=128; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.1.count",
+        "case": "prefill",
+        "value": 172,
+        "unit": "count",
+        "definition": "kernel yvex_attention_reduce_native_warp grid/copy-bytes=4096 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.1.seconds",
+        "case": "prefill",
+        "value": 2.320019892,
+        "unit": "s",
+        "definition": "kernel yvex_attention_reduce_native_warp grid/copy-bytes=4096 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.2.count",
+        "case": "prefill",
+        "value": 172,
+        "unit": "count",
+        "definition": "kernel yvex_moe_grouped_down_tensorcore grid/copy-bytes=40960 block/copy-kind=128; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.2.seconds",
+        "case": "prefill",
+        "value": 1.610858435,
+        "unit": "s",
+        "definition": "kernel yvex_moe_grouped_down_tensorcore grid/copy-bytes=40960 block/copy-kind=128; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.3.count",
+        "case": "prefill",
+        "value": 344,
+        "unit": "count",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=1536 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.3.seconds",
+        "case": "prefill",
+        "value": 1.500168635,
+        "unit": "s",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=1536 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.4.count",
+        "case": "prefill",
+        "value": 256,
+        "unit": "count",
+        "definition": "kernel yvex_mxfp4_tensorcore_wide_rows grid/copy-bytes=4096 block/copy-kind=128; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.4.seconds",
+        "case": "prefill",
+        "value": 0.929491767,
+        "unit": "s",
+        "definition": "kernel yvex_mxfp4_tensorcore_wide_rows grid/copy-bytes=4096 block/copy-kind=128; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.5.count",
+        "case": "prefill",
+        "value": 172,
+        "unit": "count",
+        "definition": "kernel yvex_mxfp4_tensorcore_wide_rows grid/copy-bytes=2048 block/copy-kind=128; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.5.seconds",
+        "case": "prefill",
+        "value": 0.785742556,
+        "unit": "s",
+        "definition": "kernel yvex_mxfp4_tensorcore_wide_rows grid/copy-bytes=2048 block/copy-kind=128; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.6.count",
+        "case": "prefill",
+        "value": 168,
+        "unit": "count",
+        "definition": "kernel yvex_decoded_rows grid/copy-bytes=1024 block/copy-kind=128; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.6.seconds",
+        "case": "prefill",
+        "value": 0.721411138,
+        "unit": "s",
+        "definition": "kernel yvex_decoded_rows grid/copy-bytes=1024 block/copy-kind=128; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.7.count",
+        "case": "prefill",
+        "value": 428,
+        "unit": "count",
+        "definition": "kernel yvex_attention_yarn_rope grid/copy-bytes=4096 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.kernel.7.seconds",
+        "case": "prefill",
+        "value": 0.710410569,
+        "unit": "s",
+        "definition": "kernel yvex_attention_yarn_rope grid/copy-bytes=4096 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.count",
+        "case": "prefill",
+        "value": 54472,
+        "unit": "count",
+        "definition": "Observed clipped api population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.overlapping",
+        "case": "prefill",
+        "value": 19.350178343,
+        "unit": "s",
+        "definition": "Sum of clipped api spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.0.count",
+        "case": "prefill",
+        "value": 1282,
+        "unit": "count",
+        "definition": "api cuCtxSynchronize grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.0.seconds",
+        "case": "prefill",
+        "value": 11.153110971,
+        "unit": "s",
+        "definition": "api cuCtxSynchronize grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.1.count",
+        "case": "prefill",
+        "value": 524,
+        "unit": "count",
+        "definition": "api cuStreamSynchronize grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.1.seconds",
+        "case": "prefill",
+        "value": 6.888050227,
+        "unit": "s",
+        "definition": "api cuStreamSynchronize grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.2.count",
+        "case": "prefill",
+        "value": 516,
+        "unit": "count",
+        "definition": "api cuMemFree_v2 grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.2.seconds",
+        "case": "prefill",
+        "value": 1.006764825,
+        "unit": "s",
+        "definition": "api cuMemFree_v2 grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.3.count",
+        "case": "prefill",
+        "value": 517,
+        "unit": "count",
+        "definition": "api cuMemAlloc_v2 grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.api.3.seconds",
+        "case": "prefill",
+        "value": 0.076924939,
+        "unit": "s",
+        "definition": "api cuMemAlloc_v2 grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.copy.count",
+        "case": "prefill",
+        "value": 17510,
+        "unit": "count",
+        "definition": "Observed clipped copy population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "prefill.copy.overlapping",
+        "case": "prefill",
+        "value": 0.343169825,
+        "unit": "s",
+        "definition": "Sum of clipped copy spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.wall",
+        "case": "first_decode",
+        "value": 0.14941092,
+        "unit": "s",
+        "definition": "Server-authored phase span under CUPTI; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel-union",
+        "case": "first_decode",
+        "value": 0.098149519,
+        "unit": "s",
+        "definition": "Union of clipped GPU kernel intervals; not occupancy or measured bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.count",
+        "case": "first_decode",
+        "value": 2421,
+        "unit": "count",
+        "definition": "Observed clipped kernel population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.overlapping",
+        "case": "first_decode",
+        "value": 0.098170095,
+        "unit": "s",
+        "definition": "Sum of clipped kernel spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.0.count",
+        "case": "first_decode",
+        "value": 43,
+        "unit": "count",
+        "definition": "kernel yvex_attention_reduce_native grid/copy-bytes=64 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.0.seconds",
+        "case": "first_decode",
+        "value": 0.015358176,
+        "unit": "s",
+        "definition": "kernel yvex_attention_reduce_native grid/copy-bytes=64 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.1.count",
+        "case": "first_decode",
+        "value": 86,
+        "unit": "count",
+        "definition": "kernel yvex_residual_mhc_pre grid/copy-bytes=1 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.1.seconds",
+        "case": "first_decode",
+        "value": 0.009035007,
+        "unit": "s",
+        "definition": "kernel yvex_residual_mhc_pre grid/copy-bytes=1 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.2.count",
+        "case": "first_decode",
+        "value": 43,
+        "unit": "count",
+        "definition": "kernel yvex_moe_grouped_up_rows grid/copy-bytes=1536 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.2.seconds",
+        "case": "first_decode",
+        "value": 0.008392325,
+        "unit": "s",
+        "definition": "kernel yvex_moe_grouped_up_rows grid/copy-bytes=1536 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.3.count",
+        "case": "first_decode",
+        "value": 43,
+        "unit": "count",
+        "definition": "kernel yvex_decoded_mxfp4_rows grid/copy-bytes=1024 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.3.seconds",
+        "case": "first_decode",
+        "value": 0.008303011,
+        "unit": "s",
+        "definition": "kernel yvex_decoded_mxfp4_rows grid/copy-bytes=1024 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.4.count",
+        "case": "first_decode",
+        "value": 86,
+        "unit": "count",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=512 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.4.seconds",
+        "case": "first_decode",
+        "value": 0.007481461,
+        "unit": "s",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=512 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.5.count",
+        "case": "first_decode",
+        "value": 1,
+        "unit": "count",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=16160 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.5.seconds",
+        "case": "first_decode",
+        "value": 0.006365474,
+        "unit": "s",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=16160 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.6.count",
+        "case": "first_decode",
+        "value": 43,
+        "unit": "count",
+        "definition": "kernel yvex_moe_grouped_down_rows grid/copy-bytes=3072 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.6.seconds",
+        "case": "first_decode",
+        "value": 0.006318943,
+        "unit": "s",
+        "definition": "kernel yvex_moe_grouped_down_rows grid/copy-bytes=3072 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.7.count",
+        "case": "first_decode",
+        "value": 43,
+        "unit": "count",
+        "definition": "kernel yvex_mxfp4_q8_rows grid/copy-bytes=4096 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.7.seconds",
+        "case": "first_decode",
+        "value": 0.005673774,
+        "unit": "s",
+        "definition": "kernel yvex_mxfp4_q8_rows grid/copy-bytes=4096 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.count",
+        "case": "first_decode",
+        "value": 10617,
+        "unit": "count",
+        "definition": "Observed clipped api population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.overlapping",
+        "case": "first_decode",
+        "value": 0.123216654,
+        "unit": "s",
+        "definition": "Sum of clipped api spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.0.count",
+        "case": "first_decode",
+        "value": 216,
+        "unit": "count",
+        "definition": "api cuCtxSynchronize grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.0.seconds",
+        "case": "first_decode",
+        "value": 0.068066489,
+        "unit": "s",
+        "definition": "api cuCtxSynchronize grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.1.count",
+        "case": "first_decode",
+        "value": 133,
+        "unit": "count",
+        "definition": "api cuStreamSynchronize grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.1.seconds",
+        "case": "first_decode",
+        "value": 0.024004611,
+        "unit": "s",
+        "definition": "api cuStreamSynchronize grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.2.count",
+        "case": "first_decode",
+        "value": 86,
+        "unit": "count",
+        "definition": "api cuGraphInstantiateWithFlags grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.2.seconds",
+        "case": "first_decode",
+        "value": 0.00890422,
+        "unit": "s",
+        "definition": "api cuGraphInstantiateWithFlags grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.3.count",
+        "case": "first_decode",
+        "value": 129,
+        "unit": "count",
+        "definition": "api cuMemFree_v2 grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.api.3.seconds",
+        "case": "first_decode",
+        "value": 0.006498407,
+        "unit": "s",
+        "definition": "api cuMemFree_v2 grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.copy.count",
+        "case": "first_decode",
+        "value": 2193,
+        "unit": "count",
+        "definition": "Observed clipped copy population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "first_decode.copy.overlapping",
+        "case": "first_decode",
+        "value": 0.004018806,
+        "unit": "s",
+        "definition": "Sum of clipped copy spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.wall",
+        "case": "post_first_decode",
+        "value": 2.045750283,
+        "unit": "s",
+        "definition": "Server-authored phase span under CUPTI; not benchmark timing",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel-union",
+        "case": "post_first_decode",
+        "value": 1.498183902,
+        "unit": "s",
+        "definition": "Union of clipped GPU kernel intervals; not occupancy or measured bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.count",
+        "case": "post_first_decode",
+        "value": 36819,
+        "unit": "count",
+        "definition": "Observed clipped kernel population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.overlapping",
+        "case": "post_first_decode",
+        "value": 1.498240701,
+        "unit": "s",
+        "definition": "Sum of clipped kernel spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.0.count",
+        "case": "post_first_decode",
+        "value": 645,
+        "unit": "count",
+        "definition": "kernel yvex_attention_reduce_native grid/copy-bytes=64 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.0.seconds",
+        "case": "post_first_decode",
+        "value": 0.244368387,
+        "unit": "s",
+        "definition": "kernel yvex_attention_reduce_native grid/copy-bytes=64 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.1.count",
+        "case": "post_first_decode",
+        "value": 1290,
+        "unit": "count",
+        "definition": "kernel yvex_residual_mhc_pre grid/copy-bytes=1 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.1.seconds",
+        "case": "post_first_decode",
+        "value": 0.135088072,
+        "unit": "s",
+        "definition": "kernel yvex_residual_mhc_pre grid/copy-bytes=1 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.2.count",
+        "case": "post_first_decode",
+        "value": 645,
+        "unit": "count",
+        "definition": "kernel yvex_moe_grouped_up_rows grid/copy-bytes=1536 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.2.seconds",
+        "case": "post_first_decode",
+        "value": 0.127835827,
+        "unit": "s",
+        "definition": "kernel yvex_moe_grouped_up_rows grid/copy-bytes=1536 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.3.count",
+        "case": "post_first_decode",
+        "value": 645,
+        "unit": "count",
+        "definition": "kernel yvex_decoded_mxfp4_rows grid/copy-bytes=1024 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.3.seconds",
+        "case": "post_first_decode",
+        "value": 0.127209801,
+        "unit": "s",
+        "definition": "kernel yvex_decoded_mxfp4_rows grid/copy-bytes=1024 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.4.count",
+        "case": "post_first_decode",
+        "value": 1290,
+        "unit": "count",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=512 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.4.seconds",
+        "case": "post_first_decode",
+        "value": 0.112750698,
+        "unit": "s",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=512 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.5.count",
+        "case": "post_first_decode",
+        "value": 645,
+        "unit": "count",
+        "definition": "kernel yvex_moe_grouped_down_rows grid/copy-bytes=3072 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.5.seconds",
+        "case": "post_first_decode",
+        "value": 0.095975675,
+        "unit": "s",
+        "definition": "kernel yvex_moe_grouped_down_rows grid/copy-bytes=3072 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.6.count",
+        "case": "post_first_decode",
+        "value": 15,
+        "unit": "count",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=16160 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.6.seconds",
+        "case": "post_first_decode",
+        "value": 0.095454758,
+        "unit": "s",
+        "definition": "kernel yvex_qtype_matvec grid/copy-bytes=16160 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.7.count",
+        "case": "post_first_decode",
+        "value": 645,
+        "unit": "count",
+        "definition": "kernel yvex_mxfp4_q8_rows grid/copy-bytes=4096 block/copy-kind=256; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.7.seconds",
+        "case": "post_first_decode",
+        "value": 0.085219826,
+        "unit": "s",
+        "definition": "kernel yvex_mxfp4_q8_rows grid/copy-bytes=4096 block/copy-kind=256; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.count",
+        "case": "post_first_decode",
+        "value": 117745,
+        "unit": "count",
+        "definition": "Observed clipped api population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.overlapping",
+        "case": "post_first_decode",
+        "value": 1.7308284950000001,
+        "unit": "s",
+        "definition": "Sum of clipped api spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.0.count",
+        "case": "post_first_decode",
+        "value": 3240,
+        "unit": "count",
+        "definition": "api cuCtxSynchronize grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.0.seconds",
+        "case": "post_first_decode",
+        "value": 1.044693652,
+        "unit": "s",
+        "definition": "api cuCtxSynchronize grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.1.count",
+        "case": "post_first_decode",
+        "value": 1995,
+        "unit": "count",
+        "definition": "api cuStreamSynchronize grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.1.seconds",
+        "case": "post_first_decode",
+        "value": 0.369565287,
+        "unit": "s",
+        "definition": "api cuStreamSynchronize grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.2.count",
+        "case": "post_first_decode",
+        "value": 1935,
+        "unit": "count",
+        "definition": "api cuMemFree_v2 grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.2.seconds",
+        "case": "post_first_decode",
+        "value": 0.098347317,
+        "unit": "s",
+        "definition": "api cuMemFree_v2 grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.3.count",
+        "case": "post_first_decode",
+        "value": 22923,
+        "unit": "count",
+        "definition": "api cuMemcpyDtoDAsync_v2 grid/copy-bytes=0 block/copy-kind=0; actual observed population",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.3.seconds",
+        "case": "post_first_decode",
+        "value": 0.071629991,
+        "unit": "s",
+        "definition": "api cuMemcpyDtoDAsync_v2 grid/copy-bytes=0 block/copy-kind=0; profiled clipped duration, not unprofiled throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.copy.count",
+        "case": "post_first_decode",
+        "value": 31623,
+        "unit": "count",
+        "definition": "Observed clipped copy population in this phase",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      },
+      {
+        "id": "post_first_decode.copy.overlapping",
+        "case": "post_first_decode",
+        "value": 0.056097934,
+        "unit": "s",
+        "definition": "Sum of clipped copy spans; not additive with other owners",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/profile-summary.json"
+      }
+    ],
+    "build": {
+      "core": {
+        "head": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "state": "dirty",
+        "delta_identity": "6ec17a3c151733a135b2f46d063e4a49b65948e288fc3035ddceed48fa18e05b",
+        "tree": "82b6643866c9882819107aee2354139ee1046b49"
+      },
+      "product": {
+        "build_commit": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "build_identity": "28dfaa292efd6891a9b06541109ef7633f0909d216d2b6f61666a570939f9159",
+        "local_protocol_version": 25,
+        "registry_identity": "1bf91cd6c95e5b1dbec21613e0b41d8a6ef061478d60648ef808afbba51cc2cc",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "ce51164ccd6c7e8916166fdee1332f876a1b52d5f0dcd1323c3f0cd6b7357bd2",
+        "source_delta_identity": "6ec17a3c151733a135b2f46d063e4a49b65948e288fc3035ddceed48fa18e05b",
+        "source_state": "dirty",
+        "source_tree": "82b6643866c9882819107aee2354139ee1046b49",
+        "version": "0.1.0"
+      },
+      "library_sha256": "310dae439b44776482715cd8a4e8f5ee2898013e966113c85642eca3bc503f12",
+      "consumer_sha256": "81291ed88c4c17b4530b1b335228f875d98857bcc2e767166495fa154c73e28b",
+      "executable_sha256": "87cfaee9a0ead3fc44b7540f7029425c2feabe48b821e9c814ab4736ece7ce61",
+      "client_sha256": "6b68c4bcf49ee96059fc6532fba7fee6c0e763aeb11e8e2f670d5ab7ba8cbd88",
+      "command": [
+        "cc",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-I/tmp/yvex-competitive-followup.1r5xbl/source/include",
+        "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/controlled_profile_host.c",
+        "/tmp/yvex-competitive-followup.1r5xbl/source/build/lib/libyvex.a",
+        "-ldl",
+        "-pthread",
+        "-lm",
+        "-lz",
+        "-o",
+        "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/controlled-profile-host"
+      ]
+    },
+    "source_capture": {
+      "schema": "yvex.qualification.source-capture.v1",
+      "source": {
+        "head": "36c16dfb1a944d359fa7136cee0497cc7e2f3d6e",
+        "state": "dirty",
+        "delta_identity": "6ec17a3c151733a135b2f46d063e4a49b65948e288fc3035ddceed48fa18e05b"
+      },
+      "tree": "82b6643866c9882819107aee2354139ee1046b49",
+      "executables": {
+        "executable-0": {
+          "observed_path": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01/controlled-profile-host",
+          "sha256": "87cfaee9a0ead3fc44b7540f7029425c2feabe48b821e9c814ab4736ece7ce61"
+        },
+        "executable-1": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/yvex",
+          "sha256": "0fba4cb688aa57a30adb9eb51da4dfa9393351e4c4849dfbad4fb2e571218f05"
+        },
+        "executable-2": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/build/lib/libyvex.a",
+          "sha256": "310dae439b44776482715cd8a4e8f5ee2898013e966113c85642eca3bc503f12"
+        },
+        "executable-3": {
+          "observed_path": "/tmp/yvex-competitive-followup.1r5xbl/source/build/tests/product_client",
+          "sha256": "6b68c4bcf49ee96059fc6532fba7fee6c0e763aeb11e8e2f670d5ab7ba8cbd88"
+        }
+      },
+      "files": {
+        "base.tar": "542b529fecda6e1a5ad7b2de08f72ca8ff2563e037516aa472f3df70f9107968",
+        "delta.patch": "dd3b353f5c0125b75ca27448a0d46c852608450b71823c063eacb2a6b93b335d",
+        "executable-0": "87cfaee9a0ead3fc44b7540f7029425c2feabe48b821e9c814ab4736ece7ce61",
+        "executable-1": "0fba4cb688aa57a30adb9eb51da4dfa9393351e4c4849dfbad4fb2e571218f05",
+        "executable-2": "310dae439b44776482715cd8a4e8f5ee2898013e966113c85642eca3bc503f12",
+        "executable-3": "6b68c4bcf49ee96059fc6532fba7fee6c0e763aeb11e8e2f670d5ab7ba8cbd88",
+        "untracked.tar": "1be7f0a6b0b956a3bda94d13aab294437cd164a230c277c6fdf2ef7c4b2499b4"
+      },
+      "scope": "observed source and executable bytes; build relationship separately required"
+    },
+    "raw_root": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/yvex-emission-batch-profile-01",
+    "profile_sha256": "e55a947b94c6e7d4f6c2cb81ec390e507afefd1a74f4af571a3033406d9d91a8",
+    "raw_files": {
+      "identity.json": "54008da99bcad1670dac314920429e3c66d2df580140e8b65573caa3327378d1",
+      "build.json": "4f3bd301f19db5ce792aed9b4f7c9be08b10b34f54e116dd8a754f836b3bb5a1",
+      "host.jsonl": "ed71190a1afa207eb7c990eafff53dd78585976c71cce23a8d68201e58d7352a",
+      "cleanup.json": "d5e1c2f436a3c83b4bd71d1f82cfc2b3260bfc34a0bf713a8a5507086878934e",
+      "cupti.tsv": "a3080aca608e17a703ee538839b322898ab7fc1baaa41012b94c11235f76a3bd",
+      "observation.json": "211f62c548c1c0096e87110879495d52556225b8a19892ca94ab823cd36ef55f"
+    },
+    "observer": {
+      "profiled": true,
+      "sha256": "cb799d35b65f021fb488d3f5d3fefe1a1a6e8d4170609c16e6f9bf94307ed465",
+      "orchestrator_sha256": "73227c878b5e56c961fe2f25a5f24efda7598a117fdc673704e4b32ea43a77b9"
+    }
+  },
+  "limitations": [
+    "Diagnostic profiled timing, excluded from performance series.",
+    "API waits and device work overlap; sums are not additive removable overhead.",
+    "Kernel union is activity, not occupancy, Tensor Core utilization or measured bandwidth.",
+    "Boundary CPU physical mapping snapshots are not GPU page-fault counters.",
+    "One diagnostic non-thinking controlled public-C/native-v25 turn; not the installed Rust/chat product.",
+    "No profiled duration enters a performance series; measurements is intentionally empty.",
+    "Exact source and kernel relationship comes from the separately unprofiled receipt; no claim is inherited.",
+    "Checkpoint reference and representation quality remain BLOCKED; no 20/700 performance gate is earned."
+  ]
+}
