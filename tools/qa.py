@@ -631,6 +631,9 @@ def main() -> int:
     explain_parser.add_argument("test_id")
     subparsers.add_parser("doctor")
     subparsers.add_parser("validate")
+    source_parser = subparsers.add_parser("source-identity", help="read canonical source snapshot without loading the QA registry")
+    source_parser.add_argument("--root", type=Path, default=ROOT)
+    source_parser.add_argument("--field", choices=("head", "state", "delta_identity"))
     plan_parser = subparsers.add_parser("plan")
     plan_parser.add_argument("--changed", required=True, metavar="BASE")
     plan_parser.add_argument("--json", action="store_true")
@@ -644,6 +647,10 @@ def main() -> int:
     report_parser.add_argument("path", nargs="?", default="latest")
     arguments = parser.parse_args()
     try:
+        if arguments.command == "source-identity":
+            snapshot = source_snapshot(arguments.root.resolve())
+            print(snapshot[arguments.field] if arguments.field else json.dumps(snapshot, sort_keys=True))
+            return 0
         registry, tests = load_registry()
         registry["tests"] = tests
         obligations = load_obligations(registry)

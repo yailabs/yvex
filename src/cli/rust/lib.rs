@@ -203,6 +203,7 @@ fn dispatch(
                         "build_commit": env!("YVEX_BUILD_COMMIT"),
                         "source_tree": env!("YVEX_BUILD_SOURCE_TREE"),
                         "source_state": env!("YVEX_BUILD_SOURCE_STATE"),
+                        "source_delta_identity": env!("YVEX_BUILD_SOURCE_DELTA_IDENTITY"),
                         "build_identity": env!("YVEX_BUILD_IDENTITY"),
                         "shell_build_identity": env!("YVEX_SHELL_BUILD_IDENTITY"),
                     })
@@ -466,6 +467,10 @@ mod tests {
         let json: serde_json::Value = serde_json::from_str(&output.text).unwrap();
         assert_eq!(json["schema"], "yvex.version.v1");
         assert_eq!(json["local_protocol_version"], 25);
+        assert_eq!(
+            json["source_delta_identity"],
+            env!("YVEX_BUILD_SOURCE_DELTA_IDENTITY")
+        );
         assert!(!output.text.contains('\u{1b}'));
     }
     #[test]

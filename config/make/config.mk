@@ -36,18 +36,14 @@ endif
 override CPPFLAGS += -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I.
 YVEX_BUILD_COMMIT ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
 YVEX_BUILD_SOURCE_TREE ?= $(shell git rev-parse --verify 'HEAD^{tree}' 2>/dev/null || printf unknown)
-YVEX_BUILD_SOURCE_DELTA_IDENTITY ?= $(shell { \
-	git diff --binary --no-ext-diff HEAD -- . 2>/dev/null; \
-	git ls-files --others --exclude-standard 2>/dev/null | LC_ALL=C sort | \
-		grep -v '__pycache__/' | grep -v '[.]pyc$$' | \
-		while IFS= read -r path; do \
-			printf 'untracked\t%s\t' "$$path"; $(if $(filter Darwin,$(YVEX_HOST_OS)),/usr/bin/stat -f 'mode=%Lp',stat -c 'mode=%a') "$$path"; \
-			sha256sum "$$path"; \
-			done; \
-	} | sha256sum | cut -d' ' -f1)
-YVEX_BUILD_SOURCE_STATE ?= $(if $(filter \
+# Build provenance and receipts use the QA owner's one source-snapshot encoding.
+# A source archive without Git retains unknown, not a fabricated clean snapshot.
+# This read does not load or generate the QA registry.
+YVEX_BUILD_SOURCE_DELTA_IDENTITY ?= $(shell python3 tools/qa.py \
+	source-identity --field delta_identity 2>/dev/null || printf unknown)
+YVEX_BUILD_SOURCE_STATE ?= $(if $(filter unknown,$(YVEX_BUILD_SOURCE_DELTA_IDENTITY)),unknown,$(if $(filter \
 	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855,\
-	$(YVEX_BUILD_SOURCE_DELTA_IDENTITY)),clean,dirty)
+	$(YVEX_BUILD_SOURCE_DELTA_IDENTITY)),clean,dirty))
 YVEX_BUILD_IDENTITY ?= $(shell printf '%s\n' \
 	'source-tree=$(YVEX_BUILD_SOURCE_TREE)' \
 	'source-delta=$(YVEX_BUILD_SOURCE_DELTA_IDENTITY)' \

@@ -74,6 +74,25 @@ def check_source_stability() -> None:
         after = qa.source_snapshot(repository)
         if qa.source_stability(before, after)["valid"]:
             raise AssertionError("untracked source input retained valid QA evidence")
+        for expected in (before, after):
+            if expected == before:
+                (repository / "untracked.c").unlink()
+            else:
+                (repository / "untracked.c").write_text("int untracked;\n", encoding="utf-8")
+            actual = json.loads(subprocess.check_output(
+                [sys.executable, str(ROOT / "tools/qa.py"), "source-identity", "--root", str(repository)]))
+            if actual != expected:
+                raise AssertionError("build-facing source projection differs from QA snapshot")
+            projected = subprocess.check_output(
+                [sys.executable, str(ROOT / "tools/qa.py"), "source-identity", "--root", str(repository),
+                 "--field", "delta_identity"], text=True).strip()
+            if projected != expected["delta_identity"]:
+                raise AssertionError("build-facing source delta differs from QA snapshot")
+        unavailable = subprocess.run(
+            [sys.executable, str(ROOT / "tools/qa.py"), "source-identity", "--root", str(repository / "absent")],
+            capture_output=True, text=True)
+        if unavailable.returncode == 0:
+            raise AssertionError("unavailable source repository fabricated a snapshot")
 
     with tempfile.TemporaryDirectory() as directory:
         invalid_path = Path(directory) / "invalid.json"

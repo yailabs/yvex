@@ -370,7 +370,10 @@ An unavailable terminal result fails closed, and starting a replacement supervis
 retires the previous result rather than reusing stale publication.
 
 `version --json` emits `yvex.version.v1`: product version, observed private local
-protocol version, registry identity, build commit/tree/state and build identity.
+protocol version, registry identity, build commit/tree/state/delta and native/Rust
+build identities. The additive `source_delta_identity` is the canonical QA
+source-snapshot digest, including admitted untracked source inputs; it is not a
+second build identity. Missing Git provenance remains unknown rather than clean.
 It is a build-fact projection, not a public remote compatibility negotiation.
 `inspect cuda bandwidth` is the engineering diagnostic `system.cuda.bandwidth`;
 it measures bounded allocation/transfers and does not mutate resident engines.

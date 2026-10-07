@@ -29,6 +29,12 @@ generates C declarations, runner tables, Make membership, an inventory, and a
 registry identity below the selected `BUILD_DIR`. Generated projections are
 never tracked or edited.
 
+`tools/qa.py source-identity` projects the canonical source snapshot without
+loading the QA registry. Make uses the same delta encoding for native/Cargo
+provenance, and `version --json` exposes it for receipt authentication. A dirty
+build cannot be bound merely by matching HEAD/tree, nor can absent Git state be
+promoted to clean. This is provenance, not another qualification result.
+
 [`config/qa/obligations.json`](../../config/qa/obligations.json) maps changed
 owners to mandatory evidence. It reuses `config/source_owners.tsv`; it is not a
 second source-ownership system. [`tools/qa.py`](../../tools/qa.py) validates and
