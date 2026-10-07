@@ -1,0 +1,245 @@
+{
+  "schema": "yvex.qualification.suite.v1",
+  "id": "deepseek-product",
+  "revision": "2026-10-04.1",
+  "provenance": "YVEX-authored public qualification inputs; NOT official DeepSeek vectors, MT-Bench or a quality leaderboard",
+  "license": "MIT",
+  "source_authority": "tests/vectors/manifest.json#deepseek_official_encoding",
+  "applicability": {
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "revision": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "family_record": "docs/model-families/deepseek-v4-flash.md",
+    "comparison": "exact input identity; representation-dependent output comparisons require independent reference"
+  },
+  "cases": [
+    {
+      "id": "chat.short",
+      "class": "representative",
+      "category": "chat",
+      "maximum_output": 256,
+      "turns": [
+        "Ciao! Spiegami brevemente che cosa puoi aiutarmi a fare."
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "coding.metal",
+      "class": "representative",
+      "category": "coding",
+      "maximum_output": 256,
+      "turns": [
+        "Scrivi un kernel Metal che sommi due array di float. Includi i controlli dei limiti, la firma degli argomenti e spiega come scegliere la dimensione della griglia e del threadgroup."
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "math.reasoning",
+      "class": "representative",
+      "category": "math",
+      "maximum_output": 256,
+      "turns": [
+        "A tank is filled by a pipe in 6 hours and drained by another in 9 hours. Both run for 3 hours starting empty, then the drain closes. Derive how long it takes in total to fill the tank, checking units."
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "extraction.json",
+      "class": "representative",
+      "category": "structured",
+      "maximum_output": 256,
+      "turns": [
+        "Return only JSON with an orders array, preserving null for missing dates. Ada ordered 3 blue adapters on 2026-09-12. Lin ordered 2 red cables; the date was not recorded. Each entry needs name, quantity, item, color, date."
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "writing.runbook",
+      "class": "representative",
+      "category": "writing",
+      "maximum_output": 256,
+      "turns": [
+        "Write a concise operator runbook for a local inference service that becomes slow. Separate observation, safe diagnosis, stopping new work, and recovery. Do not assume permission to kill active requests."
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "conversation.coding",
+      "class": "representative",
+      "category": "multi-turn",
+      "maximum_output": 256,
+      "turns": [
+        "ciao",
+        "scrivi un kernel Metal",
+        "Ora aggiungi una spiegazione del controllo dei limiti per una griglia non multipla del threadgroup."
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "reasoning.schedule",
+      "class": "representative",
+      "category": "reasoning",
+      "maximum_output": 256,
+      "turns": [
+        "Three jobs take 2, 3 and 5 seconds on either of two workers. Jobs cannot be split. Find the minimum makespan and justify why no shorter schedule exists."
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "prefill.records",
+      "class": "synthetic",
+      "category": "long-input",
+      "maximum_output": 16,
+      "turns": [
+        "Read this synthetic inventory and return the number of records.\n"
+      ],
+      "repeat": {
+        "template": "Record {index:04d}: blue adapter, warehouse north, quantity 7.\n",
+        "count": 150
+      },
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "stress.count",
+      "class": "synthetic",
+      "category": "stress",
+      "maximum_output": 256,
+      "turns": [
+        "Write the integers from 1 to 1000 in order, separated by spaces. Continue until all 1000 integers have been written."
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    },
+    {
+      "id": "tools.weather",
+      "class": "representative",
+      "category": "tools",
+      "maximum_output": 128,
+      "native_disposition": "unsupported-by-text-turn-harness",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is the temperature in Rome?"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "id": "call_weather",
+              "type": "function",
+              "function": {
+                "name": "weather",
+                "arguments": "{\"city\":\"Rome\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_weather",
+          "content": "{\"city\":\"Rome\",\"temperature_c\":21}"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "weather",
+            "description": "Get temperature for a city",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            }
+          }
+        }
+      ],
+      "reasoning_modes": [
+        "none",
+        "high",
+        "maximum"
+      ],
+      "execution_strategies": [
+        "target-only",
+        "speculative"
+      ]
+    }
+  ]
+}

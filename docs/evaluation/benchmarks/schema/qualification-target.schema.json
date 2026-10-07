@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "YVEX qualification target",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "family_contract",
+    "upstream_repository",
+    "checkpoint",
+    "tokenizer_conversation",
+    "transformation_ir",
+    "physical_policy",
+    "representation",
+    "artifact_set",
+    "binding",
+    "specialization",
+    "source_commit",
+    "source_tree",
+    "source_delta",
+    "build",
+    "executable",
+    "backend",
+    "backend_implementation",
+    "kernel_bundle",
+    "hardware_model",
+    "device_count",
+    "topology",
+    "driver",
+    "runtime_toolkit",
+    "memory_configuration",
+    "runtime_configuration",
+    "context",
+    "prefill_geometry",
+    "sequence_geometry",
+    "concurrency",
+    "strategy",
+    "reasoning",
+    "sampling",
+    "product_path",
+    "suite"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.qualification.target.v1"
+    },
+    "family_contract": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "upstream_repository": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "checkpoint": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "tokenizer_conversation": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "transformation_ir": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "physical_policy": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "representation": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "artifact_set": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "binding": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "specialization": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "source_commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "source_tree": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "source_delta": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "build": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "executable": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "backend": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "backend_implementation": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "kernel_bundle": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "hardware_model": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "device_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "topology": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "driver": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "runtime_toolkit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "memory_configuration": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "runtime_configuration": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "context": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "prefill_geometry": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "sequence_geometry": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "concurrency": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "strategy": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "reasoning": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "sampling": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "product_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "suite": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    }
+  }
+}

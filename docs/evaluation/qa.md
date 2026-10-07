@@ -42,6 +42,14 @@ locally.
 
 ## Evidence taxonomy
 
+Model and representation claims also consume the identity-bound
+[qualification authority](benchmarks/methodology.md#qualification-targets-and-local-receipts).
+`property.qualification` checks target/plane separation, metric definitions,
+checkpoint-matched comparison, independent capture admission and bounded native
+receipt import. Its fixtures qualify tooling only, not model quality or speed.
+The benchmark publication owner generates public matrices from those same
+structured observations; missing evidence remains explicit.
+
 QA identities may carry more than one evidence class:
 
 - `unit`: one bounded component;

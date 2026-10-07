@@ -1,0 +1,469 @@
+{
+  "schema": "yvex.qualification.reference-observation.v1",
+  "source": {
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "revision": "62af8fffb2f7030cac4de2f0169f5b8d1101b646"
+  },
+  "implementation": {
+    "name": "llama.cpp-deepseek-v4-flash",
+    "revision": "2f2d44052b7d15c9c4dd6610f6e14a5f7b2d5f3f",
+    "executable_sha256": "df2fee12b815701ebaa2eaaf0d840fdda26a98b83a2f14f47a2249d5ea254446",
+    "command": [
+      "/home/dgmothx/lab/models/evidence/ds4-reference-build-20261004.Sqjff4/llama-build/bin/llama-server",
+      "-m",
+      "/home/dgmothx/lab/models/evidence/ds4-reference-build-20261004.Sqjff4/target-reference-f32-packed.gguf",
+      "-c",
+      "4096",
+      "-b",
+      "64",
+      "-ub",
+      "64",
+      "-ngl",
+      "99",
+      "-np",
+      "1",
+      "--no-warmup",
+      "--cache-type-k",
+      "f32",
+      "--cache-type-v",
+      "f32",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18088"
+    ],
+    "independent_of_yvex": true,
+    "environment_identity": "bf07510b4bea8d0eef5cd856e97395ff583f6b1eb480610594f39b01b22eebc5",
+    "representation_identity": "85a9a20bf65701eb7546fac8501a965fdfcd3130ba7080d639444f32d4d728a8"
+  },
+  "suite_sha256": "499d84eef0005dc065838d53f41d9945aec654b51df94a11976db5505a429ad2",
+  "checkpoint_manifest_sha256": "754759502d1120afd9f82c953751c7fb40a5fb74e4f4b42c53720197a37894b7",
+  "status": "CHARACTERIZED",
+  "yvex_conformance": "NOT_RUN",
+  "cases": [
+    {
+      "case": "chat.short",
+      "reasoning": "none",
+      "input_identity": "097f0133ae722bba19fc895b83268cc0b19ad1ef45faa17bc042c0afc17e1ec2",
+      "prompt_tokens": 23,
+      "maximum_output": 256,
+      "output_tokens": 235,
+      "finish": "eos",
+      "capture_sha256": "e5d12207d2afe95d4744bc2eca5d3c4a64f0e638b928eda8eb5af37832f74432",
+      "output_sha256": "8cc506c02362edae5c083af8687d99d2a4508b908ffb374943b3d9af3cdbcfd2",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "PASS",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "chat.short",
+      "reasoning": "high",
+      "input_identity": "d1c3a7a581dc119794772a5cfb179e81ffd2f0ae060f32e9660c7b66dc718ea6",
+      "prompt_tokens": 23,
+      "maximum_output": 256,
+      "output_tokens": 254,
+      "finish": "eos",
+      "capture_sha256": "56e0dfbc606aa780b2a58750f7c5dcb9db759df33bb446d3017b006018f7e85d",
+      "output_sha256": "a377e69a10ae3a8510d65251bc91f10866e16d6c3adbe22ea096d7a2f0acd99e",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "PASS",
+        "reason": null,
+        "reasoning_boundary_positions": [
+          91
+        ]
+      }
+    },
+    {
+      "case": "chat.short",
+      "reasoning": "maximum",
+      "input_identity": "b363bb33ba9044014f6f4c17ec59d5aa8d4a463d39651932603405417e85a956",
+      "prompt_tokens": 102,
+      "maximum_output": 256,
+      "output_tokens": 155,
+      "finish": "eos",
+      "capture_sha256": "82f674f85902761480230e2e5679aad3fc3c0b6b58031d51c9343fdeaa55e327",
+      "output_sha256": "b6b8a89e797919fa00a2e6a871dbac6fafb3986f33092c666eb39a14b0e39f58",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "PASS",
+        "reason": null,
+        "reasoning_boundary_positions": [
+          95
+        ]
+      }
+    },
+    {
+      "case": "coding.metal",
+      "reasoning": "none",
+      "input_identity": "2d46d33e481d6cbfdb8dd4af3ca082736195695219b893b41100cc7f745f2f92",
+      "prompt_tokens": 53,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "c8053402e8400afb91c084cfbc932610612532aab51f156a1c2a24bfe456b027",
+      "output_sha256": "edce88550c35949218b7b5a6ea9428b97afaad638b62725a5d65f5939b2d1909",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "coding.metal",
+      "reasoning": "high",
+      "input_identity": "0241bc72158c416412c04f109d6bae18d95395643cdbe814ecc085af7c7cde6b",
+      "prompt_tokens": 53,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "56d713e1cd3d10ba06a08657555b7c36cbc47164199bbf7ac2a37bd79b76bf12",
+      "output_sha256": "b147ebdc52151e840f3bfab948a9541fb5b8f2068d698cea8efd080422d66116",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "coding.metal",
+      "reasoning": "maximum",
+      "input_identity": "70ae483c6e285f3c62fde78ae0303a22e5901b5432fb1800ab3e2849b5eb9928",
+      "prompt_tokens": 132,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "9088cd1c9f658670980f8c257d0f64b6ec1f5e7085ea635bc1cec5865c46a115",
+      "output_sha256": "c49f0cab40607d1f5a5abe6db883085ec54bf3a62de258e7ae660dac1a2581ec",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "math.reasoning",
+      "reasoning": "none",
+      "input_identity": "ef5b114874aefa8216b88812d2de2ec92270bd87d9d0a8284081a1ff718101e9",
+      "prompt_tokens": 54,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "218eae41a38e0224156b7f0ad4cd62161b383f22b4d638cf2c080e528ebce487",
+      "output_sha256": "58335797458f6f13fb56e4e5c52fd2800b5bd111de1e67c3b31e16147c3a6ab1",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "math.reasoning",
+      "reasoning": "high",
+      "input_identity": "2073666bf5f0fb6f91a637d7673b4ff82dec67efb68deb0ba47f3dce8764b337",
+      "prompt_tokens": 54,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "150ee88a0bc6b13fa845b20f08d7088012c007d3042d98a24cf3fe1d8783018b",
+      "output_sha256": "d1e1057c13af48415b94f83cdb64bb794b34f881dabc387dd3a24e4b1ace3f05",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "math.reasoning",
+      "reasoning": "maximum",
+      "input_identity": "08b7cebe2568b351169ff4470a70ab8655bf4ac7cf4ccbc64e652a3f6f92e0ef",
+      "prompt_tokens": 133,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "04c465d57d3315bd26bede25cb88595fb441bf1f134beb0822b16357f019e992",
+      "output_sha256": "44b587aeb26a004e1f2368697a7a7cea05c841c1f08bf2552010e293e877e2ef",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "extraction.json",
+      "reasoning": "none",
+      "input_identity": "fe63ca5e371ac2990671fd6dece98fb9afb26368828d5a4511adbc41029c8bfd",
+      "prompt_tokens": 60,
+      "maximum_output": 256,
+      "output_tokens": 91,
+      "finish": "eos",
+      "capture_sha256": "652bf33934f4ccef9db3973a8dfd575a68af7d67acfb750709b3cfa81e9bc17b",
+      "output_sha256": "a64a9092fb4d14c651fa40c27362facfe5e1e2ef5c680d544bb54fdda15868e9",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "PASS",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "extraction.json",
+      "reasoning": "high",
+      "input_identity": "5086326524a9c0eea332ab3414c2869b5c861abca56a06331982088a97bed8b3",
+      "prompt_tokens": 60,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "643a0111aca8e39039f10f0f3259a8b4b962bf97ceefedcf6b276d1f15b95bb6",
+      "output_sha256": "6259cd99771b9d9a59ec711529c86eef0ac368389bae21a30255652854014ebf",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "extraction.json",
+      "reasoning": "maximum",
+      "input_identity": "0d107db5a7d436bf0db9ad71ddae5cbade9f6010152404913abecef6e86a0dbe",
+      "prompt_tokens": 139,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "eaba1cd89429a5478eb6f131f32d19a8dc8073adef0b93b7a533746b94c788a9",
+      "output_sha256": "205c9299ed17c43ff21efc97be8442c3197d9b2a7eb94ed302e2e54474c878ce",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "writing.runbook",
+      "reasoning": "none",
+      "input_identity": "411cff6e8c6a53a4c22e0c547f8a59279f2cc9c11a074c17fdb30d246e247c7b",
+      "prompt_tokens": 41,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "2edeb3d4b8efd78f413101ddb5bfcb4e4385f0462d9dba8feda0b5bf4be5f015",
+      "output_sha256": "9ca07f46c21ec2dcae256d62da2c84154c41fe55c7f2683a3d2cf6274dc83bb4",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "writing.runbook",
+      "reasoning": "high",
+      "input_identity": "b58fc27d075b2a3ad34c48641dba8fdfe73b14911590be8c510d7d7c67a90378",
+      "prompt_tokens": 41,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "82bf496264933a7087dd08e85456803dff7c249a10cf5788d10953d136c7e038",
+      "output_sha256": "49b75af28b1a798f3a748019c8917fb98ef025b01909cab81d3e322f250dc771",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "writing.runbook",
+      "reasoning": "maximum",
+      "input_identity": "6792758ae59e44084de10ec0cdfd8a7b756e2dbb16ec6615caf1a6f42659f88c",
+      "prompt_tokens": 120,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "4a74cfb65a45bb38c5238479572d3ed94457e39e108d2c816d2cfa20e50c1099",
+      "output_sha256": "45e452242e56604241ea5e8610c3eebec5371359e7574143daa15bc7acd9ece9",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "conversation.coding",
+      "reasoning": "none",
+      "input_identity": "506fdc743150f58aff1eb0da5b45cbe3f7b29a16bc3001961a0508d5e2211626",
+      "prompt_tokens": 6,
+      "maximum_output": 256,
+      "output_tokens": 11,
+      "finish": "eos",
+      "capture_sha256": "3b38b3f58205aa111324862a631f2f2b4feb089f4fe3172793e22d84edc2b545",
+      "output_sha256": "f8cb801455943e72125e6766c5ee2bbc55e0f693d975a7b1b746cf1b78a02283",
+      "multi_turn": "requires independent generated continuation",
+      "grammar": {
+        "state": "PASS",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "conversation.coding",
+      "reasoning": "high",
+      "input_identity": "488970bc6e25544f88bd5e46c4adfea44000f8b2a735515f53c6ca46d1cf01a0",
+      "prompt_tokens": 6,
+      "maximum_output": 256,
+      "output_tokens": 11,
+      "finish": "eos",
+      "capture_sha256": "cb4183e180519c3d55c90c1d2e75a3fb376ed253d18b6d7a024aac780b4cc325",
+      "output_sha256": "f8cb801455943e72125e6766c5ee2bbc55e0f693d975a7b1b746cf1b78a02283",
+      "multi_turn": "requires independent generated continuation",
+      "grammar": {
+        "state": "FAIL",
+        "reason": "source-authored completion parser refused output",
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "conversation.coding",
+      "reasoning": "maximum",
+      "input_identity": "b5ac36bc4e8e0d5489e38e70460105b696cd2880daf56a2aa10fee6e73ee5982",
+      "prompt_tokens": 85,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "67e3ff31a97302fb801d8ef98a1bd99345f7697e886858e22beeb5f27a8d66ed",
+      "output_sha256": "8f06f1b0976ca426aedb1951f130d2d20c458c93f257254bf265d6fb3e9b9adc",
+      "multi_turn": "requires independent generated continuation",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "reasoning.schedule",
+      "reasoning": "none",
+      "input_identity": "d45df4ba74598032d0a0df1abc44cc7558996683bd3681b7cbae944d8f403bda",
+      "prompt_tokens": 40,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "b52d30b298a058db750660bfdc650eabb45fe366029c1fa85e52e8fc1bb6c281",
+      "output_sha256": "45c8ae0376b88303a9bbfbe2d62afa54410f72f735d145594e59246a54638886",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "reasoning.schedule",
+      "reasoning": "high",
+      "input_identity": "8bfd9d59bec0b27561d966703eca040b38899816281d5dde6f6efbd3fb28f14a",
+      "prompt_tokens": 40,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "7635339cb4d0d8230552561a90e3f05a568cc49d2e5ebb52b78a67f73321dbe9",
+      "output_sha256": "d129a3e4bac08efe1d5882ba4b38b8531b74df8f00a071f7f1aa10a29b2c4cfb",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "reasoning.schedule",
+      "reasoning": "maximum",
+      "input_identity": "6c870f0872ca900fd8ed0162adf8c5b787883500e287f5da0dbd1372c05e0ad1",
+      "prompt_tokens": 119,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "5104854181e287d50b8f07e32594e934fdc9874a9098f48b3d4fb4e23cfa64c5",
+      "output_sha256": "6923236210248f9b3d6e8f7259d39fba41a624ff2d7a87a7fa6c3bf24af390ee",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "tools.weather",
+      "reasoning": "none",
+      "input_identity": "66af8d3cb9f7e7ff2ae2c19a9135fcda3d479678a72388f61960a97cba787de8",
+      "prompt_tokens": 341,
+      "maximum_output": 128,
+      "output_tokens": 12,
+      "finish": "eos",
+      "capture_sha256": "99dd970574b50a0fea27e4f310e4533ca230a094864a108b8344bc63cb333c46",
+      "output_sha256": "90c6c9d588b0ebf6c46d3fba41427aad4307df82006058d09925dab9f51d5be3",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "PASS",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      }
+    },
+    {
+      "case": "tools.weather",
+      "reasoning": "high",
+      "input_identity": "8274658e0b62c0f85326411de4d432dcd702305aeb8bdbbf828c7af30f519bc3",
+      "prompt_tokens": 342,
+      "maximum_output": 128,
+      "output_tokens": 39,
+      "finish": "eos",
+      "capture_sha256": "62048ae4bcd654a06db412ed7b6456873d575467a3b857c079a16916ee844886",
+      "output_sha256": "867691c8d60210b88b65f3d4cc7eb8e9dcc3bbeb6d5a7e6728e0ff1d4475eb27",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "PASS",
+        "reason": null,
+        "reasoning_boundary_positions": [
+          26
+        ]
+      }
+    },
+    {
+      "case": "tools.weather",
+      "reasoning": "maximum",
+      "input_identity": "4c576a2e2fa9699548af52dbfcbb19a1ef90ef81d442556480a8f58a37499fd5",
+      "prompt_tokens": 420,
+      "maximum_output": 128,
+      "output_tokens": 40,
+      "finish": "eos",
+      "capture_sha256": "d379e7694f91f7ba9d9a49c19d0ed44b5cfe861d59c8e9b96f627a491a058c18",
+      "output_sha256": "6a9680f1a4d38a051f4fb8f0bfb31ccb7b88abbbb24b002a5a245fe10080e1b0",
+      "multi_turn": "not-applicable",
+      "grammar": {
+        "state": "PASS",
+        "reason": null,
+        "reasoning_boundary_positions": [
+          27
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Same-quantized-weight independent target-only execution; not the higher-precision upstream checkpoint.",
+    "Exact BF16 weight widening and F32 KV are declared reference differences, not YVEX representation changes.",
+    "Top-20 probabilities cannot establish full-vocabulary KL, RMS, NLL or PPL.",
+    "Multi-turn references capture their first input only; generated-history continuations remain missing.",
+    "Reference timings are not YVEX performance; capture does not qualify YVEX numerical agreement."
+  ],
+  "reference_sha256": "b28690aea05032e5aee4dceb55e57c648c638e9acd23f223533623efc20f1107"
+}

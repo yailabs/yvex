@@ -1,0 +1,392 @@
+{
+  "claims": {
+    "backend-execution": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "One completed 256-token native coding turn and observed owned cleanup; not independent numerical qualification",
+      "state": "CHARACTERIZED"
+    },
+    "checkpoint-reference": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "No qualification of this plane from a single profiled diagnostic",
+      "state": "UNQUALIFIED"
+    },
+    "deployment-performance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "No qualification of this plane from a single profiled diagnostic",
+      "state": "UNQUALIFIED"
+    },
+    "family-conformance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "No qualification of this plane from a single profiled diagnostic",
+      "state": "UNQUALIFIED"
+    },
+    "product-path": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Native protocol v24 request and cleanup observed; profiled wall times are not product benchmark samples",
+      "state": "CHARACTERIZED"
+    },
+    "representation-quality": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "No qualification of this plane from a single profiled diagnostic",
+      "state": "UNQUALIFIED"
+    }
+  },
+  "id": "deepseek-native-residency-diagnostic-15",
+  "limitations": [
+    "One profiled diagnostic turn, not a timed performance sample or quality gate.",
+    "API waits overlap device execution; sums are not additive and kernel time is not bandwidth utilization.",
+    "Sampled CPU-process faults and backing I/O do not prove absence of GPU address-translation faults.",
+    "RSS snapshots do not establish page locking or future residency under memory pressure.",
+    "OS sampling overhead and profiler overhead are retained; no rate from this run is a benchmark claim.",
+    "Mapped RSS is the page-rounded Linux mapping extent; artifact identity and exact payload bytes remain separate.",
+    "No cold load, residency guarantee, bandwidth/occupancy measurement or representation-quality claim is earned.",
+    "All owned work/queue/sessions/clients/leases were zero before supported host stop; this is one recovery observation.",
+    "This record has no quality/performance metrics and cannot supply a throughput baseline or comparison."
+  ],
+  "measurements": [],
+  "origin": "yvex-published",
+  "provenance": {
+    "cleanup": {
+      "host_exited": true,
+      "locator": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/cleanup-before-stop.json"
+    },
+    "diagnostic_summary": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+    "diagnostics": [
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Linux process/file-mapping observation during this profiled turn; not CUDA allocation or GPU paging proof",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "mapped_rss_min_bytes",
+        "unit": "byte",
+        "value": 95050211328
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Linux process/file-mapping observation during this profiled turn; not CUDA allocation or GPU paging proof",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "mapped_rss_max_bytes",
+        "unit": "byte",
+        "value": 95050211328
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Linux process/file-mapping observation during this profiled turn; not CUDA allocation or GPU paging proof",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "mapped_swap_max_bytes",
+        "unit": "byte",
+        "value": 0
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Linux process/file-mapping observation during this profiled turn; not CUDA allocation or GPU paging proof",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "process_read_bytes_delta",
+        "unit": "byte",
+        "value": 0
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Sampled Linux process counter/population; major and minor faults remain distinct",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "cpu_major_fault_delta",
+        "unit": "count",
+        "value": 0
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Sampled Linux process counter/population; major and minor faults remain distinct",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "cpu_minor_fault_delta",
+        "unit": "count",
+        "value": 779968
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Sampled Linux process counter/population; major and minor faults remain distinct",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "samples",
+        "unit": "count",
+        "value": 37
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Total time spent reading OS diagnostics; overhead is not hidden",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "os-probe-time",
+        "unit": "s",
+        "value": 14.384549141
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Terminal native producer population for this exact diagnostic turn",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "prompt_tokens",
+        "unit": "count",
+        "value": 53
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Terminal native producer population for this exact diagnostic turn",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "reused_tokens",
+        "unit": "count",
+        "value": 0
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Terminal native producer population for this exact diagnostic turn",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "prefill_tokens",
+        "unit": "count",
+        "value": 53
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Terminal native producer population for this exact diagnostic turn",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "generated_tokens",
+        "unit": "count",
+        "value": 256
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Terminal native producer population for this exact diagnostic turn",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "draft_cycles",
+        "unit": "count",
+        "value": 60
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Terminal native producer population for this exact diagnostic turn",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "proposed_tokens",
+        "unit": "count",
+        "value": 300
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Terminal native producer population for this exact diagnostic turn",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "accepted_tokens",
+        "unit": "count",
+        "value": 136
+      },
+      {
+        "case": "coding.metal/turn-0",
+        "definition": "Terminal native producer population for this exact diagnostic turn",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "rejected_tokens",
+        "unit": "count",
+        "value": 162
+      },
+      {
+        "case": "coding.metal/turn-0/prefill",
+        "definition": "Server-event span in a profiled diagnostic, not a timed baseline",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-prefill-wall",
+        "unit": "s",
+        "value": 1.977952363
+      },
+      {
+        "case": "coding.metal/turn-0/prefill",
+        "definition": "Union of clipped device-kernel intervals; API waits overlap it",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-prefill-kernel-union",
+        "unit": "s",
+        "value": 1.174142957
+      },
+      {
+        "case": "coding.metal/turn-0/prefill",
+        "definition": "Device kernel activities intersecting the server span",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-prefill-kernels",
+        "unit": "count",
+        "value": 6620
+      },
+      {
+        "case": "coding.metal/turn-0/prefill",
+        "definition": "Driver activities intersecting the server span; not all calls are synchronizations",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-prefill-driver-calls",
+        "unit": "count",
+        "value": 22655
+      },
+      {
+        "case": "coding.metal/turn-0/prefill",
+        "definition": "Observed context synchronization calls; wait time overlaps device execution",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-prefill-context-sync",
+        "unit": "count",
+        "value": 833
+      },
+      {
+        "case": "coding.metal/turn-0/first_decode",
+        "definition": "Server-event span in a profiled diagnostic, not a timed baseline",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-first_decode-wall",
+        "unit": "s",
+        "value": 0.97004951
+      },
+      {
+        "case": "coding.metal/turn-0/first_decode",
+        "definition": "Union of clipped device-kernel intervals; API waits overlap it",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-first_decode-kernel-union",
+        "unit": "s",
+        "value": 0.380388596
+      },
+      {
+        "case": "coding.metal/turn-0/first_decode",
+        "definition": "Device kernel activities intersecting the server span",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-first_decode-kernels",
+        "unit": "count",
+        "value": 5434
+      },
+      {
+        "case": "coding.metal/turn-0/first_decode",
+        "definition": "Driver activities intersecting the server span; not all calls are synchronizations",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-first_decode-driver-calls",
+        "unit": "count",
+        "value": 26768
+      },
+      {
+        "case": "coding.metal/turn-0/first_decode",
+        "definition": "Observed context synchronization calls; wait time overlaps device execution",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-first_decode-context-sync",
+        "unit": "count",
+        "value": 1331
+      },
+      {
+        "case": "coding.metal/turn-0/post_first_decode",
+        "definition": "Server-event span in a profiled diagnostic, not a timed baseline",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-post_first_decode-wall",
+        "unit": "s",
+        "value": 43.559257764
+      },
+      {
+        "case": "coding.metal/turn-0/post_first_decode",
+        "definition": "Union of clipped device-kernel intervals; API waits overlap it",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-post_first_decode-kernel-union",
+        "unit": "s",
+        "value": 23.316472775
+      },
+      {
+        "case": "coding.metal/turn-0/post_first_decode",
+        "definition": "Device kernel activities intersecting the server span",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-post_first_decode-kernels",
+        "unit": "count",
+        "value": 326240
+      },
+      {
+        "case": "coding.metal/turn-0/post_first_decode",
+        "definition": "Driver activities intersecting the server span; not all calls are synchronizations",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-post_first_decode-driver-calls",
+        "unit": "count",
+        "value": 1363253
+      },
+      {
+        "case": "coding.metal/turn-0/post_first_decode",
+        "definition": "Observed context synchronization calls; wait time overlaps device execution",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json",
+        "id": "profiled-post_first_decode-context-sync",
+        "unit": "count",
+        "value": 78675
+      }
+    ],
+    "evidence_class": "native-profile-diagnostic",
+    "evidence_sha256": {
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/case-0.residency.jsonl": "59f7cfe6b737fce955837c5774b32a6c4f2015fd2c7ff5894579cf32dc6816b9",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/case-0.resources.jsonl": "efd89093b3903838fcdbe9a61681973f88f808bf9d0f3c09842f7a0fed0419b3",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/case-0/receipt.json": "6f010da0cb9d5b8eae357cb62314e5256dd1c53f23b5464931ae8161458c5579",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/cleanup-before-stop.json": "dd61e3714244aedb32fc5ecef7b4653ed2e41fa65fe50ae0df5dd0c8611f1c40",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/closed.json": "5d746a2e734639ca53ef42e92219dd60d7421b7faae7b21763dd1ec36752b465",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/cupti.tsv": "611ba49750b6862648ee50626a18dc6a08499e60c4f625769e4a3234cd2b9ad0",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/host.jsonl": "8002435f059aea8e657d949da8a816b3eba2de6bff0148065e2eb612781a18e3",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/identity.json": "97878dd6cd29a2e522a3793b54cb3f4cbeac94a6f76bd7183cd3a0db610a4627",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/profile-summary-v2.json": "1aa30132e1fa756dd205d18f96833eb89c6d0f6ec97f20e48d18a175c01feaea"
+    },
+    "identity": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/identity.json",
+    "profiled": true,
+    "profiler_identity": "cb799d35b65f021fb488d3f5d3fefe1a1a6e8d4170609c16e6f9bf94307ed465",
+    "resource_observation": {
+      "adapter": "cuda-process-list-v1",
+      "allowed_pids": [
+        3053368
+      ],
+      "cancellation_requested": false,
+      "devices": [],
+      "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/case-0.resources.jsonl",
+      "interval_seconds": 1,
+      "observations": 43,
+      "owned_child_pid": 3053486,
+      "owned_child_returncode": 0,
+      "probe_seconds": 7.464378518750891,
+      "schema": "yvex.qualification.resource-observation.v1",
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "state": "OBSERVED_CLEAR"
+    },
+    "source_capture": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/source-capture",
+    "source_stability": "frozen",
+    "terminal_receipt": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-residency-profile-speculative-none-15/case-0/receipt.json"
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "build": "8d45003f0647e3675a49f46fa6a02bff367e8f7d971a7ecc7ccd9a37d7f0f7ee",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "cd7413f208f52e26646daf894dac87c3a9e15af385513589ffb2e9dcae83130c",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA GB10",
+    "kernel_bundle": null,
+    "memory_configuration": null,
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v24",
+    "reasoning": "none",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "runtime_configuration": "8cbef377dd46d52a267de1996c8f6a7506fffdbd8c1853b898e8f39c45e6fd65",
+    "runtime_toolkit": null,
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+    "source_delta": "e4626c50bb8b3b4d6f2c9cd9fc9614d4582697396ca34f33acc9467a165818d5",
+    "source_tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "strategy": "speculative",
+    "suite": "3f68f1a82695656aa1acbbc5a4e1668586f5b145132cbf9e63b071c2cf0f3a96",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "topology": "single-node single-device coherent unified memory",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark"
+  },
+  "target_identity": "7cb0c1e36913b3f42aef7d6a6c07f304a91035d13cdccf4210d3eb5e0e685b86",
+  "title": "DeepSeek native residency and launch diagnostics / speculative / none"
+}

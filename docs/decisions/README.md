@@ -29,3 +29,4 @@ Numbered ADRs retain context, decision, consequences and alternatives. Adoption 
 - [0010 — Native product management and explicit connection authority](0010-native-product-management.md)
 
 - [0011 — Independent platform client](0011-independent-platform-client.md)
+- [0012 — Identity-bound qualification and product evidence](0012-qualification-targets.md)

@@ -1,0 +1,506 @@
+{
+  "claims": {
+    "backend-execution": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Completed samples do not establish backend numerical/lifecycle qualification",
+      "state": "UNQUALIFIED"
+    },
+    "checkpoint-reference": {
+      "blockers": [
+        "Complete distributions and checkpoint-matched numerical tolerance are not qualified; visible continuation differs from the independent F32-KV reference"
+      ],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Independent same-quantized-weight captures exist, but no admitted numerical comparison or higher-precision quality gate has passed",
+      "state": "BLOCKED"
+    },
+    "deployment-performance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Three fresh coding requests over HTTP; exact same resident binary/profile as the separately recorded native lane",
+      "state": "CHARACTERIZED"
+    },
+    "family-conformance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Local native measurement only; independent reference and producer provenance incomplete",
+      "state": "UNQUALIFIED"
+    },
+    "product-path": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Three fresh coding requests over HTTP; exact same resident binary/profile as the separately recorded native lane",
+      "state": "CHARACTERIZED"
+    },
+    "representation-quality": {
+      "blockers": [
+        "Complete distributions and checkpoint-matched numerical tolerance are not qualified; visible continuation differs from the independent F32-KV reference"
+      ],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Independent same-quantized-weight captures exist, but no admitted numerical comparison or higher-precision quality gate has passed",
+      "state": "BLOCKED"
+    }
+  },
+  "id": "deepseek-paired-lineage-http-none-13",
+  "limitations": [
+    "Same binary/model/context/chunk/declared greedy sampling as the paired native record; transports remain separate targets.",
+    "Logical workload matches, but exact rendered input-token identity is not projected by HTTP; do not silently substitute the native input digest.",
+    "HTTP and native sampling receipts use their respective producer projections. No transport-only causal latency gain is inferred.",
+    "Only 53 new input positions and 256 committed output tokens per sample: not the 2K/8K prefill gate or universal sustained decode.",
+    "Independent same-weight captures are separate reference evidence, not an admitted higher-precision quality or continuation-agreement gate.",
+    "Kernel/toolkit/backend identity gaps remain explicit. All planes are independent; this is CHARACTERIZED, not qualified or release performance.",
+    "No committed-fragment publication timestamp, cold-load comparison or uninterrupted hardware reservation is inferred.",
+    "Sampled process-list observation cadence and probe time remain in each raw witness."
+  ],
+  "measurements": [
+    {
+      "case": "coding.metal/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/observations.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 256,
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "samples": [
+        35.31125808809884,
+        35.36023704498075,
+        35.181489889044315
+      ],
+      "scope": "HTTP client and correlated server phases; not native chat or representation quality",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 35.36023704498075,
+        "median": 35.31125808809884,
+        "median_absolute_deviation": 0.04897895688191056,
+        "minimum": 35.181489889044315
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.metal/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/observations.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 256,
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "samples": [
+        3.8197088909801096,
+        3.6466422968078405,
+        3.573827719083056
+      ],
+      "scope": "HTTP client and correlated server phases; not native chat or representation quality",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 3.8197088909801096,
+        "median": 3.6466422968078405,
+        "median_absolute_deviation": 0.07281457772478461,
+        "minimum": 3.573827719083056
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.metal/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/observations.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 256,
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "samples": [
+        2.41381629,
+        2.17351583,
+        2.15678588
+      ],
+      "scope": "HTTP client and correlated server phases; not native chat or representation quality",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 2.41381629,
+        "median": 2.17351583,
+        "median_absolute_deviation": 0.01672994999999977,
+        "minimum": 2.15678588
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.metal/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/observations.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 256,
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "samples": [
+        1.64849914,
+        1.63560774,
+        1.61658976
+      ],
+      "scope": "HTTP client and correlated server phases; not native chat or representation quality",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.64849914,
+        "median": 1.63560774,
+        "median_absolute_deviation": 0.012891399999999997,
+        "minimum": 1.61658976
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.metal/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/observations.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 256,
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "samples": [
+        32.1504566,
+        32.4038575,
+        32.7850647
+      ],
+      "scope": "HTTP client and correlated server phases; not native chat or representation quality",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 32.7850647,
+        "median": 32.4038575,
+        "median_absolute_deviation": 0.2534009000000026,
+        "minimum": 32.1504566
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.metal/turn-0",
+      "definition": "committed tokens after first / elapsed decode wall after first",
+      "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/observations.jsonl",
+      "metric": "decode.post-first.committed",
+      "output_bound": 256,
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "samples": [
+        8.28026575,
+        8.23821362,
+        8.23701994
+      ],
+      "scope": "HTTP client and correlated server phases; not native chat or representation quality",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 8.28026575,
+        "median": 8.23821362,
+        "median_absolute_deviation": 0.0011936800000000858,
+        "minimum": 8.23701994
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine; no hidden warmup"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "cleanup": {
+      "host_exited": true,
+      "locator": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/cleanup-before-stop.json"
+    },
+    "configuration": {
+      "active_work": 0,
+      "activity": "idle",
+      "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+      "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+      "attached_clients": 0,
+      "backend": 1,
+      "capabilities": {
+        "input_mask": 1,
+        "inputs": [
+          "text"
+        ],
+        "maximum_input_parts": 32,
+        "output_mask": 1,
+        "outputs": [
+          "text"
+        ],
+        "properties": 15
+      },
+      "capacity": {
+        "compatible_operation_batching": false,
+        "continuous_batching": false,
+        "cooperative_scheduling": false,
+        "physical_sequence_width": 1,
+        "runnable_work": 1,
+        "sessions": 8
+      },
+      "configured_physical_sequence_width": 1,
+      "context_capacity": 4096,
+      "continuous_batching": false,
+      "engine_kind": "text",
+      "execution_ready": true,
+      "execution_strategy": "speculative",
+      "generation": 1,
+      "mapped_package_bytes": 95050210272,
+      "maximum_new_tokens": 4096,
+      "maximum_sessions": 8,
+      "model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+      "model_leases": 0,
+      "prefill_chunk_tokens": 512,
+      "prepared_bytes": 0,
+      "resident_device_bytes": 0,
+      "resident_host_bytes": 0,
+      "resources": {
+        "activation_arena_current_bytes": 0,
+        "activation_arena_peak_bytes": 0,
+        "available": 129,
+        "components": 1,
+        "logical_download_bytes": 0,
+        "logical_upload_bytes": 0,
+        "model_artifact_bytes": 95050210272,
+        "model_device_addressable_bytes": 95050210272,
+        "model_explicit_device_bytes": 0,
+        "model_explicit_host_bytes": 0,
+        "model_mapped_bytes": 95050210272,
+        "model_prepared_bytes": 0,
+        "physical_residency_known": false,
+        "placement": "mapped-device-addressable",
+        "process_rss_current_bytes": 0,
+        "process_rss_peak_bytes": 0,
+        "schema_version": 1,
+        "session_attention_allocated_bytes": 0,
+        "session_attention_page_table_bytes": 0,
+        "session_attention_resident_bytes": 0,
+        "session_attention_virtual_bytes": 0,
+        "session_candidate_state_bytes": 0,
+        "session_convolution_state_bytes": 0,
+        "session_physical_state_bytes": 0,
+        "session_recurrent_state_bytes": 0,
+        "transient_current_bytes": 0,
+        "transient_peak_bytes": 0,
+        "unified_memory": true,
+        "workspace_current_bytes": 0,
+        "workspace_peak_bytes": 0
+      },
+      "runtime_binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+      "sessions": 0,
+      "specialization_identity": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+      "state": "loaded",
+      "target": "deepseek4-v4-flash-dspark"
+    },
+    "device_observation": "name, uuid, driver_version, temperature.gpu, power.draw [W], clocks.current.sm [MHz]\nNVIDIA GB10, GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc, 580.159.03, 49, 4.20 W, 208 MHz\n",
+    "evidence_class": "real-native-characterization",
+    "evidence_sha256": {
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/case-0.resources.jsonl": "c426a510aaabf42c6010059dab48ff070c0faca94ab9f4905b2a473cf51f867d",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/case-0.resources.jsonl.summary.json": "a1bb6fd761b49ae93c702d61e30f80e346b1dda674331e532620feb9a481c3ac",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/case-0/events.jsonl": "f10cf9d7f2aca96387f4bcc4e7f2c1a856c71b02f68cf0a768f2e657204fd55e",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/case-0/receipt.json": "93f1f357bc952f92041a0b023dbb40c93ef60961cda4213127831616d9b2ed3a",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/cleanup-before-stop.json": "1add21c44b9f0c4bf408b854e0a07e2a7d7c0999c273005f2204df8552a7c9f1",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/closed.json": "066d3a20eb2bee39e48628fe746010321f78ad4e610b01b9fa291bac42f31f7c",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-0-0.resources.jsonl": "347e59d8c917d2f5b208e03c951f0f8811381ea795332041aabe606bed623abd",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-0-0.sse.jsonl": "4a5d04d1af82a60c89d9320fd7aa7417679d2d8e6af3dd332ea398162ee6b51c",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-1-0.resources.jsonl": "a976f23c7f33950e73b3d3304141bab24f2b5c5fcda4b429ea757f1466c05615",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-1-0.sse.jsonl": "480516e463f1447c203acd2e00856c08a4c8b1891363fab149883e8663d8572e",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-2-0.resources.jsonl": "615e38ad8baa264c36510cece9f97d76373d4c927756e9c744e70433b5867940",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-2-0.sse.jsonl": "08b5effc7b007c23c8973c8aca20853622da3f241e7434d028a8d2db79bbc871",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/observations.jsonl": "552f8677630465d964b8f45b709fa3a5b55589f83060b0893efa6e23fb5b1861",
+      "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/identity.json": "1b5c853a5ee8711f2279846ee8c715f5e89434d34ed3d3384fb1edcc0b6ab7d9"
+    },
+    "executable_version": {
+      "build_commit": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+      "build_identity": "5c6c87fe3124f21afda23cadd29f87270a787e26806b02a8d0752d382d1b7d68",
+      "local_protocol_version": 24,
+      "registry_identity": "a51ba58f00821b9efc1a726ef61ee0531481ebb8c1bb359c8c371a29df778284",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "4169f4bcbb101a022e6927980bc564883e1e7d873a93e82a0c861b712e4e9b3b",
+      "source_delta_identity": "93ab856045bbaf0f582d5389aed04d15157f3a42fc1f3046e442fb9890589303",
+      "source_state": "dirty",
+      "source_tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca",
+      "version": "0.1.0"
+    },
+    "identity": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/identity.json",
+    "load": {
+      "cache_state": "not flushed; no cold-load claim",
+      "client_seconds": 6.992598248878494
+    },
+    "measurement_source": {
+      "delta_identity": "a20a8f95a475a2eb73d77d7177d7935133e67f7bcc4e40562fb02f66af7b5c5a",
+      "head": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+      "state": "dirty",
+      "tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca"
+    },
+    "native_peer": "deepseek-paired-lineage-speculative-none-13",
+    "observations": [
+      {
+        "accepted_tokens": 136,
+        "case": "coding.metal",
+        "discarded_tokens": 2,
+        "draft_cycles": 60,
+        "final_tokens": 256,
+        "generated_tokens": 256,
+        "input_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+        "input_identity_kind": "logical-http-request",
+        "prefill_tokens": 53,
+        "prompt_tokens": 53,
+        "proposed_tokens": 300,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 162,
+        "rendered_token_identity": null,
+        "reused_tokens": 0,
+        "sample": 0,
+        "selected_verification_tokens": 298,
+        "target_verifications": 60,
+        "turn_index": 0
+      },
+      {
+        "accepted_tokens": 136,
+        "case": "coding.metal",
+        "discarded_tokens": 2,
+        "draft_cycles": 60,
+        "final_tokens": 256,
+        "generated_tokens": 256,
+        "input_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+        "input_identity_kind": "logical-http-request",
+        "prefill_tokens": 53,
+        "prompt_tokens": 53,
+        "proposed_tokens": 300,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 162,
+        "rendered_token_identity": null,
+        "reused_tokens": 0,
+        "sample": 1,
+        "selected_verification_tokens": 298,
+        "target_verifications": 60,
+        "turn_index": 0
+      },
+      {
+        "accepted_tokens": 136,
+        "case": "coding.metal",
+        "discarded_tokens": 2,
+        "draft_cycles": 60,
+        "final_tokens": 256,
+        "generated_tokens": 256,
+        "input_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+        "input_identity_kind": "logical-http-request",
+        "prefill_tokens": 53,
+        "prompt_tokens": 53,
+        "proposed_tokens": 300,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 162,
+        "rendered_token_identity": null,
+        "reused_tokens": 0,
+        "sample": 2,
+        "selected_verification_tokens": 298,
+        "target_verifications": 60,
+        "turn_index": 0
+      }
+    ],
+    "profiled": false,
+    "published_content_agreement": {
+      "http_manifest_identity": "fe80052923b422afe006935c112931955f7feca9125880d53a07d08d3a6b4a7e",
+      "native_manifest_identity": "fe80052923b422afe006935c112931955f7feca9125880d53a07d08d3a6b4a7e",
+      "samples": 3,
+      "scope": "ordered channel/extent/byte-digest agreement; not token IDs, logits or representation quality"
+    },
+    "raw_observations": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/observations.jsonl",
+    "resource_observation": {
+      "requests": [
+        {
+          "adapter": "cuda-process-list-v1",
+          "allowed_pids": [
+            2971560
+          ],
+          "devices": [],
+          "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-0-0.resources.jsonl",
+          "interval_seconds": 1,
+          "observations": 36,
+          "probe_seconds": 0.7738618371076882,
+          "schema": "yvex.qualification.resource-observation.v1",
+          "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+          "state": "OBSERVED_CLEAR"
+        },
+        {
+          "adapter": "cuda-process-list-v1",
+          "allowed_pids": [
+            2971560
+          ],
+          "devices": [],
+          "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-1-0.resources.jsonl",
+          "interval_seconds": 1,
+          "observations": 36,
+          "probe_seconds": 0.807329413946718,
+          "schema": "yvex.qualification.resource-observation.v1",
+          "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+          "state": "OBSERVED_CLEAR"
+        },
+        {
+          "adapter": "cuda-process-list-v1",
+          "allowed_pids": [
+            2971560
+          ],
+          "devices": [],
+          "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/http-case-0/http-2-0.resources.jsonl",
+          "interval_seconds": 1,
+          "observations": 36,
+          "probe_seconds": 0.7860411563888192,
+          "schema": "yvex.qualification.resource-observation.v1",
+          "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+          "state": "OBSERVED_CLEAR"
+        }
+      ],
+      "scope": "sampled compute-process witnesses, not uninterrupted hardware reservation",
+      "state": "OBSERVED_CLEAR"
+    },
+    "source_capture": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/paired-lineage-speculative-none-13/source-capture",
+    "source_stability": "frozen"
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "build": "5c6c87fe3124f21afda23cadd29f87270a787e26806b02a8d0752d382d1b7d68",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "1a6da4bf70b0e866b2a5a03f40585366ed1b1a913526fc78f1cd5d51c94f53f8",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA GB10",
+    "kernel_bundle": null,
+    "memory_configuration": null,
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "prefill_geometry": "chunk=512",
+    "product_path": "http-openai",
+    "reasoning": "none",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "runtime_configuration": "8f04397d4407ed2aab45bc0e23d0dc73404913e8473523e528f6b79adabd2532",
+    "runtime_toolkit": null,
+    "sampling": "{\"min_p\":0,\"seed\":null,\"seed_origin\":\"not-applicable\",\"stochastic\":false,\"temperature\":0,\"top_k\":0,\"top_p\":1,\"typical_p\":1}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+    "source_delta": "93ab856045bbaf0f582d5389aed04d15157f3a42fc1f3046e442fb9890589303",
+    "source_tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "strategy": "speculative",
+    "suite": "3f68f1a82695656aa1acbbc5a4e1668586f5b145132cbf9e63b071c2cf0f3a96",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "topology": "single-node single-device coherent unified memory",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark"
+  },
+  "target_identity": "b05da84a2cf1a61a341f482e5ed69b4aa4a2c3bb78e0c16d8dbf5b25fdf2cfaa",
+  "title": "DeepSeek coding / HTTP / speculative / none / lineage witness"
+}

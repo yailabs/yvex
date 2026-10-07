@@ -1,0 +1,288 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-independent-coding-target-03-none",
+  "title": "DeepSeek independent coding continuation — none",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek4-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "tokenizer_conversation": null,
+    "transformation_ir": null,
+    "physical_policy": null,
+    "representation": "artifact-sha256:b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding": null,
+    "specialization": null,
+    "source_commit": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+    "source_tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca",
+    "source_delta": "e04488c6b373c76ec3b19fae80a922fdc428010f0a88987046ff26ecd6ab3681",
+    "build": "a35918dd0939fdcb1da3a383bb7c6fb6ecb0c7e574acde4cd70c27a7dc80d39a",
+    "executable": "cc5781e1a137eeeef031a360d5fd39cb7d136521baa67b869473f2fa522db53d",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": null,
+    "device_count": null,
+    "topology": null,
+    "driver": null,
+    "runtime_toolkit": null,
+    "memory_configuration": null,
+    "runtime_configuration": "bd257030270b4231297b1a7d2390fa0d52bde02fc036267a85e3b6ea93d9eb0f",
+    "context": 4096,
+    "prefill_geometry": "chunk=64",
+    "sequence_geometry": "width=1",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none",
+    "sampling": "{\"min_p\":0,\"seed_present\":false,\"stochastic\":false,\"strategy\":\"greedy\",\"temperature\":1,\"top_k\":0,\"top_p\":1,\"typical_p\":1}",
+    "product_path": "controlled-engine",
+    "suite": "3f68f1a82695656aa1acbbc5a4e1668586f5b145132cbf9e63b071c2cf0f3a96"
+  },
+  "target_identity": "478cf4ea37d28a32a8840f882becaecb5ff2069a43e18e8726f66a37d01dae0d",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "Independent continuation comparison does not run the family conformance gate",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "CHARACTERIZED",
+      "scope": "Exact-input greedy-prefix characterization against the declared independent realization",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No admitted higher-precision checkpoint or full-distribution comparison/tolerance",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No admitted higher-precision checkpoint or full-distribution comparison/tolerance"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Bounded completion does not replace backend numerical and lifecycle qualification",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "No performance claim; preparation and diagnostic work are not resident-host timing",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "Direct engineering generation, not the native local product or HTTP compatibility path",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "measurements": [
+    {
+      "metric": "greedy-prefix",
+      "definition": "matching continuation prefix under the declared exact comparison policy",
+      "unit": "token",
+      "case": "coding.metal",
+      "prompt_identity": "2d46d33e481d6cbfdb8dd4af3ca082736195695219b893b41100cc7f745f2f92",
+      "reference_identity": "c8053402e8400afb91c084cfbc932610612532aab51f156a1c2a24bfe456b027",
+      "session_state": "fresh",
+      "warm_state": "not a timing measurement; standalone generation includes preparation",
+      "output_bound": 256,
+      "samples": [
+        40
+      ],
+      "statistics": {
+        "count": 1,
+        "median": 40,
+        "minimum": 40,
+        "maximum": 40,
+        "median_absolute_deviation": 0
+      },
+      "scope": "Exact-input greedy-prefix characterization against the declared independent realization",
+      "evidence": "/home/dgmothx/lab/models/evidence/yvex-reference-comparison-20261005.bMoZ3v/coding-target-03/candidate-0.json"
+    }
+  ],
+  "provenance": {
+    "source_stability": "frozen",
+    "evidence_class": "real-independent-continuation-characterization",
+    "raw_root": "/home/dgmothx/lab/models/evidence/yvex-reference-comparison-20261005.bMoZ3v/coding-target-03",
+    "source_capture": {
+      "schema": "yvex.qualification.source-capture.v1",
+      "source": {
+        "head": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+        "state": "dirty",
+        "delta_identity": "e04488c6b373c76ec3b19fae80a922fdc428010f0a88987046ff26ecd6ab3681"
+      },
+      "tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca",
+      "executables": {
+        "executable-0": {
+          "observed_path": "/home/dgmothx/lab/yvex/yvex",
+          "sha256": "cc5781e1a137eeeef031a360d5fd39cb7d136521baa67b869473f2fa522db53d"
+        }
+      },
+      "files": {
+        "base.tar": "b4da55ee4045e680fabd9f077bc7584e57679b9bf8d38666209487dd48b6486f",
+        "delta.patch": "7fae56214c0bafec1761b2b5ff1e5cdcd5e1af2ca5e77608f6dc93f0d44a2ff2",
+        "executable-0": "cc5781e1a137eeeef031a360d5fd39cb7d136521baa67b869473f2fa522db53d",
+        "untracked.tar": "48a0a18043d830a74e266238c8f34dacfa351266bdd71103c41daef3bbcc835c"
+      },
+      "scope": "observed source and executable bytes; build relationship separately required"
+    },
+    "build": {
+      "build_commit": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+      "build_identity": "a35918dd0939fdcb1da3a383bb7c6fb6ecb0c7e574acde4cd70c27a7dc80d39a",
+      "local_protocol_version": 24,
+      "registry_identity": "a51ba58f00821b9efc1a726ef61ee0531481ebb8c1bb359c8c371a29df778284",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "7e615120b6ecdb9d144c2ae7c8ebb5de65bc90a9c1379bc647f9d59e9b5195b3",
+      "source_delta_identity": "e04488c6b373c76ec3b19fae80a922fdc428010f0a88987046ff26ecd6ab3681",
+      "source_state": "dirty",
+      "source_tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca",
+      "version": "0.1.0"
+    },
+    "configuration": {
+      "context": 4096,
+      "prefill_chunk": 64,
+      "strategy": "target-only",
+      "backend": "cuda",
+      "sampling": {
+        "strategy": "greedy",
+        "temperature": 1,
+        "stochastic": false,
+        "seed_present": false,
+        "top_k": 0,
+        "top_p": 1,
+        "min_p": 0,
+        "typical_p": 1
+      },
+      "reference_sampling": {
+        "temperature": 0,
+        "stochastic": false
+      },
+      "session_state": "fresh",
+      "transport": "direct-engineering-generation",
+      "concurrency": 1,
+      "lane": "controlled-engine",
+      "performance_claim": false
+    },
+    "reference_sha256": "b28690aea05032e5aee4dceb55e57c648c638e9acd23f223533623efc20f1107",
+    "inputs_sha256": "6b03a5b55902191313c5e970f2ba23f2c09cf31734210ab889aa52f200a13493",
+    "independent_implementation": {
+      "name": "llama.cpp-deepseek-v4-flash",
+      "revision": "2f2d44052b7d15c9c4dd6610f6e14a5f7b2d5f3f",
+      "executable_sha256": "df2fee12b815701ebaa2eaaf0d840fdda26a98b83a2f14f47a2249d5ea254446",
+      "command": [
+        "/home/dgmothx/lab/models/evidence/ds4-reference-build-20261004.Sqjff4/llama-build/bin/llama-server",
+        "-m",
+        "/home/dgmothx/lab/models/evidence/ds4-reference-build-20261004.Sqjff4/target-reference-f32-packed.gguf",
+        "-c",
+        "4096",
+        "-b",
+        "64",
+        "-ub",
+        "64",
+        "-ngl",
+        "99",
+        "-np",
+        "1",
+        "--no-warmup",
+        "--cache-type-k",
+        "f32",
+        "--cache-type-v",
+        "f32",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18088"
+      ],
+      "independent_of_yvex": true,
+      "environment_identity": "bf07510b4bea8d0eef5cd856e97395ff583f6b1eb480610594f39b01b22eebc5",
+      "representation_identity": "85a9a20bf65701eb7546fac8501a965fdfcd3130ba7080d639444f32d4d728a8"
+    },
+    "binding_file_sha256": "a2dbc7898e04eba22c4d78315d3f4dbadf1ee48fb454c9e6f8c2e4320072a277",
+    "profiled": false,
+    "resource_scope": "sampled process witness; not uninterrupted exclusive hardware reservation",
+    "closed_sha256": "681e98659d40f2a0f05bceafabfc229736d0fe4d8e5313c8f98afc786c29bbd9",
+    "continuation_comparisons": [
+      {
+        "candidate_sha256": "adbb085a3efd351c5db62e56c007d02952c75a35e08547b2d07cbc8119672b27",
+        "case": "coding.metal",
+        "comparison": {
+          "state": "CHARACTERIZED",
+          "exact_input_tokens": true,
+          "first_token_agreement": true,
+          "greedy_prefix_tokens": 40,
+          "exact_bounded_continuation": false,
+          "reference_sampled_tokens": 256,
+          "candidate_sampled_tokens": 256,
+          "candidate_committed_tokens": 256,
+          "first_divergence": 40,
+          "reference_token_at_divergence": 835,
+          "candidate_token_at_divergence": 112964,
+          "candidate_finish": "max-new-tokens",
+          "reference_finish": "length",
+          "comparison_policy": "exact greedy prefix on the same input; cross-realization characterization, not an admitted quality tolerance",
+          "unavailable_metrics": [
+            "teacher-forced NLL",
+            "PPL",
+            "full-distribution KL",
+            "RMS probability delta",
+            "teacher-forced same-top-token rate"
+          ]
+        },
+        "configuration": {
+          "backend": "cuda",
+          "concurrency": 1,
+          "context": 4096,
+          "lane": "controlled-engine",
+          "performance_claim": false,
+          "prefill_chunk": 64,
+          "reference_sampling": {
+            "stochastic": false,
+            "temperature": 0
+          },
+          "sampling": {
+            "min_p": 0,
+            "seed_present": false,
+            "stochastic": false,
+            "strategy": "greedy",
+            "temperature": 1,
+            "top_k": 0,
+            "top_p": 1,
+            "typical_p": 1
+          },
+          "session_state": "fresh",
+          "strategy": "target-only",
+          "transport": "direct-engineering-generation"
+        },
+        "input_identity": "2d46d33e481d6cbfdb8dd4af3ca082736195695219b893b41100cc7f745f2f92",
+        "reasoning": "none",
+        "reference_capture_sha256": "c8053402e8400afb91c084cfbc932610612532aab51f156a1c2a24bfe456b027",
+        "schema": "yvex.qualification.continuation-observation.v1",
+        "source_stable": true,
+        "prompt_tokens": 53,
+        "maximum_output": 256,
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-reference-comparison-20261005.bMoZ3v/coding-target-03/candidate-0.json"
+      }
+    ]
+  },
+  "limitations": [
+    "Representative suite inputs are not official upstream inference vectors; the four official encoding cases remain a separate gate.",
+    "Exact-input free-running continuations use the declared independent arithmetic/weight/KV realization; no cross-realization tolerance is invented.",
+    "Only positions before first divergence share a causal context; later token equality is not teacher-forced same-top-token accuracy.",
+    "Missing full logits, teacher-forced NLL/PPL, KL and probability deltas are unavailable, never zero error.",
+    "One bounded observation per case is not a statistical quality guarantee, model-quality score or sustained-throughput result.",
+    "Standalone preparation/teardown is not warm product performance; native and HTTP timings require their own targets.",
+    "Historical unprojected plan identities remain null; neither newer source nor another receipt fills them retroactively."
+  ]
+}

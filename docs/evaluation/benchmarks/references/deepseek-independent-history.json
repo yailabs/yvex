@@ -1,0 +1,104 @@
+{
+  "schema": "yvex.qualification.reference-observation.v1",
+  "source": {
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "revision": "62af8fffb2f7030cac4de2f0169f5b8d1101b646"
+  },
+  "implementation": {
+    "name": "llama.cpp-deepseek-v4-flash",
+    "revision": "2f2d44052b7d15c9c4dd6610f6e14a5f7b2d5f3f",
+    "executable_sha256": "df2fee12b815701ebaa2eaaf0d840fdda26a98b83a2f14f47a2249d5ea254446",
+    "command": [
+      "/home/dgmothx/lab/models/evidence/ds4-reference-build-20261004.Sqjff4/llama-build/bin/llama-server",
+      "-m",
+      "/home/dgmothx/lab/models/evidence/ds4-reference-build-20261004.Sqjff4/reference-reproduced-20261005-2.gguf",
+      "-c",
+      "4096",
+      "-b",
+      "64",
+      "-ub",
+      "64",
+      "-ngl",
+      "99",
+      "-np",
+      "1",
+      "--no-warmup",
+      "--cache-type-k",
+      "f32",
+      "--cache-type-v",
+      "f32",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18088"
+    ],
+    "independent_of_yvex": true,
+    "environment_identity": "95087fb2b561c96b234291be5fccd6e7a33194e92d6a7c8ae9ed5a9000d8cd21",
+    "representation_identity": "2924ddfeafde680f907453fb48290b7cf14eb0ede5a2894560169acb4e698403"
+  },
+  "suite_sha256": "499d84eef0005dc065838d53f41d9945aec654b51df94a11976db5505a429ad2",
+  "checkpoint_manifest_sha256": "754759502d1120afd9f82c953751c7fb40a5fb74e4f4b42c53720197a37894b7",
+  "status": "CHARACTERIZED",
+  "yvex_conformance": "NOT_RUN",
+  "cases": [
+    {
+      "case": "conversation.coding/turn-1",
+      "reasoning": "none",
+      "input_identity": "17184ce3b76a3f597b3a2da86fe665e8287cf125936bb985187369180b8c1d21",
+      "prompt_tokens": 25,
+      "maximum_output": 256,
+      "output_tokens": 256,
+      "finish": "length",
+      "capture_sha256": "41657df45bb672067a49b582fc95101039cd1e301295bfd3fe3cccc2e6f80c14",
+      "output_sha256": "0394ba56771bb93d9dc64f0e1c3d01f6be453065f6c9dbbf33c6d13f18fcd70c",
+      "multi_turn": "actual independent assistant history; second request",
+      "grammar": {
+        "state": "NOT_MEASURED_TRUNCATED",
+        "reason": null,
+        "reasoning_boundary_positions": []
+      },
+      "prior_capture_sha256": "3b38b3f58205aa111324862a631f2f2b4feb089f4fe3172793e22d84edc2b545",
+      "prior_input_identity": "506fdc743150f58aff1eb0da5b45cbe3f7b29a16bc3001961a0508d5e2211626",
+      "turn_index": 1,
+      "parent_case": "conversation.coding"
+    }
+  ],
+  "limitations": [
+    "Inherited producer-plan note: Same-quantized-weight independent target-only execution; not the higher-precision upstream checkpoint.",
+    "Inherited producer-plan note: Exact BF16 weight widening and F32 KV are declared reference differences, not YVEX representation changes.",
+    "Inherited producer-plan note: Top-20 probabilities cannot establish full-vocabulary KL, RMS, NLL or PPL.",
+    "Inherited producer-plan note: Multi-turn references capture their first input only; generated-history continuations remain missing.",
+    "Inherited producer-plan note: Reference timings are not YVEX performance; capture does not qualify YVEX numerical agreement.",
+    "Actual coverage here is the authenticated second request listed below, with independent generated history; not native prefix reuse or complete multi-turn qualification in all modes."
+  ],
+  "continuation_dispositions": [
+    {
+      "case": "conversation.coding",
+      "reasoning": "none",
+      "turn_index": 1,
+      "prior_capture_sha256": "3b38b3f58205aa111324862a631f2f2b4feb089f4fe3172793e22d84edc2b545",
+      "prior_grammar": "PASS",
+      "state": "CHARACTERIZED",
+      "reason": "source-encoded actual independent history"
+    },
+    {
+      "case": "conversation.coding",
+      "reasoning": "high",
+      "turn_index": 1,
+      "prior_capture_sha256": "cb4183e180519c3d55c90c1d2e75a3fb376ed253d18b6d7a024aac780b4cc325",
+      "prior_grammar": "FAIL",
+      "state": "UNQUALIFIED",
+      "reason": "prior assistant did not complete source-authored grammar; no fabricated history"
+    },
+    {
+      "case": "conversation.coding",
+      "reasoning": "maximum",
+      "turn_index": 1,
+      "prior_capture_sha256": "67e3ff31a97302fb801d8ef98a1bd99345f7697e886858e22beeb5f27a8d66ed",
+      "prior_grammar": "NOT_MEASURED_TRUNCATED",
+      "state": "UNQUALIFIED",
+      "reason": "prior assistant did not complete source-authored grammar; no fabricated history"
+    }
+  ],
+  "reference_sha256": "04a24c560eb5663d5985ce54ce2f210bf11033db357371d857b26c66f6064b27"
+}

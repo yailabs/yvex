@@ -1,0 +1,27 @@
+{
+  "schema": "yvex.qualification.suite.v1",
+  "id": "deepseek-competitive",
+  "revision": "2026-10-05.1",
+  "provenance": "External DwarfStar coding-control prompt, pinned to antirez/ds4 9139e2ae58a41503968a500f36f75895c1ba63fc QA_BEFORE_RELEASES.md; NOT official DeepSeek input vectors or a quality leaderboard. Cross-engine checkpoint/representation equivalence is not assumed.",
+  "license": "MIT",
+  "source_authority": "https://github.com/antirez/ds4/blob/9139e2ae58a41503968a500f36f75895c1ba63fc/QA_BEFORE_RELEASES.md",
+  "applicability": {
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "revision": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "family_record": "docs/model-families/deepseek-v4-flash.md",
+    "comparison": "Exact workload text; cross-engine source, representation, rendering, token counts and metric definitions must be reconciled separately. This applicability admits the YVEX pack, not the external checkpoint."
+  },
+  "cases": [
+    {
+      "id": "coding.hash-table",
+      "class": "representative",
+      "category": "coding",
+      "maximum_output": 256,
+      "turns": [
+        "Write a complete C hash table implementation with string keys, insert, find, delete, and a test main. Output only C code."
+      ],
+      "reasoning_modes": ["none", "high", "maximum"],
+      "execution_strategies": ["target-only", "speculative"]
+    }
+  ]
+}

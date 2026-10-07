@@ -177,6 +177,54 @@ repair and revalidation; stop only for a genuine external blocker or a decision
 outside the authorized boundary. Do not promote the next roadmap boundary
 merely because this one is complete.
 
+## Model, representation and performance qualification reports
+
+This protocol supplements the generic evidence table for model, quantization,
+backend/hardware qualification, inference performance and release-target
+benchmarking. Report an auditable after-state, never an execution diary. Use
+the following order; omit a section only when genuinely not applicable:
+
+| Section | Required content |
+| --- | --- |
+| RESULT | COMPLETE, IN PROGRESS or BLOCKED; exact Task; one sentence stating the earned claim. These report labels do not replace controlled Task-row states. |
+| QUALIFICATION TARGET | One identity/configuration table: family contract, model/checkpoint and upstream revision, tokenizer/conversation, Transformation IR, physical policy/quantization, artifact, binding, specialization, source/tree/build/executable, backend/kernel, hardware/device count/topology, driver/runtime, memory, context/prefill/sequence/concurrency geometry, strategy, reasoning, sampling, product transport and workload suite. Include unchanged dimensions; unknown is explicit. |
+| EVIDENCE MATRIX | Separate family semantics, checkpoint reference, representation quality, backend execution, deployment performance and product path: authority/reference, status, evidence and exact claim earned. A backend result may reference the deployment record, but must not disappear into one aggregate PASS. |
+| QUALITY MATRIX | One row per exact checkpoint-matched representation; only available, authoritative reference metrics and their comparison policy/tolerance. Missing logits, NLL/PPL, KL, probability deltas, top-token or continuation evidence is unavailable, never zero error. |
+| WORKLOAD MATRIX | Same case identity across admitted reasoning modes and execution strategies. Cells distinguish QUALIFIED, CHARACTERIZED, BLOCKED, UNSUPPORTED and NOT APPLICABLE; unexecuted admitted cells remain UNQUALIFIED. |
+| PERFORMANCE MATRIX | Load, newly executed prefill, server/client TTFT, sustained committed decode, complete request and memory. Separate controlled-engine, product-native and HTTP lanes, target-only/speculative modes and batch/concurrency. Include samples, median and dispersion where required. |
+| COMPARISON | Baseline/candidate rows passing the metric's machine-checkable comparison key; explicitly declare changed experimental axes. Never average incompatible configurations. |
+| REGRESSIONS / REJECTED CANDIDATES | Material failures, numerical/resource/preparation tradeoffs and why a candidate was rejected. |
+| BLOCKERS / NON-CLAIMS | Exact missing prerequisites and claims not earned; software/fixture agreement is not independent model evidence. |
+| DOCUMENTATION / PUBLICATION | Generated public target, family/checkpoint, representation, hardware/backend and workload/reasoning views; methodology, reproduction commands and user-visible claim state. |
+| EVIDENCE / GIT | Receipt/raw-evidence locations, immutable provenance/source stability, commits/tree/build/live executable, remote relationship and worktree state. |
+| progression_decision / downstream_safe | Existing controlled values, scoped to the exact claim and safe next boundary. |
+
+For reasoning families, use source-authored policies. DeepSeek requires none,
+high and maximum, separately with target-only and DSpark where admitted. Use
+the same workload across modes when semantically valid; never substitute an
+easier maximum-mode prompt, shorten its source instruction or suppress its
+reasoning stream. Retain input/reused/new positions, prefill time/rate, first
+reasoning time, reasoning count/rate, source-authored reasoning-to-final
+transition, first final time, final count/rate, total time and committed rate.
+An unreached transition is NOT MEASURED. Speculative evidence additionally
+retains proposals, verification population, accepted/rejected/discarded tokens,
+accepted-prefix statistics and draft/verification/commit economics. A single
+"thinking speed" is not an adequate report.
+
+A naked `20 tok/s` is not a publishable claim: expose its exact target, metric
+definition, workload and statistics. Family evidence does not qualify another
+checkpoint, quantization, backend or topology. Local receipts do not become
+YVEX-published qualifications. Machine evidence is canonical; generate public
+views from it, never maintain benchmark values independently in prose. Raw JSON
+alone does not satisfy the product publication exit. See
+[methodology](docs/evaluation/benchmarks/methodology.md).
+
+Device locks are advisory, not proof of uncontended operator hardware. Retain
+resource-observation scope and sample admission separately from target identity.
+Exclude observed contended or unavailable intervals from comparable performance
+series, preserving their raw evidence and reason. Sampled clear lists do not
+prove an uninterrupted reservation; never retire an operator's work for a test.
+
 ## Documentation and Task closure
 
 Update executable architecture in the same Task as its change. Route public

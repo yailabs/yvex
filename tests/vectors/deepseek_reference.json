@@ -1,0 +1,25 @@
+{
+  "schema": "yvex.qualification.gguf-reference-projection.v1",
+  "source_sha256": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+  "expected_output_sha256": "1f50e95021db52069b0a9eacbfbf00065e37e0cef8793e5c3d59959e40874c98",
+  "reader_repository": "https://github.com/antirez/llama.cpp-deepseek-v4-flash.git",
+  "reader_revision": "2f2d44052b7d15c9c4dd6610f6e14a5f7b2d5f3f",
+  "reader_tree": "d9f2cef7d4cf5fad4f78a596644e0696d5f874b8",
+  "metadata_aliases": {
+    "deepseek4.indexer.head_count": "deepseek4.attention.indexer.head_count",
+    "deepseek4.indexer.key_length": "deepseek4.attention.indexer.key_length",
+    "deepseek4.indexer.top_k": "deepseek4.attention.indexer.top_k"
+  },
+  "exclude_prefixes": ["yvex.draft.v1."],
+  "widen_bf16": true,
+  "expected_source_tensors": 1409,
+  "expected_target_tensors": 1328,
+  "expected_widened_tensors": 425,
+  "limitations": [
+    "External independent target-only reference, not a replacement YVEX artifact or DSpark claim.",
+    "Aliases/excluded draft entries do not change target tensor bytes; BF16 values embed exactly into F32.",
+    "Same quantized target weights, not the higher-precision upstream checkpoint.",
+    "Independent arithmetic and F32 KV remain declared numerical differences.",
+    "Projection identity/readback does not qualify inference, quantization quality or YVEX continuation agreement."
+  ]
+}

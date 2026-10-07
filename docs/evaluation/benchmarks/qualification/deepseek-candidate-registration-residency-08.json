@@ -1,0 +1,266 @@
+{
+  "claims": {
+    "backend-execution": {
+      "blockers": [],
+      "evidence": {
+        "registration-diagnostic": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/cupti.tsv",
+          "result": "PASS",
+          "sha256": "cfb610e0d56e262b9c9566f94ef151c44c20e47d92daeea56e4fdbd5b50fa92d"
+        }
+      },
+      "required_evidence": [],
+      "scope": "Instrumented registration/OS diagnostic; no throughput, optimality or numerical claim",
+      "state": "CHARACTERIZED"
+    },
+    "checkpoint-reference": {
+      "blockers": [
+        "Full-distribution reference and admitted numerical/quality comparison remain unqualified; successful coding generation is not a quality gate"
+      ],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "No independent admitted checkpoint-matched quality comparison earned by this timing capture",
+      "state": "BLOCKED"
+    },
+    "deployment-performance": {
+      "blockers": [],
+      "evidence": {
+        "registration-diagnostic": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/cupti.tsv",
+          "result": "PASS",
+          "sha256": "cfb610e0d56e262b9c9566f94ef151c44c20e47d92daeea56e4fdbd5b50fa92d"
+        }
+      },
+      "required_evidence": [],
+      "scope": "Instrumented registration/OS diagnostic; no throughput, optimality or numerical claim",
+      "state": "UNQUALIFIED"
+    },
+    "family-conformance": {
+      "blockers": [],
+      "evidence": {
+        "capture": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-compute-profile-12/case-0/receipt.json",
+          "result": "PASS",
+          "sha256": "ffed959d8ab85532b58a048f69f1a77de4273ff0ba58121b114e803194625f28"
+        }
+      },
+      "required_evidence": [],
+      "scope": "Explicit engineering configuration measured through native protocol v24, not ordinary product defaults or complete model qualification",
+      "state": "UNQUALIFIED"
+    },
+    "product-path": {
+      "blockers": [],
+      "evidence": {
+        "registration-diagnostic": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/cupti.tsv",
+          "result": "PASS",
+          "sha256": "cfb610e0d56e262b9c9566f94ef151c44c20e47d92daeea56e4fdbd5b50fa92d"
+        }
+      },
+      "required_evidence": [],
+      "scope": "Instrumented registration/OS diagnostic; no throughput, optimality or numerical claim",
+      "state": "UNQUALIFIED"
+    },
+    "representation-quality": {
+      "blockers": [
+        "Full-distribution reference and admitted numerical/quality comparison remain unqualified; successful coding generation is not a quality gate"
+      ],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "No independent admitted checkpoint-matched quality comparison earned by this timing capture",
+      "state": "BLOCKED"
+    }
+  },
+  "id": "deepseek-candidate-registration-residency-08",
+  "limitations": [
+    "This is a source-stable instrumented diagnostic, not a timed performance comparison or an optimization result.",
+    "The mapped file was almost entirely nonresident before load. Registration coincided with file population; this does not separately decompose filesystem versus registration driver internals.",
+    "No whole-range CUDA pageable prefetch was selected in this arm. API addressability and zero separately allocated model-device bytes do not mean weights are absent from physical RAM.",
+    "Linux smaps Locked is not an authoritative measurement of CUDA driver pinning and is not promoted into that claim.",
+    "No global cache eviction or competing model was used. The isolated host and owned sessions were retired before public producer restoration.",
+    "Checkpoint/representation quality, full 8K correctness, 20/700, and cross-engine checkpoint equivalence are not earned."
+  ],
+  "measurements": [],
+  "origin": "local",
+  "provenance": {
+    "cleanup": "owned sessions closed; generation/count checked",
+    "closure": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/closed.json",
+      "sha256": "43df5c1fd8850215e0d3a627305b967b6695ba9d51c5c158aac20a7744d27706"
+    },
+    "diagnostics": [
+      {
+        "case": "model-load",
+        "definition": "Client load admission through execution-ready engine under callback instrumentation; N=1, not repeated benchmark",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/identity.json",
+        "id": "load-client",
+        "unit": "s",
+        "value": 85.78903839900158
+      },
+      {
+        "case": "model-load",
+        "definition": "Actual successful CUDA Driver API interval, not an inferred phase denominator",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/cupti.tsv",
+        "id": "host-registration",
+        "unit": "s",
+        "value": 81.584753909
+      },
+      {
+        "case": "model-load",
+        "definition": "Host registration extent; not a separate device allocation or proof of permanent pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/cupti.tsv",
+        "id": "registered-host-extent",
+        "unit": "byte",
+        "value": 95050210272
+      },
+      {
+        "case": "model-load",
+        "definition": "Actual successful CUDA Driver API interval, not an inferred phase denominator",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/cupti.tsv",
+        "id": "device-address-resolution",
+        "unit": "s",
+        "value": 1.824e-06
+      },
+      {
+        "case": "model-load",
+        "definition": "Linux smaps RSS of exact artifact mapping in last load sample; includes file-backed physical pages, not a duplicate CUDA copy",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/load.residency.jsonl",
+        "id": "mapped-rss-at-load-end",
+        "unit": "byte",
+        "value": 94919204864
+      },
+      {
+        "case": "model-load",
+        "definition": "Linux process I/O read bytes at last load sample; OS observation, not measured GPU memory traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/load.residency.jsonl",
+        "id": "process-read-bytes-at-load-end",
+        "unit": "byte",
+        "value": 94890975232
+      },
+      {
+        "case": "model-load",
+        "definition": "Cumulative CPU major faults at last load sample; not GPU faults",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/load.residency.jsonl",
+        "id": "cpu-major-faults-at-load-end",
+        "unit": "count",
+        "value": 1544
+      },
+      {
+        "case": "model-load",
+        "definition": "Scoped mincore file-cache pages before load; mapped is not resident",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/identity.json",
+        "id": "file-resident-pages-before",
+        "unit": "count",
+        "value": 58316
+      }
+    ],
+    "evidence_class": "local-characterization",
+    "file_page_preparation": {
+      "checksum": 0,
+      "file_bytes": 95050210272,
+      "page_size": 4096,
+      "pages": 23205618,
+      "resident_pages_after": 58316,
+      "resident_pages_before": 58316,
+      "scope": "Linux mincore file-cache pages, not device allocation or future pinning guarantee",
+      "warming_seconds": 1.12e-07,
+      "warming_selected": false
+    },
+    "identity_evidence": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-residency-registration-08/identity.json",
+      "sha256": "a94e77701e4f385d0f9cb313c0c560eabad304bed17b0495b41877204e28639b"
+    },
+    "measurement_lane": "controlled-engine",
+    "original_receipt_sha256": "3f62002fd981da69f7e52a2a94b8dbbf70375d3d32b3831b2c81660bf387d3dc",
+    "producer_build": {
+      "build_commit": "803dd98d4c54d7a26cb3c08def6b350be51b7179",
+      "build_identity": "6ece97e98ac222ef46ac24bc437d95edf728b4e39194850ee59764058ebaf136",
+      "local_protocol_version": 24,
+      "registry_identity": "b1da12744c93dc1b3cbc2eb1346905ae224f6229a667b8ef92a3f2d342211bc7",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "773d0dd1d2b05911410fd07b807a4bf46e1f9ae1fdf730fbb5b6411367cd2a8d",
+      "source_delta_identity": "f0fedb271f549473263810ba403ca1a9c4652b3ad43df86a210df21bdf1d9754",
+      "source_state": "dirty",
+      "source_tree": "4ae815ad1669b4c95c302bb9b776e3671ee8f0a4",
+      "version": "0.1.0"
+    },
+    "profiled": true,
+    "profiler_identity": "009d9c82e74b73c028b9a39439c1d539323b9c943a374e4ed46b8973bf36f832",
+    "raw_evidence_sha256": {
+      "case-0.residency.jsonl": "c6cd210631694447b945c51cf1ad42d8224160b140324558c0202602f0e3793c",
+      "cupti.tsv": "cfb610e0d56e262b9c9566f94ef151c44c20e47d92daeea56e4fdbd5b50fa92d",
+      "load.residency.jsonl": "aa2de564dbfd4480d63b18c19ed491cf1e60fee45e2e7730e2ca07bba3c9b636"
+    },
+    "residency_arm": "artifact-mapped-current",
+    "sampling_selection": "greedy",
+    "source_capture": {
+      "executables": {
+        "executable-0": {
+          "observed_path": "/home/dgmothx/lab/yvex/build/cargo/release/yvex",
+          "sha256": "af0bb3a77a62ef2b77280f7aa4d4f4c6edc0265b813533764915a7a589e65dae"
+        },
+        "executable-1": {
+          "observed_path": "/home/dgmothx/lab/yvex/build/cargo/release/yvex",
+          "sha256": "af0bb3a77a62ef2b77280f7aa4d4f4c6edc0265b813533764915a7a589e65dae"
+        }
+      },
+      "files": {
+        "base.tar": "d6beb4aa33d88af23132e9f2ae57c025f2c7290eae2837f4b85fcdeacba07dbb",
+        "delta.patch": "b094c0802be2b36324e7dfeeca4aee8ed44130ef6a96273516bf2fcbcc148161",
+        "executable-0": "af0bb3a77a62ef2b77280f7aa4d4f4c6edc0265b813533764915a7a589e65dae",
+        "executable-1": "af0bb3a77a62ef2b77280f7aa4d4f4c6edc0265b813533764915a7a589e65dae",
+        "untracked.tar": "a9ff0563df23c9559819b9c28337777c22aa3a907937561637657072edf7a864"
+      },
+      "schema": "yvex.qualification.source-capture.v1",
+      "scope": "observed source and executable bytes; build relationship separately required",
+      "source": {
+        "delta_identity": "f0fedb271f549473263810ba403ca1a9c4652b3ad43df86a210df21bdf1d9754",
+        "head": "803dd98d4c54d7a26cb3c08def6b350be51b7179",
+        "state": "dirty"
+      },
+      "tree": "4ae815ad1669b4c95c302bb9b776e3671ee8f0a4"
+    },
+    "source_stability": "frozen",
+    "transport": "native-v24"
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "build": "6ece97e98ac222ef46ac24bc437d95edf728b4e39194850ee59764058ebaf136",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "concurrency": 1,
+    "context": 32768,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "af0bb3a77a62ef2b77280f7aa4d4f4c6edc0265b813533764915a7a589e65dae",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA GB10",
+    "kernel_bundle": null,
+    "memory_configuration": null,
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "prefill_geometry": "chunk=512",
+    "product_path": "controlled-engine/native-v24",
+    "reasoning": "none",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "runtime_configuration": "b6893dd7f14cc3cfb5b5fbef746ae553e52a45d20fbc95fcba15bcfe18dd2a46",
+    "runtime_toolkit": null,
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "803dd98d4c54d7a26cb3c08def6b350be51b7179",
+    "source_delta": "f0fedb271f549473263810ba403ca1a9c4652b3ad43df86a210df21bdf1d9754",
+    "source_tree": "4ae815ad1669b4c95c302bb9b776e3671ee8f0a4",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "strategy": "target-only",
+    "suite": "30d56bb8992dffccc0ca9bb269d96c03f99d234e4b04e1bf0279875f01f8ab77",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "topology": "single-node single-device coherent unified memory",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark"
+  },
+  "target_identity": "e3520bf4479725fb263adda4cc8afe6019dcb5af27e66be53e2f9c723a762b51",
+  "title": "DeepSeek candidate \u2014 CUDA host registration and OS residency diagnostic"
+}

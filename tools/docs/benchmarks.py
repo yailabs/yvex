@@ -9,7 +9,11 @@ import html
 import json
 import math
 from pathlib import Path
+import sys
 from metadata import ROOT, require
+
+sys.path.insert(0, str(ROOT/'tools'))
+import qualification
 
 AREA=ROOT/'docs/evaluation/benchmarks'
 CONTEXT={'source_commit','source_tree','source_stability','date','run_id','model',
@@ -107,6 +111,235 @@ def markdown(r,source):
     lines+=['','The [methodology](../methodology.md) defines comparability. A document import does not rerun this experiment.','']
     return '\n'.join(lines)
 
+def qualification_populations(record):
+    """Project measured populations/economics without inventing missing counters."""
+    rows = record['provenance'].get('observations', [])
+    if not rows:
+        return []
+    cases = {m['case'] for m in record['measurements']}
+    groups = {}
+    for row in rows:
+        if 'case' in row and 'turn_index' in row:
+            case = row['case'] + '/turn-' + str(row['turn_index'])
+            split = {c for c in cases if c.startswith(case + '/input-')}
+            if split:
+                require(case not in cases, 'mixed grouped and ungrouped observation population')
+                identity = row.get('input_identity')
+                require(isinstance(identity, str) and bool(identity),
+                        'grouped observation population lacks exact input identity')
+                case += '/input-' + identity
+        else:
+            require(len(cases) == 1, 'ambiguous observation case population')
+            case = next(iter(cases))
+        require(case in cases, 'observation population lacks matching measurement')
+        identities = {m.get('prompt_identity') for m in record['measurements']
+                      if m['case'] == case and m.get('prompt_identity') is not None}
+        require(len(identities) <= 1, 'inconsistent measurement input population')
+        if identities and row.get('input_identity') is not None:
+            require(row['input_identity'] in identities,
+                    'observation population differs from measurement input identity')
+        groups.setdefault(case, []).append(row)
+    fields = [
+        ('prompt_tokens', 'Rendered prompt', 'token'), ('reused_tokens', 'Reused prefix', 'token'),
+        ('prefill_tokens', 'New prefill', 'token'), ('generated_tokens', 'Committed output', 'token'),
+        ('reasoning_tokens', 'Reasoning', 'token'), ('final_tokens', 'Final content', 'token'),
+        ('draft_cycles', 'Draft cycles', 'cycle'), ('draft_forwards', 'Draft forwards', 'forward'),
+        ('proposed_tokens', 'Proposed', 'token'), ('selected_verification_tokens', 'Selected verification', 'token'),
+        ('target_verifications', 'Target verifications', 'verification'),
+        ('accepted_tokens', 'Accepted draft', 'token'), ('rejected_tokens', 'Rejected draft', 'token'),
+        ('discarded_tokens', 'Discarded draft', 'token'), ('correction_or_bonus_tokens', 'Correction/bonus', 'token'),
+        ('mean_accepted_prefix', 'Per-sample mean accepted prefix', 'token'),
+        ('maximum_accepted_prefix', 'Per-sample maximum accepted prefix', 'token'),
+        ('draft_seconds', 'Draft phase', 's'), ('verification_seconds', 'Verification phase', 's'),
+        ('commit_seconds', 'Speculative commit phase', 's')]
+    lines = ['', '## Runtime populations and speculative work', '',
+             'Counters come from terminal runtime facts. Missing counters are not zero.',
+             'Channel totals may exclude control delimiters; phase spans are not assumed additive.', '']
+    for case, observations in sorted(groups.items()):
+        lines += ['### ' + case, '', '| Fact | Median | Unit | N | Min–max | MAD |',
+                  '| --- | ---: | --- | ---: | --- | ---: |']
+        for key, label, unit in fields:
+            values = [r.get(key) for r in observations]
+            if any(v is None for v in values):
+                lines.append(f'| {label} | NOT MEASURED | {unit} | — | — | — |')
+                continue
+            require(all(type(v) in (int, float) and math.isfinite(v) and v >= 0 for v in values),
+                    'invalid runtime population: ' + key)
+            s = qualification.statistics_for(values)
+            lines.append(f'| {label} | {s["median"]:.6g} | {unit} | {s["count"]} | {s["minimum"]:.6g}–{s["maximum"]:.6g} | {s["median_absolute_deviation"]:.6g} |')
+    return lines
+
+
+def qualification_views():
+    """Same publication owner; receipts refer to producer evidence, not another database."""
+    paths = sorted((AREA/'qualification').glob('*.json'))
+    records = [qualification.validate(load_observation(p.read_text())) for p in paths]
+    require(len({r['id'] for r in records}) == len(records), 'duplicate qualification receipt ID')
+    def cell(value):
+        return str(value if value is not None else 'NOT RETAINED').replace('|','\\|').replace('\n',' ')
+    def header(title, identifier, source):
+        return ['<!-- docs:metadata', 'title: '+json.dumps(title), 'id: yvex.evaluation.qualification.'+identifier,
+                'document: evaluation', 'status: mixed', 'owner: evaluation',
+                'audience: [engineer, evaluator, agent]', 'publication: {html: true, pdf: true, index: true}',
+                'generated: true', 'source: '+source, '-->', '', '# '+title, '',
+                '[Benchmarks](../README.md) · [Methodology](../methodology.md)', '']
+    result = {}
+    overview = header('Qualification targets', 'index', '../methodology.md')
+    overview += ['A sparse evidence matrix, not a list of everything that can execute.', '',
+                 'LOCAL receipts are not YVEX-published qualification. Each plane stands alone; missing quality is not zero error.', '',
+                 '| Target | Representation | Backend / devices | Path / strategy | Quality | Performance | Origin |',
+                 '| --- | --- | --- | --- | --- | --- | --- |']
+    for path, r in zip(paths, records):
+        t = r['target']; name = 'qualification-'+r['id']
+        overview.append(f'| [{cell(r["title"])}]({name}.md) | {cell(t["representation"])} | {cell(t["backend"])} / {cell(t["device_count"])} | {cell(t["product_path"])} / {cell(t["strategy"])} | {r["claims"]["representation-quality"]["state"]} | {r["claims"]["deployment-performance"]["state"]} | {r["origin"]} |')
+        lines = header(r['title'], r['id'], '../qualification/'+path.name)
+        lines += ['[All targets](qualification-index.md) · [Machine receipt](../qualification/'+path.name+')', '',
+                  f'Target identity: `{r["target_identity"]}`. Origin: **{r["origin"]}**.', '',
+                  '## Measurements', '', '| Metric / exact case | Median | Unit | N | Min–max | MAD |',
+                  '| --- | ---: | --- | ---: | --- | ---: |']
+        for m in r['measurements']:
+            s=m['statistics']
+            lines.append(f'| {m["metric"]} / {cell(m["case"])} | {s["median"]:.6g} | {m["unit"]} | {s["count"]} | {s["minimum"]:.6g}–{s["maximum"]:.6g} | {s["median_absolute_deviation"]:.6g} |')
+        if not r['measurements']: lines += ['', 'No quality or performance metric is published for this target.']
+        lines += qualification_populations(r)
+        if r['provenance'].get('continuation_comparisons'):
+            lines += ['', '## Independent continuation comparison', '',
+                      'This is exact-input characterization, not cross-realization numerical equivalence or a performance measurement.', '',
+                      '| Case | Exact input tokens | First token | Matching greedy prefix | Reference / candidate sampled | Candidate committed | Exact bounded continuation |',
+                      '| --- | --- | --- | ---: | ---: | ---: | --- |']
+            for row in r['provenance']['continuation_comparisons']:
+                c = row['comparison']
+                lines.append(f'| {cell(row["case"])} | {row["prompt_tokens"]} | {"MATCH" if c["first_token_agreement"] else "DIFFERS"} | {c["greedy_prefix_tokens"]} | {c["reference_sampled_tokens"]} / {c["candidate_sampled_tokens"]} | {c["candidate_committed_tokens"]} | {"MATCH" if c["exact_bounded_continuation"] else "DIFFERS"} |')
+            producer = r['provenance']['independent_implementation']
+            lines += ['', f'Independent implementation: **{cell(producer["name"])}** @ `{producer["revision"]}`; executable `{producer["executable_sha256"]}`.',
+                      'Full distributions, teacher-forced NLL/PPL, KL and RMS probability delta: **NOT MEASURED**.', '']
+        if r['provenance'].get('diagnostics'):
+            lines += ['', '## Diagnostic facts (not timed benchmark samples)', '',
+                      'These observations explain this exact run; they do not qualify a throughput or quality claim.', '',
+                      '| Fact / case | Value | Unit | Definition / evidence |', '| --- | ---: | --- | --- |']
+            for fact in r['provenance']['diagnostics']:
+                value = 'NOT MEASURED' if fact['value'] is None else f'{fact["value"]:.9g}'
+                lines.append(f'| {cell(fact["id"])} / {cell(fact["case"])} | {value} | {cell(fact["unit"])} | {cell(fact["definition"])}; {cell(fact["evidence"])} |')
+        if r['provenance'].get('case_outcomes'):
+            lines += ['', '## Request outcomes (not performance samples)', '',
+                      '| Case | Result | Reason |', '| --- | --- | --- |']
+            lines += [f'| {cell(o["case"])} | {o["result"]} | {cell(o["reason"])} |'
+                      for o in r['provenance']['case_outcomes']]
+        lines += ['', '## Claim boundaries', '', '| Plane | State | Exact scope / missing gate |','| --- | --- | --- |']
+        for plane, claim in r['claims'].items():
+            lines.append(f'| {plane} | {claim["state"]} | {cell(claim["scope"])}; {cell("; ".join(claim["blockers"]))} |')
+        lines += ['', '## Exact configuration', '', '| Identity / setting | Value |','| --- | --- |']
+        lines += [f'| {key} | {cell(t[key])} |' for key in qualification.TARGET_FIELDS]
+        lines += ['', '## Definitions and reproducibility', '']
+        for m in r['measurements']:
+            lines += [f'- **{m["metric"]}**: {m["definition"]}. Scope: {m["scope"]}. Session: {m["session_state"]}; warm/cold: {m["warm_state"]}; output bound: {m["output_bound"]}. Evidence: {cell(m["evidence"])}.']
+        lines += ['', 'No confidence interval is inferred from small sample counts. The machine receipt retains samples, prompt/reference identities and provenance.', '', '## Non-claims', '']
+        lines += ['- '+cell(x) for x in r['limitations']]
+        result[AREA/'generated'/(name+'.md')] = '\n'.join(lines)+'\n'
+    overview += ['', 'See the [plain-language methodology](../methodology.md#qualification-targets-and-local-receipts). No result here qualifies a different checkpoint, quantization, backend, device topology or transport.', '']
+    result[AREA/'generated/qualification-index.md'] = '\n'.join(overview)
+    result[AREA/'generated/qualification.json'] = json.dumps(records, sort_keys=True, indent=2, allow_nan=False)+'\n'
+    result[AREA/'schema/qualification-target.schema.json'] = json.dumps(qualification.schema(), indent=2)+'\n'
+    result[AREA/'schema/qualification-rules.json'] = json.dumps({
+        'schema':'yvex.qualification.rules.v1', 'target_schema':qualification.TARGET_SCHEMA,
+        'receipt_schema':qualification.RECEIPT_SCHEMA, 'fields':qualification.TARGET_FIELDS,
+        'planes':qualification.PLANES, 'states':qualification.STATES,
+        'receipt_fields':qualification.RECEIPT_FIELDS, 'claim_fields':qualification.CLAIM_FIELDS,
+        'outcome_fields':qualification.OUTCOME_FIELDS, 'outcome_results':qualification.OUTCOME_RESULTS,
+        'metric_fields':qualification.METRIC_FIELDS,
+        'diagnostic_fields':qualification.DIAGNOSTIC_FIELDS,
+        'diagnostic_units':qualification.DIAGNOSTIC_UNITS,
+        'quality_key':qualification.QUALITY_KEY, 'metrics':qualification.METRICS}, indent=2)+'\n'
+    import qualification_run
+    suites = qualification_run.corpora(ROOT/'tests/vectors')
+    cells = [dict(suite=s['id'], suite_identity=qualification.identity(s), **c)
+             for s in suites for c in qualification_run.configurations(s)]
+    # Both views reference exact targets, never a hardware-free suite PASS.
+    for c in cells:
+        c['targets'] = [dict(id=r['id'], target_identity=r['target_identity'],
+                             path=r['target']['product_path'],
+                             plane='checkpoint-reference' if r['provenance'].get('continuation_comparisons') else 'product-path',
+                             state=r['claims']['checkpoint-reference' if r['provenance'].get('continuation_comparisons') else 'product-path']['state'],
+                             outcomes=[o['result'] for o in r['provenance'].get('case_outcomes', []) if o['case'] == c['case']])
+                        for r in records if r['target']['suite'] == c['suite_identity']
+                        and r['target']['reasoning'] == c['reasoning'] and r['target']['strategy'] == c['strategy']
+                        and (any(m['case'] == c['case'] or m['case'].startswith(c['case']+'/turn-') for m in r['measurements'])
+                             or any(o['case'] == c['case'] for o in r['provenance'].get('case_outcomes', [])))]
+    result[AREA/'generated/qualification-workloads.json'] = json.dumps(
+        {'schema':'yvex.qualification.workloads.v1', 'suites':suites, 'cells':cells}, indent=2)+'\n'
+    lines = header('Workload and reasoning matrix', 'workloads', '../methodology.md')
+    lines += ['Unexecuted cells are not evidence. Case input is identical across its declared modes;',
+              'source-authored rendering may add policy-specific instructions. Synthetic cases are separate controls.', '']
+    for s in suites:
+        axes = sorted({(mode, strategy) for c in s['cases'] for mode in c['reasoning_modes'] for strategy in c['execution_strategies']})
+        lines += ['## '+s['id'], '', '| Case | Class | '+' | '.join(strategy+' / '+mode for mode,strategy in axes)+' |',
+                  '| --- | --- | '+' | '.join('---' for _ in axes)+' |']
+        for case in s['cases']:
+            states=[]
+            for mode,strategy in axes:
+                state='UNQUALIFIED' if mode in case['reasoning_modes'] and strategy in case['execution_strategies'] else 'NOT APPLICABLE'
+                matching=next((c['targets'] for c in cells if c['suite']==s['id'] and c['case']==case['id']
+                               and c['reasoning']==mode and c['strategy']==strategy), [])
+                if matching:
+                    state='<br>'.join(f'[{r["id"]}: {r["plane"]} {r["state"]}{(" / " + ", ".join(r["outcomes"])) if r["outcomes"] else ""}](qualification-{r["id"]}.md)' for r in matching)
+                states.append(state)
+            lines += [f'| {case["id"]} | {case["class"]} | '+ ' | '.join(states)+' |']
+        lines += ['', 'Native adapter exclusions:', '']
+        lines += ['- '+c['id']+': '+c['native_disposition'] for c in s['cases'] if 'native_disposition' in c]
+    lines += ['', 'These are the current suite admission cells, not historical synthetic results. No full-model reference or throughput target is inferred from an input manifest.', '']
+    result[AREA/'generated/qualification-workloads.md'] = '\n'.join(lines)
+    dimensions = {
+        'families':('Family and checkpoint evidence', ['family_contract','upstream_repository','checkpoint']),
+        'representations':('Representation quality comparison', ['checkpoint','representation','physical_policy','artifact_set']),
+        'hardware':('Hardware and backend evidence', ['backend','hardware_model','device_count','topology','context','strategy','reasoning']),
+    }
+    for identifier,(title,fields) in dimensions.items():
+        view=header(title,identifier,'../methodology.md')
+        view += ['Every row links its complete context. Missing metrics are not zero; these rows do not establish cross-target comparability.', '',
+                 '| Target | '+' | '.join(fields)+' | Quality | Performance |',
+                 '| --- | '+' | '.join('---' for _ in fields)+' | --- | --- |']
+        for r in records:
+            view += [f'| [{cell(r["title"])}](qualification-{r["id"]}.md) | '+' | '.join(cell(r['target'][f]) for f in fields)+f' | {r["claims"]["representation-quality"]["state"]} | {r["claims"]["deployment-performance"]["state"]} |']
+        result[AREA/'generated'/('qualification-'+identifier+'.md')]='\n'.join(view)+'\n'
+    result[AREA/'generated/qualification-index.md'] += '\n[Family/checkpoint](qualification-families.md) · [Representation quality](qualification-representations.md) · [Hardware/backend](qualification-hardware.md) · [Workload/reasoning](qualification-workloads.md)\n'
+    references = header('Independent checkpoint reference captures', 'references', '../methodology.md')
+    references += ['Capture presence is not YVEX numerical agreement or representation-quality qualification.',
+                   'Source-parser results below concern the independent producer. Missing quality metrics are not zero.', '']
+    machine_references = []
+    for path in sorted((AREA/'references').glob('*.json')):
+        r = qualification.validate_reference_observation(load_observation(path.read_text()))
+        machine_references.append(r)
+        producer = r['implementation']
+        references += ['## '+path.stem, '', '[Machine observation](../references/'+path.name+')', '',
+                       '| Identity | Value |', '| --- | --- |',
+                       f'| Model / checkpoint | {cell(r["source"]["repository"])} |',
+                       f'| Upstream revision | {cell(r["source"]["revision"])} |',
+                       f'| Independent producer | {cell(producer["name"])} @ {cell(producer["revision"])} |',
+                       f'| Executable | {producer["executable_sha256"]} |',
+                       f'| Representation receipt identity | {producer["representation_identity"]} |',
+                       f'| Environment receipt identity | {producer["environment_identity"]} |',
+                       f'| Reference capture | {r["reference_sha256"]} |',
+                       f'| Workload suite bytes | {r["suite_sha256"]} |',
+                       f'| Weight manifest | {r["checkpoint_manifest_sha256"]} |',
+                       f'| Capture / YVEX conformance | {r["status"]} / {r["yvex_conformance"]} |', '',
+                       '| Case | Reasoning | Input | Output / bound | Finish | Source grammar | Reasoning boundary positions |',
+                       '| --- | --- | ---: | ---: | --- | --- | --- |']
+        for row in r['cases']:
+            g = row['grammar']
+            references += [f'| {cell(row["case"])} | {cell(row["reasoning"])} | {row["prompt_tokens"]} | {row["output_tokens"]} / {row["maximum_output"]} | {row["finish"]} | {g["state"]} | {cell(g["reasoning_boundary_positions"])} |']
+        if r.get('continuation_dispositions'):
+            references += ['', '### Independent generated-history continuation', '',
+                           '| Case | Reasoning | Next turn | Prior grammar | Evidence state | Reason |',
+                           '| --- | --- | ---: | --- | --- | --- |']
+            for row in r['continuation_dispositions']:
+                references += [f'| {cell(row["case"])} | {cell(row["reasoning"])} | {row["turn_index"]} | {row["prior_grammar"]} | {row["state"]} | {cell(row["reason"])} |']
+        references += ['', '### Limits', ''] + ['- '+cell(x) for x in r['limitations']] + ['']
+    result[AREA/'generated/qualification-references.md'] = '\n'.join(references).rstrip()+'\n'
+    result[AREA/'generated/qualification-references.json'] = json.dumps(machine_references, indent=2, allow_nan=False)+'\n'
+    result[AREA/'generated/qualification-index.md'] += '\n[Independent reference captures](qualification-references.md)\n'
+    return result
+
+
 def generate(check=False):
     out=AREA/'generated';out.mkdir(exist_ok=True)
     paths=sorted((AREA/'data').glob('*.json'));ids=set(); expected=set()
@@ -116,6 +349,10 @@ def generate(check=False):
             dest=out/(r['id']+suffix);expected.add(dest)
             if check:require(dest.is_file() and dest.read_text()==text,f'stale benchmark projection: {dest.name}')
             else:dest.write_text(text)
+    for dest, text in qualification_views().items():
+        if dest.parent == out: expected.add(dest)
+        if check: require(dest.is_file() and dest.read_text()==text, f'stale qualification projection: {dest.name}')
+        else: dest.write_text(text)
     require({p for p in out.iterdir() if p.name!='README.md'}<=expected,'orphan benchmark output')
     print(f'benchmark projections: {len(paths)} observations ({"check" if check else "write"})')
 

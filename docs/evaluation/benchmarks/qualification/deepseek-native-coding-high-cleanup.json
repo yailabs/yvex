@@ -1,0 +1,166 @@
+{
+  "claims": {
+    "backend-execution": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Completed samples do not establish backend numerical/lifecycle qualification",
+      "state": "UNQUALIFIED"
+    },
+    "checkpoint-reference": {
+      "blockers": [
+        "Complete distributions and checkpoint-matched numerical tolerance are not qualified; visible continuation differs from the independent F32-KV reference"
+      ],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Independent same-quantized-weight captures exist, but no admitted numerical comparison or higher-precision quality gate has passed",
+      "state": "BLOCKED"
+    },
+    "deployment-performance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "No completed successful sample; a failed bounded request is not a throughput sample",
+      "state": "UNQUALIFIED"
+    },
+    "family-conformance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Local native measurement only; independent reference and producer provenance incomplete",
+      "state": "UNQUALIFIED"
+    },
+    "product-path": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "One native high-mode coding request fails closed at the declared 256-token bound before the source reasoning terminator",
+      "state": "CHARACTERIZED"
+    },
+    "representation-quality": {
+      "blockers": [
+        "Complete distributions and checkpoint-matched numerical tolerance are not qualified; visible continuation differs from the independent F32-KV reference"
+      ],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Independent same-quantized-weight captures exist, but no admitted numerical comparison or higher-precision quality gate has passed",
+      "state": "BLOCKED"
+    }
+  },
+  "id": "deepseek-native-coding-high-cleanup",
+  "limitations": [
+    "Request outcome FAIL remains visible; correctly handled refusal and cleanup do not turn it into successful inference or a performance sample.",
+    "One fresh isolated synthetic case, no retry of operator/Case content. Output bound and reasoning policy unchanged.",
+    "Typed correlated terminal refusal, exact owned session retired, zero active/queued work and sessions before supported isolated-host stop; no successful performance receipt emitted.",
+    "Not cancellation coverage, numerical quality, source-parser conformance, long-context evidence or the throughput Task exit."
+  ],
+  "measurements": [],
+  "origin": "yvex-published",
+  "provenance": {
+    "case_outcomes": [
+      {
+        "case": "coding.metal",
+        "evidence": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-refusal-cleanup-08/case-0/events.jsonl",
+        "reason": "YVEX_ERR_FORMAT at256 without reasoning terminator; runner correctly refused measurement and closed its owned session",
+        "result": "FAIL"
+      }
+    ],
+    "cleanup": {
+      "locator": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-refusal-cleanup-08/cleanup-before-stop.json",
+      "sha256": "c5d9484905becee80f9615568d540722494e446311236c9190e8d922dd45eaf9"
+    },
+    "evidence_class": "real-native-refusal-cleanup",
+    "evidence_sha256": {
+      "case-0/events.jsonl": "b0a3bd3c393bdc9cec27862e0c6415e02f756af39a49984aabc5ae95308a678d",
+      "closed.json": "8e0ef20efd9671b81a8bc4500380399b63b880054027eda568b5aa9a7fdcb20c",
+      "identity.json": "c5686af0f30c0acc1518c8de0095499ea022cb8ffd4d686183ce242a88f204a7"
+    },
+    "executable_version": {
+      "build_commit": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+      "build_identity": "ef64f4cf0defe06720c6cf815640ba5c9522ca20838be535d3f5bdfcd4990e4e",
+      "local_protocol_version": 24,
+      "registry_identity": "a51ba58f00821b9efc1a726ef61ee0531481ebb8c1bb359c8c371a29df778284",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "41a2448739e042f6d2ef43c98959f442e34e03ce40ce3b805dacded24cd7ad74",
+      "source_state": "dirty",
+      "source_tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca",
+      "version": "0.1.0"
+    },
+    "identity": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-refusal-cleanup-08/identity.json",
+    "measurement_source": {
+      "delta_identity": "d88182b8ac765b2f557aaef95e5647a90cd892bbfc642d695bed0a1caa119ae8",
+      "head": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+      "state": "dirty",
+      "tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca"
+    },
+    "owned_session_closed": {
+      "kind": "nonmeasurement-session-closed",
+      "measurement": false,
+      "retry": false,
+      "session": "bench-7d457abffbd2d291c14a0d12"
+    },
+    "profiled": false,
+    "refusal": {
+      "cancellation_class": 0,
+      "kind": "refused",
+      "measurement": false,
+      "partial": {
+        "committed_tokens": 256,
+        "final_position": 309,
+        "published_text_identity": "7551a9b94f7fb6c672529de460776e01317f5a261395e81bb985e729456b3bc5",
+        "reset_required": 1,
+        "schema": 1,
+        "token_ledger_identity": "000afc3d248943dc46d1afa06b3168bcdfdd05d50fdc93d148e955f9cf6a8f11"
+      },
+      "phase": 8,
+      "reason": "thinking ended before its source delimiter; reset and retry with a larger token limit",
+      "retry": false,
+      "session": "bench-7d457abffbd2d291c14a0d12",
+      "session_state": 3,
+      "status": -4,
+      "status_name": "YVEX_ERR_FORMAT"
+    },
+    "source_capture": "/home/dgmothx/lab/models/evidence/yvex-measurement-authority-20261004.YbCrRR/native-refusal-cleanup-08/source-capture",
+    "source_stability": "frozen"
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "build": "ef64f4cf0defe06720c6cf815640ba5c9522ca20838be535d3f5bdfcd4990e4e",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "037ba2bc36d68893a6389102294f3efb17923adc357138525d4f1f79faea9a76",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA GB10",
+    "kernel_bundle": null,
+    "memory_configuration": null,
+    "physical_policy": null,
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v24",
+    "reasoning": "high",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "runtime_configuration": null,
+    "runtime_toolkit": null,
+    "sampling": "explicit greedy; temperature=0 top_p=1; no penalties; no seed; native stochastic=0, HTTP temperature=0",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9",
+    "source_delta": null,
+    "source_tree": "2e195df1c5d21b4ba0c2de4f1dbc0537a7fe35ca",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "strategy": "speculative",
+    "suite": "3f68f1a82695656aa1acbbc5a4e1668586f5b145132cbf9e63b071c2cf0f3a96",
+    "tokenizer_conversation": null,
+    "topology": "single-node single-device coherent unified memory",
+    "transformation_ir": null,
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark"
+  },
+  "target_identity": "c5fddba68ea6136653abba6368504645c706b6dec42470c94cc938a1a512a3ae",
+  "title": "DeepSeek native coding/high refusal and owned-session cleanup"
+}

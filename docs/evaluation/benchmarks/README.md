@@ -20,6 +20,9 @@ Start with [Methodology](methodology.md). Existing runtime benchmark v5 remains 
 
 - [GB10 Execution Target Table](gb10-targets.md)
 - [Benchmark Methodology](methodology.md)
+- [Exact qualification targets](generated/qualification-index.md)
+- [Workload and reasoning matrix](generated/qualification-workloads.md)
+- [Independent checkpoint reference captures](generated/qualification-references.md)
 ## Observation projections
 
 - [DeepSeek GB10 inference-pipeline characterization](generated/deepseek-gb10-inference-pipeline.md)

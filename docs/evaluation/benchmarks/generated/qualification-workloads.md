@@ -1,0 +1,57 @@
+<!-- docs:metadata
+title: "Workload and reasoning matrix"
+id: yvex.evaluation.qualification.workloads
+document: evaluation
+status: mixed
+owner: evaluation
+audience: [engineer, evaluator, agent]
+publication: {html: true, pdf: true, index: true}
+generated: true
+source: ../methodology.md
+-->
+
+# Workload and reasoning matrix
+
+[Benchmarks](../README.md) · [Methodology](../methodology.md)
+
+Unexecuted cells are not evidence. Case input is identical across its declared modes;
+source-authored rendering may add policy-specific instructions. Synthetic cases are separate controls.
+
+## deepseek-competitive
+
+| Case | Class | speculative / high | target-only / high | speculative / maximum | target-only / maximum | speculative / none | target-only / none |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| coding.hash-table | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-installed-native-coding-21: product-path CHARACTERIZED](qualification-deepseek-installed-native-coding-21.md)<br>[deepseek-published-native-coding-16: product-path CHARACTERIZED](qualification-deepseek-published-native-coding-16.md) | [deepseek-candidate-explicit-warm-coding-11: product-path CHARACTERIZED](qualification-deepseek-candidate-explicit-warm-coding-11.md)<br>[deepseek-candidate-native-coding-17: product-path CHARACTERIZED](qualification-deepseek-candidate-native-coding-17.md) |
+
+Native adapter exclusions:
+
+## deepseek-prefill
+
+| Case | Class | speculative / high | target-only / high | speculative / maximum | target-only / maximum | speculative / none | target-only / none |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| prefill.promessi-512 | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-candidate-prefill-512-09: product-path CHARACTERIZED](qualification-deepseek-candidate-prefill-512-09.md) |
+| prefill.promessi-2048 | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-candidate-prefill-2048-09: product-path CHARACTERIZED](qualification-deepseek-candidate-prefill-2048-09.md) |
+| prefill.promessi-8192 | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+
+Native adapter exclusions:
+
+## deepseek-product
+
+| Case | Class | speculative / high | target-only / high | speculative / maximum | target-only / maximum | speculative / none | target-only / none |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| chat.short | representative | [deepseek-native-reasoning-high-chat-06: product-path CHARACTERIZED](qualification-deepseek-native-reasoning-high-chat-06.md) | UNQUALIFIED | [deepseek-native-reasoning-maximum-05: product-path CHARACTERIZED](qualification-deepseek-native-reasoning-maximum-05.md) | [deepseek-native-target-maximum-07: product-path CHARACTERIZED](qualification-deepseek-native-target-maximum-07.md) | [deepseek-native-operator-baseline: product-path CHARACTERIZED](qualification-deepseek-native-operator-baseline.md) | UNQUALIFIED |
+| coding.metal | representative | [deepseek-native-coding-high-bounded-refusal: product-path CHARACTERIZED / FAIL](qualification-deepseek-native-coding-high-bounded-refusal.md)<br>[deepseek-native-coding-high-cleanup: product-path CHARACTERIZED / FAIL](qualification-deepseek-native-coding-high-cleanup.md) | [deepseek-independent-coding-target-03-high: checkpoint-reference CHARACTERIZED](qualification-deepseek-independent-coding-target-03-high.md) | UNQUALIFIED | [deepseek-independent-coding-target-03-maximum: checkpoint-reference CHARACTERIZED](qualification-deepseek-independent-coding-target-03-maximum.md) | [deepseek-http-stochastic-characterization: product-path CHARACTERIZED](qualification-deepseek-http-stochastic-characterization.md)<br>[deepseek-native-operator-baseline: product-path CHARACTERIZED](qualification-deepseek-native-operator-baseline.md)<br>[deepseek-native-throughput3-candidate: product-path CHARACTERIZED](qualification-deepseek-native-throughput3-candidate.md)<br>[deepseek-paired-greedy-http: product-path CHARACTERIZED](qualification-deepseek-paired-greedy-http.md)<br>[deepseek-paired-greedy-native: product-path CHARACTERIZED](qualification-deepseek-paired-greedy-native.md)<br>[deepseek-paired-lineage-http-none-13: product-path CHARACTERIZED](qualification-deepseek-paired-lineage-http-none-13.md)<br>[deepseek-paired-lineage-speculative-none-13: product-path CHARACTERIZED](qualification-deepseek-paired-lineage-speculative-none-13.md) | [deepseek-independent-coding-target-03-none: checkpoint-reference CHARACTERIZED](qualification-deepseek-independent-coding-target-03-none.md)<br>[deepseek-native-lineage-target-none-12: product-path CHARACTERIZED](qualification-deepseek-native-lineage-target-none-12.md) |
+| math.reasoning | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-native-representative-none-09: product-path CHARACTERIZED](qualification-deepseek-native-representative-none-09.md) | UNQUALIFIED |
+| extraction.json | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-native-representative-none-09: product-path CHARACTERIZED](qualification-deepseek-native-representative-none-09.md) | UNQUALIFIED |
+| writing.runbook | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-native-representative-none-09: product-path CHARACTERIZED](qualification-deepseek-native-representative-none-09.md) | UNQUALIFIED |
+| conversation.coding | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-native-operator-baseline: product-path CHARACTERIZED](qualification-deepseek-native-operator-baseline.md)<br>[deepseek-native-throughput3-candidate: product-path CHARACTERIZED](qualification-deepseek-native-throughput3-candidate.md) | [deepseek-native-lineage-target-none-12: product-path CHARACTERIZED](qualification-deepseek-native-lineage-target-none-12.md) |
+| reasoning.schedule | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | [deepseek-native-representative-none-09: product-path CHARACTERIZED](qualification-deepseek-native-representative-none-09.md) | UNQUALIFIED |
+| prefill.records | synthetic | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+| stress.count | synthetic | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+| tools.weather | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+
+Native adapter exclusions:
+
+- tools.weather: unsupported-by-text-turn-harness
+
+These are the current suite admission cells, not historical synthetic results. No full-model reference or throughput target is inferred from an input manifest.

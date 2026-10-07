@@ -196,6 +196,51 @@ UMA, addressable mapped weights are not reported as zero GPU use merely because
 the explicit device allocator owns zero bytes; unknown page placement remains
 `not measured`. The displayed classes can overlap and must not all be summed.
 
+### Mapped weights, RAM and SSD streaming
+
+A small **used** value in a system monitor does not mean the model occupies only
+that amount of physical RAM. Linux may account clean file-backed model pages as
+page cache: they occupy DRAM while resident, can appear under **buff/cache**, and
+can also contribute to the host process's RSS. These are overlapping views, not
+additional copies. `MemAvailable` is an OS estimate including reclaimable pages;
+it is not a guarantee that another workload can consume that amount while the
+model retains its warm working set. See the [Linux memory definitions](https://docs.kernel.org/filesystems/proc.html#meminfo).
+
+| Observation | What it establishes | What it does not establish |
+| --- | --- | --- |
+| System used / buff-cache / available | OS accounting and a reclaimability estimate | Exact model footprint or warm inference headroom |
+| Exact model mapping RSS | File-backed model pages resident at that instant | Locked pages, future residency or GPU access efficiency |
+| Process RSS | Resident pages attributed to the process, including model mappings | Model weights alone or extra bytes to add to page cache |
+| Explicit CUDA allocation | Bytes owned by that allocator | All memory accessible to CUDA on UMA |
+| Model device-addressable bytes | The admitted extent CUDA can address | A measurement of physical page residency |
+| GPU utilization | Observed device activity | A measurement of weight transfers or SSD reads |
+
+For the current admitted `mapped-device-addressable` placement, loading makes
+the authenticated file mapping available to CUDA. Once its required pages are
+in DRAM, kernels access that shared memory; generation does not require a full
+SSD-to-RAM-to-separate-VRAM copy for every turn. Growing GPU utilization is not
+proof of such a copy. File backing and physical residency are independent:
+file-backed weights can be fully resident at an observed instant without being
+locked permanently.
+
+This placement is not a bounded runtime-owned SSD expert-streaming cache. If
+the OS reclaims unlocked file pages under pressure, later access may need to
+read them again from storage; that is demand paging, not a qualified streaming
+performance policy. Conversely, SSD streaming means missing model data is read
+from storage during execution; the term alone does not imply that I/O bypasses
+RAM. No direct-storage-to-GPU path is claimed by this placement.
+
+Use `host memory --json`, `free -b` and the exact host PID's `/proc/PID/smaps`
+for distinct typed/runtime and OS observations. Do not add their overlapping
+byte classes or infer a memory advantage over another engine from one dashboard
+column. The [retained native diagnostic](../evaluation/benchmarks/generated/qualification-deepseek-native-residency-diagnostic-15.md)
+binds sampled mapping/fault/I/O facts separately from performance. A fair
+[residency comparison](../evaluation/benchmarks/methodology.md#memory-placement-and-cross-engine-comparisons)
+requires equivalent weights, workload and configuration, not merely matching
+model names or quantization labels. Do not evict pages, drop caches or interrupt
+an operator host to manufacture a cold control.
+
+
 Follow typed server activity independently of the foreground host stream:
 
 ```sh

@@ -1,0 +1,56 @@
+<!-- docs:metadata
+title: "Qualification targets"
+id: yvex.evaluation.qualification.index
+document: evaluation
+status: mixed
+owner: evaluation
+audience: [engineer, evaluator, agent]
+publication: {html: true, pdf: true, index: true}
+generated: true
+source: ../methodology.md
+-->
+
+# Qualification targets
+
+[Benchmarks](../README.md) · [Methodology](../methodology.md)
+
+A sparse evidence matrix, not a list of everything that can execute.
+
+LOCAL receipts are not YVEX-published qualification. Each plane stands alone; missing quality is not zero error.
+
+| Target | Representation | Backend / devices | Path / strategy | Quality | Performance | Origin |
+| --- | --- | --- | --- | --- | --- | --- |
+| [DeepSeek candidate — diagnostic whole-model CUDA submission profile](qualification-deepseek-candidate-compute-profile-12.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | controlled-engine/native-v24 / target-only | BLOCKED | UNQUALIFIED | local |
+| [DeepSeek candidate — explicit page warming, coding target-only native v24](qualification-deepseek-candidate-explicit-warm-coding-11.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | controlled-engine/native-v24 / target-only | BLOCKED | CHARACTERIZED | local |
+| [Candidate target-only: native C hash-table coding control](qualification-deepseek-candidate-native-coding-17.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / target-only | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek candidate — 2048 new prefill positions, engineering native v24](qualification-deepseek-candidate-prefill-2048-09.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | controlled-engine/native-v24 / target-only | BLOCKED | CHARACTERIZED | local |
+| [DeepSeek candidate — 512 new prefill positions, engineering native v24](qualification-deepseek-candidate-prefill-512-09.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | controlled-engine/native-v24 / target-only | BLOCKED | CHARACTERIZED | local |
+| [DeepSeek candidate — 8K repeat numerical refusal and scoped cleanup](qualification-deepseek-candidate-prefill-8192-refusal-09.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | controlled-engine/native-v24 / target-only | BLOCKED | UNQUALIFIED | local |
+| [DeepSeek candidate — CUDA host registration and OS residency diagnostic](qualification-deepseek-candidate-registration-residency-08.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | controlled-engine/native-v24 / target-only | BLOCKED | UNQUALIFIED | local |
+| [DeepSeek HTTP default-stochastic characterization](qualification-deepseek-http-stochastic-characterization.md) | mixed-iq2xxs-q2k-mxfp4-v1 | cuda / 1 | http-openai-compatibility / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek independent coding continuation — high](qualification-deepseek-independent-coding-target-03-high.md) | artifact-sha256:b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f | cuda / NOT RETAINED | controlled-engine / target-only | BLOCKED | UNQUALIFIED | yvex-published |
+| [DeepSeek independent coding continuation — maximum](qualification-deepseek-independent-coding-target-03-maximum.md) | artifact-sha256:b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f | cuda / NOT RETAINED | controlled-engine / target-only | BLOCKED | UNQUALIFIED | yvex-published |
+| [DeepSeek independent coding continuation — none](qualification-deepseek-independent-coding-target-03-none.md) | artifact-sha256:b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f | cuda / NOT RETAINED | controlled-engine / target-only | BLOCKED | UNQUALIFIED | yvex-published |
+| [Installed DeepSeek native coding control, protocol 25](qualification-deepseek-installed-native-coding-21.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / NOT RETAINED | product-native/native-v25 / speculative | UNQUALIFIED | CHARACTERIZED | yvex-published |
+| [DeepSeek native coding high — bounded reasoning refusal](qualification-deepseek-native-coding-high-bounded-refusal.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | BLOCKED | UNQUALIFIED | yvex-published |
+| [DeepSeek native coding/high refusal and owned-session cleanup](qualification-deepseek-native-coding-high-cleanup.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | BLOCKED | UNQUALIFIED | yvex-published |
+| [DeepSeek representative native corpus / target-only / none](qualification-deepseek-native-lineage-target-none-12.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / target-only | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek native operator baseline](qualification-deepseek-native-operator-baseline.md) | mixed-iq2xxs-q2k-mxfp4-v1 | cuda / 1 | product-native-v24 / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek native chat / speculative / high](qualification-deepseek-native-reasoning-high-chat-06.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek native chat / speculative / maximum](qualification-deepseek-native-reasoning-maximum-05.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek representative native corpus / speculative / none](qualification-deepseek-native-representative-none-09.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek native residency and launch diagnostics / speculative / none](qualification-deepseek-native-residency-diagnostic-15.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | UNQUALIFIED | UNQUALIFIED | yvex-published |
+| [DeepSeek native chat / target-only / maximum](qualification-deepseek-native-target-maximum-07.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / target-only | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek native candidate characterization](qualification-deepseek-native-throughput3-candidate.md) | mixed-iq2xxs-q2k-mxfp4-v1 | cuda / 1 | product-native-v24 / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek paired greedy coding — HTTP OpenAI](qualification-deepseek-paired-greedy-http.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | http-openai / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek paired greedy coding — native v24](qualification-deepseek-paired-greedy-native.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek coding / HTTP / speculative / none / lineage witness](qualification-deepseek-paired-lineage-http-none-13.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | http-openai / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek representative native corpus / speculative / none](qualification-deepseek-paired-lineage-speculative-none-13.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [Published producer: native C hash-table coding control](qualification-deepseek-published-native-coding-16.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | product-native-v24 / speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek isolated synthetic candidate - not local product](qualification-deepseek-throughput3-isolated-candidate.md) | mixed-iq2xxs-q2k-mxfp4-v1 | cuda / 1 | controlled-engine-via-http / target-only | BLOCKED | CHARACTERIZED | yvex-published |
+
+See the [plain-language methodology](../methodology.md#qualification-targets-and-local-receipts). No result here qualifies a different checkpoint, quantization, backend, device topology or transport.
+
+[Family/checkpoint](qualification-families.md) · [Representation quality](qualification-representations.md) · [Hardware/backend](qualification-hardware.md) · [Workload/reasoning](qualification-workloads.md)
+
+[Independent reference captures](qualification-references.md)

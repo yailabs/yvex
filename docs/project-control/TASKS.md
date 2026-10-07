@@ -15,10 +15,11 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **Rust shell, initial macOS/Metal integration and public documentation alignment COMPLETE; bounded prefill retains external qualification gates; A03 is READY**.
-The next selected implementation boundary remains **A03 encoder-decoder**;
-it remains READY and unstarted. The independently authorized documentation
-alignment selects no runtime implementation.
+Current phase: **DeepSeek GB10 competitive execution/residency IN PROGRESS; Rust shell and initial macOS/Metal integration COMPLETE; A03 remains READY and unstarted**.
+The operator independently selected
+`V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4`.
+Earlier repairs retain their exact evidence and external gates. This selection
+does not start A03, Metal, training or cross-repository consumer work.
 
 The independently authorized YVEX repair
 `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` has a qualified bounded producer and
@@ -69,14 +70,29 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 48 | 38 | 2 | 1 | 7 |
+| 50 | 38 | 3 | 1 | 8 |
 <!-- task-counts:end -->
 
-**38/48 selected Tasks complete.** This denominator includes the significant
+**38/50 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
 candidates are not selected Tasks.
+
+## DeepSeek competitive execution and qualification authority
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `V010.RUNTIME.DEEPSEEK.GB10.THROUGHPUT.3` | Complete GB10 inference throughput, reasoning and representation qualification | P1 | ⛔ BLOCKED | Operator closed the previous bounded investigation at its earned handoff; 20 committed decode token/s and 700 uncached prefill token/s remain unearned, not a hardware-ceiling claim. Preserve its candidate, missing independent quality gates and retained observations; successor selection does not promote them. |
+| `V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4` | Decompose same-machine YVEX/DwarfStar checkpoint, representation, residency and execution effects; retain qualified generic improvements | P1 | 🔵 IN PROGRESS | Exact checkpoint/representation reconciliation, sequential full-model controls, load/residency decomposition, repeated native/HTTP/controlled measurements, numerical/lifecycle qualification and source-stable publication. DwarfStar numbers for a different checkpoint are not YVEX quality or performance claims. |
+
+The successor is authorized on 2026-10-05. Qualification target identity,
+independent evidence planes, manifest-driven reasoning/strategy axes and generated
+public views belong to this delivery; no second benchmark database or Task is
+selected. Current operator service and finite producer are protected. Explicit
+idle windows permit supported sequential DeepSeek unload/reload, not overlapping
+model processes or user-prompt replay. The first evidence-authority publication
+is a software/documentation checkpoint, not competitive or throughput closure.
 
 ## Selected platform convergence
 

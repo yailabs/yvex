@@ -1,0 +1,234 @@
+{
+  "schema": "yvex.qualification.rules.v1",
+  "target_schema": "yvex.qualification.target.v1",
+  "receipt_schema": "yvex.qualification.receipt.v1",
+  "fields": {
+    "family_contract": "string",
+    "upstream_repository": "string",
+    "checkpoint": "string",
+    "tokenizer_conversation": "string",
+    "transformation_ir": "string",
+    "physical_policy": "string",
+    "representation": "string",
+    "artifact_set": "string",
+    "binding": "string",
+    "specialization": "string",
+    "source_commit": "string",
+    "source_tree": "string",
+    "source_delta": "string",
+    "build": "string",
+    "executable": "string",
+    "backend": "string",
+    "backend_implementation": "string",
+    "kernel_bundle": "string",
+    "hardware_model": "string",
+    "device_count": "integer",
+    "topology": "string",
+    "driver": "string",
+    "runtime_toolkit": "string",
+    "memory_configuration": "string",
+    "runtime_configuration": "string",
+    "context": "integer",
+    "prefill_geometry": "string",
+    "sequence_geometry": "string",
+    "concurrency": "integer",
+    "strategy": "string",
+    "reasoning": "string",
+    "sampling": "string",
+    "product_path": "string",
+    "suite": "string"
+  },
+  "planes": [
+    "family-conformance",
+    "checkpoint-reference",
+    "representation-quality",
+    "backend-execution",
+    "deployment-performance",
+    "product-path"
+  ],
+  "states": [
+    "QUALIFIED",
+    "CHARACTERIZED",
+    "BLOCKED",
+    "UNQUALIFIED",
+    "UNSUPPORTED"
+  ],
+  "receipt_fields": [
+    "schema",
+    "id",
+    "title",
+    "target",
+    "target_identity",
+    "origin",
+    "claims",
+    "measurements",
+    "provenance",
+    "limitations"
+  ],
+  "claim_fields": [
+    "state",
+    "scope",
+    "required_evidence",
+    "evidence",
+    "blockers"
+  ],
+  "outcome_fields": [
+    "case",
+    "result",
+    "reason",
+    "evidence"
+  ],
+  "outcome_results": [
+    "PASS",
+    "FAIL",
+    "CANCELLED",
+    "INDETERMINATE"
+  ],
+  "metric_fields": [
+    "metric",
+    "definition",
+    "unit",
+    "case",
+    "prompt_identity",
+    "reference_identity",
+    "session_state",
+    "warm_state",
+    "output_bound",
+    "samples",
+    "statistics",
+    "scope",
+    "evidence"
+  ],
+  "diagnostic_fields": [
+    "id",
+    "case",
+    "value",
+    "unit",
+    "definition",
+    "evidence"
+  ],
+  "diagnostic_units": [
+    "byte",
+    "count",
+    "s"
+  ],
+  "quality_key": [
+    "family_contract",
+    "upstream_repository",
+    "checkpoint",
+    "tokenizer_conversation",
+    "suite"
+  ],
+  "metrics": {
+    "admission.client": [
+      "product-path",
+      "s",
+      "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time"
+    ],
+    "prefill.wall": [
+      "deployment-performance",
+      "s",
+      "server-authored complete newly executed prefill wall time"
+    ],
+    "decode.post-first.committed": [
+      "deployment-performance",
+      "token/s",
+      "committed tokens after first / elapsed decode wall after first"
+    ],
+    "prefill.uncached": [
+      "deployment-performance",
+      "token/s",
+      "newly committed uncached input positions / complete prefill wall"
+    ],
+    "ttft.server": [
+      "deployment-performance",
+      "s",
+      "turn start to first committed model-token callback"
+    ],
+    "ttft.client-visible": [
+      "product-path",
+      "s",
+      "client dispatch including connect to first nonempty final/reasoning content"
+    ],
+    "reasoning.first.server": [
+      "deployment-performance",
+      "s",
+      "server turn start to first source-classified reasoning token"
+    ],
+    "reasoning.first.client": [
+      "product-path",
+      "s",
+      "client dispatch including connect to first nonempty reasoning fragment"
+    ],
+    "final.first.server": [
+      "deployment-performance",
+      "s",
+      "server turn start to first source-classified final token"
+    ],
+    "final.first.client": [
+      "product-path",
+      "s",
+      "client dispatch including connect to first nonempty final fragment"
+    ],
+    "reasoning.phase-rate": [
+      "deployment-performance",
+      "token/s",
+      "source-classified reasoning tokens / server phase from prefill completion to reasoning boundary or decode end; not post-first sustained rate"
+    ],
+    "final.phase-rate": [
+      "deployment-performance",
+      "token/s",
+      "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate"
+    ],
+    "request.client-complete": [
+      "product-path",
+      "s",
+      "client dispatch including connect through terminal response"
+    ],
+    "load.complete": [
+      "deployment-performance",
+      "s",
+      "load admission to execution-ready engine"
+    ],
+    "load.residency": [
+      "deployment-performance",
+      "s",
+      "server-authored residency phase wall"
+    ],
+    "memory.rss-peak": [
+      "deployment-performance",
+      "byte",
+      "observed process peak RSS; not device residency"
+    ],
+    "nll.teacher-forced": [
+      "representation-quality",
+      "nat/token",
+      "mean negative log probability of the same teacher-forced continuation"
+    ],
+    "perplexity": [
+      "representation-quality",
+      "ratio",
+      "exp(mean teacher-forced NLL) on exact matching positions"
+    ],
+    "kl.reference-candidate": [
+      "representation-quality",
+      "nat",
+      "mean full-vocabulary KL(reference || candidate) on the same contexts"
+    ],
+    "probability-delta.rms": [
+      "representation-quality",
+      "probability",
+      "RMS candidate minus reference probability over full vocabulary and positions"
+    ],
+    "same-top-token": [
+      "representation-quality",
+      "fraction",
+      "fraction of identical full-vocabulary argmax tokens, same contexts"
+    ],
+    "greedy-prefix": [
+      "checkpoint-reference",
+      "token",
+      "matching continuation prefix under the declared exact comparison policy"
+    ]
+  }
+}

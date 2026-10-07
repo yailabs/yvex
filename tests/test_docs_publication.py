@@ -6,6 +6,7 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -102,6 +103,92 @@ class PublicationTests(unittest.TestCase):
     def test_duplicate_evidence_keys_refuse(self):
         with self.assertRaisesRegex(ValueError,'duplicate observation key'):
             benchmarks.load_observation('{"context":{"device":"a","device":"b"}}')
+
+    def test_qualification_population_missing_is_not_zero(self):
+        record = dict(measurements=[dict(case='coding/turn-0')],
+                      provenance=dict(observations=[dict(generated_tokens=256, accepted_tokens=0)]))
+        text = '\n'.join(benchmarks.qualification_populations(record))
+        self.assertIn('| Committed output | 256 | token | 1 |', text)
+        self.assertIn('| Accepted draft | 0 | token | 1 |', text)
+        self.assertIn('| Reasoning | NOT MEASURED |', text)
+        record['provenance']['observations'][0]['generated_tokens'] = float('nan')
+        with self.assertRaisesRegex(ValueError, 'invalid runtime population'):
+            benchmarks.qualification_populations(record)
+        record['measurements'].append(dict(case='other/turn-0'))
+        with self.assertRaisesRegex(ValueError, 'ambiguous'):
+            benchmarks.qualification_populations(record)
+
+    def test_qualification_population_separates_actual_histories(self):
+        record = dict(measurements=[
+            dict(case='coding/turn-1/input-a', prompt_identity='a'),
+            dict(case='coding/turn-1/input-b', prompt_identity='b')],
+            provenance=dict(observations=[
+                dict(case='coding', turn_index=1, input_identity='a', generated_tokens=10),
+                dict(case='coding', turn_index=1, input_identity='b', generated_tokens=100),
+                dict(case='coding', turn_index=1, input_identity='b', generated_tokens=200)]))
+        text = '\n'.join(benchmarks.qualification_populations(record))
+        first, second = text.split('### coding/turn-1/input-b')
+        self.assertIn('### coding/turn-1/input-a', first)
+        self.assertIn('| Committed output | 10 | token | 1 |', first)
+        self.assertIn('| Committed output | 150 | token | 2 |', second)
+        self.assertNotIn('| Committed output | 100 | token | 3 |', text)
+        for identity in [None, '', 'unmatched']:
+            bad = copy.deepcopy(record)
+            bad['provenance']['observations'][0]['input_identity'] = identity
+            with self.subTest(identity=identity), self.assertRaises(ValueError):
+                benchmarks.qualification_populations(bad)
+        record['measurements'].append(dict(case='coding/turn-1'))
+        with self.assertRaisesRegex(ValueError, 'mixed grouped and ungrouped'):
+            benchmarks.qualification_populations(record)
+
+    def test_qualification_population_refuses_wrong_input_identity(self):
+        record = dict(measurements=[dict(case='coding/turn-0', prompt_identity='expected')],
+                      provenance=dict(observations=[dict(case='coding', turn_index=0,
+                                                       input_identity='different', generated_tokens=256)]))
+        with self.assertRaisesRegex(ValueError, 'differs from measurement input identity'):
+            benchmarks.qualification_populations(record)
+
+    def test_qualification_diagnostics_keep_zero_and_unknown_separate(self):
+        record = json.loads((ROOT/'docs/evaluation/benchmarks/qualification/deepseek-native-residency-diagnostic-15.json').read_text())
+        record['provenance']['diagnostics'] = [dict(id='measured', case='fixture', value=0,
+            unit='byte', definition='Measured diagnostic', evidence='fixture'),
+            dict(id='unknown', case='fixture', value=None, unit='byte',
+                 definition='Unavailable diagnostic', evidence='fixture')]
+        with tempfile.TemporaryDirectory() as directory:
+            area = Path(directory)
+            (area/'qualification').mkdir()
+            (area/'qualification/fixture.json').write_text(json.dumps(record))
+            with patch.object(benchmarks, 'AREA', area):
+                views = benchmarks.qualification_views()
+            page = views[area/'generated'/('qualification-'+record['id']+'.md')]
+        self.assertIn('| measured / fixture | 0 | byte |', page)
+        self.assertIn('| unknown / fixture | NOT MEASURED | byte |', page)
+        self.assertIn('not timed benchmark samples', page)
+        self.assertIn('No quality or performance metric is published', page)
+
+    def test_independent_continuation_view_is_not_a_quality_pass(self):
+        target = dict(schema=benchmarks.qualification.TARGET_SCHEMA,
+                      **{key:None for key in benchmarks.qualification.TARGET_FIELDS})
+        comparison = dict(state='CHARACTERIZED', exact_input_tokens=True, first_token_agreement=False,
+            exact_bounded_continuation=False, greedy_prefix_tokens=0, reference_sampled_tokens=256,
+            candidate_sampled_tokens=256, candidate_committed_tokens=256, comparison_policy='fixture comparison',
+            unavailable_metrics=['PPL', 'KL'])
+        row = dict(case='coding', input_identity='fixture', prompt_tokens=53, maximum_output=256,
+                   candidate_sha256='a'*64, reference_capture_sha256='b'*64, evidence='fixture', comparison=comparison)
+        provenance = dict(source_stability='fixture', evidence_class='fixture',
+                          independent_implementation=dict(name='fixture-oracle', revision='c'*40, executable_sha256='d'*64))
+        record = benchmarks.qualification.continuation_receipt(target, [row], provenance, 'fixture-comparison', 'Fixture only')
+        with tempfile.TemporaryDirectory() as directory:
+            area = Path(directory)
+            (area/'qualification').mkdir()
+            (area/'qualification/fixture.json').write_text(json.dumps(record))
+            with patch.object(benchmarks, 'AREA', area):
+                views = benchmarks.qualification_views()
+            page = views[area/'generated/qualification-fixture-comparison.md']
+        self.assertIn('| coding | 53 | DIFFERS | 0 | 256 / 256 | 256 | DIFFERS |', page)
+        self.assertIn('teacher-forced NLL/PPL, KL and RMS probability delta: **NOT MEASURED**', page)
+        self.assertIn('| representation-quality | BLOCKED |', page)
+        self.assertNotIn('256 token/s', page)
 
     def test_pdf_links_remain_inside_dossier(self):
         owners={'docs/architecture/index.html':'yvex.architecture'}
