@@ -98,6 +98,26 @@ through native protocol, settled cancellation and scoped session cleanup;
 [consumer evidence](../evaluation/retained-observations.md#qualification-operator-consumer-2026-10-07)
 does not qualify the unpublished computational candidate or close this Task.
 
+The 2026-10-08 follow-up extends this same implementation boundary to the full
+admitted-input-to-client-visible-commit critical path. Input/tokenizer work,
+state/prefix preparation, sampling/publication, scheduler/backpressure and native
+delivery join physical execution/residency only where measured costs justify
+an intervention. This selects no second throughput Task or YAI semantic owner.
+Controlled-engine, installed product-native and HTTP measurements remain
+distinct; cold/warm, fresh/reused, target-only/speculative, none/high/maximum and
+concurrency axes retain exact identities. Accepted changes require complete-model
+benefit, numerical/lifecycle/resource evidence and applicable shared-consumer
+regressions. The 20/700 hard gates and 24/800 preferred checkpoints are unchanged;
+an unmeasured subsystem is not reported as optimized.
+
+Bounded aligned program backing and device-only MoE stage preparation now have
+source-stable controlled and Rust/native characterization. Their measured
+benefit is request preparation/first-visible latency, not a sustained-decode
+breakthrough. The residency-only managed-copy arm is rejected on complete-model
+tradeoffs; artifact-mapped policy remains unchanged. [Retained arm evidence](../evaluation/retained-observations.md#full-inference-preparation-and-residency-arms-2026-10-08)
+does not close the performance or independent-quality exits. Stochastic HTTP
+sampling remains a separately profiled cost, not a transport-overhead claim.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |

@@ -1739,3 +1739,71 @@ remains generation 1; DeepSeek is restored with speculative execution, context
 because the candidate passes. The first disposable consumer's read-only
 `session.show` incorrectly supplied a mutation fence and was refused; corrected
 controls retain that negative attempt and use the admitted read request.
+
+## Full-inference preparation and residency arms (2026-10-08)
+
+The same competitive Task now follows admitted input through client-visible
+committed output. It does not replace the controlled-engine lane with a product
+claim. The exact frozen snapshots, workloads, samples, dispersion, resource
+witnesses and limitations are in the generated detail views below.
+
+Prepared programs now back their compiler-owned activation slots with one
+bounded, aligned allocation per program. Device-only MoE ingress/shared stages
+no longer allocate unused host-I/O carriers. This reduces observed request
+preparation and first-visible latency in the controlled coding controls; it
+does not materially change their sustained decode or long-prefill throughput.
+Parameter/index/completion lifetimes, arithmetic, state publication and the
+installed runtime are unchanged. The independent odd-width/alignment, budget,
+refusal, close and CUDA program controls protect the resource boundary.
+
+| Lane / workload | Source-stable characterization |
+| --- | --- |
+| Controlled target-only hash-table coding | [Prepared device-stage result](benchmarks/generated/qualification-deepseek-controlled-device-stage-20261008-target-only-coding-hash-table.md); [prior warp-cell control](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-target-only-coding-hash-table.md) |
+| Controlled DSpark hash-table coding | [Prepared device-stage result](benchmarks/generated/qualification-deepseek-controlled-device-stage-20261008-speculative-coding-hash-table.md); [prior warp-cell control](benchmarks/generated/qualification-deepseek-controlled-mhc-cell-20261007-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-controlled-device-stage-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-controlled-device-stage-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product Metal-coding request | [Product detail](benchmarks/generated/qualification-deepseek-product-device-stage-native-coding-metal-20261008.md) |
+| Rust-host HTTP seeded stochastic Metal-coding request | [Compatibility-path detail](benchmarks/generated/qualification-deepseek-product-http-device-stage-coding-metal-20261008.md) |
+
+The Rust/native product row retains its normal speculative configuration,
+context 32768, chunk 64 and greedy sampling. Controlled coding uses context
+4096 and chunk 512. Neither comparison silently changes that configuration or
+calls native greedy an HTTP stochastic control. First server-token and first
+client-visible clocks remain separate. Server first-fragment publication is
+unavailable, not zero. Bounded content/populations agree with the preceding
+controlled implementation; this is not independent checkpoint quality.
+
+The HTTP control uses the same coding case and resident geometry but explicitly
+selects temperature one, neutral filters and a fixed seed. Its three unprofiled
+requests retain identical output/populations and low dispersion. A separate
+diagnostic profile attributes the dominant cost to full-vocabulary stochastic
+selection and speculative acceptance, not socket or HTTP transfer. That profile
+is excluded from the timing series. The native greedy and HTTP stochastic rows
+are deliberately not directly ranked as a transport-overhead comparison; a
+matched sampling policy is required for that claim.
+
+A separate residency-only arm forces the existing managed-copy/prefetch
+fallback instead of the artifact mapping, with the same numerical execution.
+It is rejected as a default policy: complete-model target-only decode changes
+slightly, while speculative and long-prefill tradeoffs do not establish a
+Pareto improvement. Exact preparation/memory facts and independent timing
+series are retained for both arms, rather than a claim based on RSS alone.
+
+| Workload | Artifact-mapped arm | Rejected managed-copy arm |
+| --- | --- | --- |
+| Target-only coding | [Mapped](benchmarks/generated/qualification-deepseek-controlled-residency-mapped-20261008-target-only-coding-hash-table.md) | [Managed](benchmarks/generated/qualification-deepseek-controlled-residency-managed-rejected-20261008-target-only-coding-hash-table.md) |
+| DSpark coding | [Mapped](benchmarks/generated/qualification-deepseek-controlled-residency-mapped-20261008-speculative-coding-hash-table.md) | [Managed](benchmarks/generated/qualification-deepseek-controlled-residency-managed-rejected-20261008-speculative-coding-hash-table.md) |
+| Uncached 2K | [Mapped](benchmarks/generated/qualification-deepseek-controlled-residency-mapped-20261008-target-only-prefill-promessi-2048.md) | [Managed](benchmarks/generated/qualification-deepseek-controlled-residency-managed-rejected-20261008-target-only-prefill-promessi-2048.md) |
+| Uncached 8K | [Mapped](benchmarks/generated/qualification-deepseek-controlled-residency-mapped-20261008-target-only-prefill-promessi-8192.md) | [Managed](benchmarks/generated/qualification-deepseek-controlled-residency-managed-rejected-20261008-target-only-prefill-promessi-8192.md) |
+
+Managed unified allocations are not explicit device allocations; Linux RSS
+file-class accounting can include driver/UVM mappings rather than artifact
+page cache. Addressability, prepared bytes and OS snapshots overlap and must
+not be added. File-cache state is uncontrolled and load observations have one
+sample, so they do not earn a causal cold-load comparison.
+
+Raw captures, strict configuration-aware comparisons, diagnostic phase/API
+profiles, memory witnesses and restoration receipts remain outside Git under
+`deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u`.
+Finite remains generation 1 and the public listeners retain their identities.
+Checkpoint/representation quality, successful longer reasoning transitions,
+installed-product rollout and the 20/700 exit are not earned by these arms.
