@@ -2396,3 +2396,38 @@ series and diagnostics bind frozen `09a99e47` plus delta `209572a7` and restore
 the original installed configuration while preserving finite generation and
 public transports. Candidate producer code is not integrated. The same Task
 remains IN PROGRESS, with quality and 20/700 exits unearned.
+
+## Native long-turn reasoning completion (2026-10-08)
+
+The [exact generated target](benchmarks/generated/qualification-deepseek-gb10-long-turn-native-coding-high-20261008.md)
+retains three unprofiled, fresh-session coding/high turns through the Rust
+native product client. They keep the operator-selected speculative strategy,
+context and prefill geometry. All reach natural EOS after both source-classified
+reasoning and final content, beyond the earlier operator-observed attention
+invalidation boundary. This is a bounded completion control, not proof that
+every long session or independent checkpoint/representation-quality gate passes.
+
+The separately identified
+[long-turn suite](../../tests/vectors/deepseek_turn_lifecycle.json) preserves the
+original representative prompt bytes while increasing the output bound. The
+[generated workload matrix](benchmarks/generated/qualification-workloads.md)
+keeps the original short controls, reasoning modes and execution strategies
+separate; unexecuted admitted cells remain UNQUALIFIED. This longer coding/high
+cell does not qualify target-only, maximum reasoning, multi-turn or HTTP.
+
+The target page generates all phase timings, channel populations, speculative
+economics and dispersion from its structured receipt. Internal first-token,
+client-visible content and final-channel arrival are separate measurements;
+first-fragment server publication and the exact source boundary timestamp remain
+unavailable. Natural final content does not fill in those missing timestamps.
+The short prompt is not the 2K/8K uncached-prefill gate, and neither throughput
+exit is earned by these long-turn samples.
+
+Raw evidence remains outside Git under
+`full-system-20261008.k2BN6u/product-long-coding-high-native-01`.
+Its frozen `f1c47701` source/tree, retained source delta, executable/library
+capture, native receipt, sampled process witness and cleanup records are
+hash-bound. The isolated host retains one generation throughout the samples;
+owned sessions retire and the pre-existing producer remains separate. Publishing
+the receipt does not relabel it as a measurement of the subsequently installed
+finite-CPU repair or change the running service.

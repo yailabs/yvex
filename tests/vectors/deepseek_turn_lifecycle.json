@@ -1,0 +1,51 @@
+{
+  "schema": "yvex.qualification.suite.v1",
+  "id": "deepseek-turn-lifecycle",
+  "revision": "2026-10-08.1",
+  "provenance": "YVEX-authored product lifecycle controls, reusing representative DeepSeek-product prompt bytes with a separately identified longer output bound. NOT official DeepSeek input vectors, independent reference outputs or a quality benchmark.",
+  "license": "MIT",
+  "source_authority": "tests/vectors/deepseek_product.json@2026-10-04.1; exact prompt bytes retained, output-bound comparison axis differs",
+  "applicability": {
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "revision": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "family_record": "docs/model-families/deepseek-v4-flash.md",
+    "comparison": "Exact checkpoint/prompt identity; source-authored reasoning modes stay distinct. The 4096 output bound is not directly comparable with the original 256-bound series, and unreached transitions remain not measured."
+  },
+  "cases": [
+    {
+      "id": "coding.metal",
+      "class": "representative",
+      "category": "coding",
+      "maximum_output": 4096,
+      "turns": [
+        "Scrivi un kernel Metal che sommi due array di float. Includi i controlli dei limiti, la firma degli argomenti e spiega come scegliere la dimensione della griglia e del threadgroup."
+      ],
+      "reasoning_modes": ["none", "high", "maximum"],
+      "execution_strategies": ["target-only", "speculative"]
+    },
+    {
+      "id": "conversation.coding",
+      "class": "representative",
+      "category": "multi-turn",
+      "maximum_output": 4096,
+      "turns": [
+        "ciao",
+        "scrivi un kernel Metal",
+        "Ora aggiungi una spiegazione del controllo dei limiti per una griglia non multipla del threadgroup."
+      ],
+      "reasoning_modes": ["none", "high", "maximum"],
+      "execution_strategies": ["target-only", "speculative"]
+    },
+    {
+      "id": "reasoning.schedule",
+      "class": "representative",
+      "category": "reasoning",
+      "maximum_output": 4096,
+      "turns": [
+        "Three jobs take 2, 3 and 5 seconds on either of two workers. Jobs cannot be split. Find the minimum makespan and justify why no shorter schedule exists."
+      ],
+      "reasoning_modes": ["none", "high", "maximum"],
+      "execution_strategies": ["target-only", "speculative"]
+    }
+  ]
+}

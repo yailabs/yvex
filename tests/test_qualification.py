@@ -885,6 +885,29 @@ class MeasurementTests(unittest.TestCase):
         discovered = measurement.corpora(ROOT / "tests/vectors")
         self.assertIn(suite, discovered)
 
+    def test_long_turn_suite_keeps_prompts_and_separates_output_bound(self):
+        base = measurement.corpus(ROOT / "tests/vectors/deepseek_product.json")
+        suite = measurement.corpus(ROOT / "tests/vectors/deepseek_turn_lifecycle.json")
+        original = {case["id"]: case for case in base["cases"]}
+        self.assertEqual(suite["id"], "deepseek-turn-lifecycle")
+        self.assertNotEqual(q.identity(suite), q.identity(base))
+        self.assertEqual(suite["applicability"]["revision"], base["applicability"]["revision"])
+        self.assertIn("NOT official", suite["provenance"])
+        self.assertEqual({case["id"] for case in suite["cases"]},
+                         {"coding.metal", "conversation.coding", "reasoning.schedule"})
+        for case in suite["cases"]:
+            previous = original[case["id"]]
+            self.assertEqual(case["turns"], previous["turns"])
+            self.assertEqual(case["class"], "representative")
+            self.assertEqual(case["reasoning_modes"], previous["reasoning_modes"])
+            self.assertEqual(case["execution_strategies"], previous["execution_strategies"])
+            self.assertEqual(previous["maximum_output"], 256)
+            self.assertEqual(case["maximum_output"], 4096)
+        cells = list(measurement.configurations(suite))
+        self.assertEqual(len(cells), 18)
+        self.assertTrue(all(cell["state"] == "UNQUALIFIED" for cell in cells))
+        self.assertIn(suite, measurement.corpora(ROOT / "tests/vectors"))
+
     def test_suite_discovery_uses_schema_not_filename(self):
         suite = measurement.corpus(ROOT / "tests/vectors/deepseek_competitive.json")
         with tempfile.TemporaryDirectory() as directory:

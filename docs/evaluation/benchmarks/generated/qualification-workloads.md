@@ -53,5 +53,15 @@ Native adapter exclusions:
 Native adapter exclusions:
 
 - tools.weather: unsupported-by-text-turn-harness
+## deepseek-turn-lifecycle
+
+| Case | Class | speculative / high | target-only / high | speculative / maximum | target-only / maximum | speculative / none | target-only / none |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| coding.metal | representative | [deepseek-gb10-long-turn-native-coding-high-20261008: product-path CHARACTERIZED](qualification-deepseek-gb10-long-turn-native-coding-high-20261008.md) | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+| conversation.coding | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+| reasoning.schedule | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+
+Native adapter exclusions:
+
 
 These are the current suite admission cells, not historical synthetic results. No full-model reference or throughput target is inferred from an input manifest.
