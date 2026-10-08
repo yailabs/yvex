@@ -1954,3 +1954,44 @@ existing competitive evidence root: `product-narrow-q8-matrix-native-01`,
 public transports are preserved. Independent full-model reference/quality,
 longer-bound high/maximum transitions, comparative closure and 20/700 remain
 unearned; this does not establish a physical ceiling.
+
+## Rejected prepared IQ2 codebook (2026-10-08)
+
+The generic CUDA candidate expands the canonical IQ2 codebook into packed
+positive byte words once per block, then applies the exact sign mask at use.
+The existing matrix path shares that helper; routed row kernels replace their
+smaller halfword table with the prepared byte table. Quantization, artifact,
+activation class, accumulation and publication remain unchanged.
+
+| Exact lane / workload | Generated rejected-candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-prepared-grid-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-prepared-grid-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-prepared-grid-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-prepared-grid-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-rejected-prepared-grid-native-coding-metal-20261008.md) |
+
+Three unprofiled samples per cell preserve exact emitted content and
+speculative populations. Controlled comparison passes 38 metric gates and
+four content/population controls; native comparison passes ten gates and all
+768 ordered typed fragments. Long-prefill and target-only remain near the
+retained predecessor; the small native difference is not material benefit.
+The larger per-block shared table is not retained. CHARACTERIZED observations
+of the rejected candidate are not installed-product or quality qualifications.
+
+The frozen source (`b66b8b16`, delta `9cc50bce...`) passes registered
+`cuda.moe_rows`, `cuda.quant_qtype` and `structural.code-natural` controls.
+A separate actual-helper device probe checks every canonical grid and sign
+pattern against independent byte expansion/sign arithmetic: 131,072 exact
+words. It qualifies that transform, not an independent codebook/model oracle.
+Memcheck, racecheck and synccheck report zero errors/hazards. The registered
+codec/MoE controls retain their independent decoding and numerical obligations.
+
+The first controlled attempt lacks the compiled native measurement client;
+it fails before timing and restores DeepSeek. That failed attempt is retained
+as `prepared-grid-controlled-01`, not converted into a sample. A prerequisite
+check before resident-state changes and the built client permit the complete
+`prepared-grid-controlled-02` series. Raw captures, comparisons, build/probe
+identities and lifecycle witnesses remain outside Git under
+`full-system-20261008.k2BN6u` in the existing competitive evidence root.
+Finite generation and approved public transports remain unchanged. No producer
+architecture, public ABI or installed runtime changes follow from this rejected
+experiment; the same Task remains IN PROGRESS and no physical ceiling is proved.

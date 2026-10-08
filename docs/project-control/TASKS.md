@@ -140,6 +140,14 @@ speculative populations; long-prefill controls are separately characterized.
 does not promote checkpoint quality, installed-product performance or the 20/700
 exit. The same Task remains IN PROGRESS at encoded projection/MoE execution.
 
+The prepared IQ2 codebook candidate is rejected after complete controlled and
+Rust/native comparisons: exact component/publication preservation does not
+justify a larger shared table without material full-model benefit.
+[Rejected-arm evidence](../evaluation/retained-observations.md#rejected-prepared-iq2-codebook-2026-10-08)
+retains source-stable receipts and the failed missing-client preflight, which
+produced no timing evidence. Existing production code and installed runtime
+remain unchanged by that candidate.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |
