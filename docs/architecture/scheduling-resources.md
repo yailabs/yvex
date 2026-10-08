@@ -145,6 +145,15 @@ configured chunks do not themselves authorize wider execution. Routing still
 contains only real selected token/expert pairs. This does not widen speculative
 verification, multiply sequences or change the ordinary host's configured chunk.
 
+Separately, the server's automatic single-sequence CUDA text configuration now
+selects a logical chunk of at most 512, subject to context and runtime phase
+clamping. CPU/Metal, configured concurrency and explicit overrides retain their
+existing policy. This changes request geometry, not the specialization's legal
+population, model meaning or the scheduler's authority. The same capacity owner
+accounts its workspace before admission. See
+[generation defaults](generation-decode.md#generation-vocabulary) and the
+[paired native-product observation](../evaluation/retained-observations.md#native-product-prefill-policy-2026-10-08).
+
 Attention workspace recipe v3 separates execution rows from source-required
 prefix-checkpoint capacity. Device scratch, host ingress and graph publication
 have distinct bounds. A device-owned input at ordinary evidence scope does not

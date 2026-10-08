@@ -15,6 +15,7 @@
 #include <yvex/internal/tokenizer.h>
 
 #define ENGINE_INTERACTIVE_PREFILL_CHUNK 64u
+#define ENGINE_CUDA_PREFILL_CHUNK 512u
 #define ENGINE_BATCHED_PREFILL_FLOOR 4u
 #define ENGINE_MODEL_LEASE_CAPACITY 256u
 
@@ -122,12 +123,19 @@ static void options_rebind(server_engine *engine)
 }
 
 static unsigned long long adaptive_prefill_chunk(
+    yvex_backend_kind backend,
     unsigned long long context_capacity,
     unsigned long long concurrent_sequences)
 {
     unsigned long long selected = concurrent_sequences > 1ull
                                       ? concurrent_sequences
-                                      : ENGINE_INTERACTIVE_PREFILL_CHUNK;
+                                      : backend == YVEX_BACKEND_KIND_CUDA
+                                          ? ENGINE_CUDA_PREFILL_CHUNK
+                                          : ENGINE_INTERACTIVE_PREFILL_CHUNK;
+    /* This selects a logical request quantum, not a new physical admission.
+     * Runtime planning and execution still clamp rows to the authenticated
+     * phase envelope, account workspace, and honor cancellation boundaries.
+     * Short prompts execute only their real suffix; no rows are duplicated. */
     if (concurrent_sequences > 1ull && selected < ENGINE_BATCHED_PREFILL_FLOOR)
         selected = ENGINE_BATCHED_PREFILL_FLOOR;
     return selected < context_capacity ? selected : context_capacity;
@@ -292,6 +300,7 @@ static int options_admit(server_engine *engine,
         return yvex_error_code(err);
     if (text && !engine->options.prefill_chunk_tokens)
         engine->options.prefill_chunk_tokens = adaptive_prefill_chunk(
+            engine->options.backend,
             engine->options.context_capacity,
             engine->options.concurrent_sequences);
     yvex_core_text_copy(engine->alias, sizeof(engine->alias), options->alias);

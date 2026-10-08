@@ -1286,7 +1286,24 @@
       "strategy": "speculative",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-native-prefill-policy-512-20261008-2048-none",
+          "target_identity": "fc8e7b70a646efe7b0b814e33304e35c1a11466d700e8e1f304067e9e4ba1d66",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-prefill-policy-64-20261008-2048-none",
+          "target_identity": "2ce596f4fc8093bd9c64d45da879f38a989de0e325a09c955faddb6a51a96711",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-prefill",
@@ -1571,7 +1588,24 @@
       "strategy": "speculative",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-native-prefill-policy-512-20261008-8192-none",
+          "target_identity": "7cada69e4cf2c0eb253a2d3e010ce7f4b21e4b1a63f0c486119e7045b689b416",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-prefill-policy-64-20261008-8192-none",
+          "target_identity": "5b4eafea0e2e569046f70d88979cd060df7d68f9805e6b39745b0b741ffd863e",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-prefill",
@@ -1765,6 +1799,22 @@
           "id": "deepseek-native-operator-baseline",
           "target_identity": "47b709776420f206218c1e39b1eaa8e8cfa24467a46bdd50018d1e5e7c69e78c",
           "path": "product-native-v24",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-prefill-policy-512-20261008-coding-metal-none",
+          "target_identity": "93944690456631875581c88e88e49eaf79593e2c7ada778f65c5aa4f1098e4c4",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-prefill-policy-64-20261008-coding-metal-none",
+          "target_identity": "846d24b2e7b48bb5b17682a151406a5e3ce9b5268d2270129496eeef082411d5",
+          "path": "product-native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
           "outcomes": []

@@ -27,6 +27,12 @@ missing first-commit timing stays unavailable rather than reporting process
 uptime as decode. Its software evidence does not close the 20/700 performance
 exit or qualify the independent caller's timeout policy.
 
+The same Task's [paired Rust/native prefill policy](../evaluation/retained-observations.md#native-product-prefill-policy-2026-10-08)
+compares automatic single-sequence CUDA chunks on the exact model and immutable
+2K/8K/coding cases. Generated receipts separate product geometry from controlled
+engine results. Bounded cancellation/recovery changes neither caller deadlines
+nor the 20/700 exit; installed baseline and candidate remain separately identified.
+
 The independently authorized YVEX repair
 `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` has a qualified bounded producer and
 component repair, but its full mandatory QA gate is BLOCKED by the unavailable

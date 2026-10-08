@@ -47,6 +47,16 @@ Wider prefill can reduce repeated traversal and synchronization while increasing
 session preparation and peak memory. Compare complete-request measurements,
 not only the inner prefill span.
 
+The server's automatic text-engine request quantum is backend-aware: one
+configured CUDA sequence selects at most 512 positions, while CPU and Metal
+retain at most 64. Both clamp to the configured context. Multiple configured
+sequences retain their existing bounded policy; an explicit nonzero chunk stays
+authoritative. This is a generic server/deployment default, not a family switch,
+new numerical class or wider admitted execution. The runtime still clamps every
+real suffix to the authenticated phase envelope. Finite and media engines do not
+acquire a text-prefill policy. Native and HTTP clients use the same loaded engine
+geometry; changing a default does not alter an already-loaded generation.
+
 ```text
 rendered prompt -> exact tokenizer IDs -> prefix admission -> suffix prefill
   -> target/draft/verify work -> normalized hidden -> output head -> selection

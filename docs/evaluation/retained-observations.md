@@ -2470,3 +2470,80 @@ installed Host remains an independently identified baseline; publication does
 not imply that it has been replaced. The active competitive/full-system Task
 remains IN PROGRESS, with both throughput gates and independent quality exits
 unearned.
+
+## Native product prefill policy (2026-10-08)
+
+The active competitive/full-system Task compares two frozen Rust/native product
+arms, separately from controlled public-C engine measurements. Both keep the
+exact DSpark artifact/binding/specialization, context 32768, one sequence,
+product-default greedy sampling, reasoning disabled and immutable suite inputs.
+The baseline selects chunk 64; the generic candidate default selects 512 for
+one CUDA text sequence. Quantization, checkpoint, target verification, numerical
+class, channels and caller deadlines are unchanged. CPU/Metal, concurrency,
+explicit overrides and finite/media behavior retain their existing policy.
+
+Three unprofiled fresh-session requests per arm/case retain actual input/reuse
+populations, internal/client TTFT, delivery, dispersion and speculative economics.
+Ordered channel/byte/hash comparison preserves all 48, 48 and 768 committed
+fragments respectively, plus terminal populations. Runtime token identities bind
+execution/state lineage as well as tokens; they are not content-only hashes.
+This is internal preservation, not independent checkpoint/quality evidence.
+Values and complete identities are generated from the following receipts, not
+maintained independently in prose:
+
+| Exact native case | Baseline / chunk 64 | Candidate / chunk 512 | Bounded observation |
+| --- | --- | --- | --- |
+| 2K uncached input | [Baseline](benchmarks/generated/qualification-deepseek-native-prefill-policy-64-20261008-2048-none.md) | [Candidate](benchmarks/generated/qualification-deepseek-native-prefill-policy-512-20261008-2048-none.md) | Lower complete prefill and client request time; a 16-token tail is not sustained decode |
+| 8K uncached input | [Baseline](benchmarks/generated/qualification-deepseek-native-prefill-policy-64-20261008-8192-none.md) | [Candidate](benchmarks/generated/qualification-deepseek-native-prefill-policy-512-20261008-8192-none.md) | Lower complete prefill and client request time, not the 700-token/s gate |
+| Metal coding prompt | [Baseline](benchmarks/generated/qualification-deepseek-native-prefill-policy-64-20261008-coding-metal-none.md) | [Candidate](benchmarks/generated/qualification-deepseek-native-prefill-policy-512-20261008-coding-metal-none.md) | 53 input and 256 committed output tokens; no material complete-turn/decode gain claimed |
+
+The strict canonical comparator accepts only an explicit experiment declaring
+changed source delta, build/executable, backend implementation/kernel image,
+runtime configuration and prefill geometry. Other target/metric axes must match.
+Different compiled native image identities remain separately authenticated,
+not replaced with a source-only hash. This is a product-policy observation,
+not a new kernel, independent quality or HTTP speedup.
+
+The baseline is clean `299598ae`/tree `dd587716`; the candidate keeps that
+commit/tree with frozen delta
+`314aca7e1ce357f75db1df6a00bea1d5a7c2741e68f5c9dc8d53ed09ec160882`.
+Each receipt binds executable/library, typed kernel report, retained source,
+loaded engine and sampled device witness. Process-lifetime RSS and OS-backed
+mapped residency are diagnostic facts; unprojected workspace is unavailable,
+not zero. Mapping RSS, process RSS and device-addressable weights overlap and
+are not independent allocations. Single post-cache loads do not qualify cold
+load latency. Clock/power/thermal variation is not continuously observed.
+
+Real-model cancellation signals only the owned consumer after a committed prompt
+chunk. Typed cancellation retains zero output commits and the exact partial
+position/reset requirement. The consumer retires its session without emitting
+a performance receipt. A new short suite turn completes at its declared bound
+on the same isolated engine generation, without reload or retry; this is not
+a natural-EOS or universal long-session claim.
+
+The frozen two-file producer maps to 133 QA controls. The initial receipt
+`31f57095...` retains 127 PASS, one FAIL and five BLOCKED. The failure is missing
+Python Markdown in the default publication environment, not a product failure;
+the declared documentation environment passes the same-source rerun
+`0d138e24...`. Reconciled unique controls are 128 PASS and five BLOCKED on
+missing SDK example executables or Node/npm, with no unresolved FAIL/ERROR/SKIP.
+CLI/PTY, native protocol, runtime/quantization sanitizers, finite remote,
+structural and cross-family software controls pass. The publication tree
+separately passes qualification properties, server, registry, project control,
+documentation and all four immutable upstream encoding cases. Encoding is not
+full-model reference inference. Generated HTML contains the six new detail pages.
+
+Input-address hoisting and four-warp K partitioning are rejected: the first
+earns no material complete-model gain; the second regresses prefill despite
+passing its component oracle. Increased CTA/barrier work is a static fact,
+not measured causal occupancy/synchronization attribution.
+
+Raw captures, comparison decisions, rejected candidates and cancellation remain
+outside Git under `full-system-20261008.k2BN6u`:
+`product-prefill-policy-{baseline,candidate}-{2k,8k,coding}-01`,
+`product-prefill-policy-curated-01` and `product-prefill-policy-cancellation-01`.
+Idle windows restore installed DeepSeek; finite generation 1 and approved
+listeners/grants remain unchanged. The installed Host is not relabeled as this
+candidate; the operator's cancelled Case prompt is not replayed. Independent
+checkpoint/quality, broader reasoning/HTTP, competitive closure and 20/700 remain
+unearned. The same Task stays IN PROGRESS.

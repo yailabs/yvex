@@ -63,6 +63,10 @@ remain separate closure requirements; the milestone is not declared complete.
   40 typed product-management operations share native owners and durable receipts.
   Standalone HTTPS/pairing and same-user local management are under cross-client
   qualification; [network contract](../contracts/network-management.md).
+  The [paired native prefill policy](../evaluation/retained-observations.md#native-product-prefill-policy-2026-10-08)
+  characterizes wider automatic single-sequence CUDA request geometry on one
+  exact DeepSeek target, with bounded cancellation/recovery. This does not
+  promote independent representation quality, other hardware or the 20/700 exit.
   The [remote finite producer](../contracts/finite-decision-remote.md) separately
   exposes one identity-bound computation under an explicit SSH peer grant.
   [Installed Exon→DGX finite execution](../evaluation/finite-decision-remote.md#installed-lan-producer)

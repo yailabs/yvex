@@ -384,13 +384,19 @@ static int test_configured_summary_and_event(void)
 static int test_adaptive_prefill_policy(void)
 {
     static const struct {
+        yvex_backend_kind backend;
         unsigned long long context, concurrency, expected;
     } cases[] = {
-        {4096ull, 1ull, 64ull},
-        {4096ull, 2ull, 4ull},
-        {4096ull, 4ull, 4ull},
-        {4096ull, 8ull, 8ull},
-        {32ull, 1ull, 32ull},
+        {YVEX_BACKEND_KIND_CPU, 4096ull, 1ull, 64ull},
+        {YVEX_BACKEND_KIND_CPU, 4096ull, 2ull, 4ull},
+        {YVEX_BACKEND_KIND_CPU, 4096ull, 4ull, 4ull},
+        {YVEX_BACKEND_KIND_CPU, 4096ull, 8ull, 8ull},
+        {YVEX_BACKEND_KIND_CPU, 32ull, 1ull, 32ull},
+        {YVEX_BACKEND_KIND_CUDA, 4096ull, 1ull, 512ull},
+        {YVEX_BACKEND_KIND_CUDA, 128ull, 1ull, 128ull},
+        {YVEX_BACKEND_KIND_CUDA, 32ull, 1ull, 32ull},
+        {YVEX_BACKEND_KIND_CUDA, 4096ull, 2ull, 4ull},
+        {YVEX_BACKEND_KIND_CUDA, 4096ull, 8ull, 8ull},
     };
     yvex_server_options options;
     yvex_server_engine_options engine_options;
@@ -406,6 +412,7 @@ static int test_adaptive_prefill_policy(void)
                              yvex_server_start(server, &err) == YVEX_OK,
                          "adaptive prefill host starts independently");
         test_engine_options(&engine_options, "adaptive");
+        engine_options.backend = cases[index].backend;
         engine_options.context_capacity = cases[index].context;
         engine_options.maximum_sessions = cases[index].concurrency;
         engine_options.concurrent_sequences = cases[index].concurrency;
