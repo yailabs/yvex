@@ -21,6 +21,12 @@ The operator independently selected
 Earlier repairs retain their exact evidence and external gates. This selection
 does not start A03, Metal, training or cross-repository consumer work.
 
+The same active Task owns the
+[cancelled-prefill decode-clock repair](../evaluation/retained-observations.md#cancelled-prefill-decode-clock-repair-2026-10-08):
+missing first-commit timing stays unavailable rather than reporting process
+uptime as decode. Its software evidence does not close the 20/700 performance
+exit or qualify the independent caller's timeout policy.
+
 The independently authorized YVEX repair
 `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` has a qualified bounded producer and
 component repair, but its full mandatory QA gate is BLOCKED by the unavailable

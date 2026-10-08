@@ -690,6 +690,33 @@ static int test_decode_rate_scopes(void)
             measurement.rolling_rate == 1.0 &&
             measurement.cumulative_rate > measurement.rolling_rate,
         "bounded rolling decode reveals a local slowdown hidden by the cumulative rate");
+    yvex_server_decode_measurement(
+        0ull, 0ull, NULL, 0u, 260469578000000ull, &measurement);
+    YVEX_TEST_ASSERT(
+        yvex_server_execution_measurement_valid(&measurement) &&
+            measurement.scope == YVEX_EXECUTION_SCOPE_SUBSEQUENT_DECODE &&
+            !measurement.available && !measurement.completed_units &&
+            !measurement.duration_ns && !measurement.cumulative_rate &&
+            !measurement.rolling_units && !measurement.rolling_duration_ns &&
+            !measurement.rolling_rate,
+        "cancelled prefill has no decode clock, not the monotonic uptime");
+    yvex_server_decode_measurement(
+        0ull, 41ull, commits,
+        YVEX_SERVER_DECODE_RATE_WINDOW_TOKENS + 1u,
+        commits[YVEX_SERVER_DECODE_RATE_WINDOW_TOKENS], &measurement);
+    YVEX_TEST_ASSERT(
+        yvex_server_execution_measurement_valid(&measurement) &&
+            measurement.completed_units == 40ull && !measurement.available &&
+            !measurement.duration_ns && !measurement.cumulative_rate &&
+            !measurement.rolling_duration_ns && !measurement.rolling_rate,
+        "a missing first commit clock cannot invent cumulative or rolling decode time");
+    yvex_server_decode_measurement(
+        1000000000ull, 1ull, commits, 0u, 1000000000ull, &measurement);
+    YVEX_TEST_ASSERT(
+        yvex_server_execution_measurement_valid(&measurement) &&
+            !measurement.available && !measurement.completed_units &&
+            !measurement.duration_ns && !measurement.cumulative_rate,
+        "first-only completion has no post-first elapsed work");
     return 0;
 }
 

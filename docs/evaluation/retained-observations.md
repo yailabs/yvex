@@ -2431,3 +2431,42 @@ hash-bound. The isolated host retains one generation throughout the samples;
 owned sessions retire and the pre-existing producer remains separate. Publishing
 the receipt does not relabel it as a measurement of the subsequently installed
 finite-CPU repair or change the running service.
+
+## Cancelled-prefill decode-clock repair (2026-10-08)
+
+An operator-observed HTTP turn cancelled before its first committed output
+exposed a generic server measurement defect: the missing first-commit origin
+was subtracted from the process monotonic clock, reporting uptime as decode
+duration. The server-owned subsequent-decode measurement now retains unavailable
+duration/rates when no first commit exists. Existing cumulative/rolling rates
+remain unchanged once their clocks exist; no CLI reconstruction, schema change
+or protocol-version change is involved. This repairs evidence, not throughput
+or the independent caller's cancellation deadline. The cancelled user request
+is not replayed.
+
+The strengthened registered `unit.server` test fails against the unchanged
+producer (`965566fd4409f73a305869d2bd837edb842132d3861e5c56f0665b102a5e9a33`)
+and passes after repair
+(`fbc9f1d3f9afb5985185720b0861d51b6b2fcbf4047ccb7446b144a73eb0c7cd`).
+Controls distinguish zero-output prefill cancellation, a missing origin with a
+nonzero token population, first-only completion and valid cumulative/rolling
+decode. Unavailable is not measured zero.
+
+Mapped frozen-source QA
+(`b75637247b64c6188d3c7ebc0fe4ad872b1b47adcbfaba310235e2292add48b4`)
+passes 127 identities, including runtime/quantization sanitizers, native Rust/PTY,
+finite remote, protocol, lifecycle and the server regression. The sole failing
+documentation lane lacks Python `markdown`; its independent rerun in the
+declared documentation environment passes
+(`44c13f2333056411dd67eeb7a08c17f697e4835ff786288192b7c08e9fe58524`).
+Five consumer prerequisites remain BLOCKED: SDK examples for network ownership,
+product runtime and HTTPS/SSH sessions, and Node/npm for the OpenAI runner.
+They are not counted as PASS or replaced by fixtures.
+
+The tested source is frozen `066d52f4` plus delta `10132580`; receipts remain
+under the isolated publication worktree's `build/qa/evidence`. Documentation
+reconciliation is separate from this tested computational snapshot. The
+installed Host remains an independently identified baseline; publication does
+not imply that it has been replaced. The active competitive/full-system Task
+remains IN PROGRESS, with both throughput gates and independent quality exits
+unearned.

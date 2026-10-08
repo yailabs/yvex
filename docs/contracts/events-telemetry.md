@@ -124,6 +124,9 @@ terminal summary joins available prefill duration/rate and `ttft-server` from
 the same server process/session/request. Missing or dropped history remains
 unavailable, not zero. These bounded joins neither reconstruct client arrival
 clocks nor convert server first-token timing into client-visible TTFT.
+Before the first committed token, subsequent-decode duration and rates remain
+unavailable, including cancellation during prefill. A missing first-commit
+clock must not turn the host's monotonic uptime into an elapsed decode time.
 `rolling[count/window]` remains independently named.
 Canonical JSON keeps
 the complete scope, clock, composition, unit, work, duration, and rates. Human

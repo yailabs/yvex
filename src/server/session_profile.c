@@ -13,11 +13,8 @@ void yvex_server_decode_measurement(
     unsigned long long now,
     yvex_execution_measurement *measurement)
 {
-    unsigned long long end = decode_commit_count
-                                 ? decode_commit_ns[decode_commit_count - 1u]
-                                 : now;
-    unsigned long long duration = end > first_fragment_ns
-                                      ? end - first_fragment_ns : 0ull;
+    unsigned long long end;
+    unsigned long long duration;
     unsigned long long units = committed_tokens > 1ull
                                    ? committed_tokens - 1ull : 0ull;
     memset(measurement, 0, sizeof(*measurement));
@@ -27,6 +24,11 @@ void yvex_server_decode_measurement(
     measurement->composition = YVEX_EXECUTION_COMPOSITION_NESTED;
     measurement->work_unit = YVEX_EXECUTION_WORK_TOKENS;
     measurement->completed_units = units;
+    /* A cancelled prefill has no decode origin; now is not elapsed decode. */
+    if (!first_fragment_ns || !committed_tokens) return;
+    end = decode_commit_count ? decode_commit_ns[decode_commit_count - 1u]
+                              : now;
+    duration = end > first_fragment_ns ? end - first_fragment_ns : 0ull;
     if (duration) {
         measurement->available |=
             YVEX_EXECUTION_MEASUREMENT_DURATION_AVAILABLE;
