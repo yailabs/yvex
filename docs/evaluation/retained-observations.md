@@ -2033,3 +2033,40 @@ Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
 same installed DeepSeek identities/configuration while preserving finite
 generation and approved public transports. No production architecture, public
 ABI, installed runtime or Task-state promotion follows from this experiment.
+
+## Rejected F32 certificate endpoint merge (2026-10-08)
+
+This generic decoded-dot candidate merges the compensated interval endpoints
+using outward F32 TwoSum arithmetic before final F64 conversion. The certified
+source-ordered F64 publication and exact fallback remain mandatory. It changes
+neither the weight representation nor activation quantization.
+
+| Exact lane / workload | Generated rejected-candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-interval-reduction-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-interval-reduction-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-interval-reduction-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-interval-reduction-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-rejected-interval-reduction-native-coding-metal-20261008.md) |
+
+All cells retain three unprofiled samples. Target-only and long-input prefill
+remain materially unchanged. Small native/speculative variation does not
+justify adopting the extra certificate realization; it is rejected. Strict
+controlled comparison passes 38 metric gates and four content/population
+controls; native comparison passes ten gates, six population controls and all
+768 ordered typed fragments. Sampled resource lists are clear; they do not
+prove uninterrupted reservation.
+
+The frozen source (`b66b8b16`, delta `e0c770c6...`) passes registered
+`cuda.dot_finiteness`, `cuda.quant_qtype`, `cuda.moe_rows` and
+`structural.code-natural`. The independent host ordered-F64 fixture covers
+partial warps, reduction boundaries, rounding ties, cancellation, subnormals
+and norm overflow through width 16384. No altered numerical tolerance is
+admitted. Component agreement does not qualify checkpoint/representation
+quality or the performance exit.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`product-interval-reduction-native-01`, `interval-reduction-controlled-01`,
+`qualification-rejected-interval-reduction` and the two
+`interval-reduction-*-comparison-01.json` records. Cleanup restores installed
+DeepSeek and preserves finite generation and approved public transports.
+No production code, ABI, installed executable or Task-state promotion follows
+from this rejected candidate; no hardware ceiling is proved.

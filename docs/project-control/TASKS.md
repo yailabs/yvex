@@ -155,6 +155,13 @@ experimental axis. [Rejected small-population evidence](../evaluation/retained-o
 retains component and exact published-content controls without integrating the
 threshold change. The same Task continues at measured decoded-projection costs.
 
+The compensated F32 certificate endpoint-merge candidate is rejected after
+matched controlled and Rust/native N=3 series: target-only and long-input
+prefill remain neutral, while small native/speculative changes do not justify
+retaining another realization. Exact numerical and fragment/population controls
+remain green. [Rejected certificate evidence](../evaluation/retained-observations.md#rejected-f32-certificate-endpoint-merge-2026-10-08)
+publishes the bounded receipts, not a throughput or quality promotion.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |
