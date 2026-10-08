@@ -1,0 +1,777 @@
+{
+  "claims": {
+    "backend-execution": {
+      "blockers": [],
+      "evidence": {
+        "after": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-after.json",
+          "result": "PASS",
+          "sha256": "3ce4c986c2cc5a1c4ebd6414d35b7a6534fba998e2a636a7455d0622880e2dff"
+        },
+        "before": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-before.json",
+          "result": "PASS",
+          "sha256": "e2e25ef5aa05b1772eb5045ceb6ab04b35185ac75f761186df95d5917a04e210"
+        },
+        "cleanup": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-post.json",
+          "result": "PASS",
+          "sha256": "474b296b97a1f59e4df9e480654b791d5ce380add38d72ae4c481694fcb264e6"
+        },
+        "installation": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/installation.json",
+          "result": "PASS",
+          "sha256": "42d1cf6fef7ae15cfc3003c0090b9805cf3c42fd88112e289a2656347e873f5e"
+        },
+        "sdk-closed": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/closed.json",
+          "result": "PASS",
+          "sha256": "fee890ed3b887587067446bbbd7dca698a7630fc7d9f501e040baab66958abe3"
+        },
+        "sdk-identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/identity.json",
+          "result": "PASS",
+          "sha256": "88217dd9fd3fa047b52d73e4bc86ca77f36312b510ab6d20a9f4ce6f31736cda"
+        },
+        "sdk-samples": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+          "result": "PASS",
+          "sha256": "9ab82e4f33c4435e71bdc80fe4ec5dd6dfa6bfd566ccf9a776ab7f8621e774f9"
+        },
+        "wire-closed": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01/closed.json",
+          "result": "PASS",
+          "sha256": "2b0fe19adf2bd481abbba2aad1fc95a2854686339a4cba713670c9b3b5b3a292"
+        }
+      },
+      "required_evidence": [],
+      "scope": "Real complete CPU forward, one backbone, no sampling; generic independent ordered-F64 numerical and cancellation/refusal/cleanup controls qualified separately",
+      "state": "CHARACTERIZED"
+    },
+    "checkpoint-reference": {
+      "blockers": [],
+      "evidence": {
+        "after": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-after.json",
+          "result": "PASS",
+          "sha256": "3ce4c986c2cc5a1c4ebd6414d35b7a6534fba998e2a636a7455d0622880e2dff"
+        },
+        "before": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-before.json",
+          "result": "PASS",
+          "sha256": "e2e25ef5aa05b1772eb5045ceb6ab04b35185ac75f761186df95d5917a04e210"
+        },
+        "cleanup": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-post.json",
+          "result": "PASS",
+          "sha256": "474b296b97a1f59e4df9e480654b791d5ce380add38d72ae4c481694fcb264e6"
+        },
+        "installation": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/installation.json",
+          "result": "PASS",
+          "sha256": "42d1cf6fef7ae15cfc3003c0090b9805cf3c42fd88112e289a2656347e873f5e"
+        },
+        "sdk-closed": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/closed.json",
+          "result": "PASS",
+          "sha256": "fee890ed3b887587067446bbbd7dca698a7630fc7d9f501e040baab66958abe3"
+        },
+        "sdk-identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/identity.json",
+          "result": "PASS",
+          "sha256": "88217dd9fd3fa047b52d73e4bc86ca77f36312b510ab6d20a9f4ce6f31736cda"
+        },
+        "sdk-samples": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+          "result": "PASS",
+          "sha256": "9ab82e4f33c4435e71bdc80fe4ec5dd6dfa6bfd566ccf9a776ab7f8621e774f9"
+        },
+        "wire-closed": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01/closed.json",
+          "result": "PASS",
+          "sha256": "2b0fe19adf2bd481abbba2aad1fc95a2854686339a4cba713670c9b3b5b3a292"
+        }
+      },
+      "required_evidence": [],
+      "scope": "Retained independent upstream input/logit control, 1e-4 absolute tolerance; exact baseline score/result identity retained; not checkpoint-wide quality",
+      "state": "CHARACTERIZED"
+    },
+    "deployment-performance": {
+      "blockers": [],
+      "evidence": {
+        "after": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-after.json",
+          "result": "PASS",
+          "sha256": "3ce4c986c2cc5a1c4ebd6414d35b7a6534fba998e2a636a7455d0622880e2dff"
+        },
+        "before": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-before.json",
+          "result": "PASS",
+          "sha256": "e2e25ef5aa05b1772eb5045ceb6ab04b35185ac75f761186df95d5917a04e210"
+        },
+        "cleanup": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-post.json",
+          "result": "PASS",
+          "sha256": "474b296b97a1f59e4df9e480654b791d5ce380add38d72ae4c481694fcb264e6"
+        },
+        "installation": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/installation.json",
+          "result": "PASS",
+          "sha256": "42d1cf6fef7ae15cfc3003c0090b9805cf3c42fd88112e289a2656347e873f5e"
+        },
+        "sdk-closed": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/closed.json",
+          "result": "PASS",
+          "sha256": "fee890ed3b887587067446bbbd7dca698a7630fc7d9f501e040baab66958abe3"
+        },
+        "sdk-identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/identity.json",
+          "result": "PASS",
+          "sha256": "88217dd9fd3fa047b52d73e4bc86ca77f36312b510ab6d20a9f4ce6f31736cda"
+        },
+        "sdk-samples": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+          "result": "PASS",
+          "sha256": "9ab82e4f33c4435e71bdc80fe4ec5dd6dfa6bfd566ccf9a776ab7f8621e774f9"
+        },
+        "wire-closed": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01/closed.json",
+          "result": "PASS",
+          "sha256": "2b0fe19adf2bd481abbba2aad1fc95a2854686339a4cba713670c9b3b5b3a292"
+        }
+      },
+      "required_evidence": [],
+      "scope": "Twelve representative completed installed public SDK calls, each compute and Exon caller <=5 s; unchanged generation, no reload/retry; not a universal latency SLA or YAI semantic acceptance",
+      "state": "CHARACTERIZED"
+    },
+    "family-conformance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Not established by this timing capture",
+      "state": "UNQUALIFIED"
+    },
+    "product-path": {
+      "blockers": [],
+      "evidence": {
+        "after": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-after.json",
+          "result": "PASS",
+          "sha256": "3ce4c986c2cc5a1c4ebd6414d35b7a6534fba998e2a636a7455d0622880e2dff"
+        },
+        "before": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-before.json",
+          "result": "PASS",
+          "sha256": "e2e25ef5aa05b1772eb5045ceb6ab04b35185ac75f761186df95d5917a04e210"
+        },
+        "cleanup": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-post.json",
+          "result": "PASS",
+          "sha256": "474b296b97a1f59e4df9e480654b791d5ce380add38d72ae4c481694fcb264e6"
+        },
+        "installation": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/installation.json",
+          "result": "PASS",
+          "sha256": "42d1cf6fef7ae15cfc3003c0090b9805cf3c42fd88112e289a2656347e873f5e"
+        },
+        "sdk-closed": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/closed.json",
+          "result": "PASS",
+          "sha256": "fee890ed3b887587067446bbbd7dca698a7630fc7d9f501e040baab66958abe3"
+        },
+        "sdk-identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/identity.json",
+          "result": "PASS",
+          "sha256": "88217dd9fd3fa047b52d73e4bc86ca77f36312b510ab6d20a9f4ce6f31736cda"
+        },
+        "sdk-samples": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+          "result": "PASS",
+          "sha256": "9ab82e4f33c4435e71bdc80fe4ec5dd6dfa6bfd566ccf9a776ab7f8621e774f9"
+        },
+        "wire-closed": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01/closed.json",
+          "result": "PASS",
+          "sha256": "2b0fe19adf2bd481abbba2aad1fc95a2854686339a4cba713670c9b3b5b3a292"
+        }
+      },
+      "required_evidence": [],
+      "scope": "Twelve representative completed installed public SDK calls, each compute and Exon caller <=5 s; unchanged generation, no reload/retry; not a universal latency SLA or YAI semantic acceptance",
+      "state": "CHARACTERIZED"
+    },
+    "representation-quality": {
+      "blockers": [
+        "No independent checkpoint-wide logits/NLL/quality corpus in this latency capture"
+      ],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Not established by this timing capture",
+      "state": "BLOCKED"
+    }
+  },
+  "id": "finite-cpu-ordered-neon-exon-sdk-20261008",
+  "limitations": [
+    "Producer-boundary budget qualification for this exact checkpoint/CPU/corpus and approved Exon SDK path; not YAI Fast Search semantic acceptance or a universal 5-second SLA.",
+    "Three timed SDK samples per case; one separately measured fresh public JSONL byte control per case. SDK receive bound 32,768 bytes is stricter than the 65,536-byte consumer limit.",
+    "No Case prompts, indeterminate retry or sample-time reload. No transport/trust/grant/schema/numerical precision change.",
+    "Only the retained upstream three-candidate control has independent logit evidence. No logits-wide/NLL/PPL/calibration or general model-quality claim.",
+    "Transformation IR identity is not separately projected; remains unknown and prevents broad target qualification.",
+    "Load was measured with cached source/pages; not cold loading. DeepSeek idle and resident; no simultaneous inference guarantee.",
+    "These CPU changes do not establish the separate DeepSeek CUDA 20/700 throughput exit."
+  ],
+  "measurements": [
+    {
+      "case": "upstream.reference",
+      "definition": "server tensor-engine forward execution wall; excludes input admission/tokenization, result scoring/sealing and transport",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+      "metric": "compute.model-forward",
+      "output_bound": 65536,
+      "prompt_identity": "b86474b6c24239e7b5423495737b8ea42be47788971f8bf14613c28e0571dca9",
+      "reference_identity": "12a74ca95343a7612e53208853894df043ada0d1a8d1c59f5176ad16ce176ad6",
+      "samples": [
+        2.304795082,
+        2.248342003,
+        2.243584547
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 3,
+        "maximum": 2.304795082,
+        "median": 2.248342003,
+        "median_absolute_deviation": 0.00475745599999966,
+        "minimum": 2.243584547
+      },
+      "unit": "s",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "upstream.reference",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+      "metric": "request.client-complete",
+      "output_bound": 65536,
+      "prompt_identity": "b86474b6c24239e7b5423495737b8ea42be47788971f8bf14613c28e0571dca9",
+      "reference_identity": "12a74ca95343a7612e53208853894df043ada0d1a8d1c59f5176ad16ce176ad6",
+      "samples": [
+        2.592444227,
+        2.46192175,
+        2.453992308
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 3,
+        "maximum": 2.592444227,
+        "median": 2.46192175,
+        "median_absolute_deviation": 0.007929442000000009,
+        "minimum": 2.453992308
+      },
+      "unit": "s",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "upstream.reference",
+      "definition": "complete successful public JSONL response including LF, observed before SDK projection",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01/upstream.reference.capture.json",
+      "metric": "result.encoded-bytes",
+      "output_bound": 65536,
+      "prompt_identity": "b86474b6c24239e7b5423495737b8ea42be47788971f8bf14613c28e0571dca9",
+      "reference_identity": "12a74ca95343a7612e53208853894df043ada0d1a8d1c59f5176ad16ce176ad6",
+      "samples": [
+        1978
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 1,
+        "maximum": 1978,
+        "median": 1978,
+        "median_absolute_deviation": 0,
+        "minimum": 1978
+      },
+      "unit": "byte",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.context64",
+      "definition": "server tensor-engine forward execution wall; excludes input admission/tokenization, result scoring/sealing and transport",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+      "metric": "compute.model-forward",
+      "output_bound": 65536,
+      "prompt_identity": "8297f74ef348bf25e6e649c5f7ab2c4d5a7043f395f082b4971ef14dd60bbefa",
+      "reference_identity": null,
+      "samples": [
+        4.223904215,
+        4.2323111,
+        4.226262133
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 3,
+        "maximum": 4.2323111,
+        "median": 4.226262133,
+        "median_absolute_deviation": 0.002357917999999515,
+        "minimum": 4.223904215
+      },
+      "unit": "s",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.context64",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+      "metric": "request.client-complete",
+      "output_bound": 65536,
+      "prompt_identity": "8297f74ef348bf25e6e649c5f7ab2c4d5a7043f395f082b4971ef14dd60bbefa",
+      "reference_identity": null,
+      "samples": [
+        4.494367235,
+        4.702417824,
+        4.728623464
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 3,
+        "maximum": 4.728623464,
+        "median": 4.702417824,
+        "median_absolute_deviation": 0.026205639999999697,
+        "minimum": 4.494367235
+      },
+      "unit": "s",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.context64",
+      "definition": "complete successful public JSONL response including LF, observed before SDK projection",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01/product.context64.capture.json",
+      "metric": "result.encoded-bytes",
+      "output_bound": 65536,
+      "prompt_identity": "8297f74ef348bf25e6e649c5f7ab2c4d5a7043f395f082b4971ef14dd60bbefa",
+      "reference_identity": null,
+      "samples": [
+        1977
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 1,
+        "maximum": 1977,
+        "median": 1977,
+        "median_absolute_deviation": 0,
+        "minimum": 1977
+      },
+      "unit": "byte",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.action",
+      "definition": "server tensor-engine forward execution wall; excludes input admission/tokenization, result scoring/sealing and transport",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+      "metric": "compute.model-forward",
+      "output_bound": 65536,
+      "prompt_identity": "ae778294ee89f1b33a8472ff0d093e49d72fb3c034e6b6bb1d16c7840111cb1f",
+      "reference_identity": null,
+      "samples": [
+        2.535076019,
+        2.523942047,
+        2.510172474
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 3,
+        "maximum": 2.535076019,
+        "median": 2.523942047,
+        "median_absolute_deviation": 0.011133972000000103,
+        "minimum": 2.510172474
+      },
+      "unit": "s",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.action",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+      "metric": "request.client-complete",
+      "output_bound": 65536,
+      "prompt_identity": "ae778294ee89f1b33a8472ff0d093e49d72fb3c034e6b6bb1d16c7840111cb1f",
+      "reference_identity": null,
+      "samples": [
+        2.752742661,
+        2.746879176,
+        2.968297848
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 3,
+        "maximum": 2.968297848,
+        "median": 2.752742661,
+        "median_absolute_deviation": 0.005863484999999891,
+        "minimum": 2.746879176
+      },
+      "unit": "s",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.action",
+      "definition": "complete successful public JSONL response including LF, observed before SDK projection",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01/product.action.capture.json",
+      "metric": "result.encoded-bytes",
+      "output_bound": 65536,
+      "prompt_identity": "ae778294ee89f1b33a8472ff0d093e49d72fb3c034e6b6bb1d16c7840111cb1f",
+      "reference_identity": null,
+      "samples": [
+        1987
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 1,
+        "maximum": 1987,
+        "median": 1987,
+        "median_absolute_deviation": 0,
+        "minimum": 1987
+      },
+      "unit": "byte",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.population8",
+      "definition": "server tensor-engine forward execution wall; excludes input admission/tokenization, result scoring/sealing and transport",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+      "metric": "compute.model-forward",
+      "output_bound": 65536,
+      "prompt_identity": "0368cfeb65a9b6511ef34aeebe5c076938ffd660703dec83b1184bd11ef59105",
+      "reference_identity": null,
+      "samples": [
+        3.193001978,
+        3.199245654,
+        3.251404024
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 3,
+        "maximum": 3.251404024,
+        "median": 3.199245654,
+        "median_absolute_deviation": 0.006243675999999976,
+        "minimum": 3.193001978
+      },
+      "unit": "s",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.population8",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+      "metric": "request.client-complete",
+      "output_bound": 65536,
+      "prompt_identity": "0368cfeb65a9b6511ef34aeebe5c076938ffd660703dec83b1184bd11ef59105",
+      "reference_identity": null,
+      "samples": [
+        3.424761917,
+        3.419413292,
+        3.489339742
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 3,
+        "maximum": 3.489339742,
+        "median": 3.424761917,
+        "median_absolute_deviation": 0.005348624999999885,
+        "minimum": 3.419413292
+      },
+      "unit": "s",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    },
+    {
+      "case": "product.population8",
+      "definition": "complete successful public JSONL response including LF, observed before SDK projection",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01/product.population8.capture.json",
+      "metric": "result.encoded-bytes",
+      "output_bound": 65536,
+      "prompt_identity": "0368cfeb65a9b6511ef34aeebe5c076938ffd660703dec83b1184bd11ef59105",
+      "reference_identity": null,
+      "samples": [
+        2496
+      ],
+      "scope": "Exon SDK process wall includes startup, SSH, response validation/projection; bytes measured on a separate fresh public JSONL call, not SDK reserialization",
+      "session_state": "stateless finite request; stable resident generation",
+      "statistics": {
+        "count": 1,
+        "maximum": 2496,
+        "median": 2496,
+        "median_absolute_deviation": 0,
+        "minimum": 2496
+      },
+      "unit": "byte",
+      "warm_state": "resident CPU engine; DeepSeek resident idle; no sample-time reload or hidden warmup"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "automatic_retry": false,
+    "case_outcomes": [
+      {
+        "case": "upstream.reference",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+        "reason": "All three SDK calls complete within 5 s, preserve lineage/generation/ordered IDs; fresh raw response <=65,536 bytes",
+        "result": "PASS"
+      },
+      {
+        "case": "product.context64",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+        "reason": "All three SDK calls complete within 5 s, preserve lineage/generation/ordered IDs; fresh raw response <=65,536 bytes",
+        "result": "PASS"
+      },
+      {
+        "case": "product.action",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+        "reason": "All three SDK calls complete within 5 s, preserve lineage/generation/ordered IDs; fresh raw response <=65,536 bytes",
+        "result": "PASS"
+      },
+      {
+        "case": "product.population8",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+        "reason": "All three SDK calls complete within 5 s, preserve lineage/generation/ordered IDs; fresh raw response <=65,536 bytes",
+        "result": "PASS"
+      }
+    ],
+    "client": {
+      "executable_sha256": "d61a1a705c3f0a8d92f53f9fcff8dce175369ded4eb99cc4db0548b3e89053ce",
+      "sdk_commit": "0b6dc6e49d80740203609808ac3c941bfa0787c2",
+      "sdk_repository": "yailabs/yai-sdk",
+      "yvex_public_sdk_pin": "c57d333bb3a3f63d9c0d720c8016455cdeb7da41"
+    },
+    "diagnostics": [
+      {
+        "case": "upstream.reference",
+        "definition": "source-policy rendered finite forward positions",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+        "id": "input-positions-upstream.reference",
+        "unit": "count",
+        "value": 29
+      },
+      {
+        "case": "product.context64",
+        "definition": "source-policy rendered finite forward positions",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+        "id": "input-positions-product.context64",
+        "unit": "count",
+        "value": 64
+      },
+      {
+        "case": "product.action",
+        "definition": "source-policy rendered finite forward positions",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+        "id": "input-positions-product.action",
+        "unit": "count",
+        "value": 36
+      },
+      {
+        "case": "product.population8",
+        "definition": "source-policy rendered finite forward positions",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01/samples.json",
+        "id": "input-positions-product.population8",
+        "unit": "count",
+        "value": 46
+      }
+    ],
+    "profiled": false,
+    "raw_evidence": {
+      "post": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-post.json",
+      "rollout": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01",
+      "sdk": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01",
+      "wire": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01"
+    },
+    "reload_between_samples": false,
+    "resource_observation": "sampled idle pre/post host and uncontended observed CPU processes; no exclusive hardware reservation proof",
+    "source_capture": {
+      "executables": {
+        "executable-0": {
+          "observed_path": "/home/dgmothx/.local/lib/yvex/7fc562d5da05bba104d383266e72e3f8e075e404/bin/yvex",
+          "sha256": "fce0ebc0f1e370d9dad12a635134c0d5857883cd935bbc54956f2eeea0bbc19d"
+        },
+        "executable-1": {
+          "observed_path": "/tmp/yvex-finite-latency.yZInLc/source/build/lib/libyvex.a",
+          "sha256": "ca403d57294443b7ab2ca6dc70964a1719cf9b0278713a83e0a97cc204086dea"
+        }
+      },
+      "files": {
+        "base.tar": "8adbc1610ef22420ed14ccd9b6dfd11f456f9b908cad88806b166a8cb96ac708",
+        "delta.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "executable-0": "fce0ebc0f1e370d9dad12a635134c0d5857883cd935bbc54956f2eeea0bbc19d",
+        "executable-1": "ca403d57294443b7ab2ca6dc70964a1719cf9b0278713a83e0a97cc204086dea",
+        "untracked.tar": "84ff92691f909a05b224e1c56abb4864f01b4f8e3c854e4bb4c7baf1d3f6d652"
+      },
+      "schema": "yvex.qualification.source-capture.v1",
+      "scope": "observed source and executable bytes; build relationship separately required",
+      "source": {
+        "delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "head": "7fc562d5da05bba104d383266e72e3f8e075e404",
+        "state": "clean"
+      },
+      "tree": "0f1794b4c783a6d10d455930f5dea3484fa180bf"
+    },
+    "source_stability": "frozen",
+    "suite": {
+      "binding_identity": "5d1d4598c32c8317efbacfa3097cc4e630485cb9722e1f25e3fc3fe802fa1c41",
+      "caller_budget_ns": 5000000000,
+      "cases": [
+        {
+          "absolute_tolerance": 0.0001,
+          "candidates": [
+            {
+              "id": "continue",
+              "text": "continue"
+            },
+            {
+              "id": "stop",
+              "text": "stop"
+            },
+            {
+              "id": "escalate",
+              "text": "escalate"
+            }
+          ],
+          "context": "A short state.",
+          "id": "upstream.reference",
+          "question": "Select the best option.",
+          "reference_scores": [
+            0.752040267,
+            0.347543657,
+            -0.223986357
+          ]
+        },
+        {
+          "candidates": [
+            {
+              "id": "continue",
+              "text": "continue"
+            },
+            {
+              "id": "stop",
+              "text": "stop"
+            },
+            {
+              "id": "escalate",
+              "text": "escalate"
+            }
+          ],
+          "context": "a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a",
+          "id": "product.context64",
+          "question": "Select the best option."
+        },
+        {
+          "candidates": [
+            {
+              "id": "action.retry",
+              "text": "retry"
+            },
+            {
+              "id": "action.ask",
+              "text": "ask"
+            },
+            {
+              "id": "action.stop",
+              "text": "stop"
+            }
+          ],
+          "context": "Network request failed. Available actions need an explicit operator decision.",
+          "id": "product.action",
+          "question": "Choose the next action."
+        },
+        {
+          "candidates": [
+            {
+              "id": "opaque.a",
+              "text": "A"
+            },
+            {
+              "id": "opaque.b",
+              "text": "B"
+            },
+            {
+              "id": "opaque.c",
+              "text": "C"
+            },
+            {
+              "id": "opaque.d",
+              "text": "D"
+            },
+            {
+              "id": "opaque.e",
+              "text": "E"
+            },
+            {
+              "id": "opaque.f",
+              "text": "F"
+            },
+            {
+              "id": "opaque.g",
+              "text": "G"
+            },
+            {
+              "id": "opaque.h",
+              "text": "H"
+            }
+          ],
+          "context": "A short state.",
+          "id": "product.population8",
+          "question": "Pick one."
+        }
+      ],
+      "compute_budget_ns": 5000000000,
+      "id": "finite-product-latency@2026-10-08.3",
+      "provenance": "YVEX-authored bounded synthetic producer inputs; no Case replay. The first input is the retained independently referenced upstream arithmetic control.",
+      "result_bound_bytes": 65536,
+      "schema": "yvex.finite.latency.suite.v1",
+      "source_identity": "4fa56de72383a9d3efa9cfa78955733c81b9fc8067a587ca4beb82c78107a24e"
+    }
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "4fa56de72383a9d3efa9cfa78955733c81b9fc8067a587ca4beb82c78107a24e",
+    "backend": "cpu",
+    "backend_implementation": "source:7fc562d5da05bba104d383266e72e3f8e075e404/ordered-encoded-F32-CPU",
+    "binding": "5d1d4598c32c8317efbacfa3097cc4e630485cb9722e1f25e3fc3fe802fa1c41",
+    "build": "d22503df96b3ee7b0317cb0abc9cd7ce29891b8c5e1af4c8f2fc935344dc947b",
+    "checkpoint": "1a793eb568e6718f15941d08f85432581df534e3",
+    "concurrency": 1,
+    "context": 64,
+    "device_count": 1,
+    "driver": "Linux 6.17.0-1021-nvidia aarch64",
+    "executable": "fce0ebc0f1e370d9dad12a635134c0d5857883cd935bbc54956f2eeea0bbc19d",
+    "family_contract": "laya-typed-decisions / tensor-input token-type-dual-rope-v1",
+    "hardware_model": "NVIDIA DGX Spark GB10 CPU; Cortex-X925/Cortex-A725",
+    "kernel_bundle": "not-applicable: CPU operations linked in authenticated executable",
+    "memory_configuration": "shared GB10 system memory; OS scheduler; no exclusive machine reservation",
+    "physical_policy": "tensor-binding-v1; no quantization transformation; mapped immutable F16 source",
+    "prefill_geometry": "not-applicable: complete bidirectional finite forward",
+    "product_path": "Exon public Rust SDK / restricted SSH JSONL v1 / DGX resident host native-v25",
+    "reasoning": "not-applicable",
+    "representation": "F16 source / ordered F64 CPU F32 publication",
+    "runtime_configuration": "resident finite engine; one forward/backbone, zero sampling/generation; generation=1",
+    "runtime_toolkit": "native C CPU / ARM64 NEON; no GPU toolkit used",
+    "sampling": "none",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "one admitted input; 1..8 ordered candidates; rendered input <=64 positions",
+    "source_commit": "7fc562d5da05bba104d383266e72e3f8e075e404",
+    "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_tree": "0f1794b4c783a6d10d455930f5dea3484fa180bf",
+    "specialization": "ff6f2d5c61e15657abbee3762fa2f0bdb71191f20437cce71afd7cc5d73b1228",
+    "strategy": "not-applicable: finite-decision",
+    "suite": "4250adc32a22c5af6219d18db255859a7158117d1078c783feb44427db31af46",
+    "tokenizer_conversation": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30/8c3ecc1adba6928c3255b24f2d1eb0dd1a6843795473b8f3521cb25094e4c042",
+    "topology": "1 host / one CPU forward at a time; no GPU execution",
+    "transformation_ir": null,
+    "upstream_repository": "convaiinnovations/laya-typed-decisions"
+  },
+  "target_identity": "212587e5e2e8098fc00c32787e5577a1e7ac7d4bf45b497865f874511684e90e",
+  "title": "Finite CPU / installed Exon public SDK latency"
+}

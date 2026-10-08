@@ -64,8 +64,10 @@ currently unsupported and fails closed.
 The [installed LAN evidence](../evaluation/finite-decision-remote.md#installed-lan-producer)
 qualifies the same bounded producer over its separately versioned public SSH
 contract, with an explicit finite-only peer grant. HTTPS management is not a
-finite-inference endpoint; SDK/YAI integration and low-latency Fast Search remain
-independent consumer/performance gates.
+finite-inference endpoint. The [installed SDK latency controls](../evaluation/finite-decision-remote.md#finite-producer-latency-on-the-installed-sdk-path-2026-10-08)
+now establish the exact resident CPU producer budget for a bounded representative
+corpus. YAI semantic integration, quality breadth and a universal latency SLA
+remain independent gates.
 
 The bounded producer comparison uses the independent upstream tokenizer and
 PyTorch model on `Select the best option.` / `A short state.` with candidates
@@ -77,5 +79,7 @@ and marker positions `[10,14,18]`. Upstream logits are
 This qualifies numerical equivalence only for the stated input and raw
 finite-decision result, not general model quality, upstream calibration,
 action/escalation meaning, multilingual breadth, production latency or release
-fitness. The roughly 37-second CPU forward is characterization, not a claim
-that this checkpoint is a low-latency System-1 tier on this hardware.
+fitness. The historical slow CPU control and the later generic ordered-F32
+implementation are separate source-bound observations; the generated latency
+receipt owns the current producer measurements. It does not qualify semantic
+System-1 usefulness or arbitrary concurrent hardware load.

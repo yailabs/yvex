@@ -60,8 +60,9 @@ calibration, new model admission, inference performance or the actual Exon→DGX
 chain. Existing independently qualified local model evidence retains its scope.
 An approved installed listener, host pin, enrolled YAI key and admitted resident
 finite engine were separate exits from that original fixture delivery; the
-installed follow-up below now qualifies those producer facts. No remote SDK
-method is claimed here; the concurrent YAI/SDK owner implements it.
+installed follow-up below qualifies those producer facts. The original fixture
+did not qualify a remote SDK consumer; the later installed SDK controls below
+retain their separate scope.
 The bounded input/result and conservative unknown-outcome/no-retry semantics
 are specified in the public contract, not reconstructed from human CLI output.
 
@@ -127,7 +128,7 @@ they are not a workload/performance campaign. Durations are characterization of
 this fixture only. The remote control's outer SSH round trip includes the DGX
 control hop to Exon and is not pure client-observed Exon latency.
 
-### Current generation after the coordinated idle window
+### Historical generation after the 2026-10-07 coordinated idle window
 
 The 2026-10-07 operator-approved idle replacement installs clean published
 `a444bcdd384f6abfc79b07d1a26d93c17c4a97c0` through `make install` under its
@@ -222,8 +223,8 @@ The public contract owns input bounds, candidate/result identity, conservative
 unknown-outcome semantics and no blind retry; the consumer never forwards or
 encodes the private socket protocol and never parses human CLI output.
 
-The CPU control remains expensive and is **not** low-latency Fast Search
-qualification. Scores are uncalibrated and confer no Case authority. YAI/SDK
+That historical CPU control was expensive and did **not** qualify low-latency
+Fast Search. Scores are uncalibrated and confer no Case authority. YAI/SDK
 and Studio consumption, semantic search usefulness, broader input/quality,
 performance targets, remote HTTPS computation and release readiness remain
 independent gates. No private key, bearer or Case material is in this handoff.
@@ -231,3 +232,77 @@ independent gates. No private key, bearer or Case material is in this handoff.
 `progression_decision=proceed`, `downstream_safe=true` for connecting the remote
 typed YAI/SDK consumer to this exact installed producer only. A03 stays READY;
 the separate DeepSeek competitive/residency delivery remains unfinished.
+
+## Finite producer latency on the installed SDK path — 2026-10-08
+
+`RUNTIME.FINITE.DECISION.PRODUCT.LATENCY.0` earns the bounded producer-side
+budget exit, not YAI semantic acceptance. The [current machine handoff](data/finite-lan-20261006.json)
+owns endpoint, approved pin/grant, model lineage, current generation and installed
+build. The [generated exact-target view](benchmarks/generated/qualification-finite-cpu-ordered-neon-exon-sdk-20261008.md)
+owns measured forward/caller durations, sample distribution, actual public JSONL
+bytes and reproduction context. Its [structured receipt](benchmarks/qualification/finite-cpu-ordered-neon-exon-sdk-20261008.json)
+is canonical; timings are not separately maintained here.
+
+The SDK requires a pinned known-hosts entry for the connection address; it does
+not expose OpenSSH's `HostKeyAlias` option. Qualification binds the already
+approved public key to `[192.168.1.70]:18002` in an isolated public pin file,
+verifying the same approved fingerprint. The handoff names that file and the
+original approved Exon store. The client owner must persist the address alias
+through its own configuration; this is not approval of another key, automatic
+pairing, private-key copying or an edit of the existing Exon SSH store.
+
+One explicitly approved idle replacement installs published `7fc562d5`, through
+`make install` into its immutable commit prefix. The old Host has zero active,
+HTTP, queued, session, lease, attached-client and transient work; supported stop
+retires its process/socket/singleton before replacement. The same finite engine
+loads once at generation **1**; the same DeepSeek loads once at generation **2**,
+context 32768/chunk 64/speculative. Both public listener processes, their pinned
+identities and the YAI finite-only enrollment are unchanged. No user prompt or
+indeterminate invocation is replayed.
+
+The bottleneck was generic CPU F32 encoded projection: per-scalar codec
+redispatch and serial independent input-row traversal. The quantization owner
+retains canonical little-endian decoding and literal ordered F64 accumulation;
+the CPU backend reuses weight loads across four independent F64 accumulators,
+with native ARM64 NEON lanes and a portable scalar equivalent. Runtime owns
+cancellation between bounded tiles and final publication. No source, binding,
+physical numerical class, tensor layout, precision, new allocation or family-name
+dispatch is introduced. Unsupported/nonfinite/overlapping/malformed work retains
+typed refusal. The [numerical contract](../contracts/numerical-abi.md#ordered-encoded-f32-cpu-projection)
+owns these obligations.
+
+| Evidence | Authority / fixture | Observed | Claim |
+| --- | --- | --- | --- |
+| Ordered CPU arithmetic | Independent literal F64 recurrences; cancellation magnitudes, odd rows, unaligned storage, signed zero/subnormals, nonfinite/extent/overlap negatives | Unit backend/quantization controls pass; scalar/NEON publication is bit-exact | Same admitted ordered numerical class, not a relaxed sum |
+| Actual finite checkpoint | Independent upstream PyTorch control; exact input/candidate population and declared tolerance | Live diagnostic passes; installed SDK retains the exact previous raw scores, relative probabilities and reference result identity | One checkpoint-matched control, not general quality/calibration |
+| Installed Exon SDK budget | Published `yai-sdk` `0b6dc6e4`, public YVEX SDK pin `c57d333b`; four immutable synthetic cases, three fresh invocations per case | All twelve compute and full caller measurements are within the unchanged 5,000 ms budget; one stable generation, no reload or retry | Representative exact-target producer budget controls; no universal SLA |
+| Public wire/refusal | Fresh raw JSONL controls for the same cases; stale generation and duplicate ID | Successful frames fit 65,536 bytes; stale publishes no result; duplicate is not dispatched | Ordered IDs/lineage preserved and fail-closed result boundary |
+| Lifecycle | Typed pre/post Host/Engine facts | Work/HTTP/queue/session/lease/client/transient counts return to zero; both engines remain ready | No transient leak or DeepSeek retirement |
+| Software / interfaces | Mapped CPU/program/runtime/unit/C ABI/CLI/PTY/OpenAI controls; ASan/LSan/UBSan; official upstream DeepSeek encoding; final structural suite | Changed computational controls pass; structural suite 19/19; sanitizers and real finite diagnostic pass | Bounded Linux/ARM64 computational/interface regression evidence, not release or new Metal qualification |
+
+Raw evidence and source captures are retained at
+`/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u`.
+The initial broad mapped run retains its PATH/asset/count failures; corrected
+structural, official encoding, finite SSH and OpenAI reruns are separately
+recorded, not substituted into its original receipt. Broader SDK management
+fixtures remain unavailable/failed before computation (locked desktop vault;
+disposable SSH `host.get` transport failure). Two configured broader CUDA live
+benchmark lanes were not executed in this CPU delivery. Those results are not
+reported green and do not qualify new management, CUDA or release scope.
+
+Forward time excludes tokenization, result scoring/sealing and transport. The
+SDK caller clock runs on Exon and includes process startup, connection, SSH,
+result validation and projection; the DGX orchestration hop is excluded. Bytes
+come from fresh raw JSONL, not SDK reserialization. The largest input control
+has a narrow observed caller margin: this does not promise the same deadline
+under unrelated CPU load/concurrent inference. Higher-level YAI admission and
+the complete governed Case operation remain YAI-owned qualification.
+
+Quality breadth, calibration and the separately unprojected Transformation IR
+identity remain unavailable. The receipt therefore stays CHARACTERIZED rather
+than promoting the whole checkpoint/representation to QUALIFIED. The successful
+bounded budget controls do not earn the separate DeepSeek CUDA 20/700 exit.
+
+`progression_decision=proceed`, `downstream_safe=true` for a new, generation-bound
+YAI consumer qualification through this exact public producer. No speculative
+retry, HTTPS finite route, Case authority or A03 execution follows.

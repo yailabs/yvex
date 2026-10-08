@@ -1,7 +1,7 @@
 {
   "schema": "yvex.finite.operational-handoff.v1",
-  "observed_date_utc": "2026-10-07",
-  "task": "INTERFACES.FINITE.DECISION.LAN.OPERATIONAL.0",
+  "observed_date_utc": "2026-10-08",
+  "task": "RUNTIME.FINITE.DECISION.PRODUCT.LATENCY.0",
   "producer_state": "operational",
   "finite_transport": {
     "kind": "restricted-openssh-jsonl-v1",
@@ -35,18 +35,18 @@
     "contract": "https://github.com/yailabs/yvex/blob/a46ddf5ee8c8b0fc4938a53f02fc372d9a00d116/docs/contracts/finite-decision-remote.md"
   },
   "runtime_host_software": {
-    "source_commit": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0",
-    "source_tree": "508e7cfeb5887fc123e200038d073ce72dc79049",
+    "source_commit": "7fc562d5da05bba104d383266e72e3f8e075e404",
+    "source_tree": "0f1794b4c783a6d10d455930f5dea3484fa180bf",
     "source_state": "clean",
     "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "build_identity": "f748ad6114858e5f1b6246f8bd2d6ade9a1743bd72e8e27b351d951c35b00bac",
-    "shell_build_identity": "97c432212c41b05c3dc194ccd70311692a1858c564b4bfe74d8cee09f3d6ed3a",
-    "executable_sha256": "e1ea8e02ad223a3fffb2ecc6839ee354658bd97a6e23c7e6b0651007d4ad3b4d",
-    "native_library_sha256": "ad883eab4950cf90cdebfa165df86da15a023a11e01d56bac4e5ffc459cd05f3",
-    "installed_via": "make install, immutable published commit prefix",
+    "build_identity": "d22503df96b3ee7b0317cb0abc9cd7ce29891b8c5e1af4c8f2fc935344dc947b",
+    "shell_build_identity": "d7f1910d2ae9eb315e1609afadc8637d3f6c8f36169bb2b7d1691b787f60b5bb",
+    "executable_sha256": "fce0ebc0f1e370d9dad12a635134c0d5857883cd935bbc54956f2eeea0bbc19d",
+    "native_library_sha256": "ca403d57294443b7ab2ca6dc70964a1719cf9b0278713a83e0a97cc204086dea",
+    "installed_via": "make install, lowercase GNU prefix, immutable published source prefix",
     "private_protocol": 25,
-    "process_id_at_capture": 3708936,
-    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-product-rollout-v33"
+    "process_id_at_capture": 3338691,
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01"
   },
   "model": {
     "alias": "laya-typed-finite-cpu",
@@ -66,7 +66,10 @@
     "specialization_identity": "ff6f2d5c61e15657abbee3762fa2f0bdb71191f20437cce71afd7cc5d73b1228"
   },
   "bounds": {
-    "candidate_count": {"minimum": 1, "maximum": 8},
+    "candidate_count": {
+      "minimum": 1,
+      "maximum": 8
+    },
     "question_utf8_bytes_exclusive_maximum": 256,
     "context_utf8_bytes_exclusive_maximum": 512,
     "alias_candidate_id_candidate_text_utf8_bytes_exclusive_maximum": 128,
@@ -91,11 +94,171 @@
     "calibrated": false,
     "upstream_max_abs_logit_delta": 0.000003933915893594708,
     "predeclared_absolute_tolerance": 0.0001,
-    "producer_elapsed_seconds": [37.979803178, 38.021581935],
+    "producer_elapsed_seconds": [
+      37.979803178,
+      38.021581935
+    ],
     "result_identity": "c29d83173a3430c2b69d4dea17ec99768190688f25cbbc693085c5a9ab6a7b77",
     "raw_evidence": "remote-controls.json"
   },
-  "post_window_controls": {
+  "current_lan_controls": {
+    "scope": "Exact installed producer budget controls, not YAI Case/Fast Search semantic acceptance or universal latency SLA",
+    "path": "Published Exon SDK -> approved restricted SSH JSONL v1 -> unchanged public adapter -> updated resident Host",
+    "engine_generation": 1,
+    "sdk_repository": "yailabs/yai-sdk",
+    "sdk_commit": "0b6dc6e49d80740203609808ac3c941bfa0787c2",
+    "yvex_public_sdk_pin": "c57d333bb3a3f63d9c0d720c8016455cdeb7da41",
+    "sdk_executable_sha256": "d61a1a705c3f0a8d92f53f9fcff8dce175369ded4eb99cc4db0548b3e89053ce",
+    "complete_sdk_samples": 12,
+    "cases": 4,
+    "samples_per_case": 3,
+    "compute_and_caller_budget_ms": 5000,
+    "all_samples_within_budget": true,
+    "result_bound_bytes": 65536,
+    "sdk_receive_bound_bytes": 32768,
+    "raw_successful_jsonl_controls": 4,
+    "raw_jsonl_maximum_observed_bytes": 2496,
+    "stale_generation": "YVEX_ERR_STATE, no result",
+    "duplicate_candidate_id": "not_dispatched, no result",
+    "model_forward_count_per_response": 1,
+    "sampling_invocation_count": 0,
+    "generated_token_count": 0,
+    "calibrated": false,
+    "upstream_max_abs_logit_delta": 0.000003933915893594708,
+    "predeclared_absolute_tolerance": 0.0001,
+    "reference_result_identity": "8401dc233d6ff80cf694c105fa06e52f63b98fc448ad9728cdd8adc1b897135a",
+    "qualification_receipt": "../benchmarks/qualification/finite-cpu-ordered-neon-exon-sdk-20261008.json",
+    "qualification_target_identity": "212587e5e2e8098fc00c32787e5577a1e7ac7d4bf45b497865f874511684e90e",
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/sdk-window-01",
+    "wire_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/public-controls-01",
+    "automatic_retry": false,
+    "reload_between_samples": false,
+    "remote_trust_or_grant_changed": false,
+    "private_key_copied": false,
+    "case_prompt_replayed": false,
+    "caller_clock": "Exon SDK example process wall including startup/connect/SSH/result validation; DGX orchestration hop excluded",
+    "compute_clock": "tensor-engine forward only; excludes tokenization/scoring/sealing/transport",
+    "margin": "The largest 64-token control has a narrow observed caller margin; no concurrency/CPU-contention SLA is earned.",
+    "sdk_pin_binding": {
+      "scope": "Rebind the already approved public Ed25519 key to the current LAN address through the client owner; not a new server identity/trust approval.",
+      "existing_approved_known_hosts_on_exon": "/home/mothx/.ssh/yvex-finite-known-hosts",
+      "current_host_field": "[192.168.1.70]:18002",
+      "sdk_supports_ssh_host_key_alias_option": false,
+      "qualified_public_known_hosts_on_exon": "/tmp/yvex-finite-sdk-latency.NA4dmw/sdk-window-01/approved-current-address.known_hosts",
+      "private_key_material_not_inspected_or_copied": true
+    }
+  },
+  "deepseek_preserved": {
+    "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+    "engine_generation": 2,
+    "context": 32768,
+    "prefill_chunk": 64,
+    "strategy": "speculative",
+    "model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+    "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "specialization_identity": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "execution_ready": true,
+    "scope": "Same admitted DeepSeek restored once at the coordinated Host replacement, no sample-time reload or operator prompt replay. New request recovery qualified separately.",
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01/production-after.json",
+    "fresh_native_recovery": "One new manifest-authored chat.short native request completes through the installed Rust product with 256 committed positions and a terminal output bound; the test session is retired. Recovery only, not sustained-performance qualification.",
+    "native_receipt": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-post-deepseek-native-01/receipt.json"
+  },
+  "https_management": {
+    "url": "https://192.168.1.70:18080",
+    "approved_pin": "tls-sha256:df09a3fb3d3158adb0e7f2ef3bfcef9810b74a461498854ac52f9ada2545e293",
+    "service_restarted": false,
+    "finite_inference_endpoint": false,
+    "native_host_get": "Historical PASS before this window; current runtime readiness comes from typed native snapshots, not a renewed authenticated HTTPS operation"
+  },
+  "idle_at_evidence_capture": {
+    "active_requests": 0,
+    "active_http_requests": 0,
+    "queue_depth": 0,
+    "sessions": 0,
+    "engine_work_leases_attached_clients": 0,
+    "transient_current_bytes": 0,
+    "finite_persistent_workspace_host_bytes": 214582212,
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-final-post.json"
+  },
+  "latest_coordinated_window": {
+    "observed_date_utc": "2026-10-08",
+    "source": "7fc562d5da05bba104d383266e72e3f8e075e404, clean installed build",
+    "gate": "One explicitly approved idle Host replacement; same model/binding/configuration; 12 completed public Exon SDK calls and 6 fresh raw JSONL/refusal controls; generation stable throughout; no retry or Case replay.",
+    "finite_engine_generation": 1,
+    "deepseek_restored_generation": 2,
+    "production_binary_replaced": true,
+    "listener_trust_grants_changed": false,
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/finite-published-rollout-01",
+    "case_prompt_replayed": false
+  },
+  "consumer_rules": {
+    "verify": [
+      "approved host pin",
+      "request/schema/alias",
+      "engine generation",
+      "ordered candidate IDs",
+      "six model/input-policy identities"
+    ],
+    "request_id_deduplicates": false,
+    "automatic_retry": false,
+    "loss_after_dispatch": "outcome unavailable; no blind replay",
+    "semantic_case_authority": false,
+    "remote_sdk_owner": "Published YVEX public Rust SDK consumed by published yai-sdk wrapper; YAI retains its semantic/authority integration",
+    "producer_fast_search_v1_budget_controls_passed": true,
+    "yai_fast_search_semantic_qualification": false
+  },
+  "previous_runtime_host_software": {
+    "source_commit": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0",
+    "source_tree": "508e7cfeb5887fc123e200038d073ce72dc79049",
+    "source_state": "clean",
+    "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build_identity": "f748ad6114858e5f1b6246f8bd2d6ade9a1743bd72e8e27b351d951c35b00bac",
+    "shell_build_identity": "97c432212c41b05c3dc194ccd70311692a1858c564b4bfe74d8cee09f3d6ed3a",
+    "executable_sha256": "e1ea8e02ad223a3fffb2ecc6839ee354658bd97a6e23c7e6b0651007d4ad3b4d",
+    "native_library_sha256": "ad883eab4950cf90cdebfa165df86da15a023a11e01d56bac4e5ffc459cd05f3",
+    "installed_via": "make install, immutable published commit prefix",
+    "private_protocol": 25,
+    "process_id_at_capture": 3708936,
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-product-rollout-v33"
+  },
+  "previous_coordinated_window": {
+    "observed_date_utc": "2026-10-07",
+    "source": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0, clean installed build",
+    "gate": "Installed public-C and real Exon LAN finite controls; Rust/native coding and four three-turn sessions; settled high/maximum bounded refusals; HTTP/native recovery; two isolated diagnostic profiles. Not SDK/YAI semantic qualification, successful bounded reasoning performance or profiled throughput evidence.",
+    "finite_engine_generation_unchanged": 1,
+    "deepseek_restored_generation": 3,
+    "production_binary_replaced": true,
+    "listener_trust_grants_changed": false,
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-product-remaining-v42",
+    "case_prompt_replayed": false
+  },
+  "historical_lan_controls_20261007": {
+    "path": "Exon -> approved dedicated restricted SSH -> unchanged public producer -> updated resident Host",
+    "engine_generation": 1,
+    "positive_and_independent_recovery": 2,
+    "stale_generation": "YVEX_ERR_STATE, no result",
+    "duplicate_candidate_id": "not_dispatched, no result",
+    "fixture_token_count": 29,
+    "model_forward_count_per_response": 1,
+    "sampling_invocation_count": 0,
+    "generated_token_count": 0,
+    "calibrated": false,
+    "upstream_max_abs_logit_delta": 0.00000393391589359,
+    "predeclared_absolute_tolerance": 0.0001,
+    "producer_elapsed_seconds": [
+      37.14730088,
+      37.004553478
+    ],
+    "result_identity": "8401dc233d6ff80cf694c105fa06e52f63b98fc448ad9728cdd8adc1b897135a",
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-product-lan-v38",
+    "scope": "Real approved public producer/transport controls, not YAI SDK/Case semantic acceptance or low-latency Fast Search qualification",
+    "outer_ssh_round_trip": "Includes the DGX control hop to Exon; not pure Exon client latency",
+    "remote_trust_or_grant_changed": false,
+    "private_key_copied": false,
+    "case_prompt_replayed": false
+  },
+  "historical_post_window_controls_20261007": {
     "path": "installed public C local producer -> resident Host; not renewed Exon SDK/YAI qualification",
     "engine_generation": 1,
     "specialization_identity": "ff6f2d5c61e15657abbee3762fa2f0bdb71191f20437cce71afd7cc5d73b1228",
@@ -113,29 +276,7 @@
     "remote_trust_or_grant_changed": false,
     "case_prompt_replayed": false
   },
-  "current_lan_controls": {
-    "path": "Exon -> approved dedicated restricted SSH -> unchanged public producer -> updated resident Host",
-    "engine_generation": 1,
-    "positive_and_independent_recovery": 2,
-    "stale_generation": "YVEX_ERR_STATE, no result",
-    "duplicate_candidate_id": "not_dispatched, no result",
-    "fixture_token_count": 29,
-    "model_forward_count_per_response": 1,
-    "sampling_invocation_count": 0,
-    "generated_token_count": 0,
-    "calibrated": false,
-    "upstream_max_abs_logit_delta": 0.00000393391589359,
-    "predeclared_absolute_tolerance": 0.0001,
-    "producer_elapsed_seconds": [37.147300880, 37.004553478],
-    "result_identity": "8401dc233d6ff80cf694c105fa06e52f63b98fc448ad9728cdd8adc1b897135a",
-    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-product-lan-v38",
-    "scope": "Real approved public producer/transport controls, not YAI SDK/Case semantic acceptance or low-latency Fast Search qualification",
-    "outer_ssh_round_trip": "Includes the DGX control hop to Exon; not pure Exon client latency",
-    "remote_trust_or_grant_changed": false,
-    "private_key_copied": false,
-    "case_prompt_replayed": false
-  },
-  "deepseek_preserved": {
+  "previous_deepseek_controls": {
     "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
     "engine_generation": 3,
     "context": 32768,
@@ -159,38 +300,5 @@
       "case_prompt_replayed": false
     },
     "case_prompt_replayed": false
-  },
-  "https_management": {
-    "url": "https://192.168.1.70:18080",
-    "approved_pin": "tls-sha256:df09a3fb3d3158adb0e7f2ef3bfcef9810b74a461498854ac52f9ada2545e293",
-    "service_restarted": false,
-    "finite_inference_endpoint": false,
-    "native_host_get": "Historical PASS before this window; current runtime readiness comes from typed native snapshots, not a renewed authenticated HTTPS operation"
-  },
-  "idle_at_evidence_capture": {
-    "active_requests": 0, "active_http_requests": 0, "queue_depth": 0,
-    "sessions": 0, "engine_work_leases_attached_clients": 0,
-    "transient_current_bytes": 0,
-    "finite_persistent_workspace_host_bytes": 214580748
-  },
-  "latest_coordinated_window": {
-    "observed_date_utc": "2026-10-07",
-    "source": "a444bcdd384f6abfc79b07d1a26d93c17c4a97c0, clean installed build",
-    "gate": "Installed public-C and real Exon LAN finite controls; Rust/native coding and four three-turn sessions; settled high/maximum bounded refusals; HTTP/native recovery; two isolated diagnostic profiles. Not SDK/YAI semantic qualification, successful bounded reasoning performance or profiled throughput evidence.",
-    "finite_engine_generation_unchanged": 1,
-    "deepseek_restored_generation": 3,
-    "production_binary_replaced": true,
-    "listener_trust_grants_changed": false,
-    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/published-product-remaining-v42",
-    "case_prompt_replayed": false
-  },
-  "consumer_rules": {
-    "verify": ["approved host pin", "request/schema/alias", "engine generation", "ordered candidate IDs", "six model/input-policy identities"],
-    "request_id_deduplicates": false,
-    "automatic_retry": false,
-    "loss_after_dispatch": "outcome unavailable; no blind replay",
-    "semantic_case_authority": false,
-    "fast_search_low_latency_qualification": false,
-    "remote_sdk_owner": "YAI / yai-sdk concurrent owner; not implemented by this YVEX delivery"
   }
 }
