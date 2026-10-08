@@ -2107,3 +2107,39 @@ Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
 DeepSeek and preserves finite generation and approved public transports.
 Candidate code is not integrated. Architecture, public ABI, installed runtime
 and Task state do not change; no throughput exit or hardware ceiling is earned.
+
+## Rejected attention candidate-score tiling (2026-10-08)
+
+The generic small-head experiment assigns independent candidate dot products
+to eight warps within one query/head CTA, then retains the original candidate
+order for online softmax and output FMAs. The permuted dot tree, visibility,
+causality, sink semantics and BF16 publication remain unchanged. A bounded
+shared tile replaces neither persistent state nor a workspace owner.
+
+| Exact lane / workload | Generated rejected-candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-attention-tile-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-attention-tile-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-attention-tile-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-attention-tile-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-rejected-attention-tile-native-coding-metal-20261008.md) |
+
+Three unprofiled samples per cell show material uncached-prefill regression;
+the marginal native coding variation does not compensate for it. Candidate
+code is rejected, not integrated. Strict comparison passes 38 controlled metric
+gates and four content/population controls, plus ten native metric gates, six
+population controls and all 768 ordered channel/content fragments. These
+comparison gates establish comparability and preservation, not a speedup.
+
+Registered `cuda.attention_reduction`, `cuda.attention_softmax`,
+`cuda.attention_selection` and `structural.code-natural` pass at the frozen
+source. Independent F64/analytic controls and original native bit comparisons
+cover SWA/CSA/HCA, candidate/row tails, 17-query geometry and malformed/nonfinite
+refusals. Component success does not qualify checkpoint/representation quality
+or justify a worse full-model physical realization.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`product-attention-tile-native-01`, `attention-tile-controlled-01`,
+`qualification-rejected-attention-tile` and both
+`attention-tile-*-comparison-01.json` records. Owned cleanup restores installed
+DeepSeek and preserves finite generation and approved public transports.
+No production code, numerical class, public ABI, installed executable or
+Task-state promotion follows; the performance exit remains unearned.

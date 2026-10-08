@@ -170,6 +170,13 @@ retains exact content/population and numerical controls. No production code or
 installed-runtime change follows; the same Task continues at attention and
 physical execution costs with the 20/700 gates unchanged.
 
+The independent-candidate attention score tile is rejected: exact original
+reduction/publication and refusal controls pass, but matched N=3 complete-model
+2K/8K prefill regresses without a compensating native coding benefit.
+[Rejected attention evidence](../evaluation/retained-observations.md#rejected-attention-candidate-score-tiling-2026-10-08)
+retains the source-stable comparison and restoration witnesses. The original
+attention realization remains production-owned; the same Task continues.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |
