@@ -184,6 +184,13 @@ extra static shared storage does not earn a product tradeoff.
 [Rejected expert-tile evidence](../evaluation/retained-observations.md#rejected-expert-column-tile-cache-2026-10-08)
 retains exact comparisons. No production-code or installed-runtime change follows.
 
+The paired IQ2/Q8 gate/up input traversal is rejected after matched controlled
+and Rust/native N=3 series. Exact primitive publication/refusal and independent
+distinct-weight F64 controls pass, but complete-model coding/prefill is neutral.
+[Rejected paired-input evidence](../evaluation/retained-observations.md#rejected-paired-iq2q8-input-traversal-2026-10-08)
+retains the experiment without adding a production realization. The same Task
+continues with exact CUDA Graph/projection attribution and unchanged 20/700 gates.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |

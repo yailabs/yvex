@@ -2181,3 +2181,44 @@ Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
 DeepSeek and preserves finite generation and approved public transports.
 Candidate code is not integrated; public ABI, numerical class, installed runtime
 and Task state do not change. The same performance boundary continues.
+
+## Rejected paired IQ2/Q8 input traversal (2026-10-08)
+
+The generic row experiment shares activation loads between independent gate/up
+IQ2_XXS dots. Integer subtotals, block scaling, original 32-lane F32 publication
+tree and independent ordered-F64 exceptional recovery remain unchanged. The
+bounded eligibility is at most sixteen exact 66-byte IQ2 blocks; other rows keep
+the existing realization. No prepared weight layout, public ABI or persistent
+workspace is added.
+
+| Exact lane / workload | Generated rejected-candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-q8-paired-input-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-q8-paired-input-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-q8-paired-input-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-q8-paired-input-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-rejected-q8-paired-input-native-coding-metal-20261008.md) |
+
+Three unprofiled samples per cell show no material complete-model benefit.
+Strict comparison passes 38 controlled metric gates and four content/population
+controls, plus ten native metric gates, six population controls and all 768
+ordered channel/content fragments. Comparison success is not a performance gate.
+
+The private primitive fixture compares 6,336 distinct gate/up pairs against the
+original separate GPU dots: 4,224 exact F32 publications, 2,112 refused cases and
+528 preset-error cases, with untouched canaries on refusal. It covers all one
+through sixteen-block geometries, 33-row tails, halfword-offset weight storage,
+subnormals, signed zero, overflow and nonfinite inputs. Memcheck, racecheck and
+synccheck report zero errors; racecheck also reports zero warnings. Registered
+`cuda.moe_rows` separately uses independent CPU decoded F64 references with
+distinct gate/up weights; `cuda.quant_qtype`, runtime/worklist and structural
+controls pass. These are component/preservation facts, not independent full-model
+checkpoint or representation-quality qualification.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`product-q8-paired-input-native-01`, `q8-paired-input-controlled-01`,
+`qualification-rejected-q8-paired-input`, sanitizer/QA logs and both
+`q8-paired-input-*-comparison-01.json` records. Initial sanitizer-driver output
+parsing failed before evidence admission; a dedicated diagnostic log repairs the
+observer and all three reruns pass at the frozen final source. Candidate producer
+code and its private comparison probe are not integrated. Owned cleanup preserves
+finite generation and public transports and restores installed DeepSeek.
+No numerical, quality, installed-runtime or Task-state promotion follows.
