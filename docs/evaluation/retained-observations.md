@@ -2284,3 +2284,66 @@ produces no timing evidence. Owned cleanup restores installed DeepSeek and
 preserves finite generation and approved public transports. No public ABI,
 numerical class, installed executable, independent quality or Task-state
 promotion follows. The same full-system performance boundary continues.
+
+## Exact identity computation on ARM64 (2026-10-08)
+
+Whole-model CPU sampling identified canonical SHA-256 identity computation on
+the request critical path. The shared core owner now uses the CPU's observed
+SHA2 integer compression capability on Linux little-endian AArch64. It does not
+change serialized inputs, digest identity, authentication, model arithmetic or
+the portable implementation used elsewhere. Feature discovery is atomic;
+the instruction-specific function does not raise the global ISA requirement.
+
+| Exact lane / workload | Generated characterized result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-controlled-identity-sha2-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-controlled-identity-sha2-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-controlled-identity-sha2-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-controlled-identity-sha2-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-identity-sha2-native-coding-metal-20261008.md) |
+
+Three unprofiled samples per cell support a bounded coding/native latency and
+decode benefit, with much smaller long-prefill effects. Strict comparison
+passes 38 controlled metric gates and four content/population controls, plus
+ten native metric gates, six population controls and all 768 ordered
+channel/content fragments. This preserves the observed continuation and real
+work; it does not provide an independent checkpoint/quality oracle or earn
+the 20/700 performance exit. Timed records bind the frozen candidate source,
+not the unchanged installed executable.
+
+Independent Python `hashlib` known answers cover binary lengths, both padding
+boundaries, segmented and unaligned updates, plus canonical scalar/text input.
+An external primitive control compares 4,096 arbitrary compression states and
+190 stream digests and exercises concurrent first capability discovery.
+Permanent unit tests retain the standard known answers and add 63 segmented
+binary cases, exact identity serialization and destination/context-preserving
+negative controls. The external ASan/UBSan control and mapped runtime
+ASan/LSan/UBSan lane pass. No Darwin instruction-backed implementation is claimed.
+
+The exact-source mapped set resolves to 128 PASS, five BLOCKED, zero FAIL or
+ERROR across 133 identities. The initial environment omitted Cargo from PATH;
+all affected tests are rerun with the real toolchain retained, at the same
+source delta. Original failures remain in their reports. The five missing
+consumer prerequisites are the SDK connections/product examples and Node/npm
+for OpenAI integration. They remain unqualified, not inferred from the passing
+native protocol, Rust/PTY, finite-remote, lifecycle and public-ABI controls.
+Selection uses each report's start time, not its delayed finish time; test
+durations that include lock wait are not execution timings.
+
+Separate source-stable CPU and CUPTI diagnostics show less host-only submission
+time with materially unchanged device activity. Device-activity union,
+host-API-only intervals and intervals outside both are disjoint; named API
+spans may overlap and are not added as independent wall costs. Missing activity
+is not proof of removable CPU work. Sampling percentages are not end-to-end
+speedups or achieved GPU utilization, and these profiled runs are excluded
+from timed samples. Remaining device/runtime costs are not a hardware ceiling.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`product-identity-sha2-native-01`, `identity-sha2-controlled-01`,
+`qualification-identity-sha2`, both `identity-sha2-*-comparison-01.json`,
+`identity-sha2-mapped-consolidated-01.json`, primitive/sanitizer/QA logs,
+`product-cpu-execution-profile-01` and
+`product-identity-sha2-cpu-profile-01`. Timings bind frozen `09a99e47` plus
+delta `1600ba6e`; mapped QA binds the same commit plus delta `0d5b17f0`,
+whose only additional owner is the strengthened permanent unit test. Owned
+cleanup restores the same installed DeepSeek configuration while preserving
+finite generation and approved transports. No ABI, schema, model-quality,
+installed-runtime or Task-state promotion follows.

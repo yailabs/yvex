@@ -199,6 +199,15 @@ not a target-only or long-prefill breakthrough. [Eligibility evidence](../evalua
 retains kernel attribution and complete-model comparisons separately. The same
 Task remains IN PROGRESS; independent quality and 20/700 exits are unearned.
 
+Generic exact identity computation now uses observed Linux ARM64 SHA2 capability
+without changing canonical digests, serialization, refusal or portable fallback.
+Independent known-answer, incremental, concurrency and sanitizer controls pass;
+source-stable mapped QA retains prerequisite-blocked consumers separately.
+[Identity-computation evidence](../evaluation/retained-observations.md#exact-identity-computation-on-arm64-2026-10-08)
+separates controlled/native complete-model effects from CPU/device diagnostics.
+The installed runtime is not republished by these measurements; the same full
+inference Task and its unearned 20/700 gates continue.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |

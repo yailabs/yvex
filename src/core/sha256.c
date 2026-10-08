@@ -10,15 +10,21 @@
 #include <limits.h>
 #include <string.h>
 
+#if defined(__aarch64__) && defined(__linux__) && defined(__GNUC__) && \
+    __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#include <arm_neon.h>
+#include <asm/hwcap.h>
+#include <stdatomic.h>
+#include <sys/auxv.h>
+#define YVEX_SHA256_ARM64 1
+#endif
+
 static uint32_t sha256_rotate_right(uint32_t value, unsigned int bits)
 {
     return (value >> bits) | (value << (32u - bits));
 }
 
-static void sha256_transform(yvex_sha256 *context,
-                             const unsigned char block[64])
-{
-    static const uint32_t constants[64] = {
+static const uint32_t sha256_constants[64] = {
         0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u,
         0x3956c25bu, 0x59f111f1u, 0x923f82a4u, 0xab1c5ed5u,
         0xd807aa98u, 0x12835b01u, 0x243185beu, 0x550c7dc3u,
@@ -35,7 +41,11 @@ static void sha256_transform(yvex_sha256 *context,
         0x391c0cb3u, 0x4ed8aa4au, 0x5b9cca4fu, 0x682e6ff3u,
         0x748f82eeu, 0x78a5636fu, 0x84c87814u, 0x8cc70208u,
         0x90befffau, 0xa4506cebu, 0xbef9a3f7u, 0xc67178f2u
-    };
+};
+
+static void sha256_transform_portable(yvex_sha256 *context,
+                                      const unsigned char block[64])
+{
     uint32_t words[64];
     uint32_t a, b, c, d, e, f, g, h;
     unsigned int index;
@@ -64,7 +74,7 @@ static void sha256_transform(yvex_sha256 *context,
                       sha256_rotate_right(e, 11u) ^
                       sha256_rotate_right(e, 25u);
         uint32_t choose = (e & f) ^ ((~e) & g);
-        uint32_t first = h + s1 + choose + constants[index] + words[index];
+        uint32_t first = h + s1 + choose + sha256_constants[index] + words[index];
         uint32_t s0 = sha256_rotate_right(a, 2u) ^
                       sha256_rotate_right(a, 13u) ^
                       sha256_rotate_right(a, 22u);
@@ -77,6 +87,56 @@ static void sha256_transform(yvex_sha256 *context,
     context->state[2] += c; context->state[3] += d;
     context->state[4] += e; context->state[5] += f;
     context->state[6] += g; context->state[7] += h;
+}
+
+#ifdef YVEX_SHA256_ARM64
+static atomic_int sha256_arm64_capability;
+
+/* Only this exact integer compression function admits SHA2 instructions.
+ * Other architectures and unavailable CPU capabilities keep the portable path. */
+#if defined(__clang__)
+__attribute__((target("sha2")))
+#else
+__attribute__((target("+sha2")))
+#endif
+static void sha256_transform_arm64(yvex_sha256 *context,
+                                   const unsigned char block[64])
+{
+    uint32x4_t initial_abcd = vld1q_u32(context->state);
+    uint32x4_t initial_efgh = vld1q_u32(context->state + 4u);
+    uint32x4_t abcd = initial_abcd, efgh = initial_efgh, words[4];
+    for (unsigned index = 0u; index < 4u; ++index)
+        words[index] = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(block + index * 16u)));
+    for (unsigned index = 0u; index < 16u; ++index) {
+        unsigned current = index & 3u;
+        if (index >= 4u)
+            words[current] = vsha256su1q_u32(
+                vsha256su0q_u32(words[current], words[(current + 1u) & 3u]),
+                words[(current + 2u) & 3u], words[(current + 3u) & 3u]);
+        uint32x4_t round = vaddq_u32(words[current], vld1q_u32(sha256_constants + index * 4u));
+        uint32x4_t prior_abcd = abcd;
+        abcd = vsha256hq_u32(abcd, efgh, round);
+        efgh = vsha256h2q_u32(efgh, prior_abcd, round);
+    }
+    vst1q_u32(context->state, vaddq_u32(abcd, initial_abcd));
+    vst1q_u32(context->state + 4u, vaddq_u32(efgh, initial_efgh));
+}
+#endif
+
+static void sha256_transform(yvex_sha256 *context, const unsigned char block[64])
+{
+#ifdef YVEX_SHA256_ARM64
+    int capability = atomic_load_explicit(&sha256_arm64_capability, memory_order_relaxed);
+    if (!capability) {
+        capability = getauxval(AT_HWCAP) & HWCAP_SHA2 ? 2 : 1;
+        atomic_store_explicit(&sha256_arm64_capability, capability, memory_order_relaxed);
+    }
+    if (capability == 2) {
+        sha256_transform_arm64(context, block);
+        return;
+    }
+#endif
+    sha256_transform_portable(context, block);
 }
 
 void yvex_sha256_init(yvex_sha256 *context)

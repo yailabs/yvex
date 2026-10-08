@@ -75,6 +75,21 @@ planning still consumes zero payload bytes; execution admits ranges only from
 that trusted identity.
 
 
+## Exact identity computation
+
+The shared core SHA-256 owner computes canonical source, artifact, binding and
+execution identities. Linux little-endian AArch64 hosts with an observed SHA2
+CPU capability may use the instruction-backed integer compression function;
+other hosts retain the portable implementation. Capability detection is cached
+atomically without changing the process-wide instruction baseline. Incremental
+updates, finalization/refusal, little-endian scalar and length-delimited text
+encodings remain identical. This is exact computation of existing identities,
+not a new provenance owner, reduced authentication or changed model numerics.
+
+Independent digest/control evidence and bounded complete-model effects are
+retained in [Evaluation](../evaluation/retained-observations.md#exact-identity-computation-on-arm64-2026-10-08).
+There is no new public record, identity schema or macOS acceleration claim.
+
 ## Implementation and evidence
 
 [include/yvex/source.h](../../include/yvex/source.h) · [include/yvex/catalog.h](../../include/yvex/catalog.h) · [src/source](../../src/source) · [src/model/remote.c](../../src/model/remote.c)

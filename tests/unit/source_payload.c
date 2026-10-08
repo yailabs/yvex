@@ -1920,6 +1920,65 @@ static int test_sha256_primitive(void)
     return 0;
 }
 
+static int test_sha256_boundaries(void)
+{
+    static const struct { size_t length; const char *digest; } vectors[] = {
+        {55u, "463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59"},
+        {56u, "da2ae4d6b36748f2a318f23e7ab1dfdf45acdc9d049bd80e59de82a60895f562"},
+        {63u, "29af2686fd53374a36b0846694cc342177e428d1647515f078784d69cdb9e488"},
+        {64u, "fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108"},
+        {65u, "4bfd2c8b6f1eec7a2afeb48b934ee4b2694182027e6d0fc075074f2fabb31781"},
+        {127u, "92ca0fa6651ee2f97b884b7246a562fa71250fedefe5ebf270d31c546bfea976"},
+        {128u, "471fb943aa23c511f6f72f8d1652d9c880cfa392ad80503120547703e56a2be5"},
+        {129u, "5099c6a56203f9687f7d33f4bfdf576d31dc91f6b695ecea38b2770c87631135"},
+        {4096u, "c8f5d0341d54d951a71b136e6e2afcb14d11ed8489a7ae126a8fee0df6ecf193"},
+    };
+    const size_t steps[] = {1u, 7u, 63u, 64u, 65u, 127u, 1024u};
+    unsigned char data[4097], digest[32];
+    char text[65];
+    yvex_sha256 hash, before;
+    /* Binary known answers independently generated with Python hashlib;
+     * payload+1 also exercises unaligned input and both padding boundaries. */
+    for (size_t index = 0u; index < 4096u; ++index) data[index + 1u] = (unsigned char)index;
+    for (size_t vector = 0u; vector < sizeof(vectors) / sizeof(vectors[0]); ++vector)
+        for (size_t step = 0u; step < sizeof(steps) / sizeof(steps[0]); ++step) {
+            yvex_sha256_init(&hash);
+            for (size_t offset = 0u; offset < vectors[vector].length; offset += steps[step]) {
+                size_t take = vectors[vector].length - offset;
+                if (take > steps[step]) take = steps[step];
+                YVEX_TEST_ASSERT(yvex_sha256_update(&hash, data + offset + 1u, take),
+                    "SHA-256 binary segmented update");
+            }
+            YVEX_TEST_ASSERT(yvex_sha256_final(&hash, digest), "SHA-256 binary final");
+            yvex_sha256_hex(digest, text);
+            YVEX_TEST_ASSERT_STREQ(text, vectors[vector].digest, "SHA-256 independent binary known answer");
+            before = hash;
+            memset(digest, 42, sizeof(digest));
+            YVEX_TEST_ASSERT(!yvex_sha256_update(&hash, data, 1u) &&
+                !yvex_sha256_final(&hash, digest) && !memcmp(&before, &hash, sizeof(hash)),
+                "SHA-256 one-shot refusal does not mutate context");
+            for (size_t byte = 0u; byte < sizeof(digest); ++byte)
+                YVEX_TEST_ASSERT(digest[byte] == 42, "SHA-256 refused final preserves destination");
+        }
+    yvex_sha256_init(&hash);
+    before = hash;
+    YVEX_TEST_ASSERT(!yvex_sha256_update(&hash, NULL, 1u) &&
+        !yvex_sha256_final(&hash, NULL) && !memcmp(&before, &hash, sizeof(hash)),
+        "SHA-256 invalid pointers refuse before mutation");
+    hash.length = UINT64_MAX / 8u;
+    before = hash;
+    YVEX_TEST_ASSERT(!yvex_sha256_update(&hash, data, 1u) &&
+        !memcmp(&before, &hash, sizeof(hash)), "SHA-256 length overflow refuses before mutation");
+    yvex_sha256_init(&hash);
+    YVEX_TEST_ASSERT(yvex_sha256_update_u64(&hash, 0x0123456789abcdefull) &&
+        yvex_sha256_update_text(&hash, "yvex.identity-fixture") && yvex_sha256_final(&hash, digest),
+        "SHA-256 canonical scalar and length-delimited text encoding");
+    yvex_sha256_hex(digest, text);
+    YVEX_TEST_ASSERT_STREQ(text, "cc5fbf3c8ee355f78a3aa82282a8e99c28e9187ae2db29bf96d72d5b0198bb22",
+        "SHA-256 independently encoded identity known answer");
+    return 0;
+}
+
 static int test_payload_happy_path(void)
 {
     payload_fixture fixture;
@@ -3142,6 +3201,7 @@ int yvex_test_source_payload(void)
 {
     if (test_storage_shard_index_foundation() != 0) return 1;
     if (test_sha256_primitive() != 0) return 1;
+    if (test_sha256_boundaries() != 0) return 1;
     if (test_payload_happy_path() != 0) return 1;
     if (test_payload_component_physical_shape_fold() != 0) return 1;
     if (test_payload_local_seal_and_digest_failure() != 0) return 1;
