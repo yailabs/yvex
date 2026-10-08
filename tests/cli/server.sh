@@ -7,8 +7,8 @@ set -eu
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-server}
 HOME_ROOT=$OUT_DIR/home
-SOCKET_ROOT=$OUT_DIR/runtime
-SOCKET_PATH=$SOCKET_ROOT/yvex/yvexd.sock
+SOCKET_ROOT=
+SOCKET_PATH=
 PROFILE=deepseek4-v4-flash-dspark-runtime-iq2xxs-q2k-mxfp4-b9825a07-sm121-tc
 LEGACY_PROFILE=deepseek4-v4-flash-dspark-runtime-iq2xxs-legacy
 server_pid=
@@ -27,11 +27,18 @@ finish()
         kill "$logs_pid" 2>/dev/null || true
         wait "$logs_pid" 2>/dev/null || true
     fi
-    yvex_test_cleanup_preserving_status "$status" "$OUT_DIR"
+    if test -n "$SOCKET_ROOT"; then
+        yvex_test_cleanup_preserving_status "$status" "$OUT_DIR" "$SOCKET_ROOT"
+    else
+        yvex_test_cleanup_preserving_status "$status" "$OUT_DIR"
+    fi
 }
 trap finish EXIT HUP INT TERM
 
 yvex_test_cleanup "$OUT_DIR"
+# Socket publication also needs a bounded pending name. Keep that test-owned
+# runtime independent of checkout/output path length, including linked trees.
+SOCKET_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/yvex-cli-runtime.XXXXXX")
 mkdir -p "$HOME_ROOT/.local/share/yvex" "$SOCKET_ROOT"
 HOME_ROOT=$(realpath "$HOME_ROOT")
 SOCKET_ROOT=$(realpath "$SOCKET_ROOT")

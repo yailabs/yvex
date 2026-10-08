@@ -91,6 +91,20 @@ wait_count()
     return 1
 }
 
+# Visible content may precede turn completion. Ordinary input is deliberately
+# discarded during output, so subsequent commands must wait for editor re-entry.
+expect_next_editor()
+{
+    editor_marker=$(printf '\033[?2004h')
+    editor_count=$(grep -F -c "$editor_marker" "$transcript" || true)
+    next_editor=$((editor_count + 1))
+}
+
+wait_next_editor()
+{
+    wait_count "$transcript" "$editor_marker" "$next_editor"
+}
+
 start_host()
 {
     "$YVEX_TEST_HOST" "$socket" 2>>"$root/host.err" &
@@ -257,6 +271,7 @@ printf 'RIFF\004\000\000\000WAVE' >"$audio"
 start_console explicit 24 100 'chat --session linear' nocolor
 wait_for "$root/explicit.typescript" 'Tab completion'
 ! grep -F '/attachments-clear' "$root/explicit.typescript" >/dev/null
+expect_next_editor
 printf '/help\r' >&3
 wait_for "$root/explicit.typescript" 'Keyboard'
 wait_for "$root/explicit.typescript" '/help'
@@ -269,17 +284,28 @@ wait_for "$root/explicit.typescript" '/attachments'
 wait_for "$root/explicit.typescript" '/use'
 wait_for "$root/explicit.typescript" '/reset'
 wait_for "$root/explicit.typescript" '/quit'
+wait_next_editor
+expect_next_editor
 printf '/attach %s\r' "$image" >&3
 wait_for "$root/explicit.typescript" 'ATTACHMENTS'
 wait_for "$root/explicit.typescript" 'image'
+wait_next_editor
+expect_next_editor
 printf '/attach %s\r' "$audio" >&3
 wait_for "$root/explicit.typescript" '2 staged for next turn'
+wait_next_editor
+expect_next_editor
 printf '/attachments\r' >&3
 wait_for "$root/explicit.typescript" 'staged for next turn'
+wait_next_editor
+expect_next_editor
 printf 'hello\r' >&3
 wait_for "$root/explicit.typescript" 'hello from yvex'
+wait_next_editor
+expect_next_editor
 printf '/attachments\r' >&3
 wait_for "$root/explicit.typescript" 'ATTACHMENTS  none staged'
+wait_next_editor
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/explicit.typescript"
@@ -290,8 +316,10 @@ assert_linear_terminal "$root/explicit.typescript"
 # Omitted completion length stays adaptive/server-owned; an explicit limit is
 # carried separately and its terminal stop is distinguishable from EOS.
 start_console envelope 24 100 'chat --session envelope --max-new-tokens 3' nocolor
+expect_next_editor
 printf 'explicit envelope\r' >&3
 wait_for "$root/envelope.typescript" 'hello from yvex'
+wait_next_editor
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/envelope.typescript"
@@ -301,10 +329,12 @@ assert_linear_terminal "$root/envelope.typescript"
 # A fragment without a newline is visible while the provider is still working;
 # rendering adds neither an artificial typewriter delay nor line buffering.
 start_console progressive 24 100 'chat --session progressive' nocolor
+expect_next_editor
 printf 'PROGRESSIVE_STREAM\r' >&3
 wait_for "$root/progressive.typescript" 'Letters arrive now'
 ! grep -F 'and finish later.' "$root/progressive.typescript" >/dev/null
 wait_for "$root/progressive.typescript" 'Letters arrive now and finish later.'
+wait_next_editor
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/progressive.typescript"
@@ -312,6 +342,7 @@ assert_linear_terminal "$root/progressive.typescript"
 # Typed channels, fragmented UTF-8 and bounded Markdown stay readable while
 # ordinary text streams immediately. Reasoning remains visually secondary.
 start_console rendering 24 100 'chat --session rendering' nocolor
+expect_next_editor
 printf 'MARKDOWN_STREAM\r' >&3
 wait_for "$root/rendering.typescript" 'deterministic transcript identity.'
 ! grep -F 'answer' "$root/rendering.typescript" >/dev/null
@@ -326,6 +357,8 @@ grep -F 'protocol consumers and deterministic transcript identity.' \
     "$root/rendering.typescript" >/dev/null
 ! grep -F '# CUDA' "$root/rendering.typescript" >/dev/null
 ! grep -F '```cuda' "$root/rendering.typescript" >/dev/null
+wait_next_editor
+expect_next_editor
 printf 'REASONING_STREAM\r' >&3
 wait_for "$root/rendering.typescript" 'The valid result is 42.'
 grep -F 'REASONING' "$root/rendering.typescript" >/dev/null
@@ -334,6 +367,7 @@ grep -F '│ • Compare constraints carefully.' "$root/rendering.typescript" >/
 ! grep -F 'answer' "$root/rendering.typescript" >/dev/null
 grep -F '  Result' "$root/rendering.typescript" >/dev/null
 ! grep -F '## Result' "$root/rendering.typescript" >/dev/null
+wait_next_editor
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/rendering.typescript"
@@ -341,6 +375,7 @@ assert_linear_terminal "$root/rendering.typescript"
 # During an active response the terminal has one output owner. Editing bytes are
 # neither echoed into model output nor carried into the following prompt.
 start_console async 24 100 'chat --session async' nocolor
+expect_next_editor
 printf 'WAIT_ASYNC_KEYS\r' >&3
 wait_for "$root/async.typescript" 'prefill'
 cycle=0
@@ -354,9 +389,12 @@ wait_for "$root/async.typescript" 'hello from yvex'
 for suffix in '[A' '[B' '[C' '[D' '[H' '[F' '[3~'; do
     ! grep -F "$(printf '\033%s' "$suffix")" "$root/async.typescript" >/dev/null
 done
+wait_next_editor
+expect_next_editor
 printf 'after async\r' >&3
 wait_count "$root/async.typescript" 'hello from yvex' 2
 ! grep -F 'INPUT_CONTAMINATED' "$root/async.typescript" >/dev/null
+wait_next_editor
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/async.typescript"
@@ -388,23 +426,29 @@ assert_linear_terminal "$root/bare.typescript"
 # A transport loss leaves the draft loop alive; the next request reconnects to a restarted host.
 start_console reconnect 24 100 'chat --session reconnect' nocolor
 stop_host
+expect_next_editor
 printf 'first while offline\r' >&3
 wait_for "$root/reconnect.typescript" 'DISCONNECTED'
+wait_next_editor
 start_host
+expect_next_editor
 printf 'hello after restart\r' >&3
 wait_for "$root/reconnect.typescript" 'RECONNECTED'
 wait_for "$root/reconnect.typescript" 'hello from yvex'
+wait_next_editor
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/reconnect.typescript"
 
 # Active generation Ctrl-C crosses the canonical cancellation operation.
 start_console cancel 24 100 'chat --session cancel' nocolor
+expect_next_editor
 printf 'WAIT_PREFILL_CANCEL\r' >&3
 wait_for "$root/cancel.typescript" 'prefill'
 kill -INT "$client_pid"
 wait_for "$root/host.err" 'generation.cancel cancel'
 wait_for "$root/cancel.typescript" 'YVEX_ERR_CANCELLED'
+wait_next_editor
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/cancel.typescript"
