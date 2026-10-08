@@ -67,6 +67,9 @@ remain separate closure requirements; the milestone is not declared complete.
   characterizes wider automatic single-sequence CUDA request geometry on one
   exact DeepSeek target, with bounded cancellation/recovery. This does not
   promote independent representation quality, other hardware or the 20/700 exit.
+  [Certified projection experiments and device/API attribution](../evaluation/retained-observations.md#certified-projection-candidates-and-device-activity-attribution-2026-10-08)
+  retain rejected complete-model candidates and separate instrumented diagnosis
+  from unprofiled native timing; they do not promote the performance exit.
   The [remote finite producer](../contracts/finite-decision-remote.md) separately
   exposes one identity-bound computation under an explicit SSH peer grant.
   [Installed Exon→DGX finite execution](../evaluation/finite-decision-remote.md#installed-lan-producer)

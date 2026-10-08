@@ -2547,3 +2547,62 @@ listeners/grants remain unchanged. The installed Host is not relabeled as this
 candidate; the operator's cancelled Case prompt is not replayed. Independent
 checkpoint/quality, broader reasoning/HTTP, competitive closure and 20/700 remain
 unearned. The same Task stays IN PROGRESS.
+
+## Certified projection candidates and device activity attribution (2026-10-08)
+
+The competitive Task continues from clean `e167b04b`, tree `5c0550e8`.
+Its automatic single-sequence CUDA prefill policy is published, but the installed
+Host remains a separately identified older build. The following fresh-session
+Rust/native controls use the same immutable Metal coding or Promessi 2K case,
+DeepSeek mixed artifact/binding/specialization, context 32768, chunk 512,
+speculative execution, reasoning disabled and explicitly greedy temperature zero.
+Each timed arm retains three samples with `OBSERVED_CLEAR` resource witnesses,
+not a hardware reservation or independent checkpoint-quality result.
+
+| Experiment | Exact generated target | Bounded disposition |
+| --- | --- | --- |
+| Published coding control | [Baseline](benchmarks/generated/qualification-deepseek-native-interval-lanes-baseline-20261008-coding.md) | Native 256-output coding control; not target-only decode or HTTP |
+| Published 2K control | [Baseline](benchmarks/generated/qualification-deepseek-native-interval-lanes-baseline-20261008-2048.md) | Newly executed uncached prefill; short output tail is not a sustained decode control |
+| Two independent interval accumulators | [Coding](benchmarks/generated/qualification-deepseek-native-interval-lanes-rejected-20261008-coding.md), [2K](benchmarks/generated/qualification-deepseek-native-interval-lanes-rejected-20261008-2048.md) | Rejected: component correctness passes but complete coding and prefill regress |
+| Qtype-specialized expert matrix codec | [Coding](benchmarks/generated/qualification-deepseek-native-expert-codec-rejected-20261008-coding.md), [2K](benchmarks/generated/qualification-deepseek-native-expert-codec-rejected-20261008-2048.md) | Rejected: no material complete-model benefit; small register-count changes do not prove occupancy causality |
+| Wider BF16 prepared row envelope | [2K](benchmarks/generated/qualification-deepseek-rejected-decoded-row-envelope-native-2048-none-20261008.md) | Rejected: no material complete-model benefit for the additional reserved scratch |
+| Wider cooperative F32 input population | [2K](benchmarks/generated/qualification-deepseek-rejected-wide-cooperative-native-2048-none-20261008.md) | Rejected: exact ordered-F64, qtype and backend controls pass but the real prefill gains no material benefit |
+| Device/API phase attribution | [Instrumented coding diagnostic](benchmarks/generated/qualification-deepseek-native-device-api-diagnostic-coding-none-20261008.md) | One profiled turn, no timed throughput measurements; GPU memset is not the dominant observed decode cost |
+
+Candidate comparators explicitly declare changed source/build/backend/kernel and
+runtime-plan axes while requiring matching input, sampling, output bound and
+phase definitions. Terminal populations and all ordered fragment bytes/channels
+remain identical across each compared case. Candidate receipts retain the
+hash-bound comparison decisions. This internal preservation does not qualify
+an upstream continuation or quantization-quality claim. Accepted numerical
+realizations, artifact bytes and source-authored reasoning remain unchanged;
+none of these rejected implementations enters production membership.
+
+The separate instrumented control observes kernels, copies, GPU memset and
+driver API intervals with zero dropped activity. It clips observations to
+server-authored phase boundaries and partitions wall time into observed device
+activity, API time outside that device activity, and time outside both. These
+three intervals are disjoint. Synchronous API durations overlap device work;
+adding them to GPU execution would double-count it. Per-kind unions may also
+overlap. Logical transfer/zeroing bytes do not measure physical DRAM traffic.
+Missing activity is not automatically removable CPU overhead, and this capture
+does not establish hardware-counter occupancy or utilization. Public detail
+labels these facts as diagnostic, not ranked performance samples.
+
+Separate projection-argument capture confirms that a CUDA grid size is not a
+weight row count. The observed wide F32 control has 24 weight rows, width 16384
+and 512 input positions; the large support projection uses Q8_0 weights with
+width 12288 and 4096 rows. Unmatched graph-node arguments remain unknown.
+These observations identify actual physical work without deriving topology
+from a launch number or inventing a numerical relaxation.
+
+Raw source/binary captures, activity streams and comparison decisions remain
+outside Git under `full-system-20261008.k2BN6u`: `interval-lanes-*`,
+`expert-matrix-codec-*`, `decoded-row-envelope-*`,
+`wide-cooperative-*`,
+`published-memset-coding-profile-01` and
+`published-projection-shapes-prefill-profile-01`. Each idle experiment restores
+the installed DeepSeek identity/configuration; finite generation 1 and approved
+listeners/grants are unchanged. No operator prompt is replayed. Independent
+checkpoint/representation quality, complete reasoning/strategy characterization,
+competitive closure and the original 20/700 exit remain unearned.

@@ -1288,6 +1288,30 @@
       "workload_class": "representative",
       "targets": [
         {
+          "id": "deepseek-native-expert-codec-rejected-20261008-2048",
+          "target_identity": "72fb71a8f359cd9c3c46a025a80b21a00ff0a04d6a4da8e5162b9c89282b1d0e",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-interval-lanes-baseline-20261008-2048",
+          "target_identity": "7cae3e2064fdf0459256d1228b0639a573a53977cc58dfba7fea1c2eb3db8325",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-interval-lanes-rejected-20261008-2048",
+          "target_identity": "a8466fb54bfea3787c74cea474574e439bdf5fe7959e27d6f5b08ff90c23e892",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-native-prefill-policy-512-20261008-2048-none",
           "target_identity": "fc8e7b70a646efe7b0b814e33304e35c1a11466d700e8e1f304067e9e4ba1d66",
           "path": "product-native-v25",
@@ -1298,6 +1322,22 @@
         {
           "id": "deepseek-native-prefill-policy-64-20261008-2048-none",
           "target_identity": "2ce596f4fc8093bd9c64d45da879f38a989de0e325a09c955faddb6a51a96711",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-rejected-decoded-row-envelope-native-2048-none-20261008",
+          "target_identity": "cf1478b41ba91ddc4e71c7fbe93dfe1328bf13665cafbf3cc14ffda37b8ce651",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-rejected-wide-cooperative-native-2048-none-20261008",
+          "target_identity": "83249eafbd18c4a30e277f388370c97c39f425bb8a45d0f1990b6b8a7dacd171",
           "path": "product-native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
@@ -1790,6 +1830,30 @@
         {
           "id": "deepseek-installed-metal-none-42",
           "target_identity": "1b0a91dcda0fac068dc46f714fac5c42147c3e5347a318b1b37807ad2ed689c9",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-expert-codec-rejected-20261008-coding",
+          "target_identity": "4c13dc600675fbfac92ccc00b6fe0dcd3ca67ab7c6c2fe1590bb53cd4909ff85",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-interval-lanes-baseline-20261008-coding",
+          "target_identity": "c626076e886adb1b9bacdd92bee387f65f7b8779167b713674e5eb9d628689a6",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-interval-lanes-rejected-20261008-coding",
+          "target_identity": "0292950e6929b540c7827975ef554bd3f4f01058241c6484eaa7ac29e9605fc5",
           "path": "product-native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
