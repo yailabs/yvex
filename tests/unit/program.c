@@ -472,6 +472,7 @@ static int program_device_fixture(yvex_program_physical **out, unsigned int vari
     if (variant == 2u) { dim.minimum = 2u; dim.maximum = 6u; dim.multiple = 2u; }
     if (variant == 3u) t.shape[1].extent = ULLONG_MAX / 4u;
     if (variant == 4u) { dim.minimum = 2u; dim.maximum = 5u; dim.multiple = 2u; }
+    if (variant == 5u) t.shape[1].extent = 31u;
     int rc = yvex_ir_module_open(&m, "physical_lifetimes", program_source, dialects, 2u, err);
     if (rc == YVEX_OK) rc = yvex_ir_dimension_add(m, &dim, &dimension, err);
     if (rc == YVEX_OK) rc = yvex_ir_type_intern(m, &t, &type, err);
@@ -689,6 +690,7 @@ static int program_device_invoke(void *context, const yvex_program_device_invoca
     float left[96], right[96];
     yvex_device_tensor *out = &r->values[r->step->results[0]];
     size_t i;
+    YVEX_TEST_ASSERT((uintptr_t)out->data % 16u == 0u, "every activation slot preserves vector alignment");
     int rc = yvex_backend_tensor_read(context, &r->values[r->step->operands[0]], left, out->bytes, err);
     if (rc == YVEX_OK) rc = yvex_backend_tensor_read(context, &r->values[r->step->operands[1]], right, out->bytes, err);
     if (rc != YVEX_OK) return rc;
@@ -701,6 +703,58 @@ static int program_device_cancel(void *context)
 {
     unsigned int *remaining = context;
     return (*remaining)-- == 0u;
+}
+
+static int program_test_device_alignment(void)
+{
+    const yvex_program_device_kernel implementations[] = {{"add.bf16.v1", program_device_invoke}};
+    yvex_program_physical *plan = NULL;
+    yvex_program_device *device = NULL, *limited = NULL;
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CPU};
+    yvex_backend_memory_stats before, after;
+    yvex_backend_tensor_desc desc = {.name = "odd-slot", .dtype = YVEX_DTYPE_F32,
+        .rank = 2u, .dims = {3u, 31u}, .bytes = 93u * sizeof(float)};
+    yvex_device_tensor *input = NULL, *output = NULL;
+    yvex_program_device_result result;
+    yvex_error err = {0};
+    unsigned long long host, bytes;
+    float values[93], observed[93];
+    YVEX_TEST_ASSERT(program_device_fixture(&plan, 5u, &err) == YVEX_OK &&
+        yvex_backend_open(&backend, &options, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK &&
+        yvex_program_device_open(&device, plan, backend, 3u, 0u, 0u,
+            implementations, 1u, backend, &err) == YVEX_OK,
+        "odd-width activation program prepares one checked arena");
+    yvex_program_device_resources(device, &host, &bytes);
+    YVEX_TEST_ASSERT(host && bytes == 2u * 384u &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes - before.allocated_bytes == bytes &&
+        after.allocation_count == before.allocation_count + 1u &&
+        yvex_program_device_open(&limited, plan, backend, 3u, 0u, bytes - 1u,
+            implementations, 1u, backend, &err) == YVEX_ERR_BOUNDS && !limited,
+        "two 372-byte slots include 24 bytes of alignment padding; one-byte-short budget refuses");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &input, &err) == YVEX_OK &&
+        yvex_backend_tensor_alloc(backend, &desc, &output, &err) == YVEX_OK,
+        "odd-width caller inputs and outputs retain exact extents");
+    for (size_t i = 0u; i < 93u; ++i) values[i] = (float)((int)i - 46) / 64.0f;
+    yvex_program_device_argument argument = {.tensor = input};
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, input, values, sizeof(values), &err) == YVEX_OK &&
+        yvex_program_device_run(device, 3u, &argument, 1u, &output, 1u,
+            NULL, NULL, &result, &err) == YVEX_OK && result.operations == 6u &&
+        yvex_backend_tensor_read(backend, output, observed, sizeof(observed), &err) == YVEX_OK,
+        "padding neither enters the logical population nor aliases another slot");
+    for (size_t i = 0u; i < 93u; ++i)
+        YVEX_TEST_ASSERT(observed[i] == values[i] * 64.0f, "odd-width scalar doubling is exact");
+    YVEX_TEST_ASSERT(yvex_program_device_close(&device, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &input, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &output, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes &&
+        yvex_backend_close_checked(&backend, &err) == YVEX_OK,
+        "aligned arena and refused construction return every allocation to baseline");
+    yvex_program_physical_close(&plan);
+    return 0;
 }
 
 static int program_test_device(void)
@@ -738,6 +792,9 @@ static int program_test_device(void)
         implementations, 1u, backend, &err);
     if (rc != YVEX_OK) fprintf(stderr, "physical CPU bind: %s\n", yvex_error_message(&err));
     YVEX_TEST_ASSERT(rc == YVEX_OK, "physical instructions bind a deterministic storage/dispatch fixture");
+    YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocation_count == before.allocation_count + 1u,
+        "two compiler storage slots share one owned allocation without sharing logical contents");
     YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &input, &err) == YVEX_OK &&
         yvex_backend_tensor_alloc(backend, &d, &output, &err) == YVEX_OK, "independent input/output storage");
     for (i = 0u; i < 96u; ++i) values[i] = (float)((int)i - 48) / 64.0f;
@@ -1125,5 +1182,6 @@ int yvex_test_program(void)
            "semantic identity unchanged across BF16/F32 physical recipes\n");
     if (program_test_execution() != 0) return 1;
     if (program_test_device() != 0) return 1;
+    if (program_test_device_alignment() != 0) return 1;
     return program_test_tensor();
 }

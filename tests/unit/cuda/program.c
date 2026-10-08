@@ -327,10 +327,13 @@ static int program_cuda_failures(program_fixture *f)
         yvex_backend_get_memory_stats(f->backend, &before, &err) == YVEX_OK &&
         yvex_program_device_open(&limited, f->plan, f->backend, 3u, 0u, device_bytes,
             implementations, 2u, f, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(f->backend, &after, &err) == YVEX_OK &&
+        after.allocation_count == before.allocation_count + 2u &&
+        after.allocated_bytes - before.allocated_bytes == device_bytes &&
         yvex_program_device_close(&limited, &err) == YVEX_OK &&
         yvex_backend_get_memory_stats(f->backend, &after, &err) == YVEX_OK &&
         before.allocated_bytes == after.allocated_bytes,
-        "exact executor budget includes owned completion storage and closes without leaks");
+        "exact executor budget includes one slot arena and separate completion storage; cleanup is exact");
     YVEX_TEST_ASSERT(yvex_program_device_open(&limited, f->plan, f->backend, 3u, 0u,
         device_bytes - 1u, implementations, 2u, f, &err) == YVEX_ERR_BOUNDS && !limited &&
         yvex_backend_get_memory_stats(f->backend, &after, &err) == YVEX_OK &&

@@ -91,6 +91,24 @@ activation geometry: fixed extents, the admitted population/multiple, element
 count and physical byte count. It distinguishes BF16/F32 in F32 storage from
 host-U32 index streams; parameter references and state handles are not activation
 allocations. Maximum executable storage is checked during physical verification.
+
+Prepared tensor execution backs its compiler-assigned F32 activation slots with
+one allocation per program. Each slot retains a disjoint, capacity-checked typed
+view and its original shape; liveness/reuse is still the compiler's decision.
+Each activation slot starts at a 16-byte boundary, preserving the vector
+alignment required by prepared linear execution. Rounded slot extents,
+including bounded padding, are checked and included in the device budget
+before allocation; there is no global pool. Index storage remains host-owned and completion and
+prepared parameter resources retain separate lifetimes. Checked program close
+releases only the backing owner, never a borrowed slot view. This changes
+preparation allocation topology, not physical-program identity, arithmetic,
+publication, state isolation, public ABI or wire semantics.
+
+Device-only MoE ingress/shared stages bind their caller-owned device views and
+do not reserve unused host-I/O input/result tensors. The CPU MoE path retains
+its host spans; explicit host-I/O tensor stages remain available to their other
+consumers. Resource reports count only resources actually owned by each path.
+
 The device executor, tensor stages, prepared links and MoE result carriers use
 this view rather than independently resolving shapes. Runtime still validates
 actual backing, disjoint views and resource budgets. The view adds no persisted

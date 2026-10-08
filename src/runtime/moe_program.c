@@ -169,8 +169,12 @@ static int programs_stage_open(yvex_runtime_moe_programs *c, unsigned long long 
             count++;
         }
     }
+    /* The CPU path consumes host spans; accelerator ingress and shared stages
+     * bind device views through programs_device. Do not reserve a second,
+     * unused set of host-I/O tensor carriers for that device-only lifetime. */
+    int host_io = yvex_backend_kind_of(c->session->backend) == YVEX_BACKEND_KIND_CPU;
     if (rc == YVEX_OK) rc = yvex_program_stage_open(&c->stages[index], p, parameters, count,
-        c->session->backend, c->capacity, 1, h, d, err);
+        c->session->backend, c->capacity, host_io, h, d, err);
     free(parameters);
     if (rc == YVEX_OK) rc = yvex_program_stage_prepare(c->stages[index], c->capacity, err);
     if (rc == YVEX_OK && c->capacity != 1u) rc = yvex_program_stage_prepare(c->stages[index], 1u, err);
@@ -242,7 +246,8 @@ int yvex_runtime_moe_programs_host(yvex_runtime_moe_programs *c, unsigned long l
     yvex_backend_operation_facts *facts, yvex_error *err)
 {
     if (read_bytes) *read_bytes = 0u;
-    if (!c || !c->stages || ordinal >= c->count / 3u || !read_bytes || !facts)
+    if (!c || !c->stages || ordinal >= c->count / 3u || !read_bytes || !facts ||
+        yvex_backend_kind_of(c->session->backend) != YVEX_BACKEND_KIND_CPU)
         return programs_refuse(err, YVEX_ERR_STATE, "compiled stage is not admitted");
     c->reads = 0u;
     int rc = yvex_program_stage_host(c->stages[ordinal * 3u], 1u, &input, 1u, outputs, 4u,

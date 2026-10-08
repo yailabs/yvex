@@ -6,13 +6,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Portable activation slot boundaries retain the 16-byte vector alignment
+ * required by prepared linear execution. Backend allocation owns base
+ * alignment; the arena owner admits and accounts every padded slot extent. */
+#define PROGRAM_ACTIVATION_SLOT_ALIGNMENT 16ull
+
 struct yvex_program_device {
     yvex_program_physical *program;
     const yvex_program_physical_summary *summary;
     yvex_backend *backend;
     yvex_program_device_kernel *kernels;
     void *kernel_context;
-    yvex_device_tensor **storage, *values, *completion;
+    yvex_device_tensor **storage, *slot_views, *arena, *values, *completion;
     unsigned int **index_storage;
     yvex_program_index_value *indices;
     unsigned long long capacity, host_bytes, device_bytes;
@@ -42,20 +47,47 @@ int yvex_program_device_descriptor(const yvex_program_physical *p, size_t value,
 
 static int program_device_storage_open(yvex_program_device *c, unsigned long long limit, yvex_error *err)
 {
-    size_t i;
-    for (i = 0u; i < c->summary->value_count; ++i) {
+    unsigned long long extent = 0u, cursor = 0u;
+    for (size_t i = 0u; i < c->summary->value_count; ++i) {
         const yvex_program_physical_value *v = yvex_program_physical_value_at(c->program, i);
         yvex_backend_tensor_desc desc;
-        unsigned long long total;
-        int rc;
-        if (v->storage == YVEX_IR_NONE || c->storage[v->storage] || c->index_storage[v->storage]) continue;
+        unsigned long long total, padded;
+        if (v->storage == YVEX_IR_NONE || c->slot_views[v->storage].bytes) continue;
         if (v->type.scalar == YVEX_IR_INDEX) continue; /* Explicit host placement below. */
         if (yvex_program_device_descriptor(c->program, i, c->capacity, &desc, err) != YVEX_OK ||
-            !yvex_core_u64_add(c->device_bytes, desc.bytes, &total) || (limit && total > limit))
+            !desc.bytes || desc.bytes % sizeof(float) ||
+            !yvex_core_u64_add(desc.bytes, PROGRAM_ACTIVATION_SLOT_ALIGNMENT - 1u, &padded))
             return program_device_refuse(err, YVEX_ERR_BOUNDS, "compiled activation slots exceed device budget");
-        rc = yvex_backend_tensor_alloc(c->backend, &desc, &c->storage[v->storage], err);
-        if (rc != YVEX_OK) return rc;
-        c->device_bytes = total;
+        padded &= ~(PROGRAM_ACTIVATION_SLOT_ALIGNMENT - 1u);
+        if (!yvex_core_u64_add(extent, padded, &total) || (limit && total > limit))
+            return program_device_refuse(err, YVEX_ERR_BOUNDS, "compiled activation slots exceed device budget");
+        c->slot_views[v->storage].bytes = desc.bytes;
+        c->slot_views[v->storage].rank = desc.rank;
+        memcpy(c->slot_views[v->storage].dims, desc.dims, desc.rank * sizeof(*desc.dims));
+        extent = total;
+    }
+    if (!extent) return YVEX_OK;
+    yvex_backend_tensor_desc arena = {.name = "program-activation-slots", .dtype = YVEX_DTYPE_F32,
+        .rank = 1u, .dims = {extent / sizeof(float)}, .bytes = extent};
+    int rc = yvex_backend_tensor_alloc(c->backend, &arena, &c->arena, err);
+    if (rc != YVEX_OK) return rc;
+    c->device_bytes = extent;
+    /* Compiler storage slots remain disjoint logical owners. Their backing
+     * shares one allocation only within this prepared program's lifetime;
+     * completion and parameter resources retain their separate owners. */
+    for (size_t i = 0u; i < c->summary->storage_count; ++i) {
+        unsigned long long bytes = c->slot_views[i].bytes;
+        yvex_device_tensor view;
+        if (!bytes) continue;
+        if (!yvex_backend_tensor_f32_subview(c->arena, cursor / sizeof(float),
+                bytes / sizeof(float), &view))
+            return program_device_refuse(err, YVEX_ERR_STATE, "compiled slot exceeds its owned activation arena");
+        view.rank = c->slot_views[i].rank;
+        memcpy(view.dims, c->slot_views[i].dims, view.rank * sizeof(*view.dims));
+        c->slot_views[i] = view;
+        c->storage[i] = &c->slot_views[i];
+        cursor += (bytes + PROGRAM_ACTIVATION_SLOT_ALIGNMENT - 1u) &
+            ~(PROGRAM_ACTIVATION_SLOT_ALIGNMENT - 1u); /* Checked before allocation. */
     }
     return YVEX_OK;
 }
@@ -111,7 +143,7 @@ int yvex_program_device_open(yvex_program_device **out, const yvex_program_physi
         return program_device_refuse(err, YVEX_ERR_INVALID_ARG,
             "verified physical work, backend and capacity required");
     host = sizeof(*c) + s->step_count * sizeof(*c->kernels) +
-           s->storage_count * (sizeof(*c->storage) + sizeof(*c->index_storage)) +
+           s->storage_count * (sizeof(*c->storage) + sizeof(*c->slot_views) + sizeof(*c->index_storage)) +
            s->value_count * (sizeof(*c->values) + sizeof(*c->indices));
     if (host_limit && host > host_limit)
         return program_device_refuse(err, YVEX_ERR_BOUNDS, "execution directory exceeds host budget");
@@ -126,10 +158,11 @@ int yvex_program_device_open(yvex_program_device **out, const yvex_program_physi
     c->kernel_context = context;
     c->kernels = calloc(s->step_count, sizeof(*c->kernels));
     c->storage = calloc(s->storage_count ? s->storage_count : 1u, sizeof(*c->storage));
+    c->slot_views = calloc(s->storage_count ? s->storage_count : 1u, sizeof(*c->slot_views));
     c->values = calloc(s->value_count, sizeof(*c->values));
     c->index_storage = calloc(s->storage_count ? s->storage_count : 1u, sizeof(*c->index_storage));
     c->indices = calloc(s->value_count, sizeof(*c->indices));
-    rc = c->kernels && c->storage && c->values && c->index_storage && c->indices ? YVEX_OK :
+    rc = c->kernels && c->storage && c->slot_views && c->values && c->index_storage && c->indices ? YVEX_OK :
         program_device_refuse(err, YVEX_ERR_NOMEM, "execution directory allocation failed");
     for (i = 0u; rc == YVEX_OK && i < s->step_count; ++i) {
         const char *name = yvex_program_physical_step_at(p, i)->implementation;
@@ -355,14 +388,14 @@ int yvex_program_device_close(yvex_program_device **out, yvex_error *err)
         rc = yvex_backend_tensor_release(c->backend, &c->completion, err);
         if (rc != YVEX_OK) return rc;
     }
-    for (i = 0u; c->storage && i < c->summary->storage_count; ++i) if (c->storage[i]) {
-        rc = yvex_backend_tensor_release(c->backend, &c->storage[i], err);
+    if (c->arena) {
+        rc = yvex_backend_tensor_release(c->backend, &c->arena, err);
         if (rc != YVEX_OK) return rc;
     }
     free(c->values);
     for (i = 0u; c->index_storage && i < c->summary->storage_count; ++i) free(c->index_storage[i]);
     free(c->index_storage); free(c->indices);
-    free(c->storage);
+    free(c->storage); free(c->slot_views);
     free(c->kernels);
     yvex_program_physical_close(&c->program);
     free(c);
