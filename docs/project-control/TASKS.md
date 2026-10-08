@@ -70,10 +70,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 51 | 38 | 4 | 1 | 8 |
+| 52 | 38 | 5 | 1 | 8 |
 <!-- task-counts:end -->
 
-**38/51 selected Tasks complete.** This denominator includes the significant
+**38/52 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -268,6 +268,22 @@ admission must not classify a finite engine as chat-capable. No new Laya
 checkpoint, CUDA acceleration, calibration, semantic decision authority or A03
 work is selected. Existing DeepSeek work and user-owned runtime are preserved;
 an operator Host replacement requires a coordinated idle window.
+
+### Finite producer latency follow-up
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `RUNTIME.FINITE.DECISION.PRODUCT.LATENCY.0` | Qualify an exact resident finite realization within the independently published Fast Search v1 budget | P1 | 🔵 IN PROGRESS | Generic computational repair, independent numerical/reference and refusal/cleanup evidence, representative producer and approved remote caller measurements at most 5,000 ms and 65,536 result bytes; exact generation/model/input-policy lineage and ordered candidate IDs retained, with no sample-time reload or indeterminate retry. |
+
+Authorized by the operator's YAI consumer handoff on 2026-10-08. The completed
+remote-contract and installed-LAN Tasks retain their earned bounded exits;
+their roughly 37-second control is not Fast Search latency qualification.
+This delivery does not change YAI/SDK/Studio, select a new Laya lifecycle,
+checkpoint or calibration, or lower the separate active DeepSeek 20/700 gates.
+Computational changes belong to generic numerical/backend owners; the admitted
+source and finite public contract remain authoritative. No operator Host or
+engine is replaced without supported coordinated idle lifecycle. Timed CPU and
+GPU windows remain separate. Unknown remote outcomes are retained, never replayed.
 
 ## Independently selected macOS qualification
 

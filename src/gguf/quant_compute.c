@@ -108,6 +108,29 @@ static int quant_compute_fail(yvex_quant_failure *failure, yvex_quant_failure_co
     return status;
 }
 
+/* F32 has one canonical four-byte scalar per block, not a codec to redispatch
+ * for every multiply. Keep the literal source-order F64 recurrence. Finite
+ * F32 products are exact in F64; even SIZE_MAX/4 terms cannot overflow F64.
+ * Exceptional operands fall back to the block oracle, preserving its first
+ * failure identity, ordinal and output-publication behavior. Byte loads keep
+ * unaligned and canonical little-endian storage valid on every host. */
+static int quant_compute_f32_finite(const unsigned char *encoded, const float *vector,
+                                  unsigned long long elements, double *result)
+{
+    double sum = 0.0;
+    for (unsigned long long index = 0u; index < elements; ++index) {
+        const unsigned char *p = encoded + (size_t)index * 4u;
+        uint32_t bits = (uint32_t)p[0] | ((uint32_t)p[1] << 8u) |
+                        ((uint32_t)p[2] << 16u) | ((uint32_t)p[3] << 24u);
+        float value;
+        memcpy(&value, &bits, sizeof(value));
+        sum += (double)value * (double)vector[index];
+    }
+    if (!isfinite(sum)) return 0;
+    *result = sum;
+    return 1;
+}
+
 /*
  * Compute one encoded qtype row dot directly from canonical blocks.
  *
@@ -149,6 +172,9 @@ int yvex_quant_cpu_dot(unsigned int qtype, const unsigned char *encoded, size_t 
                 : ULLONG_MAX,
             encoded_bytes, err, YVEX_ERR_BOUNDS, "encoded qtype row byte count is inconsistent");
     }
+    if (qtype == YVEX_GGUF_QTYPE_F32 &&
+        quant_compute_f32_finite(encoded, vector, elements, &sum))
+        blocks = 0u; /* The exact finite row is already evaluated. */
     for (block = 0u; block < blocks; ++block) {
         unsigned long long lane;
         int rc = yvex_quant_decode_block(qtype, encoded + (size_t)block * geometry->bytes_per_block,

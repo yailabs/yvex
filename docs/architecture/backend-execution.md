@@ -130,6 +130,16 @@ Checked CPU close retains a cleanup-only owner while tensors or linear
 executables remain; correct releases and a final close discharge it. Descriptor
 bytes are reported as plan host storage, not prepared weights or GPU residency.
 
+The separate encoded-F32 CPU projection retains literal source-column F64
+accumulation and F32 publication. Four independent activation rows reuse each
+canonical little-endian weight load; ARM64 NEON lanes hold independent F64
+accumulators, not a parallel sum of one dot. Portable hosts use the same ordered
+scalar recurrences. The runtime checks cancellation between bounded four-row
+tiles and publishes only the completed projection. No threads, prepared weight
+copy, new numerical class or family-specific dispatch is introduced. Exceptional
+rows recover the quantization owner's first error/publication behavior. See the
+[numerical obligation](../contracts/numerical-abi.md#ordered-encoded-f32-cpu-projection).
+
 Explicit CPU gated-delta execution consumes the existing host sequence-state
 provider and common F32 recurrence authority. It stages through the same session
 transaction and rounds only the declared BF16 output. It is not a fallback from

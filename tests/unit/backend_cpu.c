@@ -3,6 +3,7 @@
  * stats, read/write, copy, sync, and memory-limit errors.
  */
 #include <math.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <yvex/api.h>
@@ -393,6 +394,95 @@ static int test_bf16_linear_executable(void)
     return 0;
 }
 
+/* Canonical unaligned storage and independent literal ordered-F64 rows. */
+static int test_encoded_f32_rows(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_error err = {0};
+    unsigned char storage[5u * 17u * 4u + 1u], *encoded = storage + 1u;
+    float weights[5u * 17u], values[9u * 17u], observed[9u * 5u];
+    const unsigned int populations[] = {1u, 2u, 3u, 4u, 5u, 7u, 9u};
+    for (unsigned int i = 0u; i < 5u * 17u; ++i) {
+        uint32_t bits;
+        weights[i] = (float)((int)(i % 23u) - 11) / 7.0f;
+        if (i == 0u) weights[i] = 0x1p100f;
+        if (i == 1u) weights[i] = 1.0f;
+        if (i == 2u) weights[i] = -0x1p100f;
+        memcpy(&bits, weights + i, sizeof(bits));
+        for (unsigned int b = 0u; b < 4u; ++b) encoded[i * 4u + b] = (unsigned char)(bits >> (8u*b));
+    }
+    for (unsigned int i = 0u; i < 9u * 17u; ++i) values[i] = (float)((int)(i % 11u) - 5) / 13.0f;
+    values[0] = values[1] = values[2] = 1.0f;
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "ordered F32 CPU opens");
+    for (size_t p = 0u; p < sizeof(populations) / sizeof(populations[0]); ++p) {
+        unsigned int rows = populations[p];
+        yvex_device_tensor *input = NULL, *output = NULL;
+        yvex_backend_tensor_desc desc;
+        yvex_backend_operation_facts facts = {0};
+        make_desc(&desc, "encoded_input", rows, 17u);
+        YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &input, &err) == YVEX_OK &&
+            yvex_backend_tensor_write(backend, input, values, rows * 17u * sizeof(float), &err) == YVEX_OK,
+            "exact input population");
+        make_desc(&desc, "encoded_output", rows, 5u);
+        YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &output, &err) == YVEX_OK,
+            "exact output population");
+        YVEX_TEST_ASSERT(yvex_backend_encoded_matvec(backend, encoded, 5u * 17u * 4u,
+            YVEX_GGUF_QTYPE_F32, 5u, 17u, 17u * 4u, rows, input, NULL, 0u, NULL, output,
+            YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &facts, &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, output, observed, rows * 5u * sizeof(float), &err) == YVEX_OK,
+            "encoded rows publish");
+        for (unsigned int row = 0u; row < rows; ++row)
+            for (unsigned int column = 0u; column < 5u; ++column) {
+                volatile double sum = 0.0;
+                for (unsigned int k = 0u; k < 17u; ++k)
+                    sum = sum + (double)weights[column * 17u + k] * (double)values[row * 17u + k];
+                float expected = (float)sum;
+                YVEX_TEST_ASSERT(!memcmp(&expected, observed + row * 5u + column, sizeof(float)),
+                    "independent input rows retain bit-exact source order, not a shared reduction");
+            }
+        YVEX_TEST_ASSERT(facts.active_weight_bytes == 5u * 17u * 4u &&
+            facts.activation_bytes == (17u + 5u) * rows * sizeof(float), "exact non-overlapping logical traffic");
+        float saved = values[(rows - 1u) * 17u];
+        values[(rows - 1u) * 17u] = NAN;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, input, values, rows * 17u * sizeof(float), &err) == YVEX_OK &&
+            yvex_backend_encoded_matvec(backend, encoded, 5u * 17u * 4u, YVEX_GGUF_QTYPE_F32,
+                5u, 17u, 17u * 4u, rows, input, NULL, 0u, NULL, output, YVEX_ENCODED_INPUT_F32,
+                YVEX_ENCODED_REDUCTION_DEFAULT, &facts, &err) == YVEX_ERR_FORMAT &&
+            !output->is_written && !strcmp(err.where, "quant.cpu_dot"),
+            "nonfinite lane restores scalar refusal and cannot publish");
+        values[(rows - 1u) * 17u] = saved;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, input, values, rows * 17u * sizeof(float), &err) == YVEX_OK,
+            "finite input restored");
+        unsigned char first_weight[4];
+        memcpy(first_weight, encoded, 4u);
+        encoded[0] = 0u; encoded[1] = 0u; encoded[2] = 0xc0u; encoded[3] = 0x7fu;
+        YVEX_TEST_ASSERT(yvex_backend_encoded_matvec(backend, encoded, 5u * 17u * 4u,
+            YVEX_GGUF_QTYPE_F32, 5u, 17u, 17u * 4u, rows, input, NULL, 0u, NULL, output,
+            YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &facts, &err) == YVEX_ERR_FORMAT &&
+            !output->is_written && !strcmp(err.where, "quant.cpu_dot"),
+            "nonfinite weight preserves the quantization owner's first refusal");
+        memcpy(encoded, first_weight, 4u);
+        yvex_device_tensor overlap = *output;
+        overlap.data = input->data;
+        YVEX_TEST_ASSERT(yvex_backend_encoded_matvec(backend, encoded, 5u * 17u * 4u,
+            YVEX_GGUF_QTYPE_F32, 5u, 17u, 17u * 4u, rows, input, NULL, 0u, NULL, &overlap,
+            YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &facts, &err) == YVEX_ERR_FORMAT,
+            "overlapping activation publication refuses");
+        YVEX_TEST_ASSERT(yvex_backend_encoded_matvec(backend, encoded, 5u * 17u * 4u,
+            YVEX_GGUF_QTYPE_BF16, 5u, 17u, 17u * 4u, rows, input, NULL, 0u, NULL, output,
+            YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &facts, &err) == YVEX_ERR_UNSUPPORTED,
+            "no unimplemented encoded qtype becomes admitted");
+        YVEX_TEST_ASSERT(yvex_backend_encoded_matvec(backend, encoded, 5u * 17u * 4u - 1u,
+            YVEX_GGUF_QTYPE_F32, 5u, 17u, 17u * 4u, rows, input, NULL, 0u, NULL, output,
+            YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &facts, &err) == YVEX_ERR_BOUNDS,
+            "malformed physical extent refuses");
+        YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &input, &err) == YVEX_OK &&
+            yvex_backend_tensor_release(backend, &output, &err) == YVEX_OK, "encoded rows retire");
+    }
+    yvex_backend_close(backend);
+    return 0;
+}
+
 int yvex_test_backend_cpu(void)
 {
     if (test_open_and_unsupported() != 0) return 1;
@@ -401,5 +491,5 @@ int yvex_test_backend_cpu(void)
     if (test_attention_workspace() != 0) return 1;
     if (test_dense_encoder_primitives() != 0) return 1;
     if (test_bf16_linear_executable() != 0) return 1;
-    return 0;
+    return test_encoded_f32_rows();
 }

@@ -120,6 +120,16 @@
     "suite"
   ],
   "metrics": {
+    "compute.model-forward": [
+      "deployment-performance",
+      "s",
+      "server tensor-engine forward execution wall; excludes input admission/tokenization, result scoring/sealing and transport"
+    ],
+    "result.encoded-bytes": [
+      "product-path",
+      "byte",
+      "complete successful public JSONL response including LF, observed before SDK projection"
+    ],
     "admission.client": [
       "product-path",
       "s",

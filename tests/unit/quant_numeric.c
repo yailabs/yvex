@@ -7,6 +7,7 @@
 #include <yvex/internal/quant_numeric.h>
 
 #include <float.h>
+#include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
@@ -691,6 +692,95 @@ static int quant_test_weighted_blocks(void)
     return 0;
 }
 
+/* Independent byte interpretation and literal ordered F64 recurrence, not an
+ * unordered SIMD reduction or agreement with another accelerated consumer. */
+static int quant_test_f32_ordered_dot(void)
+{
+    unsigned char storage[2049u * 4u + 2u];
+    unsigned char *encoded = storage + 1u;
+    float vector[2049];
+    const unsigned int widths[] = {1u, 3u, 7u, 16u, 31u, 33u, 65u, 257u, 1024u, 2049u};
+    uint32_t random = 0x371ab49du;
+    yvex_quant_failure failure;
+    yvex_error error;
+    for (unsigned int trial = 0u; trial < 256u; ++trial) {
+        unsigned int width = widths[trial % (sizeof(widths) / sizeof(widths[0]))];
+        volatile double expected = 0.0;
+        storage[0] = storage[sizeof(storage) - 1u] = 0xa5u;
+        for (unsigned int index = 0u; index < width; ++index) {
+            random = random * 1664525u + 1013904223u;
+            uint32_t bits = (random & 0x807fffffu) | ((90u + random % 56u) << 23u);
+            for (unsigned int byte = 0u; byte < 4u; ++byte)
+                encoded[index * 4u + byte] = (unsigned char)(bits >> (byte * 8u));
+            random = random * 1664525u + 1013904223u;
+            bits = (random & 0x807fffffu) | ((100u + random % 33u) << 23u);
+            memcpy(vector + index, &bits, sizeof(bits));
+            float weight;
+            YVEX_TEST_ASSERT(quant_reference_block(YVEX_GGUF_QTYPE_F32,
+                encoded + index * 4u, &weight), "independent F32 interpretation");
+            expected = expected + (double)weight * (double)vector[index];
+        }
+        float observed = 123.0f;
+        memset(&failure, 0xa5, sizeof(failure));
+        YVEX_TEST_ASSERT(yvex_quant_cpu_dot(YVEX_GGUF_QTYPE_F32, encoded, width * 4u,
+            vector, width, &observed, &failure, &error) == YVEX_OK &&
+            quant_float_bits_equal(observed, (float)expected) && failure.code == 0u,
+            "unaligned F32 dot equals independent ordered F64 publication bitwise");
+        YVEX_TEST_ASSERT(storage[0] == 0xa5u && storage[sizeof(storage) - 1u] == 0xa5u,
+            "F32 encoded range remains unchanged");
+    }
+    const float controls[][3] = {
+        {0x1p30f, 1.0f, -0x1p30f}, {0x1p100f, 1.0f, -0x1p100f},
+        {-0.0f, 0.0f, -0.0f}, {0x1p-149f, -0x1p-149f, 0x1p-149f}
+    };
+    for (size_t control = 0u; control < sizeof(controls) / sizeof(controls[0]); ++control) {
+        volatile double expected = 0.0;
+        for (unsigned int index = 0u; index < 3u; ++index) {
+            uint32_t bits;
+            memcpy(&bits, &controls[control][index], sizeof(bits));
+            for (unsigned int byte = 0u; byte < 4u; ++byte)
+                encoded[index * 4u + byte] = (unsigned char)(bits >> (byte * 8u));
+            vector[index] = 1.0f;
+            expected = expected + (double)controls[control][index];
+        }
+        float observed = 123.0f;
+        YVEX_TEST_ASSERT(yvex_quant_cpu_dot(YVEX_GGUF_QTYPE_F32, encoded, 12u, vector, 3u,
+            &observed, &failure, &error) == YVEX_OK &&
+            quant_float_bits_equal(observed, (float)expected),
+            "F32 cancellation, signed zero and subnormal retain F64 order");
+    }
+    for (unsigned int bad = 0u; bad < 3u; ++bad) {
+        for (unsigned int index = 0u; index < 7u; ++index) {
+            uint32_t bits = bad == 0u && index == 3u ? 0x7fc00001u : 0x3f800000u;
+            for (unsigned int byte = 0u; byte < 4u; ++byte)
+                encoded[index * 4u + byte] = (unsigned char)(bits >> (byte * 8u));
+            vector[index] = index == 3u && bad ? (bad == 1u ? NAN : INFINITY) : 1.0f;
+        }
+        float observed = 123.0f;
+        YVEX_TEST_ASSERT(yvex_quant_cpu_dot(YVEX_GGUF_QTYPE_F32, encoded, 28u, vector, 7u,
+            &observed, &failure, &error) == YVEX_ERR_FORMAT &&
+            failure.code == YVEX_QUANT_FAILURE_NONFINITE && failure.actual == 3u &&
+            failure.block_index == ULLONG_MAX && observed == 123.0f &&
+            !strcmp(error.where, "quant.cpu_dot"),
+            "exceptional F32 row retains first refusal identity and unpublished output");
+    }
+    uint32_t maximum = 0x7f7fffffu;
+    for (unsigned int byte = 0u; byte < 4u; ++byte)
+        encoded[byte] = (unsigned char)(maximum >> (byte * 8u));
+    vector[0] = FLT_MAX;
+    float observed = 123.0f;
+    YVEX_TEST_ASSERT(yvex_quant_cpu_dot(YVEX_GGUF_QTYPE_F32, encoded, 4u, vector, 1u,
+        &observed, &failure, &error) == YVEX_ERR_BOUNDS &&
+        failure.code == YVEX_QUANT_FAILURE_NUMERIC_BOUND && isinf(observed),
+        "F64 finite but unrepresentable F32 retains existing result-bound refusal");
+    observed = 123.0f;
+    YVEX_TEST_ASSERT(yvex_quant_cpu_dot(YVEX_GGUF_QTYPE_F32, encoded, 3u, vector, 1u,
+        &observed, &failure, &error) == YVEX_ERR_BOUNDS &&
+        failure.code == YVEX_QUANT_FAILURE_BYTE_OVERFLOW && observed == 123.0f,
+        "malformed byte extent refuses before direct F32 loading");
+    return 0;
+}
+
 int yvex_test_quant_numeric(void)
 {
     float zero_q8[YVEX_QUANT_Q8_0_ELEMENTS] = {0};
@@ -705,7 +795,7 @@ int yvex_test_quant_numeric(void)
         quant_test_source_formats() != 0 || quant_test_registry() != 0 ||
         quant_test_golden_blocks() != 0 ||
         quant_test_weighted_blocks() != 0 ||
-        quant_test_exact_scalar_blocks() != 0 ||
+        quant_test_exact_scalar_blocks() != 0 || quant_test_f32_ordered_dot() != 0 ||
         quant_test_block(YVEX_GGUF_QTYPE_Q8_0,
                          YVEX_QUANT_Q8_0_ELEMENTS,
                          YVEX_QUANT_Q8_0_BYTES, 0.02) != 0 ||

@@ -41,6 +41,8 @@ QUALITY_KEY = ("family_contract", "upstream_repository", "checkpoint", "tokenize
 # become a representation regression test, even if the caller asks to ignore them.
 QUALITY_VARIANTS = set(TARGET_FIELDS) - set(QUALITY_KEY)
 METRICS = {
+    "compute.model-forward": ("deployment-performance", "s", "server tensor-engine forward execution wall; excludes input admission/tokenization, result scoring/sealing and transport"),
+    "result.encoded-bytes": ("product-path", "byte", "complete successful public JSONL response including LF, observed before SDK projection"),
     "admission.client": ("product-path", "s", "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time"),
     "prefill.wall": ("deployment-performance", "s", "server-authored complete newly executed prefill wall time"),
     "decode.post-first.committed": ("deployment-performance", "token/s", "committed tokens after first / elapsed decode wall after first"),

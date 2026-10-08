@@ -1060,6 +1060,18 @@ class QualificationTests(unittest.TestCase):
                     output_bound=256, samples=[1,2,3], statistics=q.statistics_for([1,2,3]),
                     scope="fixture", evidence="fixture")
 
+    def test_finite_metrics_do_not_relabel_forward_as_complete_caller_time(self):
+        receipt = self.receipt()
+        receipt["measurements"] = [self.metric("compute.model-forward"),
+                                   self.metric("request.client-complete"),
+                                   self.metric("result.encoded-bytes")]
+        q.validate(receipt)
+        self.assertIn("excludes input admission", receipt["measurements"][0]["definition"])
+        self.assertEqual(q.METRICS["result.encoded-bytes"][:2], ("product-path", "byte"))
+        receipt["measurements"][0]["definition"] = q.METRICS["request.client-complete"][2]
+        with self.assertRaisesRegex(ValueError, "denominator/definition changed"):
+            q.validate(receipt)
+
     def test_diagnostics_are_bounded_nullable_facts_not_performance_metrics(self):
         receipt = self.receipt()
         fact = dict(id="mapped-rss", case="fixture", value=0, unit="byte",

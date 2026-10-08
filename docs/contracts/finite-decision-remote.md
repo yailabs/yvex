@@ -94,6 +94,11 @@ Successful JSON has `schema="yvex.finite.response.v1"`, echoed `request_id`,
 | `token_count`, `candidate_count`, `model_forward_count`, `sampling_invocation_count`, `generated_token_count`, `resident_backbone_count` | Exact bounded work: one forward/backbone, zero sampling/generation |
 | `elapsed_nanoseconds`, `source_mapped_bytes`, `parameter_execution_bytes`, `workspace_host_bytes`, `workspace_device_bytes` | Producer-authored time/resource facts; do not add overlapping byte classes |
 
+`elapsed_nanoseconds` measures the tensor-engine forward, not the complete
+caller operation. Input admission/tokenization, candidate scoring/result sealing
+and transport are outside that clock. A caller budget must be measured from
+client dispatch through validated response, independently of this compute fact.
+
 Consumers must verify peer pins, schema, correlation, alias, generation, ordered
 candidate IDs and the exact model/binding/input-policy identities admitted by
 their configuration. Alias/generation alone cannot authenticate a model across
@@ -130,11 +135,19 @@ outcome semantics on loss.
 
 ## Consumer handoff and evidence scope
 
-The YAI/SDK owner implements the remote typed client against these schemas and
-the approved SSH endpoint. Existing `yvex-sdk::finite::execute_local` remains
-local; this producer does not claim that a remote SDK method already exists.
-YAI retains Participant/Case admission and disclosure; SDK validates and projects
-producer facts. No SDK, YAI or Studio modification is part of this delivery.
+The independently buildable public Rust `yvex-sdk` supports
+`finite::remote::{RemoteClient, ProducerIdentity, Invocation}` over an explicitly
+approved `yvex_sdk::SshConnection`. The invocation binds alias, expected
+generation, question/context and ordered candidates; the client validates schema,
+correlation, server/peer and exact producer lineage before returning a result.
+Use `with_timeout(Duration::from_millis(5000))` for a 5,000 ms caller budget;
+timeout is outcome-unavailable, not permission to retry. The client's complete
+response receive bound is 32,768 bytes, stricter than a 65,536-byte consumer bound.
+`finite::execute_local` remains the separate public-C local integration.
+YAI retains Participant/Case admission and disclosure. SDK validates/projects
+producer facts; neither commercial access nor computational success grants Case
+authority. HTTPS management is not this finite-compute endpoint. No SDK, YAI or
+Studio changes are required to consume a compatible faster resident realization.
 
 `tests/integration/finite_remote.py` exercises the real restricted SSH producer
 and its public C client, with a synthetic native peer for wire/result negatives.

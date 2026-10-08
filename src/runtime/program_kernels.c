@@ -786,7 +786,7 @@ int yvex_program_kernels_prepare(yvex_program_kernels *c, unsigned long long row
 /* The portable implementation retains the quantization owner's scalar dot
  * algorithm and per-row cancellation. This is one linear operation, not model
  * composition; dimensions and parameter handles arrive from physical work. */
-static int kernel_linear_cpu(const yvex_component_encoded_weight *w,
+static int kernel_linear_cpu(yvex_backend *backend, const yvex_component_encoded_weight *w,
     const yvex_program_device_invocation *r, const yvex_device_tensor *input,
     yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
 {
@@ -794,6 +794,30 @@ static int kernel_linear_cpu(const yvex_component_encoded_weight *w,
     float *y = (float *)output->data;
     unsigned long long row, column;
     output->is_written = 0;
+    if (w->qtype == YVEX_GGUF_QTYPE_F32) {
+        for (row = 0u; row < r->rows; row += 4u) {
+            unsigned long long count = r->rows - row < 4u ? r->rows - row : 4u;
+            yvex_device_tensor source = *input, result = *output;
+            yvex_backend_operation_facts part = {0};
+            if (r->cancel_requested && r->cancel_requested(r->cancel_context))
+                return kernel_refuse(err, YVEX_ERR_CANCELLED, "linear CPU projection cancelled");
+            source.data = (unsigned char *)(void *)(x + row * w->row_width);
+            source.bytes = count * w->row_width * sizeof(float);
+            source.dims[0] = count;
+            result.data = (unsigned char *)(void *)(y + row * w->row_count);
+            result.bytes = count * w->row_count * sizeof(float);
+            result.dims[0] = count;
+            int rc = yvex_backend_encoded_matvec(backend, w->encoded, w->encoded_bytes, w->qtype,
+                w->row_count, w->row_width, w->row_bytes, count, &source, NULL, 0u, NULL, &result,
+                YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &part, err);
+            if (rc != YVEX_OK) return rc;
+        }
+        facts->active_weight_bytes = w->encoded_bytes;
+        facts->activation_bytes = input->bytes + output->bytes;
+        facts->compulsory_memory_facts_available = 1;
+        output->is_written = 1;
+        return YVEX_OK;
+    }
     for (row = 0u; row < r->rows; ++row)
         for (column = 0u; column < w->row_count; ++column) {
             yvex_quant_failure failure = {0};
@@ -870,7 +894,7 @@ static int kernel_linear_residual(yvex_program_kernels *c, const yvex_program_de
     const yvex_device_tensor *residual = &r->values[r->step->operands[2]];
     int rc;
     if (yvex_backend_kind_of(c->backend) == YVEX_BACKEND_KIND_CPU) {
-        rc = kernel_linear_cpu(w, r, input, output, facts, err);
+        rc = kernel_linear_cpu(c->backend, w, r, input, output, facts, err);
         output->is_written = 0;
         for (unsigned long long i = 0u; rc == YVEX_OK && i < output->bytes / sizeof(float); ++i) {
             float value = ((float *)output->data)[i] + ((const float *)residual->data)[i];
@@ -1422,7 +1446,7 @@ static int kernel_encoded_linear(yvex_program_kernels *c, const yvex_program_dev
     yvex_encoded_reduction_policy reduction = q8 || !strcmp(s->implementation, "linear.row_dot.f32.v1") ?
         YVEX_ENCODED_REDUCTION_ROW : YVEX_ENCODED_REDUCTION_DEFAULT;
     if (yvex_backend_kind_of(c->backend) == YVEX_BACKEND_KIND_CPU)
-        return kernel_linear_cpu(w, r, input, output, facts, err);
+        return kernel_linear_cpu(c->backend, w, r, input, output, facts, err);
     unsigned long long packing = 0u;
     if (q8) {
         int rc = yvex_backend_encoded_workspace_bytes(c->backend, w->qtype, w->row_width, r->rows,

@@ -16,6 +16,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__aarch64__) && defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
 
 typedef struct {
     unsigned long long linear_executables;
@@ -306,6 +309,102 @@ static int cpu_neural_bounds(yvex_error *err)
 {
     yvex_error_set(err, YVEX_ERR_BOUNDS, "cpu.neural", "numerical population or parameter extent overflowed");
     return YVEX_ERR_BOUNDS;
+}
+
+/* Independent input rows share canonical weights, never a reduction. Each
+ * accumulator still visits source columns in literal F64 order. Four live
+ * rows expose instruction-level parallelism without threads, a new numerical
+ * class, prepared weights or an unbounded workspace. */
+static int cpu_encoded_f32_matvec(yvex_backend *backend, const unsigned char *encoded,
+    unsigned long long bytes, unsigned int qtype, unsigned long long columns,
+    unsigned long long width, unsigned long long row_bytes, unsigned long long rows,
+    const yvex_device_tensor *input, const yvex_device_tensor *tail,
+    unsigned long long head_width, const yvex_device_tensor *additive,
+    yvex_device_tensor *output, yvex_encoded_input_policy policy,
+    yvex_encoded_reduction_policy reduction, const yvex_device_tensor *workspace,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long expected, input_count, output_count;
+    if (qtype != YVEX_GGUF_QTYPE_F32 || policy != YVEX_ENCODED_INPUT_F32 ||
+        tail || head_width || additive || workspace ||
+        (reduction != YVEX_ENCODED_REDUCTION_DEFAULT && reduction != YVEX_ENCODED_REDUCTION_ROW)) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "cpu.encoded-matvec", "exact F32 rows required");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (!encoded || !rows || !width || !columns || !yvex_core_u64_mul(width, 4u, &expected) ||
+        expected != row_bytes || !yvex_core_u64_mul(row_bytes, columns, &expected) ||
+        expected != bytes || bytes > SIZE_MAX || !yvex_core_u64_mul(rows, width, &input_count) ||
+        !yvex_core_u64_mul(rows, columns, &output_count)) return cpu_neural_bounds(err);
+    int rc = cpu_neural_admit(backend, &input, &input_count, 1u, &output, &output_count, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_device_tensor weights = {.data = (unsigned char *)(void *)encoded, .bytes = bytes};
+    if (input->dtype != YVEX_DTYPE_F32 || output->dtype != YVEX_DTYPE_F32 ||
+        !cpu_storage_disjoint(output, &weights)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.encoded-matvec", "F32 storage and read-only weights required");
+        return YVEX_ERR_FORMAT;
+    }
+    const float *x = (const float *)input->data;
+    float *y = (float *)output->data;
+    int exceptional = 0;
+    for (unsigned long long base = 0u; base < rows && !exceptional; base += 4u) {
+        unsigned long long count = rows - base < 4u ? rows - base : 4u;
+        const float *a = x + base * width, *b = a + (count > 1u ? width : 0u);
+        const float *c = a + (count > 2u ? width * 2u : 0u), *d = a + (count > 3u ? width * 3u : 0u);
+        for (unsigned long long column = 0u; column < columns; ++column) {
+            const unsigned char *w = encoded + column * row_bytes;
+            double s0 = 0.0, s1 = 0.0, s2 = 0.0, s3 = 0.0;
+#if defined(__aarch64__) && defined(__ARM_NEON)
+            float64x2_t pair0 = vdupq_n_f64(0.0), pair1 = vdupq_n_f64(0.0);
+#endif
+            for (unsigned long long k = 0u; k < width; ++k) {
+                const unsigned char *p = w + k * 4u;
+                uint32_t bits = (uint32_t)p[0] | ((uint32_t)p[1] << 8u) |
+                    ((uint32_t)p[2] << 16u) | ((uint32_t)p[3] << 24u);
+                float value;
+                memcpy(&value, &bits, sizeof(value));
+                double weight = (double)value;
+#if defined(__aarch64__) && defined(__ARM_NEON)
+                float32x2_t x0 = vset_lane_f32(b[k], vdup_n_f32(a[k]), 1);
+                float32x2_t x1 = vset_lane_f32(d[k], vdup_n_f32(c[k]), 1);
+                pair0 = vaddq_f64(pair0, vmulq_n_f64(vcvt_f64_f32(x0), weight));
+                pair1 = vaddq_f64(pair1, vmulq_n_f64(vcvt_f64_f32(x1), weight));
+#else
+                s0 += weight * (double)a[k]; s1 += weight * (double)b[k];
+                s2 += weight * (double)c[k]; s3 += weight * (double)d[k];
+#endif
+            }
+#if defined(__aarch64__) && defined(__ARM_NEON)
+            s0 = vgetq_lane_f64(pair0, 0); s1 = vgetq_lane_f64(pair0, 1);
+            s2 = vgetq_lane_f64(pair1, 0); s3 = vgetq_lane_f64(pair1, 1);
+#endif
+            const double sums[] = {s0, s1, s2, s3};
+            for (unsigned long long lane = 0u; lane < count; ++lane) {
+                float value = (float)sums[lane];
+                if (!isfinite(value)) { exceptional = 1; break; }
+                y[(base + lane) * columns + column] = value;
+            }
+            if (exceptional) break;
+        }
+    }
+    /* Restore the scalar oracle's first row/column error and publication
+     * behavior. Non-finite inputs are never admitted by a faster reduction. */
+    if (exceptional)
+        for (unsigned long long row = 0u; row < rows; ++row)
+            for (unsigned long long column = 0u; column < columns; ++column) {
+                yvex_quant_failure failure = {0};
+                rc = yvex_quant_cpu_dot(qtype, encoded + column * row_bytes, (size_t)row_bytes,
+                    x + row * width, width, y + row * columns + column, &failure, err);
+                if (rc != YVEX_OK) return rc;
+            }
+    facts->active_weight_bytes = bytes;
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static const yvex_backend_encoded_operations *cpu_encoded_operations(const yvex_backend *backend)
+{
+    static const yvex_backend_encoded_operations operations = {.matvec = cpu_encoded_f32_matvec};
+    (void)backend;
+    return &operations;
 }
 
 static int cpu_sinusoidal_embedding(yvex_backend *backend, const yvex_device_tensor *input,
@@ -1110,6 +1209,7 @@ static const yvex_backend_vtable cpu_vtable = {
     .op_mlp = cpu_op_mlp,
     .op_attention = cpu_op_attention,
     .transformer_operations = cpu_transformer_operations,
+    .encoded_operations = cpu_encoded_operations,
 };
 
 int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err)

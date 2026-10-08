@@ -33,6 +33,25 @@ not infer equivalence for operations requiring ordered F64 accumulation or
 other numerical classes. F16 conversion, matmul, normalization, attention and
 quantized variants remain explicitly unsupported by this Metal realization.
 
+## Ordered encoded-F32 CPU projection
+
+Canonical encoded-F32 weights and F32 activations produce one literal
+source-order F64 recurrence per output, followed by the existing F32 cast.
+Independent input rows may share weight loads and occupy independent F64 SIMD
+lanes. This does not permit a tree/warp reduction within a dot, F32 accumulation,
+changed column order or an approximate publication. Finite F32 products are
+exact in F64; the bounded addressable population cannot overflow F64. Canonical
+little-endian byte loads admit unaligned storage without exporting host layouts.
+
+The scalar quantization owner skips per-scalar codec redispatch only for this
+exact F32 path. Exceptional operands re-enter its existing block oracle,
+preserving the first typed failure and output-publication contract. Encoded
+matrix numerical failure leaves the output unwritten; unsupported qtypes, foreign owners,
+overlap and malformed byte extents refuse. Independent literal-F64 controls
+cover cancellation-sensitive magnitudes, signed zero, subnormals, odd row
+populations, unaligned weights and nonfinite/overflow refusal. No installed ABI,
+representation identity or physical-program numerical selection changes.
+
 ## Ordered decoded-dot publication
 
 The ordinary decoded CUDA projection publishes F32 from a source-ordered F64
