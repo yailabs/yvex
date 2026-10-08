@@ -125,6 +125,13 @@ The numerical certificate, sanitizer/refusal/rollback gates and generated
 sampling views remain part of this boundary; no installed rollout or independent
 checkpoint-quality promotion follows from internal preservation.
 
+The subsequent tensor-only multi-program completion experiment is rejected:
+source-stable repeated controlled/native coding and 2K/8K prefill do not show a
+material complete-model gain. Its API stays outside production; generated
+[rejected-candidate evidence](../evaluation/retained-observations.md#rejected-tensor-only-program-sequence-2026-10-08)
+retains the exact scope. The same Task continues at measured projection/MoE
+execution costs, without relaxing numerical or performance gates.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |

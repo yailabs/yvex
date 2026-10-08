@@ -1871,3 +1871,33 @@ encoding (`aafa4b9a...`); this is not full-model reference inference. The final
 also pass memcheck, racecheck and synccheck. CPU/runtime/quantization sanitizers,
 finite producer regression, CLI/PTY and structural/documentation consumers pass.
 The SDK consumer and unexecuted live gates are not promoted by these controls.
+
+## Rejected tensor-only program sequence (2026-10-08)
+
+An isolated candidate joins an ingress program and its shared-expert program
+under one checked completion. It excludes state, observers and nested ownership;
+prevalidation and failure drain preserve admission/publication. CPU, CUDA,
+malformed/cancellation/completion and finite regression controls pass at their
+bounded scope. Correctness alone does not justify retaining the additional API.
+
+| Exact lane / workload | Generated candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-program-sequence-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-program-sequence-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-program-sequence-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-program-sequence-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-program-sequence-native-coding-metal-20261008.md) |
+
+Three samples per cell preserve emitted content and complete speculative
+populations. Native comparison preserves all ordered typed fragments. Controlled
+prefill and sustained decode show no material improvement; native complete-turn
+latency is slightly worse. The sequence API is rejected, not added to production.
+The records remain CHARACTERIZED observations of the rejected exact candidate,
+not a qualification or an installed-product result.
+
+The native diagnostic profile separately localizes remaining device work to
+encoded/decoded projections and routed MoE. Synchronization API spans overlap
+device execution and are not a removable additive cost. Tokenization is not a
+material coding-turn cost in this capture. The profile is excluded from timed
+samples; unavailable hardware utilization counters remain unavailable. Raw
+profiles, strict comparisons, source captures and lifecycle witnesses remain
+under `full-system-20261008.k2BN6u` in the existing competitive evidence root.
+These observations neither prove a hardware ceiling nor earn the 20/700 exit.
