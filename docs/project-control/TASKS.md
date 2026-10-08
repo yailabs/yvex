@@ -191,6 +191,14 @@ distinct-weight F64 controls pass, but complete-model coding/prefill is neutral.
 retains the experiment without adding a production realization. The same Task
 continues with exact CUDA Graph/projection attribution and unchanged 20/700 gates.
 
+Activation-owned lossless eligibility now avoids repeated rejected preparation
+inside generic MXFP4 projection rows. Exact ordered-F64 publication, exceptional
+fallback, bounded arena reuse and refusal controls remain unchanged. Repeated
+controlled/native evidence supports a small bounded speculative/native benefit,
+not a target-only or long-prefill breakthrough. [Eligibility evidence](../evaluation/retained-observations.md#activation-owned-lossless-eligibility-2026-10-08)
+retains kernel attribution and complete-model comparisons separately. The same
+Task remains IN PROGRESS; independent quality and 20/700 exits are unearned.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |

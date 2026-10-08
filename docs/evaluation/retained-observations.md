@@ -2222,3 +2222,65 @@ observer and all three reruns pass at the frozen final source. Candidate produce
 code and its private comparison probe are not integrated. Owned cleanup preserves
 finite generation and public transports and restores installed DeepSeek.
 No numerical, quality, installed-runtime or Task-state promotion follows.
+
+## Activation-owned lossless eligibility (2026-10-08)
+
+Generic CUDA preparation computes the lossless signed-digit eligibility once
+per actual activation row. Previously an unsupported activation span could
+discard work already repeated for every MXFP4 weight row. The flags use a
+bounded suffix of the existing arena, are recomputed on the ordered stream and
+never become model state or a retained weight layout. Ineligible activations
+enter the unchanged certified ordered-F64 dot directly; exceptional weight
+scales and inconclusive publication retain their original fallback.
+
+| Exact lane / workload | Generated characterized result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-controlled-activation-eligibility-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-controlled-activation-eligibility-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-controlled-activation-eligibility-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-controlled-activation-eligibility-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-activation-eligibility-native-coding-metal-20261008.md) |
+
+Three unprofiled samples per cell retain a small native/speculative benefit;
+target-only coding and long-prefill remain materially neutral. Strict comparison
+passes 38 controlled metric gates and four content/population controls, plus ten
+native metric gates, six population controls and all 768 ordered channel/content
+fragments. Those preservation gates are not a checkpoint-quality oracle or the
+20/700 exit.
+
+Registered `cuda.dot_finiteness` adds the maximum 128-activation grouped geometry,
+exact eligible/ineligible flags and reuse without stale flags. Independent CPU
+decoded source-order F64 references retain exact F32/BF16 publication and
+nonfinite/canary refusals. A separate frozen-source private primitive control
+covers late unsupported blocks, partial rows, signed zero/subnormals, preset
+status and malformed CTA geometry. Memcheck, racecheck and synccheck report zero
+errors; racecheck also reports zero warnings. These component controls do not
+provide independent full-model checkpoint or representation-quality evidence.
+
+The source-stable mapped run passes 142 identities; its document-publication
+check fails because the selected Python lacks `markdown`, not because of changed
+runtime code. Its independent rerun passes in the declared documentation
+environment (`346892232293b852d72b8260cdc50fb3e168f2eb0eef8203bce2cc4ec826ee97`).
+Ten prerequisite-blocked identities remain distinct: historical
+CUDA/reference assets, explicit live/performance inputs, SDK consumer examples
+and Node/npm for the OpenAI integration runner. Generated views and
+`make docs-check` pass; the existing 154 catalog records remain structurally
+unchanged while five exact candidate records are added.
+Actual complete-model native controls are recorded separately, not promoted
+from those blocked lanes.
+
+A separate diagnostic activation-path census establishes the discarded-work
+condition. Source-stable CUPTI attribution then measures the affected MXFP4
+projection with unchanged task geometry; it does not claim that every projection
+or the entire model improved by the component ratio. Profiler runs stay outside
+timed series. The broad remaining execution costs are not a hardware ceiling.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`product-activation-eligibility-native-01`, `activation-eligibility-controlled-02`,
+`qualification-activation-eligibility`, both
+`activation-eligibility-*-comparison-01.json` records, primitive/sanitizer/QA logs
+and `product-activation-eligibility-profile-01`. Timings bind frozen `b66b8b16`
+plus delta `adb5e008`; integration QA binds `f00d3f7b` plus the same two runtime
+files and strengthened permanent test. The failed missing-client preflight
+produces no timing evidence. Owned cleanup restores installed DeepSeek and
+preserves finite generation and approved public transports. No public ABI,
+numerical class, installed executable, independent quality or Task-state
+promotion follows. The same full-system performance boundary continues.

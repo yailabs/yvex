@@ -378,6 +378,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-controlled-activation-eligibility-20261008-target-only-coding-hash-table",
+          "target_identity": "c1653280382ba9467226d08c026d9c0414d5b9793251acfde22603f959b51c6d",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-controlled-baseline-20261007-target-only-coding-hash-table",
           "target_identity": "b4fe4c6e8fed35246be3b3d54635be107fbf82798d70d69308f8f7a313b109f1",
           "path": "controlled-engine/public-C-host/native-v25",
@@ -588,6 +596,14 @@
       "state": "UNQUALIFIED",
       "workload_class": "representative",
       "targets": [
+        {
+          "id": "deepseek-controlled-activation-eligibility-20261008-speculative-coding-hash-table",
+          "target_identity": "eba42557fcd9c76590eda3f269d2cf7df2a0b365d1f2a315c674315234e66946",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
         {
           "id": "deepseek-controlled-baseline-20261007-speculative-coding-hash-table",
           "target_identity": "c3e5c7dc4f83c2207348cde500430c864680aedd742cfb121dfab4e27828906d",
@@ -941,6 +957,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-controlled-activation-eligibility-20261008-target-only-prefill-promessi-2048",
+          "target_identity": "6e9d193c545821a2a941971711fe37c5f0b2060f1af6c6fd6a41372527dcf4e3",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-controlled-baseline-20261007-target-only-prefill-promessi-2048",
           "target_identity": "e7f6aa61ec8e236b6d020cfad8d01e9c67e1eeebd195bcff76492f0593e963fe",
           "path": "controlled-engine/public-C-host/native-v25",
@@ -1193,6 +1217,14 @@
       "state": "UNQUALIFIED",
       "workload_class": "representative",
       "targets": [
+        {
+          "id": "deepseek-controlled-activation-eligibility-20261008-target-only-prefill-promessi-8192",
+          "target_identity": "6e9d193c545821a2a941971711fe37c5f0b2060f1af6c6fd6a41372527dcf4e3",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
         {
           "id": "deepseek-controlled-baseline-20261007-target-only-prefill-promessi-8192",
           "target_identity": "e7f6aa61ec8e236b6d020cfad8d01e9c67e1eeebd195bcff76492f0593e963fe",
@@ -1637,6 +1669,14 @@
           "id": "deepseek-paired-lineage-speculative-none-13",
           "target_identity": "fbd53bd45668f7a813933085382800bc33a1b8b4fec802a3befa077374f31c66",
           "path": "product-native-v24",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-product-activation-eligibility-native-coding-metal-20261008",
+          "target_identity": "017598cf4696da6490ce29a412dce90356134ce27a35361a1bf1035ee68923cd",
+          "path": "product-native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
           "outcomes": []

@@ -335,18 +335,20 @@ static int prepared_case(yvex_backend *backend, unsigned width, unsigned tokens,
     return 0;
 }
 
-static int prepared_mxfp4_case(yvex_backend *backend, unsigned width, unsigned tokens, int scenario)
+static int prepared_mxfp4_case(yvex_backend *backend, unsigned width, unsigned tokens,
+                               int scenario, unsigned groups)
 {
-    enum { GROUPS = 2, ROWS = 17, TOTAL = GROUPS * ROWS };
+    enum { ROWS = 17 };
+    unsigned total = groups * ROWS;
     size_t row_bytes = width / 32u * 17u;
-    size_t input_offset = (TOTAL * row_bytes + 3u) & ~(size_t)3u;
-    size_t output_offset = input_offset + tokens * GROUPS * width * 4u + 4u;
-    size_t status_offset = output_offset + TOTAL * tokens * 4u + 4u;
+    size_t input_offset = (total * row_bytes + 3u) & ~(size_t)3u;
+    size_t output_offset = input_offset + tokens * groups * width * 4u + 4u;
+    size_t status_offset = output_offset + total * tokens * 4u + 4u;
     size_t bytes = status_offset + 4u;
     unsigned char *before = calloc(1u, bytes), *after = malloc(bytes);
     yvex_backend_tensor_desc desc = {.name = "prepared-mxfp4-oracle", .dtype = YVEX_DTYPE_I8, .rank = 1u};
     yvex_backend_attention_weight weight = {.present = 1, .qtype = YVEX_GGUF_QTYPE_MXFP4,
-        .row_width = width, .row_bytes = row_bytes, .row_count = TOTAL};
+        .row_width = width, .row_bytes = row_bytes, .row_count = total};
     yvex_device_tensor *arena = NULL;
     yvex_cuda_work work = {.backend = backend, .state = yvex_cuda_state(backend),
         .variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED};
@@ -356,13 +358,13 @@ static int prepared_mxfp4_case(yvex_backend *backend, unsigned width, unsigned t
     const unsigned levels[] = {0u, 1u, 2u, 3u, 4u, 6u, 8u, 12u};
     YVEX_TEST_ASSERT(before && after, "allocate prepared-MXFP4 oracle");
     float *input = (float *)(before + input_offset);
-    for (unsigned row = 0u; row < TOTAL; ++row)
+    for (unsigned row = 0u; row < total; ++row)
         for (unsigned block = 0u; block < width / 32u; ++block) {
             unsigned char *p = before + row * row_bytes + block * 17u;
             p[0] = block % 8u < 2u ? block % 8u : 112u + (row + block) % 16u;
             for (unsigned i = 1u; i < 17u; ++i) p[i] = (unsigned char)(i * 53u + row * 7u + block);
         }
-    for (unsigned t = 0u; t < tokens * GROUPS; ++t)
+    for (unsigned t = 0u; t < tokens * groups; ++t)
         for (unsigned k = 0u; k < width; ++k) {
             float value = (float)((int)((k * 7u + t) % 31u) - 15) / 16.0f;
             if (t % 4u == 1u) value = k % 3u ? 0.0f : -0.0f;
@@ -383,7 +385,7 @@ static int prepared_mxfp4_case(yvex_backend *backend, unsigned width, unsigned t
     CUdeviceptr status = encoded + status_offset;
     for (int bf16 = 0; bf16 < 2; ++bf16) {
         YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, before, bytes, &err) == YVEX_OK &&
-            yvex_cuda_decoded_mxfp4(&work, &weight, encoded, GROUPS, ROWS, tokens,
+            yvex_cuda_decoded_mxfp4(&work, &weight, encoded, groups, ROWS, tokens,
                 device_input, output, bf16, status, &err) == YVEX_OK &&
             yvex_cuda_launch_synchronize(backend, work.variant, &device_wide,
                 "cuda.test.prepared-mxfp4", &err) == YVEX_OK &&
@@ -391,8 +393,20 @@ static int prepared_mxfp4_case(yvex_backend *backend, unsigned width, unsigned t
             "execute prepared-MXFP4 projection and completion");
         YVEX_TEST_ASSERT((*(int *)(after + status_offset) != 0) == (scenario != 0),
             "prepared-MXFP4 finite status");
+        if (scenario != 2) {
+            int eligibility[128];
+            CUdeviceptr flags = work.decoded_workspace +
+                (unsigned long long)tokens * groups * width * 25ull / 8ull;
+            YVEX_TEST_ASSERT(work.state->driver.cuMemcpyDtoH_v2(eligibility, flags,
+                tokens * groups * sizeof(int)) == YVEX_CUDA_SUCCESS,
+                "read activation-owned eligibility after checked completion");
+            for (unsigned t = 0u; t < tokens * groups; ++t)
+                YVEX_TEST_ASSERT(eligibility[t] ==
+                    (t % 4u != 3u && !(scenario == 1 && t == 0u)),
+                    "unsupported spans and nonfinite inputs do not inherit stale eligibility");
+        }
         if (!scenario) for (unsigned t = 0u; t < tokens; ++t)
-            for (unsigned row = 0u; row < TOTAL; ++row) {
+            for (unsigned row = 0u; row < total; ++row) {
                 double reference = 0.0;
                 for (unsigned k = 0u; k < width; ++k) {
                     const unsigned char *p = before + row * row_bytes + k / 32u * 17u;
@@ -401,28 +415,28 @@ static int prepared_mxfp4_case(yvex_backend *backend, unsigned width, unsigned t
                     float value = (float)levels[code & 7u] * scale * 0.5f;
                     if (code & 8u) value = -value;
                     reference = fma((double)value,
-                        (double)input[(t * GROUPS + row / ROWS) * width + k], reference);
+                        (double)input[(t * groups + row / ROWS) * width + k], reference);
                 }
                 float expected = (float)reference;
                 if (bf16) expected = yvex_quant_bf16_decode(yvex_quant_bf16_encode(expected));
                 YVEX_TEST_ASSERT(!memcmp(&expected, after + output_offset +
-                    (t * TOTAL + row) * 4u, 4u), "prepared-MXFP4 exact ordered host F64 oracle");
+                    (t * total + row) * 4u, 4u), "prepared-MXFP4 exact ordered host F64 oracle");
             }
         YVEX_TEST_ASSERT(!memcmp(before, after, output_offset) &&
             !memcmp(before + status_offset - 4u, after + status_offset - 4u, 4u),
             "prepared-MXFP4 inputs and canaries unchanged");
         if (scenario == 2) YVEX_TEST_ASSERT(!memcmp(before + output_offset,
-            after + output_offset, TOTAL * tokens * 4u), "prior status prohibits MXFP4 writes");
+            after + output_offset, total * tokens * 4u), "prior status prohibits MXFP4 writes");
     }
     weight.row_count--;
-    YVEX_TEST_ASSERT(yvex_cuda_decoded_mxfp4(&work, &weight, encoded, GROUPS, ROWS, tokens,
+    YVEX_TEST_ASSERT(yvex_cuda_decoded_mxfp4(&work, &weight, encoded, groups, ROWS, tokens,
         device_input, output, 0, status, &err) == YVEX_ERR_INVALID_ARG,
         "prepared-MXFP4 malformed group extent refused");
     YVEX_TEST_ASSERT(yvex_cuda_work_cleanup(&work, &err) == YVEX_OK &&
         yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
         "prepared-MXFP4 temporary ownership released");
-    printf("prepared MXFP4 oracle: width=%u inputs=%u groups=2 rows=17 scenario=%d bit_differences=0\n",
-        width, tokens, scenario);
+    printf("prepared MXFP4 oracle: width=%u inputs=%u groups=%u rows=17 scenario=%d bit_differences=0\n",
+        width, tokens, groups, scenario);
     free(before);
     free(after);
     return 0;
@@ -472,9 +486,10 @@ int yvex_cuda_test_dot_finiteness(void)
         if (prepared_case(backend, 96u, 65u, scenario)) return 1;
     if (prepared_case(backend, 4096u, 33u, 0)) return 1;
     for (int scenario = 0; scenario < 4; ++scenario)
-        if (prepared_mxfp4_case(backend, 96u, 5u, scenario)) return 1;
-    if (prepared_mxfp4_case(backend, 4096u, 1u, 0) ||
-        prepared_mxfp4_case(backend, 8192u, 16u, 0)) return 1;
+        if (prepared_mxfp4_case(backend, 96u, 5u, scenario, 2u)) return 1;
+    if (prepared_mxfp4_case(backend, 4096u, 1u, 0, 2u) ||
+        prepared_mxfp4_case(backend, 8192u, 16u, 0, 2u) ||
+        prepared_mxfp4_case(backend, 8192u, 16u, 0, 8u)) return 1;
     yvex_backend_close(backend);
     return 0;
 }

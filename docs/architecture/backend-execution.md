@@ -306,6 +306,15 @@ earlier earned evidence or its numerical contract. Prepared lossless digit
 layouts are bounded backend resources, not a new quantization; the unchanged
 artifact/binding and final F32-to-BF16 publication remain authoritative.
 
+Lossless MXFP4 activation eligibility is computed once per actual activation
+row, not rediscovered after partial integer-dot work for every weight row.
+Stream-owned flags occupy the existing bounded preparation arena and are
+rewritten on each invocation. Unsupported activation spans enter the unchanged
+certified ordered-dot fallback directly; exceptional weight scales and
+inconclusive bounds retain their original fallback. No weight representation,
+numerical class, model state or persistent cache is added. [Eligibility evidence](../evaluation/retained-observations.md#activation-owned-lossless-eligibility-2026-10-08)
+separates affected-kernel attribution from repeated complete-model benefit.
+
 Exact MiniMax output-linear requirements remain source/package numerical facts.
 Runtime component specialization resolves them to exact generic linear
 execution records; generic CUDA consumes those records without MiniMax switches

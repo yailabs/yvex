@@ -2,21 +2,12 @@
  * This is an execution workspace, not a new weight format or numerical class. */
 #include "src/backend/cuda/dot_recovery.h"
 
-extern "C" __global__ void yvex_decoded_prepare(
-    const unsigned char *source, unsigned qtype, unsigned width, unsigned rows,
-    unsigned char *digits, short2 *metadata, int *status)
+static __device__ __forceinline__ int decoded_prepare_block(
+    const unsigned char *source, unsigned qtype, unsigned width, unsigned row,
+    unsigned part, unsigned char *digits, short2 *metadata)
 {
     unsigned lane = threadIdx.x & 31u;
-    unsigned long long block = (unsigned long long)blockIdx.x *
-        (blockDim.x / 32u) + (threadIdx.x >> 5u);
-    if (!status || *status) return;
-    if (!source || !digits || !metadata || !width || width % 32u || !rows ||
-        (qtype != YVEX_GGUF_QTYPE_BF16 && qtype != YVEX_GGUF_QTYPE_F32)) {
-        if (!threadIdx.x) atomicCAS(status, 0, 2);
-        return;
-    }
-    if (block >= (unsigned long long)rows * (width / 32u)) return;
-    unsigned row = block / (width / 32u), part = block % (width / 32u);
+    unsigned long long block = (unsigned long long)row * (width / 32u) + part;
     float value = qtype_value(source + (unsigned long long)row * width *
         (qtype == YVEX_GGUF_QTYPE_BF16 ? 2u : 4u), part * 32u + lane, qtype);
     unsigned bits = __float_as_uint(value), exponent = (bits >> 23u) & 255u;
@@ -44,6 +35,41 @@ extern "C" __global__ void yvex_decoded_prepare(
         digits[((unsigned long long)row * 3u + digit) * width + part * 32u + lane] =
             (unsigned char)low;
         integer = (integer - low) / 256;
+    }
+    return invalid;
+}
+
+extern "C" __global__ void yvex_decoded_prepare(
+    const unsigned char *source, unsigned qtype, unsigned width, unsigned rows,
+    unsigned char *digits, short2 *metadata, int *status, int *row_eligibility)
+{
+    if (!status) return;
+    if (row_eligibility) {
+        __shared__ int prior_status;
+        if (!threadIdx.x) prior_status = *status;
+        __syncthreads();
+        if (prior_status) return;
+    } else if (__shfl_sync(~0u, *status, 0)) return;
+    if (!source || !digits || !metadata || !width || width % 32u || !rows ||
+        (qtype != YVEX_GGUF_QTYPE_BF16 && qtype != YVEX_GGUF_QTYPE_F32) ||
+        (row_eligibility && (blockDim.x != 256u || width > 8192u || rows > 128u))) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
+    if (row_eligibility) {
+        unsigned row = blockIdx.x, warp = threadIdx.x >> 5u;
+        if (row >= rows) return;
+        int invalid = 0;
+        for (unsigned part = warp; part < width / 32u; part += 8u)
+            invalid |= decoded_prepare_block(source, qtype, width, row, part, digits, metadata);
+        int invalid_threads = __syncthreads_count(invalid);
+        if (!threadIdx.x) row_eligibility[row] = invalid_threads ? 0 : 1;
+    } else {
+        unsigned long long block = (unsigned long long)blockIdx.x *
+            (blockDim.x / 32u) + (threadIdx.x >> 5u);
+        if (block < (unsigned long long)rows * (width / 32u))
+            decoded_prepare_block(source, qtype, width, block / (width / 32u),
+                block % (width / 32u), digits, metadata);
     }
 }
 
@@ -73,12 +99,12 @@ extern "C" __global__ void yvex_decoded_mxfp4_rows(
     const unsigned char *weights, const float *input,
     const unsigned char *digits, const short2 *metadata, unsigned width,
     unsigned rows, unsigned groups, unsigned inputs, float *output,
-    int output_bf16, int *status)
+    int output_bf16, int *status, const int *row_eligibility)
 {
     unsigned lane = threadIdx.x & 31u;
     unsigned long long task = ((unsigned long long)blockIdx.x * blockDim.x + threadIdx.x) / 32ull;
     if (!status || *status) return;
-    if (!weights || !input || !digits || !metadata || !output || !width || width > 8192u ||
+    if (!weights || !input || !digits || !metadata || !output || !row_eligibility || !width || width > 8192u ||
         width % 32u || !rows || rows > 16384u || !groups || groups > 8u ||
         !inputs || inputs > 16u || blockDim.x != 256u || (output_bf16 != 0 && output_bf16 != 1)) {
         if (!threadIdx.x) atomicCAS(status, 0, 2);
@@ -90,6 +116,17 @@ extern "C" __global__ void yvex_decoded_mxfp4_rows(
     unsigned activation = column * groups + (unsigned)(row / rows);
     const unsigned char *weight = weights + row * blocks * 17ull;
     const float *values = input + (unsigned long long)activation * width;
+    /* Preparation is activation-owned, not repeated for every weight row.
+     * Ineligible lossless digits execute the unchanged certified dot directly. */
+    if (!row_eligibility[activation]) {
+        float value = qtype_dot_certified_f64(weight, values, width, YVEX_GGUF_QTYPE_MXFP4);
+        if (!lane) {
+            if (!isfinite(value)) atomicCAS(status, 0, 1);
+            else output[(unsigned long long)column * rows * groups + row] =
+                output_bf16 ? float_to_bf16_rne(value) : value;
+        }
+        return;
+    }
     double sum = 0.0, norm = 0.0;
     int quantum = 1024, unsupported = 0;
     for (unsigned block = lane; block < blocks; block += 32u) {

@@ -38,7 +38,7 @@ int yvex_cuda_decoded_mxfp4(yvex_cuda_work *work,
     unsigned rows = (unsigned)group_rows, inputs = (unsigned)input_rows;
     unsigned prepared_rows = inputs * groups, f32 = YVEX_GGUF_QTYPE_F32;
     unsigned long long elements = (unsigned long long)prepared_rows * width;
-    if (elements * 25ull / 8ull > bytes) {
+    if (elements * 25ull / 8ull + prepared_rows * sizeof(int) > bytes) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "cuda.decoded-mxfp4",
                        "lossless activation preparation exceeds the admitted workspace");
         return YVEX_ERR_BOUNDS;
@@ -51,11 +51,12 @@ int yvex_cuda_decoded_mxfp4(yvex_cuda_work *work,
     }
     if (rc != YVEX_OK) return rc;
     CUdeviceptr digits = work->decoded_workspace, metadata = digits + elements * 3ull;
-    void *prepare[] = {&input, &f32, &width, &prepared_rows, &digits, &metadata, &status};
+    CUdeviceptr eligibility = metadata + elements / 8ull;
+    void *prepare[] = {&input, &f32, &width, &prepared_rows, &digits, &metadata, &status, &eligibility};
     void *parameters[] = {&encoded, &input, &digits, &metadata, &width,
-        &rows, &groups, &inputs, &output, &output_bf16, &status};
+        &rows, &groups, &inputs, &output, &output_bf16, &status, &eligibility};
     rc = decoded_launch(work, work->state->decoded_prepare_function,
-        (unsigned)((elements + 255ull) / 256ull), 256u, prepare, err);
+        prepared_rows, 256u, prepare, err);
     if (rc == YVEX_OK)
         rc = decoded_launch(work, work->state->decoded_mxfp4_function,
             (rows * groups * inputs + 7u) / 8u, 256u, parameters, err);
@@ -105,9 +106,10 @@ int yvex_cuda_decoded_rows(yvex_cuda_work *work,
     lm = left + weight_elements * 3ull;
     right = lm + weight_elements / 8ull;
     rm = right + input_elements * 3ull;
+    CUdeviceptr no_eligibility = 0ull;
     void *weight_parameters[] = {&encoded, (void *)&weight->qtype, &width,
-        &rows, &left, &lm, &status};
-    void *input_parameters[] = {&input, &f32, &width, &inputs, &right, &rm, &status};
+        &rows, &left, &lm, &status, &no_eligibility};
+    void *input_parameters[] = {&input, &f32, &width, &inputs, &right, &rm, &status, &no_eligibility};
     void *parameters[] = {&left, &lm, &right, &rm, &width, &rows, &inputs,
         &output, &encoded, &input, (void *)&weight->qtype, &output_bf16, &status};
     rc = decoded_launch(work, work->state->decoded_prepare_function,
