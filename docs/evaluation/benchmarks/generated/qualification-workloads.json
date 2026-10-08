@@ -498,6 +498,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-rejected-expert-input-reuse-20261008-target-only-coding-hash-table",
+          "target_identity": "dd81b396421373af5be45345cb6113ef6db7a7282037c81abbdab6da53465275",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-rejected-expert-tile-cache-20261008-target-only-coding-hash-table",
           "target_identity": "2f7fbcd6f12707eb5d1374cb16e8f2f8ab92de1ffaeb8b96b77623b25b9780f7",
           "path": "controlled-engine/public-C-host/native-v25",
@@ -743,6 +751,14 @@
         {
           "id": "deepseek-rejected-expert-geometry-20261007-speculative-coding-hash-table",
           "target_identity": "eb58a3b8587b8c2de8dac8135f72968701e31d7e342c75e2f9e6628a56e343ed",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-rejected-expert-input-reuse-20261008-speculative-coding-hash-table",
+          "target_identity": "4477eb0e1e303381bea3497d4d743f576e0b7578ea267a5d6919435b892c9620",
           "path": "controlled-engine/public-C-host/native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
@@ -1085,6 +1101,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-rejected-expert-input-reuse-20261008-target-only-prefill-promessi-2048",
+          "target_identity": "33c3986e35e14addbea39bde4486e8279cbd589ae68584ac5b749e6a1011098e",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-rejected-expert-tile-cache-20261008-target-only-prefill-promessi-2048",
           "target_identity": "d00a7094060552302a44656047625a99ed064e06e9dd7db2af8ffd30b5579d0b",
           "path": "controlled-engine/public-C-host/native-v25",
@@ -1356,6 +1380,14 @@
         {
           "id": "deepseek-rejected-expert-geometry-20261007-target-only-prefill-promessi-8192",
           "target_identity": "fe932df35ef6d3894cb8a52117e5a8ca23ee622b8dfaec4f7e71ee5973ba907d",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-rejected-expert-input-reuse-20261008-target-only-prefill-promessi-8192",
+          "target_identity": "33c3986e35e14addbea39bde4486e8279cbd589ae68584ac5b749e6a1011098e",
           "path": "controlled-engine/public-C-host/native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",

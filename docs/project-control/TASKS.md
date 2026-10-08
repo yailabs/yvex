@@ -208,6 +208,11 @@ separates controlled/native complete-model effects from CPU/device diagnostics.
 The installed runtime is not republished by these measurements; the same full
 inference Task and its unearned 20/700 gates continue.
 
+Sixteen-column expert input reuse is rejected after unchanged-population,
+source-stable complete-model prefill regressions. [Retained rejection](../evaluation/retained-observations.md#rejected-sixteen-column-expert-input-reuse-2026-10-08)
+separates exact component controls, profiler attribution and unprofiled results;
+no producer realization or new Task is added.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |

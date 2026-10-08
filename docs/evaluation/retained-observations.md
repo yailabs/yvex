@@ -2347,3 +2347,52 @@ whose only additional owner is the strengthened permanent unit test. Owned
 cleanup restores the same installed DeepSeek configuration while preserving
 finite generation and approved transports. No ABI, schema, model-quality,
 installed-runtime or Task-state promotion follows.
+
+## Rejected sixteen-column expert input reuse (2026-10-08)
+
+This generic experiment shares each decoded IQ2/Q2 weight fragment across two
+eight-input MMA tiles. Real expert populations, integer products, block scales,
+the 32-leaf F32 reduction tree, BF16 publication and exceptional ordered-F64
+recovery remain unchanged. Narrow decode/verification retains its original
+eight-column realization; only broad prefill selects the sixteen-column tile.
+No additional prepared weight layout or workspace is introduced.
+
+| Exact lane / workload | Generated rejected-candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-expert-input-reuse-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-expert-input-reuse-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-expert-input-reuse-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-expert-input-reuse-20261008-target-only-prefill-promessi-8192.md) |
+
+Three unprofiled samples per cell show a long-prefill regression rather than a
+complete-model benefit. Coding stays materially neutral on its unchanged narrow
+path. Strict comparison passes 38 metric gates and four exact content/population
+controls. It is therefore rejected, not silently retained because it reuses
+more weight arithmetic. No native-product performance is inferred from this
+controlled public-C/native series.
+
+Registered `cuda.moe_rows` compares wide and narrow output bytes and real
+executed-pair counts exactly, independently checks decoded CPU F64 controls,
+and covers block lengths, column tails, 65-bucket boundaries, hybrid small
+populations, exceptional recovery, malformed work and canaries. It passes with
+`cuda.quant_qtype`, `cuda.program`, `cuda.program_sequence` and
+`structural.code-natural`. Actual-kernel memcheck, racecheck and synccheck report
+zero errors; racecheck also reports zero warnings. These component controls do
+not provide independent full-model checkpoint or representation-quality evidence.
+
+Separate source-stable complete-model CUPTI captures attribute the regression to
+longer expert up/down matrix activity rather than page warming or changed
+committed work. The wide compiled kernels use more registers, with no local
+spills; this is a static compiler fact, not measured occupancy or proof that
+register pressure alone causes the regression. Profiled runs remain outside
+timed samples, and overlapping host/device durations are not added as costs.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`expert-input-reuse-controlled-02`, `qualification-rejected-expert-input-reuse`,
+`expert-input-reuse-controlled-comparison-01.json`, registered QA/sanitizer and
+kernel-resource logs, `prefill-identity-sha2-profile-01` and
+`prefill-expert-input-reuse-profile-01`. Attempt `controlled-01` refuses before
+timed samples because a build/install QA compiler is still active; it restores
+the installed engine and is not treated as performance evidence. The final
+series and diagnostics bind frozen `09a99e47` plus delta `209572a7` and restore
+the original installed configuration while preserving finite generation and
+public transports. Candidate producer code is not integrated. The same Task
+remains IN PROGRESS, with quality and 20/700 exits unearned.
