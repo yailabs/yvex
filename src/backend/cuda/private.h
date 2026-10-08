@@ -513,6 +513,8 @@ int yvex_cuda_qtype_matvec_geometry(
     unsigned int qtype, int block_row_eligible, int decoded_input, unsigned int *grid, unsigned int *block,
     int *block_row);
 int yvex_cuda_qtype_tensorcore_geometry(unsigned long long, unsigned long long, unsigned int *, unsigned int *);
+int yvex_cuda_q8_row_matrix_geometry(unsigned long long, unsigned long long, unsigned long long,
+    unsigned int *, unsigned int *);
 static inline unsigned int cuda_qtype_tensorcore_columns(
     unsigned long long rows, unsigned long long inputs) {
     return rows >= 2048ull && inputs >= 64ull ? 16u : 8u;

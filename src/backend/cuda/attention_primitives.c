@@ -274,16 +274,21 @@ static int attention_matvec(yvex_cuda_work *work,
 {
     CUdeviceptr additive = 0ull;
     unsigned long long group_count = 1ull, group_rows = rows;
-    int block_row = 0, q8_path, q8_input = 0, shared_q8_path, tensorcore_path;
+    int block_row = 0, q8_path, q8_input = 0, shared_q8_path, tensorcore_path, row_matrix_path;
     unsigned int matvec_grid, matvec_block, tensorcore_grid = 0u, tensorcore_block = 0u;
     unsigned int shared_q8_grid = 0u, shared_q8_block = 0u, shared_q8_bytes = 0u;
+    unsigned int row_matrix_grid = 0u, row_matrix_block = 0u;
     q8_path = weight && work->activation_q8 && !work->forensic_numeric &&
               weight->row_width % 256ull == 0ull &&
               yvex_cuda_q8_activation_eligible(weight->qtype) &&
               work->state->q8_quantize_function && work->state->qtype_matvec_function;
     tensorcore_path = q8_path && work->state->qtype_tensorcore_rows_function &&
                       cuda_qtype_tensorcore_eligible(input_rows);
-    shared_q8_path = q8_path && !tensorcore_path &&
+    row_matrix_path = q8_path && !tensorcore_path && weight->qtype == YVEX_GGUF_QTYPE_MXFP4 &&
+        work->state->mxfp4_q8_matrix_function &&
+        yvex_cuda_q8_row_matrix_geometry(rows, weight->row_width, input_rows,
+            &row_matrix_grid, &row_matrix_block);
+    shared_q8_path = q8_path && !tensorcore_path && !row_matrix_path &&
                      work->state->mxfp4_q8_rows_function &&
                      attention_mxfp4_q8_rows_geometry(
                          weight, rows, input_rows, &shared_q8_grid,
@@ -344,6 +349,16 @@ static int attention_matvec(yvex_cuda_work *work,
                 work, cuda_qtype_tensorcore_function(work->state, rows, input_rows, weight->qtype),
                 tensorcore_grid, tensorcore_block, 0u, params, stage,
                 failure, err);
+            if (rc == YVEX_OK) work->tensor_core_launches++;
+        } else if (rc == YVEX_OK && row_matrix_path) {
+            q8_input = 1;
+            void *params[] = {&device_weight, (void *)&weight->row_bytes,
+                (void *)&weight->row_width, &start_row, &rows, &input_rows,
+                (void *)&weight->qtype, &quantized, (void *)&weight->row_width,
+                &q8_input, &block_row, &work->forensic_numeric, &additive,
+                &out, &rows, &output_bf16, &status};
+            rc = attention_launch(work, work->state->mxfp4_q8_matrix_function,
+                row_matrix_grid, row_matrix_block, 0u, params, stage, failure, err);
             if (rc == YVEX_OK) work->tensor_core_launches++;
         } else if (rc == YVEX_OK && shared_q8_path) {
             void *params[] = {

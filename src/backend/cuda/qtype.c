@@ -943,6 +943,19 @@ int yvex_cuda_qtype_matvec_geometry(
     return 1;
 }
 
+int yvex_cuda_q8_row_matrix_geometry(
+    unsigned long long rows, unsigned long long width, unsigned long long inputs,
+    unsigned int *grid, unsigned int *block)
+{
+    if (!grid || !block || !rows || rows > 131072ull || !width || width > 8192ull ||
+        width % 256ull || inputs < 4ull || inputs > 1024ull) return 0;
+    unsigned long long warps = inputs < 32ull ? (inputs + 7ull) / 8ull : 4ull;
+    unsigned long long groups = (inputs + warps * 8ull - 1ull) / (warps * 8ull);
+    *grid = (unsigned int)(((rows + 15ull) / 16ull) * groups);
+    *block = (unsigned int)(warps * 32ull);
+    return 1;
+}
+
 int yvex_cuda_qtype_tensorcore_geometry(
     unsigned long long rows, unsigned long long input_rows,
     unsigned int *grid, unsigned int *block)
@@ -1527,6 +1540,7 @@ static int cuda_encoded_matvec(
     int block_row = 0;
     int forensic_numeric = 0, split_input = input_tail != NULL;
     unsigned int matvec_grid, matvec_block, tensorcore_grid = 0u, tensorcore_block = 0u;
+    unsigned int row_matrix_grid = 0u, row_matrix_block = 0u;
     yvex_error cleanup;
     if (facts) memset(facts, 0, sizeof(*facts));
     rc = cuda_encoded_policy(qtype, input_policy, reduction_policy, split_input, err);
@@ -1542,8 +1556,9 @@ static int cuda_encoded_matvec(
                       q8_path && state && state->qtype_tensorcore_rows_function &&
                       cuda_qtype_tensorcore_eligible(input_rows);
     row_matrix_path = reduction_policy == YVEX_ENCODED_REDUCTION_ROW && q8_path &&
-        qtype == YVEX_GGUF_QTYPE_MXFP4 && row_width <= 8192ull && row_count <= 16384ull &&
-        input_rows >= 32ull && input_rows <= 1024ull;
+        qtype == YVEX_GGUF_QTYPE_MXFP4 && state && state->mxfp4_q8_matrix_function &&
+        yvex_cuda_q8_row_matrix_geometry(row_count, row_width, input_rows,
+            &row_matrix_grid, &row_matrix_block);
     if (!state || !resident_encoded || !encoded_bytes || !row_count || !input_rows ||
         !row_width || !row_bytes || !facts || split_input != (input_head_width != 0ull) ||
         (split_input && input_head_width >= row_width) ||
@@ -1653,9 +1668,8 @@ static int cuda_encoded_matvec(
                             : row_matrix_path ? state->mxfp4_q8_matrix_function
                             : split_input ? state->qtype_split_matvec_function
                                           : state->qtype_matvec_function,
-            tensorcore_path ? tensorcore_grid : row_matrix_path ?
-                (unsigned int)(((row_count + 15ull) / 16ull) * ((input_rows + 31ull) / 32ull)) : matvec_grid,
-            tensorcore_path ? tensorcore_block : row_matrix_path ? 128u : matvec_block, 0u,
+            tensorcore_path ? tensorcore_grid : row_matrix_path ? row_matrix_grid : matvec_grid,
+            tensorcore_path ? tensorcore_block : row_matrix_path ? row_matrix_block : matvec_block, 0u,
             tensorcore_path ? tensorcore_params
                             : split_input ? split_params : q8_path ? q8_params : params,
             "cuda.encoded-matvec.launch", err);

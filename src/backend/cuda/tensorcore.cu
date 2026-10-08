@@ -340,18 +340,20 @@ extern "C" __global__ void yvex_mxfp4_q8_matrix(
     if (!status || *status) return;
     if (!weights || !activation || !output || !width || width > 8192ull ||
         width % 256ull || row_bytes != width / 32ull * 17ull ||
-        !rows || rows > 16384ull || start > ~0ull - rows ||
+        !rows || rows > 131072ull || start > ~0ull - rows ||
         (start + rows) > ~0ull / row_bytes || !inputs || inputs > 1024ull ||
         qtype != YVEX_GGUF_QTYPE_MXFP4 || stride != width || q8 != 1 ||
         block_row || forensic || output_stride < rows || output_stride > ~0ull / inputs ||
-        blockDim.x != 128u || (output_bf16 != 0 && output_bf16 != 1)) {
+        blockDim.x < 32u || blockDim.x > 128u || blockDim.x % 32u ||
+        (output_bf16 != 0 && output_bf16 != 1)) {
         if (!threadIdx.x) atomicCAS(status, 0, 2);
         return;
     }
     unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
-    unsigned groups = (unsigned)(inputs + 31ull) / 32u, blocks = (unsigned)width / 256u;
+    unsigned columns = blockDim.x / 32u * 8u;
+    unsigned groups = (unsigned)(inputs + columns - 1ull) / columns, blocks = (unsigned)width / 256u;
     unsigned long long row_base = (unsigned long long)(blockIdx.x / groups) * 16ull;
-    unsigned long long input_base = (blockIdx.x % groups) * 32ull + warp * 8ull;
+    unsigned long long input_base = (blockIdx.x % groups) * columns + warp * 8ull;
     if (row_base >= rows || input_base >= inputs) return;
     float4 s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, result = {};
     for (unsigned leaf = 0u; leaf < 32u; ++leaf) {

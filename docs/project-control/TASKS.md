@@ -132,6 +132,14 @@ material complete-model gain. Its API stays outside production; generated
 retains the exact scope. The same Task continues at measured projection/MoE
 execution costs, without relaxing numerical or performance gates.
 
+Generic MXFP4/Q8 narrow-row matrix reuse now preserves the existing row-reduction
+class while sharing encoded-weight work across actual input populations.
+Source-stable repeated controlled and Rust/native coding retain exact output and
+speculative populations; long-prefill controls are separately characterized.
+[Row-reuse evidence](../evaluation/retained-observations.md#narrow-q8-matrix-row-reuse-2026-10-08)
+does not promote checkpoint quality, installed-product performance or the 20/700
+exit. The same Task remains IN PROGRESS at encoded projection/MoE execution.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |

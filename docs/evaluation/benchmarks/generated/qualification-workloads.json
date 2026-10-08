@@ -410,6 +410,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-controlled-narrow-q8-matrix-20261008-target-only-coding-hash-table",
+          "target_identity": "565424ab3215e79b28e462494af1b746af7442141f0a0965a85efa9fd3f7ed4e",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-controlled-packing-workspace-20261007-target-only-coding-hash-table",
           "target_identity": "dabeca3de6df34f8a3333f1b4ba9142c9f8b3c51e74aa756b57d356ae46d3ee1",
           "path": "controlled-engine/public-C-host/native-v25",
@@ -551,6 +559,14 @@
         {
           "id": "deepseek-controlled-mhc-cell-20261007-speculative-coding-hash-table",
           "target_identity": "b526d64b2968b65214e50665a099f7f7d03e040d699bc67905d9da4c0e2cb645",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-controlled-narrow-q8-matrix-20261008-speculative-coding-hash-table",
+          "target_identity": "21633d4483a894a3e363be1a6c07557998300701c5b890d4602e6e6fc62809b0",
           "path": "controlled-engine/public-C-host/native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
@@ -845,6 +861,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-controlled-narrow-q8-matrix-20261008-target-only-prefill-promessi-2048",
+          "target_identity": "280052d12029a0a9fc755a46e08ad49f202ddb83ebd893bc9d7edca32eb751fc",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-controlled-packing-workspace-20261007-target-only-prefill-promessi-2048",
           "target_identity": "427731c52754783ee609d301194cbbbd3e4926c58e1fcd30709872f6d20f60ea",
           "path": "controlled-engine/public-C-host/native-v25",
@@ -1028,6 +1052,14 @@
         {
           "id": "deepseek-controlled-mhc-cell-20261007-target-only-prefill-promessi-8192",
           "target_identity": "4ebb51ea98cf273a1bcd1e2ec65376a3e814b3bc3a29879ade6c563d539a14ee",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-controlled-narrow-q8-matrix-20261008-target-only-prefill-promessi-8192",
+          "target_identity": "280052d12029a0a9fc755a46e08ad49f202ddb83ebd893bc9d7edca32eb751fc",
           "path": "controlled-engine/public-C-host/native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
@@ -1429,6 +1461,14 @@
           "id": "deepseek-product-http-sampling-streams-coding-metal-20261008",
           "target_identity": "70d2adf359b55353a42ce86049f7e9249ce9ac883e36444be27b2a6d83875a65",
           "path": "http-compatibility/Rust-host/native-v25-adapter",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-product-narrow-q8-matrix-native-coding-metal-20261008",
+          "target_identity": "a8e8cc60a414fd2e4d99af264e95f8dc0bdfb87baaba8e7848b70756e374756c",
+          "path": "product-native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
           "outcomes": []

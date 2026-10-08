@@ -1901,3 +1901,56 @@ samples; unavailable hardware utilization counters remain unavailable. Raw
 profiles, strict comparisons, source captures and lifecycle witnesses remain
 under `full-system-20261008.k2BN6u` in the existing competitive evidence root.
 These observations neither prove a hardware ceiling nor earn the 20/700 exit.
+
+## Narrow Q8 matrix row reuse (2026-10-08)
+
+The generic MXFP4/Q8 row-reduction candidate uses integer matrix instructions
+to reuse encoded weights across independent input rows. Partial tiles and
+narrow populations retain the original per-block operations, 32-lane F32
+reduction and optional BF16 publication. The ordinary wide-matrix and ordered
+decoded-input classes are unchanged; no prepared weights or additional retained
+workspace are introduced. The shared geometry owner is consumed by explicit
+encoded row reduction and narrow attention projections, not a family policy.
+
+| Exact lane / workload | Generated candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-controlled-narrow-q8-matrix-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-controlled-narrow-q8-matrix-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-controlled-narrow-q8-matrix-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-controlled-narrow-q8-matrix-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-narrow-q8-matrix-native-coding-metal-20261008.md) |
+
+All cells retain three complete unprofiled fresh-session requests. Strict
+controlled comparisons preserve output content and speculative populations;
+native comparisons preserve all 768 ordered typed fragments. Coding speculation
+and native complete-turn latency improve, while target-only and long-prefill
+controls are near their predecessors. These are exact candidate CHARACTERIZED
+results, not an installed rollout or independent checkpoint-quality claim.
+
+Independent decoded Q8 host arithmetic and the literal CUDA row-reduction oracle
+exercise F32/BF16 publication, input/output tails and the wide-output population.
+The original population ceiling missed a material complete-model projection;
+its neutral screen remains raw evidence rather than a retained performance claim.
+Numerical fixture mistakes encountered while expanding the population controls
+remain failed raw runs, not kernel qualifications.
+
+The frozen computational candidate (`46d54769`, delta `1bc37881...`) maps to
+137 QA controls: 131 PASS, five BLOCKED on unconfigured live/reference assets
+and one documentation FAIL because the default Python lacks Markdown. That
+same-source documentation control passes with the declared documentation
+environment (`91ae12e1...`); the initial receipt (`7c398b54...`) is retained,
+not rewritten. Numerical/runtime sanitizers, CLI/PTY, source/build ownership
+and bounded computational controls pass. The publication fixture separately
+covers every input population through 31 and broad output tails, with bitwise
+CUDA preservation and independent unrounded host arithmetic. Its BF16 host
+comparison includes the publication rounding bound, not false bit equality to
+host F64. Separate actual-kernel memcheck, racecheck and synccheck report zero
+errors/hazards; their probe/source identities and logs remain outside Git.
+
+Raw source captures, build identities, resource/restore witnesses, numerical
+controls and strict comparisons reside in `full-system-20261008.k2BN6u` under the
+existing competitive evidence root: `product-narrow-q8-matrix-native-01`,
+`narrow-q8-matrix-controlled-01`, `qualification-narrow-q8-matrix`,
+`product-narrow-q8-matrix-comparison-01.json` and
+`narrow-q8-matrix-controlled-comparison-01.json`. Finite generation and approved
+public transports are preserved. Independent full-model reference/quality,
+longer-bound high/maximum transitions, comparative closure and 20/700 remain
+unearned; this does not establish a physical ceiling.

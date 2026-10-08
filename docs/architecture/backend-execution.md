@@ -263,6 +263,19 @@ topology, not the numerical class; a finite F32 warp reduction is not an
 equivalent substitute. Q8 activation keeps its separately admitted reduction.
 Non-finite results still refuse through the device-status completion owner.
 
+For admitted MXFP4 weights with Q8 activations, the explicit row-reduction
+realization may share encoded-weight traversal across independent input rows
+using integer matrix instructions. Its geometry covers real populations and
+partial output tiles; narrow attention populations use the same generic owner.
+Each result retains the original per-block F32 operations and 32-lane reduction
+tree, including the intermediate F32 before optional BF16 publication. This is
+not the distinct ordinary wide-matrix reduction and does not change decoded-input
+projections, packing, weights, workspace ownership or numerical admission.
+The backend selects geometry from physical extents, never family names.
+[Numerical and complete-model evidence](../evaluation/retained-observations.md#narrow-q8-matrix-row-reuse-2026-10-08)
+separates this bounded execution improvement from model quality and the unearned
+throughput targets.
+
 The earlier bounded launch-geometry repair mapped independent ordered decoded
 dots to independent CUDA threads rather than
 warps whose other lanes immediately return. Generic launch geometry maps each
