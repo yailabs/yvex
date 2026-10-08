@@ -115,8 +115,15 @@ source-stable controlled and Rust/native characterization. Their measured
 benefit is request preparation/first-visible latency, not a sustained-decode
 breakthrough. The residency-only managed-copy arm is rejected on complete-model
 tradeoffs; artifact-mapped policy remains unchanged. [Retained arm evidence](../evaluation/retained-observations.md#full-inference-preparation-and-residency-arms-2026-10-08)
-does not close the performance or independent-quality exits. Stochastic HTTP
-sampling remains a separately profiled cost, not a transport-overhead claim.
+does not close the performance or independent-quality exits. Generic CUDA
+stochastic selection now cooperates on independent work, preserves source-order
+ties/compaction and certifies identical binary64 normalization or retains the
+literal ordered fallback. Complete Rust-host HTTP coding controls preserve
+content and speculative populations across source-stable repeated samples.
+Native greedy controls are retained separately and do not earn the same speedup.
+The numerical certificate, sanitizer/refusal/rollback gates and generated
+sampling views remain part of this boundary; no installed rollout or independent
+checkpoint-quality promotion follows from internal preservation.
 
 ## Compute platform product refoundation
 

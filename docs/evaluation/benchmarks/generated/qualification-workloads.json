@@ -1368,6 +1368,54 @@
           "plane": "product-path",
           "state": "CHARACTERIZED",
           "outcomes": []
+        },
+        {
+          "id": "deepseek-product-http-sampling-certificate-coding-metal-20261008",
+          "target_identity": "185c55bb2c00ea0bd3fe8d964e6d601983cf2812c144481f40d7adf43b4dac8b",
+          "path": "http-compatibility/Rust-host/native-v25-adapter",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-product-http-sampling-maximum-coding-metal-20261008",
+          "target_identity": "1c87569a0e1f2c81dc6860ff8228a9e6c4aff1a1746bb9ac819ed37982b1f9f4",
+          "path": "http-compatibility/Rust-host/native-v25-adapter",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-product-http-sampling-rounding-cell-coding-metal-20261008",
+          "target_identity": "ed9a2349bc83ca24b3148ba98d00eb94d17069e1f9079d2554c70e426fec0c29",
+          "path": "http-compatibility/Rust-host/native-v25-adapter",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-product-http-sampling-streams-coding-metal-20261008",
+          "target_identity": "70d2adf359b55353a42ce86049f7e9249ce9ac883e36444be27b2a6d83875a65",
+          "path": "http-compatibility/Rust-host/native-v25-adapter",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-product-sampling-maximum-native-coding-metal-20261008",
+          "target_identity": "cdbc29f9ea7ab5869ff7084ce122a86271c1f0fb579c6aa48986541f4f5ba04b",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-product-sampling-rounding-cell-native-coding-metal-20261008",
+          "target_identity": "16b286169d23bf6008d394e6ec70feb92012ca43141b92b32101c9375afc91f7",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
         }
       ]
     },

@@ -1,0 +1,552 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-product-http-sampling-certificate-coding-metal-20261008",
+  "title": "GB10 HTTP seeded coding.metal / none",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "source_commit": "f744f2b84ae71cf9e57f9c65ab23962e0d302dc2",
+    "source_tree": "8f55a89cbe4754fcd468cf65e7667148eb538a24",
+    "source_delta": "17e81edbd47a09cc9778f9440a1f92941c538ee1c17745a0b80c367889d023bb",
+    "build": "998933fa838bcf7a3ee80414d7ec095f31cd649755c11aceb25fec556740e7a2",
+    "executable": "397ed25c0224b3567121f282ca021b91df11a02bc9d440b3796028477e7bc2da",
+    "backend": "cuda",
+    "backend_implementation": "backend.cuda@f744f2b84ae71cf9e57f9c65ab23962e0d302dc2+17e81edbd47a09cc9778f9440a1f92941c538ee1c17745a0b80c367889d023bb",
+    "kernel_bundle": "1c5f6e8bf2259f22a896750c3842d77b4e3b8c1bc927e235523099234343734c",
+    "hardware_model": "NVIDIA GB10",
+    "device_count": 1,
+    "topology": "single-node single-device coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA Driver API; toolkit 13.0 / NVCC V13.0.88",
+    "memory_configuration": "coherent unified memory; CUDA-reported global memory bytes=130663170048",
+    "runtime_configuration": "03a2849788ba43a8032c510395421a656f96b9deb1e29b0235e603e3b0014f3f",
+    "context": 32768,
+    "prefill_geometry": "chunk=64",
+    "sequence_geometry": "width=1",
+    "concurrency": 1,
+    "strategy": "speculative",
+    "reasoning": "none",
+    "sampling": "{\"seed\":721,\"stochastic\":true,\"temperature\":1,\"top_p\":1}",
+    "product_path": "http-compatibility/Rust-host/native-v25-adapter",
+    "suite": "3f68f1a82695656aa1acbbc5a4e1668586f5b145132cbf9e63b071c2cf0f3a96"
+  },
+  "target_identity": "185c55bb2c00ea0bd3fe8d964e6d601983cf2812c144481f40d7adf43b4dac8b",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "Not qualified by HTTP timing",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Not qualified by HTTP timing",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent full-model quality comparison in this timing series"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Not qualified by HTTP timing",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent full-model quality comparison in this timing series"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Not qualified by HTTP timing",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "required_evidence": [],
+      "evidence": {
+        "http-capture": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json",
+          "sha256": "5fa95ba3aa4bfdb14ddbbcc3eecc2e2c63f39042544319f87b1482bc04433345",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "required_evidence": [],
+      "evidence": {
+        "http-capture": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json",
+          "sha256": "5fa95ba3aa4bfdb14ddbbcc3eecc2e2c63f39042544319f87b1482bc04433345",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "measurements": [
+    {
+      "metric": "prefill.wall",
+      "unit": "s",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        1.503554796,
+        1.490466161,
+        1.4790005
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 1.490466161,
+        "minimum": 1.4790005,
+        "maximum": 1.503554796,
+        "median_absolute_deviation": 0.011465661000000127
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    },
+    {
+      "metric": "ttft.server",
+      "unit": "s",
+      "definition": "turn start to first committed model-token callback",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        2.78718098,
+        2.65174302,
+        2.64441142
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 2.65174302,
+        "minimum": 2.64441142,
+        "maximum": 2.78718098,
+        "median_absolute_deviation": 0.007331600000000105
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    },
+    {
+      "metric": "ttft.client-visible",
+      "unit": "s",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        3.2461187099979725,
+        3.116687453002669,
+        3.133694996009581
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 3.133694996009581,
+        "minimum": 3.116687453002669,
+        "maximum": 3.2461187099979725,
+        "median_absolute_deviation": 0.017007543006911874
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    },
+    {
+      "metric": "request.client-complete",
+      "unit": "s",
+      "definition": "client dispatch including connect through terminal response",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        49.98370197901386,
+        49.736429580982076,
+        49.9430457050039
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 49.9430457050039,
+        "minimum": 49.736429580982076,
+        "maximum": 49.98370197901386,
+        "median_absolute_deviation": 0.040656274009961635
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    },
+    {
+      "metric": "final.first.server",
+      "unit": "s",
+      "definition": "server turn start to first source-classified final token",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        2.78718098,
+        2.65174302,
+        2.64441142
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 2.65174302,
+        "minimum": 2.64441142,
+        "maximum": 2.78718098,
+        "median_absolute_deviation": 0.007331600000000105
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    },
+    {
+      "metric": "final.first.client",
+      "unit": "s",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        3.2461187099979725,
+        3.116687453002669,
+        3.133694996009581
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 3.133694996009581,
+        "minimum": 3.116687453002669,
+        "maximum": 3.2461187099979725,
+        "median_absolute_deviation": 0.017007543006911874
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    },
+    {
+      "metric": "prefill.uncached",
+      "unit": "token/s",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        35.2497961,
+        35.5593447,
+        35.8350116
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 35.5593447,
+        "minimum": 35.2497961,
+        "maximum": 35.8350116,
+        "median_absolute_deviation": 0.2756669000000045
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    },
+    {
+      "metric": "decode.post-first.committed",
+      "unit": "token/s",
+      "definition": "committed tokens after first / elapsed decode wall after first",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        5.49036204,
+        5.50869011,
+        5.49081768
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 5.49081768,
+        "minimum": 5.49036204,
+        "maximum": 5.50869011,
+        "median_absolute_deviation": 0.00045564000000020144
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    },
+    {
+      "metric": "final.phase-rate",
+      "unit": "token/s",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "case": "coding.metal/turn-0",
+      "prompt_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db",
+      "reference_identity": null,
+      "session_state": "fresh",
+      "warm_state": "Post-load resident engine; no post-load conditioning; file-cache state uncontrolled; first 0 repetitions excluded explicitly",
+      "output_bound": 256,
+      "samples": [
+        5.3637206995730775,
+        5.394972433197665,
+        5.377428538627457
+      ],
+      "statistics": {
+        "count": 3,
+        "median": 5.377428538627457,
+        "minimum": 5.3637206995730775,
+        "maximum": 5.394972433197665,
+        "median_absolute_deviation": 0.013707839054379889
+      },
+      "scope": "Frozen Rust-host HTTP compatibility request; seeded stochastic control, not native default policy",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/observation.json"
+    }
+  ],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "evidence_class": "rust-http-compatibility-characterization",
+    "raw_root": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01",
+    "build": {
+      "core": {
+        "head": "f744f2b84ae71cf9e57f9c65ab23962e0d302dc2",
+        "state": "dirty",
+        "delta_identity": "17e81edbd47a09cc9778f9440a1f92941c538ee1c17745a0b80c367889d023bb",
+        "tree": "8f55a89cbe4754fcd468cf65e7667148eb538a24"
+      },
+      "product": {
+        "build_commit": "f744f2b84ae71cf9e57f9c65ab23962e0d302dc2",
+        "build_identity": "998933fa838bcf7a3ee80414d7ec095f31cd649755c11aceb25fec556740e7a2",
+        "local_protocol_version": 25,
+        "registry_identity": "a953f0b0ae2800162cc4b4db609c40a3a1134984c683b6c4866c807f8d50f6da",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "57e08fd71434953db71d05081277759a8b76be338d566196aed2e4c9a1673bd3",
+        "source_delta_identity": "17e81edbd47a09cc9778f9440a1f92941c538ee1c17745a0b80c367889d023bb",
+        "source_state": "dirty",
+        "source_tree": "8f55a89cbe4754fcd468cf65e7667148eb538a24",
+        "version": "0.1.0"
+      },
+      "executable_path": "/tmp/yvex-sampling-certificate.QoFj8k/source/yvex",
+      "executable_sha256": "397ed25c0224b3567121f282ca021b91df11a02bc9d440b3796028477e7bc2da",
+      "library_sha256": "e323d119da7e1b154aa2f467f42d3a11963859d2ca92b413ab718071eb5d2da5",
+      "orchestrator_sha256": "2e7602cdb8886495afbb25865f45093925ef60a0c39dfdc754f9169f802505a9"
+    },
+    "source_capture": {
+      "schema": "yvex.qualification.source-capture.v1",
+      "source": {
+        "head": "f744f2b84ae71cf9e57f9c65ab23962e0d302dc2",
+        "state": "dirty",
+        "delta_identity": "17e81edbd47a09cc9778f9440a1f92941c538ee1c17745a0b80c367889d023bb"
+      },
+      "tree": "8f55a89cbe4754fcd468cf65e7667148eb538a24",
+      "executables": {
+        "executable-0": {
+          "observed_path": "/tmp/yvex-sampling-certificate.QoFj8k/source/yvex",
+          "sha256": "397ed25c0224b3567121f282ca021b91df11a02bc9d440b3796028477e7bc2da"
+        },
+        "executable-1": {
+          "observed_path": "/tmp/yvex-sampling-certificate.QoFj8k/source/build/lib/libyvex.a",
+          "sha256": "e323d119da7e1b154aa2f467f42d3a11963859d2ca92b413ab718071eb5d2da5"
+        }
+      },
+      "files": {
+        "base.tar": "8b0acd735b637fddd9bee0140ed9bfbe06957520bdc18e1d0d760fa58c007e9e",
+        "delta.patch": "17e81edbd47a09cc9778f9440a1f92941c538ee1c17745a0b80c367889d023bb",
+        "executable-0": "397ed25c0224b3567121f282ca021b91df11a02bc9d440b3796028477e7bc2da",
+        "executable-1": "e323d119da7e1b154aa2f467f42d3a11963859d2ca92b413ab718071eb5d2da5",
+        "untracked.tar": "84ff92691f909a05b224e1c56abb4864f01b4f8e3c854e4bb4c7baf1d3f6d652"
+      },
+      "scope": "observed source and executable bytes; build relationship separately required"
+    },
+    "kernel_owner": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/full-system-20261008.k2BN6u/http-sampling-certificate-native-01/backend-identity.json",
+      "sha256": "e09825a02600626e1a1f5ff1cf85c86cd101ae7d269bf11dd511831e800e0914"
+    },
+    "canonical_relationship": {
+      "target": "88d242f177c9bc4f4d667e17088121bb4ed54a05a472488f51380fbcca4aaa5a",
+      "sha256": "f1f7ff6e997698489eaea9b5c329486eb493d1e0b03394897b0e34f6e9dd42b1"
+    },
+    "observations": [
+      {
+        "reasoning_tokens": 0,
+        "final_tokens": 256,
+        "reasoning_tokens_per_second": 0,
+        "final_tokens_per_second": 5.3637207,
+        "total_tokens_per_second": 5.19967911,
+        "time_to_first_reasoning_token": 0,
+        "time_to_first_final_token": 2.78718098,
+        "reasoning_seconds": 0,
+        "final_seconds": 47.7280631,
+        "total_completion_seconds": 49.2338075,
+        "generated_tokens": 256,
+        "prompt_tokens": 53,
+        "reused_tokens": 0,
+        "prefill_tokens": 53,
+        "prefill_seconds": 1.503554796,
+        "prefill_rate": 35.2497961,
+        "server_first_token_seconds": 2.78718098,
+        "first_reasoning_seconds": 0,
+        "first_final_seconds": 2.78718098,
+        "client_first_visible_seconds": 3.2461187099979725,
+        "client_first_reasoning_seconds": null,
+        "client_first_final_seconds": 3.2461187099979725,
+        "client_complete_seconds": 49.98370197901386,
+        "post_first_decode_units": 255,
+        "post_first_decode_seconds": 46.445024632,
+        "post_first_decode_rate": 5.49036204,
+        "content_sha256": "64bc26ffbce51f532abe9840870627c24ce62c6efa936b839e4bd5882e1dbf82",
+        "speculative": {
+          "accepted_tokens": 150,
+          "proposed_tokens": 265,
+          "selected_verification_tokens": 263,
+          "rejected_tokens": 113,
+          "discarded_tokens": 2,
+          "speculative_cycle": 53
+        },
+        "case": "coding.metal/turn-0",
+        "input_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db"
+      },
+      {
+        "reasoning_tokens": 0,
+        "final_tokens": 256,
+        "reasoning_tokens_per_second": 0,
+        "final_tokens_per_second": 5.39497243,
+        "total_tokens_per_second": 5.23048523,
+        "time_to_first_reasoning_token": 0,
+        "time_to_first_final_token": 2.65174302,
+        "reasoning_seconds": 0,
+        "final_seconds": 47.4515863,
+        "total_completion_seconds": 48.9438339,
+        "generated_tokens": 256,
+        "prompt_tokens": 53,
+        "reused_tokens": 0,
+        "prefill_tokens": 53,
+        "prefill_seconds": 1.490466161,
+        "prefill_rate": 35.5593447,
+        "server_first_token_seconds": 2.65174302,
+        "first_reasoning_seconds": 0,
+        "first_final_seconds": 2.65174302,
+        "client_first_visible_seconds": 3.116687453002669,
+        "client_first_reasoning_seconds": null,
+        "client_first_final_seconds": 3.116687453002669,
+        "client_complete_seconds": 49.736429580982076,
+        "post_first_decode_units": 255,
+        "post_first_decode_seconds": 46.290496438,
+        "post_first_decode_rate": 5.50869011,
+        "content_sha256": "64bc26ffbce51f532abe9840870627c24ce62c6efa936b839e4bd5882e1dbf82",
+        "speculative": {
+          "accepted_tokens": 150,
+          "proposed_tokens": 265,
+          "selected_verification_tokens": 263,
+          "rejected_tokens": 113,
+          "discarded_tokens": 2,
+          "speculative_cycle": 53
+        },
+        "case": "coding.metal/turn-0",
+        "input_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db"
+      },
+      {
+        "reasoning_tokens": 0,
+        "final_tokens": 256,
+        "reasoning_tokens_per_second": 0,
+        "final_tokens_per_second": 5.37742854,
+        "total_tokens_per_second": 5.21520964,
+        "time_to_first_reasoning_token": 0,
+        "time_to_first_final_token": 2.64441142,
+        "reasoning_seconds": 0,
+        "final_seconds": 47.6063974,
+        "total_completion_seconds": 49.0871926,
+        "generated_tokens": 256,
+        "prompt_tokens": 53,
+        "reused_tokens": 0,
+        "prefill_tokens": 53,
+        "prefill_seconds": 1.4790005,
+        "prefill_rate": 35.8350116,
+        "server_first_token_seconds": 2.64441142,
+        "first_reasoning_seconds": 0,
+        "first_final_seconds": 2.64441142,
+        "client_first_visible_seconds": 3.133694996009581,
+        "client_first_reasoning_seconds": null,
+        "client_first_final_seconds": 3.133694996009581,
+        "client_complete_seconds": 49.9430457050039,
+        "post_first_decode_units": 255,
+        "post_first_decode_seconds": 46.441170513,
+        "post_first_decode_rate": 5.49081768,
+        "content_sha256": "64bc26ffbce51f532abe9840870627c24ce62c6efa936b839e4bd5882e1dbf82",
+        "speculative": {
+          "accepted_tokens": 150,
+          "proposed_tokens": 265,
+          "selected_verification_tokens": 263,
+          "rejected_tokens": 113,
+          "discarded_tokens": 2,
+          "speculative_cycle": 53
+        },
+        "case": "coding.metal/turn-0",
+        "input_identity": "d51c142b101bcdff7970726d5e2141a25f5aaab8a3eaae167903178da41fe0db"
+      }
+    ],
+    "raw_files": {
+      "http-0-0.request.json": "3c263ca6e00c72d1161997200b60b79f7e191fbd49b4367643fc28a49ca9d66e",
+      "http-0-0.observation.json": "2aa892376d06f7db141f90a987e0f6e0348ab938e5a82a85b51121f9350668ae",
+      "http-0-0.sse.jsonl": "d3c261834cea36e8dd20ae25a834fc7ff3bb53f70d85725ee47427d1cc02e4b5",
+      "http-0-0.resources.jsonl": "72a2055f761a3461c899fad05132fd14d4e4880de754b00b0a223e9c9f678a20",
+      "http-0-0.resource-summary.json": "e89fb66793830ee87f1ca292504b59d8f213fdb726d53ab8d39aaf9db0fb4e16",
+      "http-0-0.compiler-boundaries.json": "df933022441a2b63c3ad0e8cc4b30efb25cb646827acffdb14d3492875728257",
+      "http-1-0.request.json": "3c263ca6e00c72d1161997200b60b79f7e191fbd49b4367643fc28a49ca9d66e",
+      "http-1-0.observation.json": "ec5b560f2387d56c2f59316021b3a031f1482da566842ff36cb32755cfe1c088",
+      "http-1-0.sse.jsonl": "5aeeb16e3b41b2d4902aebc956542e78ab969623a4625831a625bf0fbf56aea2",
+      "http-1-0.resources.jsonl": "92ef38b50e338aa2c0cf37352bfd0270edb1ff211a401fb33ffabeb9b4594b06",
+      "http-1-0.resource-summary.json": "ecaa7858128f989f42b487b8df67e291af85f266562abdefaa66309f5f6892c5",
+      "http-1-0.compiler-boundaries.json": "df933022441a2b63c3ad0e8cc4b30efb25cb646827acffdb14d3492875728257",
+      "http-2-0.request.json": "3c263ca6e00c72d1161997200b60b79f7e191fbd49b4367643fc28a49ca9d66e",
+      "http-2-0.observation.json": "97a2845bd72e5ad935ad2cd278da729e6c4bee856f67c6561ff9d3d95c0e3a84",
+      "http-2-0.sse.jsonl": "5600df473fd130aaef471ff85912e04d6a8b331b5de6331d998c7effafe30cf8",
+      "http-2-0.resources.jsonl": "732100408d3e402e71f22a9b783b1baff2cf8ce3e367a474a5c8ecff479dda40",
+      "http-2-0.resource-summary.json": "473545fe0281a5fade28a16c4f95890d197e5d868cf6270ba758dd6bea3bbe63",
+      "http-2-0.compiler-boundaries.json": "df933022441a2b63c3ad0e8cc4b30efb25cb646827acffdb14d3492875728257",
+      "host.jsonl": "f29994749c7fc66e87c03fc2da0364143cf1783b05292df2ba667beaed86f332",
+      "build.json": "0ff19e0259bec69399303466ffa92dde82e52f2a64d05482400b0b53a520722c",
+      "identity.json": "113a3fb48a9d3de38d1b88fcb1b8c0ff43ca0d724d8de443ebaf2214978c9231",
+      "load.json": "2f67b462e44d05ce8ef12c1be2372ae8caff6183a6ee028f3d5a2e2153ed2c42",
+      "memory-before.json": "13e45adb6064ca47247e33ea28c28325f1017bdb17ca0235eb9a2a631601f0cd",
+      "memory-after.json": "0d67430c6a83abd1b8800564bff90d85b5534b0bb4926fac2ffdd06fb768dd69",
+      "cleanup.json": "bebcaf1e35a334866e14a608aa686755ec0816140aa467dae8fb31a02744340a"
+    },
+    "resource_scope": "sampled process witness and compiler boundaries; not uninterrupted reservation"
+  },
+  "limitations": [
+    "Seeded stochastic HTTP control differs from native greedy defaults; no transport-only comparison.",
+    "First-fragment server publication and HTTP admission acknowledgement remain unavailable, not zero.",
+    "Profiled runs are rejected; first post-load and later fresh-session samples are retained without hidden warmup.",
+    "Each HTTP request owns a new ephemeral session; multi-turn message history is not persistent prefix reuse.",
+    "N=3 case/configuration-bound characterization is not 20/700, independent quality or release qualification.",
+    "Bounded output does not imply natural EOS; unreached reasoning/final transition is NOT MEASURED.",
+    "RSS, file mappings and CUDA ownership overlap; no uninterrupted device reservation or cold-load claim."
+  ]
+}

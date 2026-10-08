@@ -1807,3 +1807,67 @@ profiles, memory witnesses and restoration receipts remain outside Git under
 Finite remains generation 1 and the public listeners retain their identities.
 Checkpoint/representation quality, successful longer reasoning transitions,
 installed-product rollout and the 20/700 exit are not earned by these arms.
+
+## Generic stochastic selection and product-path controls (2026-10-08)
+
+Full-model HTTP profiling localizes a large seeded-stochastic cost to CUDA
+selection/verification, not to transport. Generic cooperative initialization,
+independent exponentials/divisions, stable compaction and survivor-sized sorting
+retain the original filtering, source-order tie and RNG contracts. A bounded
+binary64 certificate avoids the literal compensated normalization only when its
+directed enclosure proves exactly the same rounded result. Ambiguous inputs,
+midpoints, exceptional values and unsupported dimensions retain the ordered
+fallback. This is an equivalent realization, not a new precision or tolerance.
+
+The private reference fixture tests the actual implementation without adding
+a production ABI. Independent literal host/device and exact-integer/Fraction
+controls keep exact-real rounding distinct from the contract's literal result.
+Separate initialization, signed-zero/underflow, asymmetric rounding-cell and
+midpoint controls protect maximum/tie and certificate behavior. CUDA unit
+controls also cover partial tiles, sparse populations, filters, transfer bounds,
+verifier/refusal, RNG abort/staleness and failed completion.
+
+| Exact lane / implementation | Generated repeated-sample result |
+| --- | --- |
+| HTTP stochastic baseline | [Prepared-stage baseline](benchmarks/generated/qualification-deepseek-product-http-device-stage-coding-metal-20261008.md) |
+| HTTP cooperative tiled work | [Tiled selection](benchmarks/generated/qualification-deepseek-product-http-sampling-streams-coding-metal-20261008.md) |
+| HTTP binary64 certificate | [Conservative certificate](benchmarks/generated/qualification-deepseek-product-http-sampling-certificate-coding-metal-20261008.md) |
+| HTTP source-earliest parallel maxima | [Maximum selection](benchmarks/generated/qualification-deepseek-product-http-sampling-maximum-coding-metal-20261008.md) |
+| HTTP signed rounding-cell enclosure | [Retained normalization](benchmarks/generated/qualification-deepseek-product-http-sampling-rounding-cell-coding-metal-20261008.md) |
+| Native greedy baseline / regressions | [Prepared-stage baseline](benchmarks/generated/qualification-deepseek-product-device-stage-native-coding-metal-20261008.md); [maximum-stage regression](benchmarks/generated/qualification-deepseek-product-sampling-maximum-native-coding-metal-20261008.md); [retained rounding-cell regression](benchmarks/generated/qualification-deepseek-product-sampling-rounding-cell-native-coding-metal-20261008.md) |
+
+These rows share the immutable Metal-coding workload, but native greedy and
+HTTP seeded stochastic are not a matched transport comparison. Their sampling,
+speculative populations and exact target details remain explicit. The HTTP
+series preserve content, token counts and acceptance populations against the
+baseline. Native regression preserves every typed fragment and population over
+three complete turns. Neither internal preservation nor primitive exactness
+qualifies independent checkpoint/representation quality. No installed runtime
+inherits a candidate result before an explicit qualified rollout.
+
+One pre-acceptance certificate experiment exposed a shared-flag reuse race;
+collective retirement before the next invocation repairs it. The failure and
+subsequent memcheck/racecheck/synccheck controls remain in the external evidence
+root, rather than being erased or reported as an all-green original experiment.
+A compiler-footprint-only candidate reduces generated code size without a
+complete-model improvement and is not independently claimed as a speedup.
+Profiler samples remain diagnostic and outside the repeated timing series.
+
+Raw source captures, phase/API profiles, exact fragment/content comparisons,
+memory/resource witnesses, numerical controls and supported DeepSeek restoration
+remain under `full-system-20261008.k2BN6u` in the existing competitive evidence
+root. Public views carry source/build/kernel identity, normal product context and
+chunk, sampling/seed, server/client first-token clocks, sample statistics and
+claim limitations. Long-prefill throughput, target-only decode, successful
+longer high/maximum transitions and the 20/700 exit remain unearned here.
+
+The frozen publication integration (`874c4a5d`, delta `470ad5bd...`) maps to
+151 QA controls: 142 PASS, zero FAIL/ERROR/SKIP and nine BLOCKED on absent
+live assets or independently owned SDK/tool prerequisites. Receipt
+`20eb7189...` confirms unchanged source at start and finish. Separately supplied
+exact upstream/artifact/binding/tokenizer-reference assets pass official input
+encoding (`aafa4b9a...`); this is not full-model reference inference. The final
+100 sum populations, 40 initialization controls and eight rounding-cell controls
+also pass memcheck, racecheck and synccheck. CPU/runtime/quantization sanitizers,
+finite producer regression, CLI/PTY and structural/documentation consumers pass.
+The SDK consumer and unexecuted live gates are not promoted by these controls.
