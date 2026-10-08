@@ -1995,3 +1995,41 @@ identities and lifecycle witnesses remain outside Git under
 Finite generation and approved public transports remain unchanged. No producer
 architecture, public ABI or installed runtime changes follow from this rejected
 experiment; the same Task remains IN PROGRESS and no physical ceiling is proved.
+
+## Rejected small-population routed matrix specialization (2026-10-08)
+
+This generic candidate lowers the existing encoded IQ2/Q2 routed-matrix
+minimum population from four to one. Real expert buckets, numerical kernels,
+activation encoding and publication are unchanged. The selected specialization
+identity changes deliberately; comparisons declare that axis rather than
+pretending the deployment is identical. Empty ordinary-row launches are omitted
+when every admitted bucket uses the matrix realization.
+
+| Exact lane / workload | Generated rejected-candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-small-population-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-small-population-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-small-population-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-small-population-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-rejected-small-population-native-coding-metal-20261008.md) |
+
+Three unprofiled samples per cell show a worse complete-model target-only decode
+tradeoff despite modest long-prefill improvement. Native coding has no material
+benefit. The threshold/launch change is not retained. Strict controlled
+comparison passes 38 metric gates and four content/population checks; native
+comparison passes ten gates, six population controls and all 768 ordered typed
+fragments. Identity hashes that include specialization are not substituted for
+the independent retained fragment comparisons.
+
+The frozen source (`b66b8b16`, delta `0a440e8d...`) passes registered
+`cuda.moe_rows`, `unit.runtime_binding` and `structural.code-natural`, plus
+expert-worklist and generation controls. The expanded MoE fixture exercises
+one/two/three-row and partial matrix groups against independent decoded host
+arithmetic and bitwise ordinary-row output. This qualifies those bounded
+component paths, not checkpoint or representation quality.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`product-small-population-native-01`, `small-population-controlled-01`,
+`qualification-rejected-small-population` and the two
+`small-population-*-comparison-01.json` records. Supported cleanup restores the
+same installed DeepSeek identities/configuration while preserving finite
+generation and approved public transports. No production architecture, public
+ABI, installed runtime or Task-state promotion follows from this experiment.

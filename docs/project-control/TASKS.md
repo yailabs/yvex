@@ -148,6 +148,13 @@ retains source-stable receipts and the failed missing-client preflight, which
 produced no timing evidence. Existing production code and installed runtime
 remain unchanged by that candidate.
 
+The minimum-one-row encoded routed-matrix specialization is also rejected:
+its modest long-prefill gain does not justify worse target-only coding decode
+and no native-product benefit. The changed specialization is an explicit
+experimental axis. [Rejected small-population evidence](../evaluation/retained-observations.md#rejected-small-population-routed-matrix-specialization-2026-10-08)
+retains component and exact published-content controls without integrating the
+threshold change. The same Task continues at measured decoded-projection costs.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |
