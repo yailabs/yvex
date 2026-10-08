@@ -482,6 +482,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-rejected-expert-tile-cache-20261008-target-only-coding-hash-table",
+          "target_identity": "2f7fbcd6f12707eb5d1374cb16e8f2f8ab92de1ffaeb8b96b77623b25b9780f7",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-rejected-five-digit-20261007-target-only-coding-hash-table",
           "target_identity": "a24fe4ad0b004846c5f6e73f3d59d5eb49df8fb0c6edda93d4027fa4ffb0fc17",
           "path": "controlled-engine/public-C-host/native-v25",
@@ -695,6 +703,14 @@
         {
           "id": "deepseek-rejected-expert-geometry-20261007-speculative-coding-hash-table",
           "target_identity": "eb58a3b8587b8c2de8dac8135f72968701e31d7e342c75e2f9e6628a56e343ed",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-rejected-expert-tile-cache-20261008-speculative-coding-hash-table",
+          "target_identity": "19520348174b7f3ed7f32b6be4abecb939ba77e34b287299c79a4b54beb0a555",
           "path": "controlled-engine/public-C-host/native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
@@ -1005,6 +1021,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-rejected-expert-tile-cache-20261008-target-only-prefill-promessi-2048",
+          "target_identity": "d00a7094060552302a44656047625a99ed064e06e9dd7db2af8ffd30b5579d0b",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-rejected-five-digit-20261007-target-only-prefill-promessi-2048",
           "target_identity": "46f107518ea9d6c6ea33ccc7ce1588d5da00e6a0d434e13b867b45b4678027f6",
           "path": "controlled-engine/public-C-host/native-v25",
@@ -1244,6 +1268,14 @@
         {
           "id": "deepseek-rejected-expert-geometry-20261007-target-only-prefill-promessi-8192",
           "target_identity": "fe932df35ef6d3894cb8a52117e5a8ca23ee622b8dfaec4f7e71ee5973ba907d",
+          "path": "controlled-engine/public-C-host/native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-rejected-expert-tile-cache-20261008-target-only-prefill-promessi-8192",
+          "target_identity": "d00a7094060552302a44656047625a99ed064e06e9dd7db2af8ffd30b5579d0b",
           "path": "controlled-engine/public-C-host/native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",
@@ -1644,6 +1676,14 @@
         {
           "id": "deepseek-product-rejected-attention-tile-native-coding-metal-20261008",
           "target_identity": "f35ca9846d51c900520b4c2cfa59bf5da08934d132dab4258ed56aae6cdc7cae",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-product-rejected-expert-tile-cache-native-coding-metal-20261008",
+          "target_identity": "f796d4b9e2bdb4253f6d9ba0e5d15958c46648bd4957767de2fc14826c32167d",
           "path": "product-native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",

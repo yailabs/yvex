@@ -2143,3 +2143,41 @@ Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
 DeepSeek and preserves finite generation and approved public transports.
 No production code, numerical class, public ABI, installed executable or
 Task-state promotion follows; the performance exit remains unearned.
+
+## Rejected expert-column tile cache (2026-10-08)
+
+The generic experiment shares the existing expert-column prefix scan across four
+aligned output-row warps. Unaligned populations keep the original warp scan.
+The matrix arithmetic, Q8 publication, selected expert associations and numerical
+class remain unchanged. A uniform CTA status snapshot protects barrier participation.
+
+| Exact lane / workload | Generated rejected-candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-expert-tile-cache-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-expert-tile-cache-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-expert-tile-cache-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-expert-tile-cache-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-rejected-expert-tile-cache-native-coding-metal-20261008.md) |
+
+Three unprofiled samples per cell remain materially neutral. Strict comparison
+passes 38 controlled metric gates and four content/population controls, plus ten
+native metric gates, six population controls and all 768 ordered channel/content
+fragments. These are preservation/comparability gates, not a speedup.
+
+Registered `cuda.moe_rows`, `cuda.quant_qtype` and `structural.code-natural`
+pass at the frozen source. Independent CPU decoded F64 controls exercise aligned
+64-expert and unaligned 65-expert populations, 512 selected pairs, row tails,
+padding canaries and malformed/refused work. Memcheck, racecheck and synccheck
+report zero errors; racecheck also reports zero warnings. Component agreement
+does not qualify checkpoint/representation quality.
+
+Observed static resources change up shared storage from 3,072 to 3,088 bytes
+with 94 registers unchanged; down shared storage changes from zero to 1,040
+bytes and registers from 96 to 94. Neither has local/stack storage. This compiler
+footprint is not an achieved-occupancy measurement or a hardware-bound proof.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`product-expert-tile-cache-native-01`, `expert-tile-cache-controlled-01`,
+`qualification-rejected-expert-tile-cache`, sanitizer/resource logs and both
+`expert-tile-cache-*-comparison-01.json` records. Owned cleanup restores installed
+DeepSeek and preserves finite generation and approved public transports.
+Candidate code is not integrated; public ABI, numerical class, installed runtime
+and Task state do not change. The same performance boundary continues.

@@ -177,6 +177,13 @@ reduction/publication and refusal controls pass, but matched N=3 complete-model
 retains the source-stable comparison and restoration witnesses. The original
 attention realization remains production-owned; the same Task continues.
 
+The CTA-shared expert-column tile cache is also rejected after controlled and
+Rust/native N=3 series: it does not materially improve complete-model performance.
+Numerical publication/refusal, tail populations and sanitizer controls pass;
+extra static shared storage does not earn a product tradeoff.
+[Rejected expert-tile evidence](../evaluation/retained-observations.md#rejected-expert-column-tile-cache-2026-10-08)
+retains exact comparisons. No production-code or installed-runtime change follows.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |
