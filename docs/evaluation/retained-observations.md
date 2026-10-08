@@ -2070,3 +2070,40 @@ Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
 DeepSeek and preserves finite generation and approved public transports.
 No production code, ABI, installed executable or Task-state promotion follows
 from this rejected candidate; no hardware ceiling is proved.
+
+## Rejected lossless MXFP4 digit and norm candidate (2026-10-08)
+
+The generic decoded-MXFP4 experiment skips a third radix-256 activation digit
+only when the authenticated exponent span proves it zero. Directed outward F32
+norm bounds replace F64 certificate-norm arithmetic; overflow disables the
+certificate. Source-order F64 accumulation, lattice certification, literal
+fallback and F32/BF16 publication remain unchanged. This is neither activation
+quantization nor a new admitted numerical class.
+
+| Exact lane / workload | Generated rejected-candidate result |
+| --- | --- |
+| Controlled target-only / DSpark coding | [Target-only](benchmarks/generated/qualification-deepseek-rejected-lossless-digits-20261008-target-only-coding-hash-table.md); [DSpark](benchmarks/generated/qualification-deepseek-rejected-lossless-digits-20261008-speculative-coding-hash-table.md) |
+| Controlled uncached 2K / 8K | [2K](benchmarks/generated/qualification-deepseek-rejected-lossless-digits-20261008-target-only-prefill-promessi-2048.md); [8K](benchmarks/generated/qualification-deepseek-rejected-lossless-digits-20261008-target-only-prefill-promessi-8192.md) |
+| Rust/native product coding | [Native detail](benchmarks/generated/qualification-deepseek-product-rejected-lossless-digits-native-coding-metal-20261008.md) |
+
+Each cell retains three unprofiled samples. Matched controlled and native
+performance is neutral or slightly worse; no complete-system Pareto benefit
+justifies adopting the candidate. Strict comparison passes 38 controlled metric
+gates and four content/population controls, plus ten native metric gates, six
+population controls and all 768 ordered channel/content fragments. Internal
+turn/token identities are not a substitute for this actual fragment comparison.
+
+Registered `cuda.dot_finiteness`, `cuda.quant_qtype`, `cuda.moe_rows` and
+`structural.code-natural` pass at the frozen candidate. Independent ordered-F64
+controls include exponent spans at the two/three-digit boundary, nonzero third
+digits, unsupported-span fallback, extreme exponents, subnormals, non-finite
+inputs and preset refusal. Component agreement does not promote full-model
+checkpoint or representation quality.
+
+Raw evidence remains outside Git under `full-system-20261008.k2BN6u`:
+`product-lossless-digits-native-01`, `lossless-digits-controlled-01`,
+`qualification-rejected-lossless-digits` and both
+`lossless-digits-*-comparison-01.json` records. Owned cleanup restores installed
+DeepSeek and preserves finite generation and approved public transports.
+Candidate code is not integrated. Architecture, public ABI, installed runtime
+and Task state do not change; no throughput exit or hardware ceiling is earned.

@@ -162,6 +162,14 @@ retaining another realization. Exact numerical and fragment/population controls
 remain green. [Rejected certificate evidence](../evaluation/retained-observations.md#rejected-f32-certificate-endpoint-merge-2026-10-08)
 publishes the bounded receipts, not a throughput or quality promotion.
 
+The lossless MXFP4 digit/certificate-norm candidate is rejected after matched
+controlled and Rust/native N=3 series. Proved-zero digit omission and outward
+F32 norm bounds preserve ordered-F64 publication but do not materially improve
+complete-model performance. [Rejected digit evidence](../evaluation/retained-observations.md#rejected-lossless-mxfp4-digit-and-norm-candidate-2026-10-08)
+retains exact content/population and numerical controls. No production code or
+installed-runtime change follows; the same Task continues at attention and
+physical execution costs with the 20/700 gates unchanged.
+
 ## Compute platform product refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |
