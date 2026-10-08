@@ -292,6 +292,65 @@ selected token, canonical probability, and applicable RNG states field by
 field. The API does not mutate logits or persistent state and does not append,
 decode, tokenize, stop, detokenize, or generate.
 
+CUDA stochastic filtering evaluates independent F64 exponentials across the
+block, while retaining source-ordered compensated F64 normalization and the
+existing filter/acceptance order. Cooperative tiled loads feed the literal
+ordered compensated fallback. A separately bounded equivalent realization may
+avoid it only when a certificate proves identical binary64 rounding; it does
+not admit an unordered probability sum with a tolerance.
+Independent divisions retain the same F64 divisor and the verification sum
+uses the same source order. Stable in-place compaction saves each complete tile
+before writing its retained records and preserves token order across tiles.
+Initialization retains source-ordered maxima, including signed-zero ties.
+Sorting uses the power-of-two extent of the
+current survivor population, not the original padded vocabulary. The final
+categorical draw omits token sorting only when no rank-based filter could have
+reordered initialization/positive-mass/min-p compaction. Tie-breaking remains
+lowest token ID. Neither RNG draws, probability publication, bounded result
+transfers nor transactional commit change. These execution choices are generic
+and do not select a family, model, prompt or transport-specific sampling policy.
+
+### Binary64 compensated-sum certificate
+
+For finite nonnegative probabilities and `1024 <= n <= 2^24`, 256 threads form
+compensated pairs over disjoint populations, then one thread merges their 512
+components with the same error-free addition/correction primitive. The final
+rounded pair is not automatically authoritative. A conservative enclosure must
+prove equality to the original source-ordered compensated result.
+
+Let `u = 2^-53`, `A = sum(abs(p_i))` and `gamma_n = n*u/(1-n*u)`.
+The error-free residual identity bounds the pre-final-rounding error of one
+compensated pair by `gamma_n^2 * A`; see the derivation preceding Proposition
+4.5 and equation 4.11 in [Ogita, Rump and Oishi, Accurate Sum and Dot Product](https://www.tuhh.de/ti3/paper/rump/OgRuOi05.pdf).
+This is a bound on the pair before rounding, not permission to change the
+published sum. Each partial pair has at most n terms. Its components have
+combined absolute mass less than `2*A` in the admitted range. The merge has
+512 terms, so both partial and merge errors plus the literal pair error are
+bounded by `16*n^2*u^2*A`, using `gamma_n <= 2*n*u`.
+
+For this nonnegative population, the merge's high component H satisfies
+`A <= 2*H`: the partial-pair error and the merge's ordinary summation error are
+less than half A in the admitted range. The implementation conservatively
+encloses the difference between pairs with `64*n^2*u^2*(2*H)`, rounding its
+bound upward. This deliberately exceeds the derived bound. Only finite bounds,
+a normal positive rounded result and `H >= abs(L)` are eligible. Error-free
+FastTwoSum recovers the exact residual of rounding `H+L`. Directed subtraction
+and addition enclose the residual minus/plus the upward bound. Certification
+requires these endpoints to lie strictly inside the lower and upper half-gaps
+of the rounded value's binary64 rounding cell respectively. The gaps can differ
+at powers of two; a symmetric smaller-gap test is unnecessarily conservative.
+Thus both pair estimates lie in the same rounding cell, including the original
+ordered pair. Midpoints, exceptional inputs,
+underflow-range results and unsupported dimensions retain literal evaluation.
+
+Add/subtract error-free transformations retain gradual-underflow semantics;
+probability exponentiation, division, filtering, categorical draws and RNG are
+unchanged. The numerical obligation is bitwise equality to the literal ordered
+binary64 result, not agreement with a differently rounded exact real sum.
+Independent literal and exact-arithmetic fixtures must exercise certified and
+fallback cases before this realization is accepted; a faster model request
+alone is insufficient.
+
 
 ## Internal DeepSeek Attention Operator Boundary
 

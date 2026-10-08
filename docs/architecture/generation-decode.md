@@ -64,6 +64,12 @@ greedy/stochastic selection, and admitted speculative acceptance/correction.
 The common sampling owner supplies transactional RNG, validates bounded result
 publication, and commits RNG only with the surrounding state transaction.
 Tokenizer and protocol remain host-owned; this is not all-on-device generation.
+Generic CUDA selection cooperatively realizes independent probability work and
+stable survivor compaction. A bounded certificate may replace literal ordered
+normalization only by proving the identical binary64 result; an inconclusive
+proof retains ordered device evaluation. The [sampling numerical contract](../contracts/numerical-abi.md#internal-real-logits-sampling-boundary)
+owns the exact class. This changes neither runtime RNG/policy nor native/HTTP
+default-policy differences, and does not grant a model-quality claim.
 Transient hidden/logit publications have one producer-owned borrow generation;
 workspace reuse expires old views before downstream selection. This replaces
 passive producer counters with checked lifetime authority, without copying full

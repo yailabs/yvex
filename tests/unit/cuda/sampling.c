@@ -284,6 +284,156 @@ static void sampling_softmax_row(const float *logits, unsigned long long count,
         probabilities[index] = (float)(probabilities[index] / total);
 }
 
+/* A full encoded vocabulary with a non-power-of-two, sparse survivor set.
+ * Analytic equal mass and token IDs are independent of the CUDA sort/filter.
+ * This catches tail reintroduction, rank ties and unnecessary token sorting. */
+static int sampling_sparse_vocabulary(
+    yvex_backend *backend, const yvex_backend_sampling_operations *operations)
+{
+    const unsigned long long vocabulary = 129280ull, survivors = 73ull;
+    const unsigned int draws[] = {0u, 0x40000000u, 0x80000000u, UINT_MAX};
+    yvex_device_tensor *logits = NULL, *workspace = NULL;
+    yvex_backend_tensor_desc descriptor;
+    yvex_runtime_sampling_policy policy;
+    yvex_backend_sampling_result result;
+    yvex_backend_operation_facts facts;
+    yvex_error err;
+    unsigned long long bytes, mode, draw;
+    float *values = malloc((size_t)vocabulary * sizeof(*values));
+    YVEX_TEST_ASSERT(values != NULL, "allocate sparse full-vocabulary oracle");
+    for (unsigned long long index = 0ull; index < vocabulary; ++index)
+        values[index] = -1000.0f;
+    for (unsigned long long index = 0ull; index < survivors; ++index)
+        values[19ull + index * 997ull] = 0.0f;
+    YVEX_TEST_ASSERT(
+        operations->workspace_required(vocabulary, &bytes, &err) == YVEX_OK,
+        "derive sparse full-vocabulary workspace");
+    sampling_tensor_desc(&descriptor, "sampling-sparse-logits", YVEX_DTYPE_F32,
+                         vocabulary * sizeof(*values));
+    YVEX_TEST_ASSERT(
+        yvex_backend_tensor_alloc(backend, &descriptor, &logits, &err) == YVEX_OK &&
+            yvex_backend_tensor_write(backend, logits, values,
+                vocabulary * sizeof(*values), &err) == YVEX_OK,
+        "upload sparse analytic logits");
+    sampling_tensor_desc(&descriptor, "sampling-sparse-workspace", YVEX_DTYPE_I8, bytes);
+    YVEX_TEST_ASSERT(
+        yvex_backend_tensor_alloc(backend, &descriptor, &workspace, &err) == YVEX_OK &&
+            yvex_backend_workspace_attach(backend, workspace, 5ull, &err) == YVEX_OK,
+        "attach sparse stochastic workspace");
+    for (mode = 0ull; mode < 4ull; ++mode) {
+        unsigned long long retained = mode < 2ull ? survivors : mode == 2ull ? 17ull : 6ull;
+        policy = sampling_policy();
+        if (mode) policy.min_p = 0.5;
+        if (mode >= 2ull) policy.top_k = 17ull;
+        if (mode == 3ull) policy.typical_p = 0.5, policy.top_p = 0.6;
+        YVEX_TEST_ASSERT(
+            yvex_runtime_sampling_policy_seal(&policy, vocabulary, &err) == YVEX_OK,
+            "seal sparse neutral/min-p/rank-based policy");
+        for (draw = 0ull; draw < sizeof(draws) / sizeof(draws[0]); ++draw) {
+            double uniform = ((double)draws[draw] + 0.5) / 4294967296.0;
+            unsigned int expected = (unsigned int)(19ull +
+                (unsigned long long)(uniform * (double)retained) * 997ull);
+            YVEX_TEST_ASSERT(
+                operations->select_stochastic(backend, logits, vocabulary,
+                    &policy, draws[draw], &result, &facts, &err) == YVEX_OK &&
+                    result.completed && result.selected_token_id == expected &&
+                    result.candidates_after_top_k == (mode >= 2ull ? 17ull : survivors) &&
+                    result.candidates_after_min_p == (mode >= 2ull ? 17ull : survivors) &&
+                    result.candidates_after_typical_p == (mode == 3ull ? 9ull : retained) &&
+                    result.candidates_after_top_p == retained &&
+                    fabs(result.selected_probability - 1.0 / (double)retained) < 1e-14 &&
+                    result.selected_logit == 0.0f && facts.kernel_launches == 1ull &&
+                    facts.d2h_bytes == 100ull && facts.temporary_bytes == bytes,
+                "sparse full-vocabulary draws preserve analytic mass, ties and token order");
+        }
+    }
+    yvex_backend_workspace_detach(backend);
+    YVEX_TEST_ASSERT(
+        yvex_backend_tensor_release(backend, &workspace, &err) == YVEX_OK &&
+            yvex_backend_tensor_release(backend, &logits, &err) == YVEX_OK,
+        "release sparse full-vocabulary resources");
+    free(values);
+    return 0;
+}
+
+/* Nonuniform analytic mass crosses warp/block boundaries and a partial final
+ * input tile. Compaction must preserve original token order, not tile order. */
+static int sampling_tiled_vocabulary(
+    yvex_backend *backend, const yvex_backend_sampling_operations *operations)
+{
+    const unsigned long long vocabulary = 129283ull, step = 211ull, first = 17ull;
+    const unsigned long long survivors = (vocabulary - first - 1ull) / step + 1ull;
+    const unsigned int draws[] = {0u, 0x40000000u, 0x80000000u, UINT_MAX};
+    yvex_device_tensor *logits = NULL, *workspace = NULL;
+    yvex_backend_tensor_desc descriptor;
+    yvex_runtime_sampling_policy policy;
+    yvex_backend_sampling_result result;
+    yvex_backend_operation_facts facts;
+    yvex_error err;
+    unsigned long long bytes;
+    float *values = malloc((size_t)vocabulary * sizeof(*values));
+    YVEX_TEST_ASSERT(values != NULL, "allocate partial-tile nonuniform vocabulary");
+    for (unsigned long long index = 0ull; index < vocabulary; ++index) values[index] = -1000.0f;
+    for (unsigned long long index = 0ull; index < survivors; ++index)
+        values[first + index * step] = index % 2ull ? -2.0f : 0.0f;
+    YVEX_TEST_ASSERT(operations->workspace_required(vocabulary, &bytes, &err) == YVEX_OK,
+                     "derive nonuniform tiled workspace");
+    sampling_tensor_desc(&descriptor, "sampling-tiled-logits", YVEX_DTYPE_F32,
+                         vocabulary * sizeof(*values));
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &descriptor, &logits, &err) == YVEX_OK &&
+        yvex_backend_tensor_write(backend, logits, values, vocabulary * sizeof(*values), &err) == YVEX_OK,
+        "upload nonuniform partial-tile logits");
+    sampling_tensor_desc(&descriptor, "sampling-tiled-workspace", YVEX_DTYPE_I8, bytes);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &descriptor, &workspace, &err) == YVEX_OK &&
+        yvex_backend_workspace_attach(backend, workspace, 6ull, &err) == YVEX_OK,
+        "attach tiled stochastic workspace");
+    for (unsigned int mode = 0u; mode < 5u; ++mode) {
+        unsigned long long high = (survivors + 1ull) / 2ull, low = survivors / 2ull;
+        unsigned long long after_k = survivors, after_min = survivors, after_typical = survivors;
+        policy = sampling_policy();
+        if (mode == 1u) policy.min_p = 0.5, low = 0ull;
+        if (mode == 2u) policy.top_k = 17ull, high = 17ull, low = 0ull;
+        if (mode >= 3u) policy.top_k = 521ull, low = 521ull - high;
+        after_k = policy.top_k ? policy.top_k : survivors;
+        if (mode == 4u) {
+            policy.min_p = 0.5; policy.typical_p = 0.5; policy.top_p = 0.6;
+            low = 0ull; after_min = high;
+            after_typical = (high + 1ull) / 2ull;
+            high = (unsigned long long)ceil((double)after_typical * policy.top_p);
+        } else after_min = after_typical = high + low;
+        YVEX_TEST_ASSERT(yvex_runtime_sampling_policy_seal(&policy, vocabulary, &err) == YVEX_OK,
+                         "seal tiled neutral, min-p and rank policies");
+        for (unsigned int draw = 0u; draw < sizeof(draws) / sizeof(draws[0]); ++draw) {
+            double total = (double)high + (double)low * exp(-2.0);
+            double uniform = ((double)draws[draw] + 0.5) / 4294967296.0, cumulative = 0.0;
+            unsigned int expected = UINT_MAX;
+            double expected_probability = 0.0;
+            for (unsigned long long index = 0ull; index < survivors; ++index) {
+                if (index / 2ull >= (index % 2ull ? low : high)) continue;
+                expected_probability = (index % 2ull ? exp(-2.0) : 1.0) / total;
+                cumulative += expected_probability;
+                expected = (unsigned int)(first + index * step);
+                if (uniform < cumulative) break;
+            }
+            YVEX_TEST_ASSERT(operations->select_stochastic(backend, logits, vocabulary, &policy,
+                draws[draw], &result, &facts, &err) == YVEX_OK && result.completed &&
+                result.selected_token_id == expected && result.candidates_after_top_k == after_k &&
+                result.candidates_after_min_p == after_min &&
+                result.candidates_after_typical_p == after_typical &&
+                result.candidates_after_top_p == high + low &&
+                fabs(result.selected_probability - expected_probability) < 1e-14 &&
+                facts.kernel_launches == 1ull && facts.d2h_bytes == 100ull,
+                "tiled nonuniform sampling preserves analytic mass, population and stable token order");
+        }
+    }
+    yvex_backend_workspace_detach(backend);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &workspace, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &logits, &err) == YVEX_OK,
+        "release tiled stochastic fixture");
+    free(values);
+    return 0;
+}
+
 static int sampling_speculation_device(
     yvex_backend *backend, const yvex_backend_sampling_operations *operations)
 {
@@ -552,6 +702,8 @@ int yvex_cuda_test_sampling(void)
             yvex_backend_tensor_release(backend, &device_logits, &err) == YVEX_OK,
         "release bounded stochastic sampling tensors");
     if (sampling_full_vocabulary(backend, operations)) return 1;
+    if (sampling_sparse_vocabulary(backend, operations)) return 1;
+    if (sampling_tiled_vocabulary(backend, operations)) return 1;
     sampling_tensor_desc(&descriptor, "sampling-sync-fault", YVEX_DTYPE_F32,
                          sizeof(logits));
     YVEX_TEST_ASSERT(
