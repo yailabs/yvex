@@ -1231,12 +1231,23 @@ check-docs: test-documentation-architecture test-project-control test-docs-surfa
 
 .PHONY: test-rust-shell rust-ffi-index test-finite-remote test-terminal-flow
 
-test-terminal-flow: rust-client $(OPENAI_FAKE_HOST) $(TERMIOS_PROBE)
-	npm ci --ignore-scripts --prefix tests/terminal_flow
+TERMINAL_FLOW_OBSERVER := $(TEST_DIR)/terminal-flow-observer
+
+$(TERMINAL_FLOW_OBSERVER)/node_modules/.package-lock.json: tests/terminal_flow/package.json tests/terminal_flow/npm_lock.json
+	@mkdir -p '$(TERMINAL_FLOW_OBSERVER)'
+	cp tests/terminal_flow/package.json '$(TERMINAL_FLOW_OBSERVER)/package.json'
+	cp tests/terminal_flow/npm_lock.json '$(TERMINAL_FLOW_OBSERVER)/package-lock.json'
+	npm ci --ignore-scripts --prefix '$(TERMINAL_FLOW_OBSERVER)'
+
+$(TERMINAL_FLOW_OBSERVER)/reflow.cjs: tests/terminal_flow/reflow.cjs
+	@mkdir -p '$(@D)'
+	cp $< $@
+
+test-terminal-flow: rust-client $(OPENAI_FAKE_HOST) $(TERMIOS_PROBE) $(TERMINAL_FLOW_OBSERVER)/node_modules/.package-lock.json $(TERMINAL_FLOW_OBSERVER)/reflow.cjs
 	YVEX_TEST_TERMIOS_PROBE='$(abspath $(TERMIOS_PROBE))' \
 		python3 tests/rust_chat_pty.py --binary '$(RUST_SHELL_BIN)' \
 		--fixture '$(OPENAI_FAKE_HOST)' --output '$(TEST_DIR)/terminal-flow'
-	node tests/terminal_flow/reflow.cjs '$(TEST_DIR)/terminal-flow'
+	node '$(TERMINAL_FLOW_OBSERVER)/reflow.cjs' '$(TEST_DIR)/terminal-flow'
 $(TEST_DIR)/finite-remote-peer: $(OBJ_DIR)/tests/integration/finite_remote_peer.o $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
