@@ -17,7 +17,8 @@ sequence = 0
 
 def main():
     global sequence
-    with tempfile.TemporaryDirectory(prefix='yvex-management-models-') as directory:
+    # Match the source-lifecycle fixture's canonical, short Darwin temp root.
+    with tempfile.TemporaryDirectory(prefix='yvex-management-models-', dir=Path('/tmp').resolve()) as directory:
         root = Path(directory)
         root.chmod(0o700)
         for name in ['config', 'data', 'models', 'runtime', 'xdg']:

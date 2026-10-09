@@ -15,7 +15,8 @@ BINARY = Path(os.environ.get('YVEX_BIN', 'yvex')).resolve()
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='yvex-net-') as directory:
+    # Darwin's default temporary root can exhaust the AF_UNIX path bound.
+    with tempfile.TemporaryDirectory(prefix='yvex-net-', dir=Path('/tmp').resolve()) as directory:
         root = Path(directory)
         root.chmod(0o700)
         for name in ['config', 'data', 'models', 'runtime', 'xdg', 'home']:

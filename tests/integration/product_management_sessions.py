@@ -110,7 +110,8 @@ def https_sdk_transport(root,env):
 def main():
     transport = os.environ.get('YVEX_SESSION_MANAGEMENT_TRANSPORT', 'local')
     assert transport in ['local', 'ssh-sdk', 'https-sdk'], 'unknown qualification transport'
-    with tempfile.TemporaryDirectory(prefix='yvex-management-sessions-') as directory, ExitStack() as stack:
+    # The full native socket path must fit Darwin's AF_UNIX extent too.
+    with tempfile.TemporaryDirectory(prefix='yvex-management-sessions-', dir=Path('/tmp').resolve()) as directory, ExitStack() as stack:
         root = Path(directory)
         root.chmod(0o700)
         for name in ['config', 'data', 'models', 'runtime', 'xdg', 'bindings']:

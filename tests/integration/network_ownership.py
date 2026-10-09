@@ -16,7 +16,8 @@ SDK = os.environ.get('YVEX_SDK_CONNECTIONS_EXAMPLE')
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='yvex-owner-') as directory:
+    # Keep fixture sockets bounded without weakening production path checks.
+    with tempfile.TemporaryDirectory(prefix='yvex-owner-', dir=Path('/tmp').resolve()) as directory:
         root = Path(directory)
         root.chmod(0o700)
         for name in ['config', 'data', 'models', 'runtime', 'xdg', 'home', 'profiles']:
