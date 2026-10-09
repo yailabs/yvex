@@ -87,6 +87,40 @@ the installed model/configuration; the final observed DeepSeek generation is 48,
 finite remains 1, and approved transports/grants are unchanged. Closing the
 operator's detached `main` context was explicitly authorized before these windows.
 
+### Retained decoder: complete high-reasoning coding turns
+
+The [exact native target](benchmarks/generated/qualification-deepseek-native-qtype-combined-long-coding-high-16k-20261009.md)
+retains three fresh `coding.metal` sessions from `deepseek-turn-lifecycle`, with
+context 16384, chunk 512, greedy sampling, explicit high reasoning and the
+admitted speculative/source-boundary policy. All three reach natural EOS with
+the same channel populations; phase timings, dispersion, output counts and
+speculative economics are generated from the authenticated record. The output
+bound is 4096, not the earlier short-control bound of 256. Neither the installed
+32768/chunk-64 target nor a 2K/8K prefill claim inherits this result.
+
+The family-owned reasoning terminator closes speculative execution; subsequent
+iterations decode through the ordinary target. A crossing speculative block can
+already contain final-channel tokens. Channel counts and accepted/proposed totals
+must not be interpreted as proof that every final token was drafted or that every
+post-boundary token executed through the ordinary loop. Missing first-publication
+and exact boundary timestamps remain unavailable. No source instruction, channel
+or numerical realization changed for this capture.
+
+The preceding 256-bound high control ends before the source terminator and
+correctly refuses with `YVEX_ERR_FORMAT`, retaining the reset requirement. It
+produces no performance receipt and is not retried. The separate long-suite
+execution starts new owned sessions, reaches EOS, settles them and restores the
+installed DeepSeek configuration at generation 50; finite remains generation 1.
+No Host executable, approved transport or grant is replaced.
+
+Raw `full-system-20261008.k2BN6u/qtype-combined-native-long-coding-high-16k-20261009-01`
+retains frozen source/executable/library capture, the native fragment journal,
+zero-drop isolated telemetry and sampled clear resource witnesses. The refused
+short control remains under `qtype-combined-native-coding-high-16k-20261009-01`.
+The original mixed artifact and published decoder implementation are unchanged.
+Independent checkpoint quality, remaining reasoning/strategy cells and 20/700
+remain unearned.
+
 ## Native output-flow consumer (2026-10-09)
 
 The active `V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4`
@@ -169,6 +203,19 @@ Make. Structural rules are unchanged. Fresh Linux receipts pass terminal flow
 (`c2b47d27`), repository layout (`8ddc6694`), source layout (`61111e0d`) and
 topology closure (`344a04e4`). The old local dependency directory was moved to
 an external temporary location, not committed or recursively deleted.
+
+Hosted follow-up [37934108594](https://github.com/yailabs/yvex/actions/runs/37934108594)
+at `3299cad3` passes all 131 hermetic Linux lanes. Its macOS receipt `84f61d43`
+records **18 PASS / 2 FAIL / 4 BLOCKED**: Rust shell, REPL, flow/reflow and the
+repaired model/session fixture paths pass. The two remaining network tests fail
+during TLS request I/O. Accepted streams now explicitly enter deadline-bound
+blocking mode rather than depending on inherited listener flags. The TCP/Unix
+negative control proves immediate `WouldBlock` before adaptation, then successful
+delivery and bounded expiry afterwards. Linux Rust-shell (`b5d5e1b8`), network
+management (`b07e6b9c`), ownership (`7df82ce4`) and source-layout (`23aaf8a0`)
+pass this correction; a new hosted macOS run must establish its platform result.
+The four external SDK prerequisites remain blocked, not waived. No operator
+management service is restarted or replaced by these isolated tests.
 
 Limitations: emulator evidence covers retained scrollback, not its active
 cursor paragraph or every terminal. Null padding before a wrapped wide glyph

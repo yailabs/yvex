@@ -2957,6 +2957,14 @@
           "plane": "product-path",
           "state": "CHARACTERIZED",
           "outcomes": []
+        },
+        {
+          "id": "deepseek-native-qtype-combined-long-coding-high-16k-20261009",
+          "target_identity": "0bb7277d7e4737911ecb64e399a6461b59f3efac0200894b62e4cac853db1923",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
         }
       ]
     },

@@ -194,8 +194,11 @@ silently falls back to target-only.
 
 For explicit reasoning, the source-authored terminator ends the speculative
 shape; the final channel continues with ordinary target decode. The
-`source-boundary` event reports boundary extent in `a`, target-only
-continuation in `b`, and replayed accepted target rows in `c` (required zero).
+`source-boundary` event reports boundary extent in `a`, the committed extent
+after that boundary in `b`, and replayed accepted target rows in `c` (required
+zero). A speculative block crossing the terminator can also commit final-channel
+tokens; `b` and final-channel token counts are therefore not exact counters of
+ordinary target-only work. Subsequent iterations use ordinary target decode.
 This identity-bound sub-policy is not silent fallback.
 
 ## Current capability
