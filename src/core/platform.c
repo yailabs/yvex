@@ -17,6 +17,7 @@
 #include <libproc.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
+#include <sys/random.h>
 #include <sys/sysctl.h>
 #else
 #include <sys/syscall.h>
