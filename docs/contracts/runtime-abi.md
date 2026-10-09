@@ -49,6 +49,14 @@ backend, capacity, memory, and generation facts. Engine schema v1 is refused
 before the added fields are read.
 The source-authored conversation boundary admits provider request/wire schema
 v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v25.
+Compiled tokenizer family-policy v3 adds a separately authenticated source-authored
+high-effort instruction. Its conversation projection is v3; segmented and
+role-enveloped grammars remain explicit facts rather than consequences of the
+version number. Native and provider prompt rendering consume the same instruction.
+The v1/v2 serialized text populations and identity domains remain frozen, and
+their high-effort behavior is unchanged. Unknown policy versions and modified
+instructions fail closed. This internal compiled-policy extension does not change
+the public provider or local wire contracts, nor admit another checkpoint by itself.
 Runtime event schema v6, generation plan schema v7, and generation result
 schema v5 are current. Generation plan ABI v5 added the workload-profile identity
 required to bind phase evidence to the compiled workload. Generation result

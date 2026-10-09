@@ -136,6 +136,9 @@ static const char *reasoning_instruction(
         return conversation->reasoning_effort_max;
     if (policy == YVEX_REASONING_LOW)
         return conversation->reasoning_effort_low;
+    if (policy == YVEX_REASONING_ENABLED &&
+        conversation->schema_version == YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3)
+        return conversation->reasoning_effort_high;
     return "";
 }
 
@@ -332,8 +335,9 @@ int yvex_tokenizer_prompt_render_v2(
     int rc;
 
     if (!out || !tokenizer || !tokenizer->plan.sealed ||
-        !tokenizer->conversation || tokenizer->conversation->schema_version !=
-            YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2 ||
+        !tokenizer->conversation ||
+        (tokenizer->conversation->schema_version != YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2 &&
+         tokenizer->conversation->schema_version != YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3) ||
         tokenizer->conversation->grammar !=
             YVEX_CONVERSATION_GRAMMAR_ROLE_ENVELOPED) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "tokenizer.prompt",

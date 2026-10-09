@@ -10,6 +10,7 @@
 
 #define YVEX_CONVERSATION_PROTOCOL_SCHEMA_V1 1u
 #define YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2 2u
+#define YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3 3u
 
 typedef enum {
     YVEX_CONVERSATION_GRAMMAR_SEGMENTED = 0,
@@ -73,6 +74,8 @@ typedef struct {
     unsigned int bos_token_id, eos_token_id, pad_token_id, unk_token_id;
     int bos_present, eos_present, pad_present, unk_present;
     int add_bos_token, add_eos_token, byte_fallback;
+    /* V3 source-authored high-effort instruction; never inferred from maximum. */
+    const char *reasoning_effort_high;
 } yvex_conversation_protocol;
 
 #endif /* INCLUDE_YVEX_INTERNAL_CONVERSATION_H_INCLUDED */

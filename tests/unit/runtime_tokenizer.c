@@ -301,6 +301,17 @@ static int test_compiled_family_policy(void)
             strcmp(qwen_decoded.policy_identity,
                    qwen_policy.policy_identity) == 0,
         "Qwen role-enveloped policy roundtrips with exact architecture and pre-tokenizer facts");
+    changed = qwen_policy;
+    changed.text_offsets[YVEX_TOKENIZER_POLICY_REASONING_EFFORT_HIGH] = UINT32_MAX;
+    changed.text_lengths[YVEX_TOKENIZER_POLICY_REASONING_EFFORT_HIGH] = UINT32_MAX;
+    repeated.count = 0u;
+    YVEX_TEST_ASSERT(
+        yvex_tokenizer_family_policy_encode(&changed, &repeated, &err) == YVEX_OK &&
+            repeated.count == encoded.count &&
+            memcmp(repeated.data, encoded.data, encoded.count) == 0 &&
+            yvex_tokenizer_family_policy_conversation(&changed, &view) &&
+            strcmp(view.reasoning_effort_high, "") == 0,
+        "V2 serialization and identity exclude the V3-only field");
     free(encoded.data);
     free(repeated.data);
     free(direct_encoded.data);
@@ -504,6 +515,96 @@ static int request_reseal(yvex_provider_request *request, yvex_error *err)
     request->sealed = 0;
     request->request_identity[0] = '\0';
     return yvex_provider_request_seal(request, err);
+}
+
+static int test_versioned_reasoning_instructions(void)
+{
+    const yvex_reasoning_policy modes[] = {
+        YVEX_REASONING_DISABLED, YVEX_REASONING_ENABLED, YVEX_REASONING_MAXIMUM};
+    yvex_tokenizer tokenizer;
+    yvex_token_info tokens[4];
+    yvex_conversation_protocol source;
+    yvex_tokenizer_family_policy policy, decoded, changed;
+    yvex_core_bytes encoded = {0};
+    yvex_provider_message message = {0};
+    yvex_provider_request request;
+    yvex_prompt_message native = {0};
+    yvex_prompt_options options = {
+        .add_bos = 1, .add_generation_prompt = 1, .drop_thinking = 1};
+    yvex_rendered_prompt provider = {0}, local = {0};
+    yvex_error err;
+    unsigned int index;
+
+    fixture_open(&tokenizer, tokens);
+    source = tokenizer.conversation_view;
+    source.schema_version = YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3;
+    source.reasoning_effort_high = "high fixture\n";
+    source.reasoning_effort_max = "maximum fixture\n";
+    YVEX_TEST_ASSERT(
+        yvex_tokenizer_family_policy_compile(
+            &policy, &source, tokenizer.compiled_policy.tokenizer_kind,
+            tokenizer.compiled_policy.model_policy,
+            tokenizer.compiled_policy.prompt_policy, &err) == YVEX_OK,
+        "V3 compiles separate source-authored high and maximum instructions");
+    encoded.maximum = 16384u;
+    encoded.initial_capacity = 4096u;
+    YVEX_TEST_ASSERT(
+        yvex_tokenizer_family_policy_encode(&policy, &encoded, &err) == YVEX_OK &&
+            yvex_tokenizer_family_policy_decode(
+                &decoded, encoded.data, encoded.count, &err) == YVEX_OK &&
+            strcmp(policy.policy_identity, decoded.policy_identity) == 0 &&
+            yvex_tokenizer_family_policy_conversation(
+                &decoded, &tokenizer.conversation_view) &&
+            strcmp(tokenizer.conversation_view.reasoning_effort_high,
+                   "high fixture\n") == 0,
+        "V3 roundtrip retains the independent high instruction");
+    tokenizer.compiled_policy = decoded;
+    message.role = YVEX_PROVIDER_ROLE_USER;
+    message.content = text_span("hello");
+    native.schema_version = YVEX_PROMPT_MESSAGE_SCHEMA_V1;
+    native.role = YVEX_PROMPT_ROLE_USER;
+    native.content = "hello";
+    yvex_provider_request_default(&request);
+    strcpy(request.model, "versioned-instruction-fixture");
+    request.messages = &message;
+    request.message_count = 1u;
+    request.maximum_output_tokens = 16u;
+    for (index = 0u; index < 3u; ++index) {
+        request.reasoning_policy = options.reasoning_policy = modes[index];
+        options.mode = index ? YVEX_PROMPT_MODE_THINKING : YVEX_PROMPT_MODE_CHAT;
+        YVEX_TEST_ASSERT(
+            request_reseal(&request, &err) == YVEX_OK &&
+                yvex_tokenizer_provider_prompt(
+                    &tokenizer, &request, &provider, &err) == YVEX_OK &&
+                yvex_prompt_render(
+                    &local, &tokenizer, &native, 1u, &options, &err) == YVEX_OK &&
+                strcmp(provider.text, local.text) == 0 &&
+                (strstr(local.text, "high fixture\n") != NULL) == (index == 1u) &&
+                (strstr(local.text, "maximum fixture\n") != NULL) == (index == 2u),
+            "native and provider preserve distinct none/high/maximum source semantics");
+        yvex_rendered_prompt_free(&provider);
+        yvex_rendered_prompt_free(&local);
+    }
+    changed = decoded;
+    changed.text[changed.text_offsets[YVEX_TOKENIZER_POLICY_REASONING_EFFORT_HIGH]] ^= 1;
+    YVEX_TEST_ASSERT(
+        yvex_tokenizer_family_policy_validate(&changed, &err) == YVEX_ERR_FORMAT &&
+            yvex_tokenizer_family_policy_decode(
+                &changed, encoded.data, encoded.count - 1u, &err) == YVEX_ERR_FORMAT,
+        "high instruction tampering and truncated V3 encoding fail closed");
+    changed = decoded;
+    changed.schema_version = 4u;
+    YVEX_TEST_ASSERT(
+        yvex_tokenizer_family_policy_validate(&changed, &err) == YVEX_ERR_FORMAT,
+        "unknown compiled policy versions remain unsupported");
+    source.reasoning_effort_high = NULL;
+    YVEX_TEST_ASSERT(
+        yvex_tokenizer_family_policy_compile(
+            &changed, &source, policy.tokenizer_kind, policy.model_policy,
+            policy.prompt_policy, &err) != YVEX_OK,
+        "V3 requires an explicit high instruction, including an explicit empty value");
+    free(encoded.data);
+    return 0;
 }
 
 static int test_reasoning_channel(void)
@@ -1244,6 +1345,8 @@ static int test_candidate_transactions(void)
 
 int yvex_test_runtime_tokenizer(void)
 {
+    if (test_versioned_reasoning_instructions() != 0)
+        return 1;
     if (test_nfc_normalization() != 0)
         return 1;
     if (test_compiled_family_policy() != 0)

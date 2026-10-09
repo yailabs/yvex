@@ -543,7 +543,9 @@ static int prompt_identity_build(yvex_tokenizer *tokenizer)
     if (!yvex_sha256_update_text(
             &hash, conversation->schema_version == YVEX_CONVERSATION_PROTOCOL_SCHEMA_V1
                        ? "yvex.tokenizer.conversation-prompt.v3"
-                       : "yvex.tokenizer.conversation-prompt.v4") ||
+                       : conversation->schema_version == YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2
+                       ? "yvex.tokenizer.conversation-prompt.v4"
+                       : "yvex.tokenizer.conversation-prompt.v5") ||
         !yvex_sha256_update_u64_be(
             &hash, conversation->drop_prior_reasoning_by_default) ||
         !yvex_sha256_update_u64_be(&hash,
@@ -555,7 +557,7 @@ static int prompt_identity_build(yvex_tokenizer *tokenizer)
         if (!yvex_sha256_update_u64_be(&hash, strlen(facts[index])) ||
             !yvex_sha256_update(&hash, facts[index], strlen(facts[index])))
             return 0;
-    if (conversation->schema_version == YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2) {
+    if (conversation->schema_version >= YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2) {
         const char *extended[] = {
             conversation->system, conversation->message_end,
             conversation->thinking_start_suffix,
@@ -574,6 +576,11 @@ static int prompt_identity_build(yvex_tokenizer *tokenizer)
                                     strlen(extended[index])))
                 return 0;
     }
+    if (conversation->schema_version == YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3 &&
+        (!yvex_sha256_update_u64_be(&hash, strlen(conversation->reasoning_effort_high)) ||
+         !yvex_sha256_update(&hash, conversation->reasoning_effort_high,
+                             strlen(conversation->reasoning_effort_high))))
+        return 0;
     }
     if (!yvex_sha256_final(&hash, digest))
         return 0;
@@ -676,7 +683,7 @@ static int exact_policy_admit(yvex_tokenizer *tokenizer, const yvex_gguf *gguf,
         !tokenizer->conversation->reasoning_effort_max ||
         !tokenizer->conversation->tools_prefix ||
         !tokenizer->conversation->tools_suffix ||
-        (tokenizer->conversation->schema_version ==
+        (tokenizer->conversation->schema_version >=
              YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2 &&
          (!tokenizer->conversation->system ||
           !tokenizer->conversation->message_end ||
@@ -684,7 +691,9 @@ static int exact_policy_admit(yvex_tokenizer *tokenizer, const yvex_gguf *gguf,
           !tokenizer->conversation->thinking_end_prefix ||
           !tokenizer->conversation->thinking_end_suffix ||
           !tokenizer->conversation->reasoning_effort_low ||
-          !tokenizer->conversation->tool_result_group_start))))
+          !tokenizer->conversation->tool_result_group_start)) ||
+        (tokenizer->conversation->schema_version == YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3 &&
+         !tokenizer->conversation->reasoning_effort_high)))
         return YVEX_ERR_UNSUPPORTED;
     if (tokenizer->kind != policy->tokenizer_kind ||
         !tokenizer->model_name || strcmp(tokenizer->model_name, policy->tokenizer_model) != 0 ||
@@ -776,7 +785,7 @@ int yvex_tokenizer_execution_seal(yvex_tokenizer *tokenizer, const yvex_gguf *gg
             tokenizer->plan.explicit_reasoning_supported = 1;
             tokenizer->plan.maximum_reasoning_supported = 1;
             tokenizer->plan.low_reasoning_supported =
-                tokenizer->conversation->schema_version ==
+                tokenizer->conversation->schema_version >=
                     YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2 &&
                 tokenizer->conversation->reasoning_effort_low[0] != '\0';
             tokenizer->plan.default_reasoning_policy =
@@ -1712,8 +1721,9 @@ int yvex_prompt_render(yvex_rendered_prompt *out,
 
     if (!tokenizer || !tokenizer->plan.sealed)
         return fixture_prompt_render(out, messages, message_count, options, err);
-    if (tokenizer->conversation && tokenizer->conversation->schema_version ==
-            YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2)
+    if (tokenizer->conversation && tokenizer->conversation->schema_version >=
+            YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2 &&
+        tokenizer->conversation->grammar == YVEX_CONVERSATION_GRAMMAR_ROLE_ENVELOPED)
         return yvex_tokenizer_prompt_render_v2(
             out, tokenizer, messages, message_count, options, err);
     if (tokenizer->plan.prompt_policy != YVEX_TOKENIZER_PROMPT_CONVERSATION) {
@@ -1748,6 +1758,10 @@ int yvex_prompt_render(yvex_rendered_prompt *out,
                             tokenizer->conversation->reasoning_effort_max,
                             strlen(tokenizer->conversation->reasoning_effort_max),
                             err);
+    if (rc == YVEX_OK && options->reasoning_policy == YVEX_REASONING_ENABLED &&
+        tokenizer->conversation->schema_version == YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3)
+        rc = builder_append(&builder, tokenizer->conversation->reasoning_effort_high,
+                            strlen(tokenizer->conversation->reasoning_effort_high), err);
     for (index = 0u; index < message_count && rc == YVEX_OK; ++index) {
         yvex_prompt_role prior = index ? messages[index - 1u].role : YVEX_PROMPT_ROLE_SYSTEM;
         rc = prompt_message_append(&builder, tokenizer->conversation,

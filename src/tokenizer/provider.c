@@ -48,7 +48,9 @@ static int conversation_admitted(const yvex_tokenizer *tokenizer)
            (tokenizer->conversation->schema_version ==
                 YVEX_CONVERSATION_PROTOCOL_SCHEMA_V1 ||
             tokenizer->conversation->schema_version ==
-                YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2) &&
+                YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2 ||
+            tokenizer->conversation->schema_version ==
+                YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3) &&
            yvex_tokenizer_family_policy_validate(&tokenizer->compiled_policy, NULL) == YVEX_OK;
 }
 
@@ -854,6 +856,9 @@ static const char *provider_reasoning_instruction(
         return conversation->reasoning_effort_max;
     if (policy == YVEX_REASONING_LOW)
         return conversation->reasoning_effort_low;
+    if (policy == YVEX_REASONING_ENABLED &&
+        conversation->schema_version == YVEX_CONVERSATION_PROTOCOL_SCHEMA_V3)
+        return conversation->reasoning_effort_high;
     return "";
 }
 
@@ -1107,8 +1112,8 @@ int yvex_tokenizer_provider_prompt(
     rc = provider_prompt_policy(tokenizer, request, &reasoning,
                                 &effective_drop, err);
     if (rc != YVEX_OK) return rc;
-    if (conversation->schema_version ==
-        YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2) {
+    if (conversation->schema_version >= YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2 &&
+        conversation->grammar == YVEX_CONVERSATION_GRAMMAR_ROLE_ENVELOPED) {
         rc = provider_prompt_v2(&builder, tokenizer, request, err);
         if (rc != YVEX_OK) {
             free(builder.data);
@@ -1140,9 +1145,8 @@ int yvex_tokenizer_provider_prompt(
         }
     }
     rc = literal(&builder, conversation->bos, err);
-    if (rc == YVEX_OK &&
-        reasoning == YVEX_REASONING_MAXIMUM)
-        rc = literal(&builder, conversation->reasoning_effort_max, err);
+    if (rc == YVEX_OK)
+        rc = literal(&builder, provider_reasoning_instruction(conversation, reasoning), err);
     if (rc == YVEX_OK && controls_at == ULLONG_MAX)
         rc = append_controls(&builder, conversation, request, err);
     for (index = 0u; rc == YVEX_OK && index < request->message_count; ++index) {
