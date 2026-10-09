@@ -1,0 +1,141 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-0731-native-admission-20261009",
+  "title": "DeepSeek 0731 native artifact and binding; inference unqualified",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "physical_policy": "d66294b5e016806f2e283e8b0160e25385302fa6c9db4ac24a49e94140fa0ea9",
+    "representation": "deepseek-v4-flash-0731-q8_0-q2_k-v1",
+    "artifact_set": "4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a",
+    "binding": "29676295361a8c99b86b3e1837a64e23791337f862d01fbeaeb2b5361399cc6d",
+    "specialization": null,
+    "source_commit": "7ed9e4b7b9fba21d00d4f493ba9d34e0be877044",
+    "source_tree": "66f9de8b8997a4869bdcc3c805098f8935325711",
+    "source_delta": "7f84809883c7564577a7701f1708d274461b00127aca1c8fda79bf621d3f5d03",
+    "build": "b6411f322ec55b4da4876b1b5efbb0d55e059eff4ab2715a9d0f8b46de51507f",
+    "executable": "1e08904c132fdba8808572430945e7bed53c3d0d018c49b99b9f90fea8632fc9",
+    "backend": null,
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": null,
+    "device_count": null,
+    "topology": null,
+    "driver": null,
+    "runtime_toolkit": null,
+    "memory_configuration": null,
+    "runtime_configuration": null,
+    "context": null,
+    "prefill_geometry": null,
+    "sequence_geometry": null,
+    "concurrency": null,
+    "strategy": null,
+    "reasoning": null,
+    "sampling": null,
+    "product_path": "native offline preparation and artifact-bound tokenizer; no inference",
+    "suite": null
+  },
+  "target_identity": "664f411c2e0c8f49789a78f24ab2495f3771fa89b5aa9c2726a00038a7341548",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "CHARACTERIZED",
+      "scope": "Four official encoding vectors plus artifact-bound BPE and bounded none/high/maximum prompt controls; not full tool/history semantics",
+      "required_evidence": [],
+      "evidence": {
+        "native-tokenizer": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-binding-tokenizer-evidence.json",
+          "sha256": "404ab4490c787bf443c976e8d9c17f5a10ed5a3107d23ba6a71e157e0af4f94a",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Exact 0731 source; independent full-model checkpoint reference remains missing",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No checkpoint-matched independent full-model output/logit evidence"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Native Q8_0/Q2_K artifact integrity is not quantization quality",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent checkpoint-matched quality comparison for this physical variant"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "No 0731 model forward executed",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "No 0731 prefill/decode/load benchmark; 20/700 remain unearned",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "No 0731 hosted generation or installed-product rollout",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "unknown",
+    "scope": "Archived exact preparation binaries and embedded dirty source identities; no full emission-source archive. Not a source-stable performance series.",
+    "evidence_root": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/",
+    "emission": {
+      "executable_sha256": "2dd063ffd64834dbbde298701fa0a95b33929d25ab6beb498218b522d2f1ad58",
+      "build": "0277cc28e896302a1473e07395481b519f8d0db75bb078675c9cafdd6c345644",
+      "source_delta": "33b32a1d86db27d725ec839db2528ae811c9bf2949e09c7184ccc46998fcf848",
+      "log_sha256": "042134dd7d80d55d20a3e69ad7904edab9070f82f6aa156d7a23c6487b243d32"
+    },
+    "official_reader": {
+      "revision": "af97976c7810cdabb1863172f31c432dab767de7",
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-official-reader.json",
+      "sha256": "f9888504b99ab380db9de98b6b2b0457dd7f35c5e417c8246ed1d1a2cf7ce32f",
+      "result": "PASS"
+    },
+    "diagnostics": [
+      {
+        "id": "artifact.file-bytes",
+        "case": "preparation",
+        "value": 107077901216,
+        "unit": "byte",
+        "definition": "Complete emitted file extent; not resident memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-emission.log"
+      },
+      {
+        "id": "artifact.payload-bytes",
+        "case": "preparation",
+        "value": 107066194936,
+        "unit": "byte",
+        "definition": "Encoded tensor bytes included in file extent; not additive memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-official-reader.json"
+      }
+    ]
+  },
+  "limitations": [
+    "Preparation and tokenizer admission do not qualify forward execution, numerical behavior, quality, performance or release readiness.",
+    "0731 Q8_0/Q2_K differs from DwarfStar IQ2_XXS and the prior YVEX mixed variant; do not attribute changed quantization to engine speed.",
+    "43 preserved F32 controls match the external 0731 artifact; complete target/support checkpoint equivalence remains UNPROVEN.",
+    "No GPU engine was loaded for this record. Deployment identities and geometry remain null, not inferred from the operator's old engine.",
+    "Installed DeepSeek generation 18 and finite generation 2 remain unchanged."
+  ]
+}

@@ -318,6 +318,7 @@ include/yvex/internal/families/deepseek_v4.h	model	model.families.deepseek_v4	fa
 include/yvex/internal/families/minimax_h3.h	model	model.families.minimax_h3	family	private	family-interface	model.compilation,cli,tests	interface	none
 include/yvex/internal/families/qwen3_5.h	model	model.families.qwen3_5	family	private	family-interface	model.compilation,graph,runtime,tests	interface	none
 src/model/families/deepseek_v4.c	model.family	model.family.deepseek_v4	family	private	reusable-algorithm	model,graph,gguf	implementation	none
+src/tokenizer/families/deepseek_v4.c	tokenizer.family	tokenizer.family.deepseek_v4	family	private	family-recipe	graph,tokenizer	implementation	none
 src/model/families/minimax_h3.c	model.family	model.family.minimax_h3	family	private	reusable-algorithm	model.compilation,cli,tests	implementation	none
 src/model/families/qwen3_5.c	model.family	model.family.qwen3_5	family	private	reusable-algorithm	model.compilation,graph,runtime,tests	implementation	none
 src/model/families/mamba2.c	model.family	model.family.mamba2	family	private	reusable-algorithm	model.compilation,graph,tests	implementation	none

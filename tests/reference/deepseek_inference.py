@@ -7,7 +7,7 @@ bit-exact or tolerance claim is invented by this harness.
 """
 import argparse
 import hashlib
-import importlib.util
+from types import ModuleType
 import json
 from pathlib import Path
 import sys
@@ -20,25 +20,47 @@ import qualification_reference as independent
 CORPUS = ROOT / "tests/vectors/deepseek_product.json"
 
 
-def prepare(source):
+def load_encoding(source):
+    """Execute source bytes, never reuse or create caches in an immutable source."""
+    path = source / "encoding/encoding_dsv4.py"
+    module = ModuleType("upstream_dsv4")
+    module.__file__ = str(path)
+    exec(compile(path.read_bytes(), str(path), "exec"), module.__dict__)
+    return module
+
+
+def source_authority(suite):
+    owner, separator, key = suite.get("source_authority", "").partition("#")
+    if owner != "tests/vectors/manifest.json" or not separator or not key:
+        raise ValueError("suite requires an exact canonical source authority")
+    manifest = json.loads((ROOT / owner).read_text())
+    authority = manifest.get(key)
+    if not isinstance(authority, dict) or not authority.get("files"):
+        raise ValueError("unknown official source authority")
+    if any(authority.get(k) != suite["applicability"].get(k)
+           for k in ("repository", "revision")):
+        raise ValueError("suite checkpoint differs from official source authority")
+    return authority
+
+
+def prepare(source, suite_path=CORPUS):
     from tokenizers import Tokenizer
     import tokenizers
     if tokenizers.__version__ != "0.20.3":
         raise ValueError("reference tokenizer must be tokenizers==0.20.3")
-    authority = json.loads((ROOT / "tests/vectors/manifest.json").read_text())["deepseek_official_encoding"]
+    suite = measurement.corpus(suite_path)
+    authority = source_authority(suite)
     for name, expected in authority["files"].items():
         if measurement.digest(source / name) != expected:
             raise ValueError("upstream byte identity differs: " + name)
-    spec = importlib.util.spec_from_file_location("upstream_dsv4", source / "encoding/encoding_dsv4.py")
-    encoding = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(encoding)
+    encoding = load_encoding(source)
     tokenizer = Tokenizer.from_file(str(source / "tokenizer.json"))
     records = []
-    for base in measurement.corpus(CORPUS)["cases"]:
+    for base in suite["cases"]:
         for reasoning in base["reasoning_modes"]:
             records.append(prepare_case(dict(base, reasoning=reasoning), encoding, tokenizer, authority))
     return dict(schema="yvex.deepseek.reference-inputs.v1", authority=authority,
-                corpus_sha256=measurement.digest(CORPUS),
+                corpus_sha256=measurement.digest(suite_path),
                 upstream_inference_files={str(p.relative_to(source)):measurement.digest(p)
                                           for p in sorted((source / "inference").glob("*.py"))},
                 evidence_class="independent-input-encoding; full-model NOT RUN", cases=records)
@@ -67,7 +89,7 @@ def prepare_case(case, encoding, tokenizer, authority):
     return record
 
 
-def prepare_continuations(inputs, reference, evidence_root, source):
+def prepare_continuations(inputs, reference, evidence_root, source, suite_path=CORPUS):
     """Continue only independently completed, source-parseable conversations.
 
     The generic producer still consumes prepared token IDs. Family grammar owns
@@ -75,15 +97,17 @@ def prepare_continuations(inputs, reference, evidence_root, source):
     arbitrary prose nor a length-truncated reply becomes a completed assistant.
     """
     from tokenizers import Tokenizer
+    suite = measurement.corpus(suite_path)
+    if (measurement.digest(suite_path) != inputs["corpus_sha256"]
+            or source_authority(suite) != inputs["authority"]):
+        raise ValueError("continuation suite/checkpoint differs from prepared inputs")
     validate_reference(inputs, reference, evidence_root)
-    spec = importlib.util.spec_from_file_location("upstream_dsv4_history", source / "encoding/encoding_dsv4.py")
-    encoding = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(encoding)
+    encoding = load_encoding(source)
     tokenizer = Tokenizer.from_file(str(source / "tokenizer.json"))
     requests = {(r["case"], r["reasoning"]):r for r in inputs["cases"]}
     captures = {(r["case"], r["reasoning"]):r for r in reference["cases"]}
     cases, dispositions = [], []
-    for base in measurement.corpus(CORPUS)["cases"]:
+    for base in suite["cases"]:
         if len(base.get("turns", [])) < 2:
             continue
         for reasoning in base["reasoning_modes"]:
@@ -221,9 +245,7 @@ def output_grammar(tokens, finish, reasoning, encoding, tokenizer):
 def reference_summary(inputs, reference, source):
     from tokenizers import Tokenizer
     # prepare() has already authenticated this exact source and tokenizer.
-    spec = importlib.util.spec_from_file_location("upstream_dsv4_result", source / "encoding/encoding_dsv4.py")
-    encoding = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(encoding)
+    encoding = load_encoding(source)
     tokenizer = Tokenizer.from_file(str(source / "tokenizer.json"))
     requests = {(r["case"], r["reasoning"]):r for r in inputs["cases"]}
     rows = []
@@ -271,6 +293,8 @@ def reference_summary(inputs, reference, source):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--suite", type=Path, default=CORPUS,
+                        help="immutable suite with checkpoint-matched official encoding authority")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--reference", type=Path)
     parser.add_argument("--continue-from", type=Path,
@@ -279,10 +303,10 @@ def main():
     args = parser.parse_args()
     if args.output.resolve().is_relative_to(ROOT):
         parser.error("raw prompt/token vectors must be outside Git")
-    inputs = prepare(args.source)
+    inputs = prepare(args.source, args.suite)
     if args.continue_from:
         prior = independent.read(args.continue_from)
-        inputs = prepare_continuations(inputs, prior, args.continue_from.parent, args.source)
+        inputs = prepare_continuations(inputs, prior, args.continue_from.parent, args.source, args.suite)
     with args.output.open("x") as stream:
         json.dump(inputs, stream, ensure_ascii=False, indent=2, allow_nan=False)
     if not args.reference:

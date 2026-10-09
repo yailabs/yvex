@@ -392,6 +392,45 @@ static int test_deepseek_same_extent_selection(const char *root)
     return 0;
 }
 
+static int test_deepseek_checkpoint_catalog(const char *root)
+{
+    char path[YVEX_ARTIFACT_PATH_CAP];
+    yvex_artifact_options options = {0};
+    yvex_complete_artifact_admission admission;
+    yvex_artifact_admission_failure failure;
+    yvex_artifact *artifact = NULL;
+    yvex_error err;
+    int fd;
+
+    YVEX_TEST_ASSERT(snprintf(path, sizeof(path), "%s/0731.gguf", root) <
+                         (int)sizeof(path), "checkpoint fixture path fits");
+    fd = open(path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    YVEX_TEST_ASSERT(fd >= 0 && ftruncate(fd, 107077901216ll) == 0 &&
+                         write_deepseek_profile(fd,
+                             "09312d58916c4081ef9091e41bfd35caecc51ed698847a44c2f25740f3db1024") &&
+                         close(fd) == 0, "checkpoint sparse fixture created");
+    options.path = path;
+    options.readonly = 1;
+    YVEX_TEST_ASSERT(yvex_artifact_open(&artifact, &options, &err) == YVEX_OK &&
+                         yvex_artifact_admit_deepseek(artifact, &admission, &failure, &err) == YVEX_OK,
+                     "0731 catalog expectation opens independently");
+    YVEX_TEST_ASSERT(admission.source_snapshot_identity == 0x8d8da435dea23049ull &&
+                         admission.mapping_identity == 0x779aa44d104fc718ull &&
+                         strcmp(admission.payload_identity,
+                             "d46c2f3a4305155f357191e0bd804defe33764b92997c3de123b3b5cab41e5ce") == 0 &&
+                         strcmp(admission.transform_identity,
+                             YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY) == 0 &&
+                         strcmp(admission.profile_name, YVEX_DEEPSEEK_0731_QUANT_PRESET) == 0 &&
+                         strcmp(admission.artifact_identity,
+                             "4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a") == 0,
+                     "equal structural inventory never substitutes old checkpoint payload or IR");
+    YVEX_TEST_ASSERT(!admission.artifact_identity_verified && admission.artifact_bytes_hashed == 0u,
+                     "0731 sparse fixture is not authenticated model evidence");
+    yvex_artifact_close(artifact);
+    YVEX_TEST_ASSERT(unlink(path) == 0, "0731 sparse fixture removed");
+    return 0;
+}
+
 static int test_deepseek_variant_admission_catalog(void)
 {
     char root[] = "/tmp/yvex-artifact-variant-XXXXXX";
@@ -462,6 +501,8 @@ static int test_deepseek_variant_admission_catalog(void)
                      "compact MXFP4 DeepSeek catalog entry is exact");
     YVEX_TEST_ASSERT(test_deepseek_same_extent_selection(root) == 0,
                      "catalog selection distinguishes equal-size artifacts");
+    YVEX_TEST_ASSERT(test_deepseek_checkpoint_catalog(root) == 0,
+                     "catalog preserves exact checkpoint lineage");
     YVEX_TEST_ASSERT(rmdir(root) == 0, "variant catalog root cleaned");
     return 0;
 }

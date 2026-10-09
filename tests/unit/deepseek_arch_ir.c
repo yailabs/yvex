@@ -6,6 +6,9 @@
 
 #include <yvex/internal/artifact.h>
 #include <yvex/internal/compilation.h>
+#include <yvex/internal/compiler.h>
+#include <yvex/internal/graph.h>
+#include <yvex/internal/tokenizer.h>
 #include <yvex/internal/families/deepseek_v4.h>
 #include <yvex/internal/moe.h>
 #include <yvex/internal/model_target.h>
@@ -190,6 +193,76 @@ static int arch_ir_expect_failure(
                      message);
     YVEX_TEST_ASSERT(ir == NULL, "refused architecture publishes no IR");
     YVEX_TEST_ASSERT(failure.code == expected, message);
+    return 0;
+}
+
+static int test_arch_ir_checkpoint_separation(void)
+{
+    const yvex_model_family_api *family = yvex_model_register_deepseek_v4();
+    const yvex_source_target_identity *candidate =
+        yvex_source_target_identity_find("deepseek4-v4-flash-0731");
+    yvex_source_verification source;
+    yvex_deepseek_v4_ir *ir = NULL;
+    yvex_deepseek_v4_ir_failure failure;
+    const yvex_deepseek_v4_model_spec *model;
+    char old_identity[YVEX_TRANSFORM_IR_IDENTITY_CAP];
+    char new_identity[YVEX_TRANSFORM_IR_IDENTITY_CAP];
+    arch_ir_verification_fixture(&source);
+    YVEX_TEST_ASSERT(candidate && arch_ir_build(&source, &ir, &failure) == YVEX_OK &&
+        family->transform.architecture_identity(ir, old_identity),
+        "old checkpoint retains its exact architecture identity");
+    family->ir.close(ir);
+    ir = NULL;
+    arch_ir_copy(source.manifest_target_id, sizeof(source.manifest_target_id),
+                 candidate->target_id);
+    YVEX_TEST_ASSERT(arch_ir_expect_failure(&source,
+        YVEX_DEEPSEEK_V4_IR_FAILURE_IDENTITY_MISMATCH,
+        "new target cannot impersonate old source revision") == 0,
+        "mixed checkpoint tuple refuses without publishing IR");
+    arch_ir_copy(source.repository_id, sizeof(source.repository_id), candidate->upstream_repo_id);
+    arch_ir_copy(source.revision, sizeof(source.revision), candidate->upstream_revision);
+    YVEX_TEST_ASSERT(arch_ir_build(&source, &ir, &failure) == YVEX_OK &&
+        family->transform.architecture_identity(ir, new_identity) &&
+        strcmp(old_identity, new_identity) != 0,
+        "same topology at another checkpoint retains independent model identity");
+    model = family->ir.model(ir);
+    YVEX_TEST_ASSERT(model && !strcmp(model->target_id, candidate->target_id) &&
+        !strcmp(model->repository, candidate->upstream_repo_id) &&
+        !strcmp(model->revision, candidate->upstream_revision) &&
+        model->main_layer_count == 43ull && model->auxiliary_layer_count == 3ull &&
+        strcmp(new_identity, YVEX_DEEPSEEK_QUANT_IMATRIX_SOURCE_IDENTITY) != 0,
+        "0731 architecture preserves target/support geometry without inheriting calibration identity");
+    family->ir.close(ir);
+    return 0;
+}
+
+static int test_checkpoint_compiler_separation(void)
+{
+    const yvex_graph_execution_binding *previous =
+        yvex_graph_execution_find(0, 0, YVEX_SOURCE_RELEASE_TARGET_ID);
+    const yvex_graph_execution_binding *current =
+        yvex_graph_execution_find(0, 0, YVEX_DEEPSEEK_0731_TARGET);
+    yvex_tokenizer_family_policy old_policy, new_policy;
+    yvex_error error = {0};
+    YVEX_TEST_ASSERT(previous && current && previous != current &&
+        previous->compiler != current->compiler &&
+        !strcmp(current->compiler->target_id, YVEX_DEEPSEEK_0731_TARGET) &&
+        !strcmp(current->logical_transform_identity, YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY) &&
+        strcmp(previous->logical_transform_identity, current->logical_transform_identity),
+        "checkpoint catalog keeps exact independent transform and compiler bindings");
+    YVEX_TEST_ASSERT(current->compiler->binding_pipeline->imatrix_source_identity == NULL &&
+        previous->compiler->binding_pipeline->imatrix_source_identity != NULL &&
+        current->compiler->binding_pipeline->source_open != previous->compiler->binding_pipeline->source_open,
+        "0731 cannot borrow previous checkpoint source or imatrix admission");
+    YVEX_TEST_ASSERT(previous->compiler->tokenizer_policy(&old_policy, &error) &&
+        current->compiler->tokenizer_policy(&new_policy, &error) &&
+        old_policy.schema_version == YVEX_TOKENIZER_FAMILY_POLICY_SCHEMA_V1 &&
+        new_policy.schema_version == YVEX_TOKENIZER_FAMILY_POLICY_SCHEMA_V3,
+        "compiler projects old conversation unchanged and distinct 0731 high/maximum semantics");
+    YVEX_TEST_ASSERT(!strcmp(current->deployment_defaults->execution_strategy, "target-only") &&
+        !strcmp(current->deployment_defaults->quant_preset, YVEX_DEEPSEEK_0731_QUANT_PRESET) &&
+        !current->deployment_defaults->rebind_artifact_identity,
+        "new checkpoint defaults cannot rebind an old artifact or silently choose speculation");
     return 0;
 }
 
@@ -977,6 +1050,8 @@ static int test_runtime_numeric_identity_field_coverage(void)
 
 int yvex_test_deepseek_arch_ir(void)
 {
+    if (test_arch_ir_checkpoint_separation() != 0) return 1;
+    if (test_checkpoint_compiler_separation() != 0) return 1;
     if (test_arch_ir_golden_topology() != 0) return 1;
     if (test_arch_ir_position_authority() != 0) return 1;
     if (test_arch_ir_refusal_matrix() != 0) return 1;

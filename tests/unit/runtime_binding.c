@@ -1529,7 +1529,8 @@ static int fixture_binding_request(const binding_fixture *fixture, const char *d
     request->transformer_policy = fixture->transformer_policy;
     request->logits_policy = fixture->logits_policy;
     request->speculation_policy = fixture->speculation_policy;
-    tokenizer_source = *yvex_model_deepseek_v4_conversation();
+    if (!yvex_tokenizer_deepseek_v4_conversation(
+            &tokenizer_source, "deepseek4-v4-flash-dspark")) return 0;
     tokenizer_source.vocabulary_size = descriptor->model_execution.vocabulary_size;
     tokenizer_source.base_vocabulary_size = descriptor->model_execution.vocabulary_size;
     tokenizer_source.merge_count = 0u;
@@ -2812,8 +2813,10 @@ static int test_runtime_family_neutrality(void)
                          !rejected.published && !rejected.path[0],
                      "generic publication owner refuses incomplete family compiler products");
     YVEX_TEST_ASSERT(yvex_graph_execution_find(
-                         deepseek->adapter_id, deepseek->adapter_version, NULL) == deepseek,
-                     "compiled adapter identity selects one immutable execution binding");
+                         deepseek->adapter_id, deepseek->adapter_version, NULL) == NULL &&
+                         yvex_graph_execution_find(
+                             deepseek->adapter_id, deepseek->adapter_version, deepseek->target_id) == deepseek,
+                     "shared family adapter requires an exact checkpoint target, never first-match selection");
     YVEX_TEST_ASSERT(yvex_graph_execution_find(
                          0ull, 0ull, "not-a-runtime-family") == NULL &&
                          yvex_graph_execution_find(deepseek->adapter_id, 0ull, NULL) == NULL,

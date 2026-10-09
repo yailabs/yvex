@@ -48,6 +48,14 @@ facts, every required tensor role, qtype support, source/derivation/variant
 identities, and exact file identity. Structural GGUF validity is necessary but
 not sufficient.
 
+An expected-identity catalog must retain the source lineage of each physical
+row; a family-wide source default cannot stand in for a checkpoint. Equal
+structural inventory/mapping identities can coexist with different payloads
+and revisions. Catalog reconstruction selects expected facts, not observed byte
+integrity: the reopened artifact must still authenticate its complete file
+identity before runtime use. A catalog entry is not numerical, model-quality or
+performance qualification.
+
 Artifact materialization builds and commits an authenticated package mapping:
 checked tensor bindings and bounded access to file-backed package ranges used by
 the runtime descriptor, PEIR construction and runtime binding. It does not

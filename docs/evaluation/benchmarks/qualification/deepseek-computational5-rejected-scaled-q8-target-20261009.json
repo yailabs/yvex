@@ -1,0 +1,792 @@
+{
+  "claims": {
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent full-model checkpoint/quality comparison in this timing series"
+      ]
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Frozen Rust/native request path; not interactive terminal-render timing or HTTP",
+      "required_evidence": [],
+      "evidence": {
+        "native-receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/receipt.json",
+          "sha256": "ae29aa09b7fbec58892666f0e02d35defbdfdc7eafa528e5f65dd94366d85e26",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Frozen Rust/native request path; not interactive terminal-render timing or HTTP",
+      "required_evidence": [],
+      "evidence": {
+        "native-receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/receipt.json",
+          "sha256": "ae29aa09b7fbec58892666f0e02d35defbdfdc7eafa528e5f65dd94366d85e26",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent full-model checkpoint/quality comparison in this timing series"
+      ]
+    }
+  },
+  "id": "deepseek-computational5-rejected-scaled-q8-target-20261009",
+  "limitations": [
+    "N=3 workload-bound characterization; not 20/700, independent quality or universal product speed.",
+    "Controlled engine configuration exercised through the Rust/native client; not unchanged operator defaults. Context, strategy, prefill geometry and sampling are explicit experimental axes.",
+    "Native Rust request/committed-content observation, not REPLAI paint/editor timing or HTTP.",
+    "Sampling selection is greedy; resolved facts in receipt; exact temperature/stochastic fields are retained per observation. Native and HTTP defaults are not interchangeable.",
+    "Exact engine configuration retained; first post-load request and subsequent fresh sessions are not cold samples.",
+    "Unreached reasoning/final transitions remain NOT MEASURED; bounded output does not imply natural EOS.",
+    "Sampled process witness cannot prove uninterrupted reservation. RSS/mapping/CUDA ownership overlap.",
+    "First-fragment server publication remains unavailable; client-visible and internal clocks are separate.",
+    "Lossless Q8 activation preparation earns no material target-only benefit; not retained."
+  ],
+  "measurements": [
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.455739909,
+        0.468499903,
+        0.466532083
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.468499903,
+        "median": 0.466532083,
+        "median_absolute_deviation": 0.001967820000000009,
+        "minimum": 0.455739909
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        27.425215042,
+        27.444497557,
+        27.427896708
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 27.444497557,
+        "median": 27.427896708,
+        "median_absolute_deviation": 0.002681665999997307,
+        "minimum": 27.425215042
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.347208177,
+        1.338622639,
+        1.322203772
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.347208177,
+        "median": 1.338622639,
+        "median_absolute_deviation": 0.008585537999999948,
+        "minimum": 1.322203772
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.12446858799999916,
+        0.11693031200000092,
+        0.11798090199999933
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.12446858799999916,
+        "median": 0.11798090199999933,
+        "median_absolute_deviation": 0.001050589999998408,
+        "minimum": 0.11693031200000092
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.10226530422745099,
+        0.10237457671372549,
+        0.10237392461568628
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.10237457671372549,
+        "median": 0.10237392461568628,
+        "median_absolute_deviation": 6.520980392055176e-7,
+        "minimum": 0.10226530422745099
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.891430667,
+        0.870205296,
+        0.855656649
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.891430667,
+        "median": 0.870205296,
+        "median_absolute_deviation": 0.014548646999999915,
+        "minimum": 0.855656649
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.891430667,
+        0.870205296,
+        0.855656649
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.891430667,
+        "median": 0.870205296,
+        "median_absolute_deviation": 0.014548646999999915,
+        "minimum": 0.855656649
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.347208177,
+        1.338622639,
+        1.322203772
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.347208177,
+        "median": 1.338622639,
+        "median_absolute_deviation": 0.008585537999999948,
+        "minimum": 1.322203772
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        9.77204555496254,
+        9.764037132698512,
+        9.764360826592414
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 9.77204555496254,
+        "median": 9.764360826592414,
+        "median_absolute_deviation": 0.0003236938939021883,
+        "minimum": 9.764037132698512
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "committed tokens after first / elapsed decode wall after first",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "decode.post-first.committed",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        9.778457271124616,
+        9.768088956671459,
+        9.768105850119447
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 9.778457271124616,
+        "median": 9.768105850119447,
+        "median_absolute_deviation": 0.000016893447988053367,
+        "minimum": 9.768088956671459
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        40.175593574696066,
+        40.959186023539765,
+        41.71540680219471
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 41.71540680219471,
+        "median": 40.959186023539765,
+        "median_absolute_deviation": 0.7562207786549422,
+        "minimum": 40.175593574696066
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine; no hidden warmup"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/native/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.771612744,
+        0.756850978,
+        0.743130713
+      ],
+      "scope": "local client and server terminal-summary measurements; no quality qualification",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.771612744,
+        "median": 0.756850978,
+        "median_absolute_deviation": 0.01372026500000001,
+        "minimum": 0.743130713
+      },
+      "unit": "s",
+      "warm_state": "resident engine; no hidden warmup"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "cleanup": "owned sessions closed; generation/count checked",
+    "client_build": "4c840b4150ce39aa9ac1dd4b63dcff04ba129df01300ab6d6328e8ac98ae12dc",
+    "engine": {
+      "active_work": 0,
+      "activity": "idle",
+      "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+      "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+      "attached_clients": 0,
+      "backend": 1,
+      "capabilities": {
+        "input_mask": 1,
+        "inputs": [
+          "text"
+        ],
+        "maximum_input_parts": 32,
+        "output_mask": 1,
+        "outputs": [
+          "text"
+        ],
+        "properties": 15
+      },
+      "capacity": {
+        "compatible_operation_batching": false,
+        "continuous_batching": false,
+        "cooperative_scheduling": false,
+        "physical_sequence_width": 1,
+        "runnable_work": 1,
+        "sessions": 8
+      },
+      "capacity_plan_identity": "e698e13bf1f381224a62f8460a4f6a6fe7cb6af7eb7371dcddb57bd40828d9f2",
+      "configured_physical_sequence_width": 1,
+      "context_capacity": 4096,
+      "continuous_batching": false,
+      "engine_kind": "text",
+      "execution_ready": true,
+      "execution_strategy": "target-only",
+      "generation": 1,
+      "mapped_package_bytes": 95050210272,
+      "maximum_new_tokens": 4096,
+      "maximum_sessions": 8,
+      "model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+      "model_leases": 0,
+      "prefill_chunk_tokens": 512,
+      "prepared_bytes": 0,
+      "resident_device_bytes": 0,
+      "resident_host_bytes": 0,
+      "resources": {
+        "activation_arena_current_bytes": 0,
+        "activation_arena_peak_bytes": 0,
+        "available": 129,
+        "components": 1,
+        "logical_download_bytes": 0,
+        "logical_upload_bytes": 0,
+        "model_artifact_bytes": 95050210272,
+        "model_device_addressable_bytes": 95050210272,
+        "model_explicit_device_bytes": 0,
+        "model_explicit_host_bytes": 0,
+        "model_mapped_bytes": 95050210272,
+        "model_prepared_bytes": 0,
+        "physical_residency_known": false,
+        "placement": "mapped-device-addressable",
+        "process_rss_current_bytes": 0,
+        "process_rss_peak_bytes": 0,
+        "schema_version": 1,
+        "session_attention_allocated_bytes": 0,
+        "session_attention_page_table_bytes": 0,
+        "session_attention_resident_bytes": 0,
+        "session_attention_virtual_bytes": 0,
+        "session_candidate_state_bytes": 0,
+        "session_convolution_state_bytes": 0,
+        "session_physical_state_bytes": 0,
+        "session_recurrent_state_bytes": 0,
+        "transient_current_bytes": 0,
+        "transient_peak_bytes": 0,
+        "unified_memory": true,
+        "workspace_current_bytes": 0,
+        "workspace_peak_bytes": 0
+      },
+      "runtime_binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+      "sessions": 0,
+      "specialization_identity": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+      "state": "loaded",
+      "target": "deepseek4-v4-flash-dspark"
+    },
+    "evidence_class": "controlled-configuration-rust-native-characterization",
+    "observations": [
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.455739909,
+        "client_complete_seconds": 27.425215042,
+        "client_first_final_seconds": 1.347208177,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.347208177,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.12446858799999916,
+        "client_visible_gap_mean_seconds": 0.10226530422745099,
+        "commit_seconds": 0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0,
+        "final_phase_rate": 9.77204555496254,
+        "final_seconds": 26.197176278,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0,
+        "post_first_decode_ns": 26077733218,
+        "post_first_decode_rate": 9.778457271124616,
+        "post_first_decode_units": 255,
+        "prefill_rate": 40.175593574696066,
+        "prefill_seconds": 0.771612744,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 0,
+        "sampling": {
+          "min_p": 0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0,
+          "top_k": 0,
+          "top_p": 1,
+          "typical_p": 1
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.891430667,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.891430667,
+        "session": "bench-26bc8bd8fc9114b30b5442dd",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "5f3bbed9277fdfec9ee2a1c3688a9a8017e740da33b0c1d69fec2ab890a0fdd7",
+        "total_completion_seconds": 26.969360173,
+        "turn_identity": "a2afdcd1e43520cf985216aea34be4366191d501065ca25345a33da1e6153756",
+        "turn_index": 0,
+        "verification_seconds": 0
+      },
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.468499903,
+        "client_complete_seconds": 27.444497557,
+        "client_first_final_seconds": 1.338622639,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.338622639,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.11693031200000092,
+        "client_visible_gap_mean_seconds": 0.10237457671372549,
+        "commit_seconds": 0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0,
+        "final_phase_rate": 9.764037132698512,
+        "final_seconds": 26.218663092,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0,
+        "post_first_decode_ns": 26105413365,
+        "post_first_decode_rate": 9.768088956671459,
+        "post_first_decode_units": 255,
+        "prefill_rate": 40.959186023539765,
+        "prefill_seconds": 0.756850978,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 1,
+        "sampling": {
+          "min_p": 0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0,
+          "top_k": 0,
+          "top_p": 1,
+          "typical_p": 1
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.870205296,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.870205296,
+        "session": "bench-570e15ccadac0be56829083b",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "5f3bbed9277fdfec9ee2a1c3688a9a8017e740da33b0c1d69fec2ab890a0fdd7",
+        "total_completion_seconds": 26.975825445,
+        "turn_identity": "a2afdcd1e43520cf985216aea34be4366191d501065ca25345a33da1e6153756",
+        "turn_index": 0,
+        "verification_seconds": 0
+      },
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.466532083,
+        "client_complete_seconds": 27.427896708,
+        "client_first_final_seconds": 1.322203772,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.322203772,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.11798090199999933,
+        "client_visible_gap_mean_seconds": 0.10237392461568628,
+        "commit_seconds": 0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0,
+        "final_phase_rate": 9.764360826592414,
+        "final_seconds": 26.217793929,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0,
+        "post_first_decode_ns": 26105368217,
+        "post_first_decode_rate": 9.768105850119447,
+        "post_first_decode_units": 255,
+        "prefill_rate": 41.71540680219471,
+        "prefill_seconds": 0.743130713,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 2,
+        "sampling": {
+          "min_p": 0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0,
+          "top_k": 0,
+          "top_p": 1,
+          "typical_p": 1
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.855656649,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.855656649,
+        "session": "bench-55bcfaefe22ca479cc7e3433",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "5f3bbed9277fdfec9ee2a1c3688a9a8017e740da33b0c1d69fec2ab890a0fdd7",
+        "total_completion_seconds": 26.96126013,
+        "turn_identity": "a2afdcd1e43520cf985216aea34be4366191d501065ca25345a33da1e6153756",
+        "turn_index": 0,
+        "verification_seconds": 0
+      }
+    ],
+    "raw_evidence_sha256": "17ba9bc5a90303f6b52f20960d8167d75b971cb3927609398c1df847c418251e",
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/resources.jsonl",
+      "allowed_pids": [
+        172119
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 83,
+      "probe_seconds": 1.9388913229950049,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 172201,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "sampling_selection": "greedy",
+    "separated_inputs": [],
+    "source_stability": "frozen",
+    "profiled": false,
+    "raw_root": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01",
+    "build": {
+      "core": {
+        "head": "25b981808348440f37cde5913d4d804c4940e5a7",
+        "state": "dirty",
+        "delta_identity": "3ec457a2b8a38e24dff123d8e9cdb1e9119ecc5ada806c8f50b9f9f0e11f185e",
+        "tree": "a6510628c9b45227f5bd4624a1f7acd0b9c4674c"
+      },
+      "product": {
+        "build_commit": "25b981808348440f37cde5913d4d804c4940e5a7",
+        "build_identity": "4c840b4150ce39aa9ac1dd4b63dcff04ba129df01300ab6d6328e8ac98ae12dc",
+        "local_protocol_version": 25,
+        "registry_identity": "a953f0b0ae2800162cc4b4db609c40a3a1134984c683b6c4866c807f8d50f6da",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "72c93f3d1c9787d6ad83d86bd7a540b49cf624deb3ce57a39e2287b4a9396015",
+        "source_delta_identity": "3ec457a2b8a38e24dff123d8e9cdb1e9119ecc5ada806c8f50b9f9f0e11f185e",
+        "source_state": "dirty",
+        "source_tree": "a6510628c9b45227f5bd4624a1f7acd0b9c4674c",
+        "version": "0.1.0"
+      },
+      "executable_path": "/home/dgmothx/lab/yvex-computational-5/yvex",
+      "executable_sha256": "fca775509e1a8fea1481bbcb2982f21540487c1b065c4eb0689a39ce2c7aa4b8",
+      "library_sha256": "0d02483dfe8f65865c1050b364607dce4fdfca976894aa5701282d736116d283",
+      "orchestrator_sha256": "1db59bfc01e8a4390216d2e01cebd1c4f57255217d556598dc17c6cfa17eaafe"
+    },
+    "source_capture": {
+      "schema": "yvex.qualification.source-capture.v1",
+      "source": {
+        "head": "25b981808348440f37cde5913d4d804c4940e5a7",
+        "state": "dirty",
+        "delta_identity": "3ec457a2b8a38e24dff123d8e9cdb1e9119ecc5ada806c8f50b9f9f0e11f185e"
+      },
+      "tree": "a6510628c9b45227f5bd4624a1f7acd0b9c4674c",
+      "executables": {
+        "executable-0": {
+          "observed_path": "/home/dgmothx/lab/yvex-computational-5/yvex",
+          "sha256": "fca775509e1a8fea1481bbcb2982f21540487c1b065c4eb0689a39ce2c7aa4b8"
+        },
+        "executable-1": {
+          "observed_path": "/home/dgmothx/lab/yvex-computational-5/build/lib/libyvex.a",
+          "sha256": "0d02483dfe8f65865c1050b364607dce4fdfca976894aa5701282d736116d283"
+        }
+      },
+      "files": {
+        "base.tar": "501ef5b57338f35bad6c7ad04f58e04b8317573105d34ddaf0cdde516991c220",
+        "delta.patch": "3ec457a2b8a38e24dff123d8e9cdb1e9119ecc5ada806c8f50b9f9f0e11f185e",
+        "executable-0": "fca775509e1a8fea1481bbcb2982f21540487c1b065c4eb0689a39ce2c7aa4b8",
+        "executable-1": "0d02483dfe8f65865c1050b364607dce4fdfca976894aa5701282d736116d283",
+        "untracked.tar": "84ff92691f909a05b224e1c56abb4864f01b4f8e3c854e4bb4c7baf1d3f6d652"
+      },
+      "scope": "observed source and executable bytes; build relationship separately required"
+    },
+    "kernel_owner": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/scaled-q8-target-coding-01/backend-identity-captured.json",
+      "sha256": "06b6abc670fbc7ada0a71fcfda9777e2162f80e72ec3ad977d41563b8f47113d"
+    },
+    "producer_provenance_join": "Externally observed isolated host executable equals the captured Rust executable",
+    "canonical_relationship": {
+      "target": "1acf1eb24857c3aeea0b79af536425157472d11afc70b1b6e94aecbbc409145c",
+      "sha256": "4f05a71578a77e13eb923a250e7c0274639bb0885769adfccb22344a301fb45c"
+    },
+    "raw_files": {
+      "host.jsonl": "fb22ddf5d2b971537b228fa26c45575df9d7ce169d5b49caf935a4aae730a581",
+      "resources.jsonl": "4797cf510e421644aa496bba9eadd3e990c0874629f1bdb4c397de5806ae55ae",
+      "resources.jsonl.summary.json": "b4d9cb8385a724aa7c1ae458117940634569189914c6b73ed670af2958d00613",
+      "cleanup.json": "7aeb58c2a3a7ce42a4a5226005d4c088fedff4b6c10fcb5b9f217e2fd485d1b2",
+      "load.json": "2e634ea653b392051db4400f0ab8a2bbdacecc023bf94d7b0fbefc811f427276",
+      "identity.json": "aa3d6396650588ba2880930e9703ed08293d7bde305eb39144f5b50d61a6b485",
+      "memory-before.json": "952b1a5cb9c86e2baf641ac2de92900a3e8aad3333bb111ca3e5e5ad19d90137",
+      "memory-after.json": "216d3e02f2ff954e48f51ef08cc4e761845954d4f9fe7880ccbbf12cc6908b1e"
+    },
+    "candidate_disposition": "rejected"
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "backend": "cuda",
+    "backend_implementation": "backend.cuda@25b981808348440f37cde5913d4d804c4940e5a7+3ec457a2b8a38e24dff123d8e9cdb1e9119ecc5ada806c8f50b9f9f0e11f185e",
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "build": "4c840b4150ce39aa9ac1dd4b63dcff04ba129df01300ab6d6328e8ac98ae12dc",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "fca775509e1a8fea1481bbcb2982f21540487c1b065c4eb0689a39ce2c7aa4b8",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA GB10",
+    "kernel_bundle": "cad9ad084c826d0c9a4e629d3e39738e8d0f0cd0718c5f34f5b9923744cd1d14",
+    "memory_configuration": "coherent unified memory; CUDA-reported global memory bytes=130663165952",
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "prefill_geometry": "chunk=512",
+    "product_path": "controlled-configuration/native-v25",
+    "reasoning": "none",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "runtime_configuration": "e698e13bf1f381224a62f8460a4f6a6fe7cb6af7eb7371dcddb57bd40828d9f2",
+    "runtime_toolkit": "CUDA Driver API; toolkit 13.0 / NVCC V13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "25b981808348440f37cde5913d4d804c4940e5a7",
+    "source_delta": "3ec457a2b8a38e24dff123d8e9cdb1e9119ecc5ada806c8f50b9f9f0e11f185e",
+    "source_tree": "a6510628c9b45227f5bd4624a1f7acd0b9c4674c",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "strategy": "target-only",
+    "suite": "94f29d3a9002bfc3b2d91d3427268099ce7659430d32030c9747e1bf00582a01",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "topology": "single-node single-device coherent unified memory",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark"
+  },
+  "target_identity": "3b6a64df97956ae7a08f708a1195513568e39c61112da6e7ac6f4f8bc73f75bf",
+  "title": "REJECTED execution candidate / GB10 controlled configuration / Rust-native coding.hash-table / none"
+}

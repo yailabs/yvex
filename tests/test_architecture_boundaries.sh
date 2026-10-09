@@ -259,14 +259,19 @@ if find src/runtime -type f \( -name '*deepseek*' -o -name '*qwen*' -o -name '*g
 fi
 
 # A family projects facts only at boundaries where generic operations cannot
-# express its semantics. DeepSeek now terminates at model intake and graph
-# composition; its encoded-attention request is complete enough for the common
+# express its semantics. DeepSeek terminates at model intake, checkpoint-owned
+# conversation recipes and graph composition; its encoded-attention request is complete enough for the common
 # CUDA operation, so retaining a family backend would duplicate that mechanism.
 deepseek_family_sources=$(find src -path '*/families/deepseek_v4.c' -type f | sort)
 expected_deepseek_family_sources='src/graph/families/deepseek_v4.c
-src/model/families/deepseek_v4.c'
+src/model/families/deepseek_v4.c
+src/tokenizer/families/deepseek_v4.c'
 [ "$deepseek_family_sources" = "$expected_deepseek_family_sources" ] ||
-    fail "DeepSeek must terminate at its model and graph family projections"
+    fail "DeepSeek must terminate at its model, conversation and graph family projections"
+if rg -n '(#include.*(runtime|backend|graph)|yvex_graph_execution_find|yvex_runtime_)' \
+    src/tokenizer/families/deepseek_v4.c; then
+    fail "checkpoint conversation recipes must not own execution or runtime lookup"
+fi
 if rg -n 'yvex_graph_execution_find[[:space:]]*\(' src/graph/families; then
     fail "a family projection owns the common execution catalog lookup"
 fi
@@ -418,9 +423,9 @@ rg -n 'typedef struct yvex_component_encoded_weight yvex_transformer_encoded_wei
     fail "dense Transformer execution does not reuse the canonical component weight view"
 
 if find src include -type f \( -name '*.c' -o -name '*.h' -o -name '*.cu' \) \
-        ! -path 'src/model/families/*' -print0 |
+        ! -path 'src/model/families/*' ! -path 'src/tokenizer/families/deepseek_v4.c' -print0 |
     xargs -0 rg -n "$conversation_literal_pattern"; then
-    fail "source-authored conversation literal escaped the model-family projection"
+    fail "source-authored conversation literal escaped its admitted family recipe"
 fi
 
 if find src -path '*/families/*' -type f \

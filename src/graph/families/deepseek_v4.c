@@ -269,10 +269,19 @@ static int deepseek_speculation_policy(const yvex_runtime_descriptor_summary *ru
     yvex_sha256_hex(digest, out->policy_identity);
     return 1;
 }
-static int deepseek_tokenizer_policy(yvex_tokenizer_family_policy *out, yvex_error *err) {
-    return yvex_tokenizer_family_policy_compile(
-        out, yvex_model_deepseek_v4_conversation(), YVEX_TOKENIZER_KIND_GGML_GPT2,
+static int deepseek_checkpoint_tokenizer_policy(
+    yvex_tokenizer_family_policy *out, const char *target, yvex_error *err) {
+    yvex_conversation_protocol conversation;
+    return yvex_tokenizer_deepseek_v4_conversation(
+        &conversation, target) && yvex_tokenizer_family_policy_compile(
+        out, &conversation, YVEX_TOKENIZER_KIND_GGML_GPT2,
         YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL, YVEX_TOKENIZER_PROMPT_CONVERSATION, err) == YVEX_OK;
+}
+static int deepseek_tokenizer_policy(yvex_tokenizer_family_policy *out, yvex_error *err) {
+    return deepseek_checkpoint_tokenizer_policy(out, YVEX_SOURCE_RELEASE_TARGET_ID, err);
+}
+static int deepseek_0731_tokenizer_policy(yvex_tokenizer_family_policy *out, yvex_error *err) {
+    return deepseek_checkpoint_tokenizer_policy(out, YVEX_DEEPSEEK_0731_TARGET, err);
 }
 static const yvex_family_compiler_adapter deepseek_compiler;
 static const yvex_model_deployment_defaults deepseek_deployment_defaults = {
@@ -300,6 +309,8 @@ static const yvex_graph_execution_binding deepseek_execution = {
 static int deepseek_compilation_source_open(
     yvex_family_compilation_source *out,
     const yvex_compilation_runtime_binding_request *request, yvex_error *err);
+static int deepseek_0731_source_open(yvex_family_compilation_source *out,
+    const yvex_compilation_runtime_binding_request *request, yvex_error *err);
 static void deepseek_compilation_source_close(void *owner);
 static int deepseek_compilation_semantic_model(
     yvex_semantic_model_ir **out,
@@ -317,38 +328,44 @@ static int deepseek_compilation_quant_policy(
     const yvex_transform_binding *binding, const void *lowering_context,
     const yvex_quant_policy *policy, const char *imatrix_identity,
     yvex_error *err);
+#define DEEPSEEK_PIPELINE_FIELDS \
+    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1, \
+    .source_close = deepseek_compilation_source_close, \
+    .artifact_admit = yvex_artifact_admit_deepseek, \
+    .semantic_model_build = deepseek_compilation_semantic_model, \
+    .runtime_descriptor_build = deepseek_compilation_descriptor, \
+    .quant_plan_default = deepseek_compilation_quant_default, \
+    .quant_plan_policy = deepseek_compilation_quant_policy, \
+    .tokenizer_architecture = "deepseek-v3", .tokenizer_model = "gpt2", .tokenizer_pre = "deepseek-v3"
 static const yvex_family_binding_pipeline deepseek_binding_pipeline = {
-    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1,
-    .source_open = deepseek_compilation_source_open,
-    .source_close = deepseek_compilation_source_close,
-    .artifact_admit = yvex_artifact_admit_deepseek,
-    .semantic_model_build = deepseek_compilation_semantic_model,
-    .runtime_descriptor_build = deepseek_compilation_descriptor,
-    .quant_plan_default = deepseek_compilation_quant_default,
-    .quant_plan_policy = deepseek_compilation_quant_policy,
-    .tokenizer_architecture = "deepseek-v3", .tokenizer_model = "gpt2",
-    .tokenizer_pre = "deepseek-v3",
+    DEEPSEEK_PIPELINE_FIELDS, .source_open = deepseek_compilation_source_open,
     .imatrix_source_identity = YVEX_DEEPSEEK_QUANT_IMATRIX_SOURCE_IDENTITY,
     .imatrix_dataset_identity = YVEX_DEEPSEEK_QUANT_IMATRIX_DATASET_IDENTITY,
     .imatrix_producer = "llama.cpp-imatrix",
     .imatrix_producer_version = 1u};
+/* No checkpoint-matched calibration is admitted for 0731 yet. */
+static const yvex_family_binding_pipeline deepseek_0731_pipeline = {
+    DEEPSEEK_PIPELINE_FIELDS, .source_open = deepseek_0731_source_open};
+#undef DEEPSEEK_PIPELINE_FIELDS
+#define DEEPSEEK_COMPILER_FIELDS \
+    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V2, \
+    .adapter_id = YVEX_DEEPSEEK_V4_ADAPTER_ID, .adapter_version = YVEX_DEEPSEEK_V4_ADAPTER_VERSION, \
+    .family = "deepseek-v4", .graph = deepseek_graph_compile, \
+    .operator_graph_build = yvex_operator_graph_ir_build_transformer, \
+    .execution_capabilities = deepseek_execution_capabilities, \
+    .transformer_policy = deepseek_transformer_policy, .logits_policy = deepseek_logits_policy, \
+    .speculation_policy = deepseek_speculation_policy, \
+    .physical_variant = yvex_graph_physical_variant_api_get, .binding_compile = yvex_family_binding_compile
 static const yvex_family_compiler_adapter deepseek_compiler = {
-    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V2,
-    .adapter_id = YVEX_DEEPSEEK_V4_ADAPTER_ID,
-    .adapter_version = YVEX_DEEPSEEK_V4_ADAPTER_VERSION,
-    .target_id = "deepseek4-v4-flash-dspark",
-    .family = "deepseek-v4",
+    DEEPSEEK_COMPILER_FIELDS, .target_id = YVEX_SOURCE_RELEASE_TARGET_ID,
     .logical_transform_identity = YVEX_DEEPSEEK_CURRENT_LOGICAL_TRANSFORM_IDENTITY,
-    .graph = deepseek_graph_compile,
-    .operator_graph_build = yvex_operator_graph_ir_build_transformer,
-    .execution_capabilities = deepseek_execution_capabilities,
-    .transformer_policy = deepseek_transformer_policy,
-    .logits_policy = deepseek_logits_policy,
-    .speculation_policy = deepseek_speculation_policy,
     .tokenizer_policy = deepseek_tokenizer_policy,
-    .physical_variant = yvex_graph_physical_variant_api_get,
-    .binding_pipeline = &deepseek_binding_pipeline,
-    .binding_compile = yvex_family_binding_compile};
+    .binding_pipeline = &deepseek_binding_pipeline};
+static const yvex_family_compiler_adapter deepseek_0731_compiler = {
+    DEEPSEEK_COMPILER_FIELDS, .target_id = YVEX_DEEPSEEK_0731_TARGET,
+    .logical_transform_identity = YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY,
+    .tokenizer_policy = deepseek_0731_tokenizer_policy, .binding_pipeline = &deepseek_0731_pipeline};
+#undef DEEPSEEK_COMPILER_FIELDS
 const yvex_family_compiler_adapter *yvex_compiler_family_deepseek_v4(void) {
     return &deepseek_compiler;
 }
@@ -1024,23 +1041,24 @@ static const void *deepseek_source_identity(void)
     return yvex_source_release_identity();
 }
 
+static const void *deepseek_0731_source_identity(void) {
+    return yvex_source_target_identity_find(YVEX_DEEPSEEK_0731_TARGET);
+}
+#define DEEPSEEK_SOURCE_FIELDS \
+    .schema_version = YVEX_COMPILATION_SOURCE_PROJECTION_SCHEMA_V1, \
+    .expected_mapping_identity = YVEX_DEEPSEEK_PAYLOAD_MAPPING_IDENTITY, \
+    .required_contribution_mask = YVEX_COMPILATION_SOURCE_REQUIRE_DIRECT | \
+        YVEX_COMPILATION_SOURCE_REQUIRE_FP8_WEIGHT | YVEX_COMPILATION_SOURCE_REQUIRE_E8M0_SCALE | \
+        YVEX_COMPILATION_SOURCE_REQUIRE_EXPERT | YVEX_COMPILATION_SOURCE_REQUIRE_I64_ROUTER | \
+        YVEX_COMPILATION_SOURCE_REQUIRE_GLOBAL | YVEX_COMPILATION_SOURCE_REQUIRE_NORM | \
+        YVEX_COMPILATION_SOURCE_REQUIRE_SHARED_EXPERT | YVEX_COMPILATION_SOURCE_REQUIRE_OUTPUT_HEAD | \
+        YVEX_COMPILATION_SOURCE_REQUIRE_DRAFT, \
+    .lower = deepseek_source_lower, .lowering = &yvex_artifact_lowering_operations
 static const yvex_compilation_source_projection deepseek_source_projection = {
-    .schema_version = YVEX_COMPILATION_SOURCE_PROJECTION_SCHEMA_V1,
-    .expected_mapping_identity = YVEX_DEEPSEEK_PAYLOAD_MAPPING_IDENTITY,
-    .required_contribution_mask =
-        YVEX_COMPILATION_SOURCE_REQUIRE_DIRECT |
-        YVEX_COMPILATION_SOURCE_REQUIRE_FP8_WEIGHT |
-        YVEX_COMPILATION_SOURCE_REQUIRE_E8M0_SCALE |
-        YVEX_COMPILATION_SOURCE_REQUIRE_EXPERT |
-        YVEX_COMPILATION_SOURCE_REQUIRE_I64_ROUTER |
-        YVEX_COMPILATION_SOURCE_REQUIRE_GLOBAL |
-        YVEX_COMPILATION_SOURCE_REQUIRE_NORM |
-        YVEX_COMPILATION_SOURCE_REQUIRE_SHARED_EXPERT |
-        YVEX_COMPILATION_SOURCE_REQUIRE_OUTPUT_HEAD |
-        YVEX_COMPILATION_SOURCE_REQUIRE_DRAFT,
-    .source_identity = deepseek_source_identity,
-    .lower = deepseek_source_lower,
-    .lowering = &yvex_artifact_lowering_operations};
+    DEEPSEEK_SOURCE_FIELDS, .source_identity = deepseek_source_identity};
+static const yvex_compilation_source_projection deepseek_0731_source_projection = {
+    DEEPSEEK_SOURCE_FIELDS, .source_identity = deepseek_0731_source_identity};
+#undef DEEPSEEK_SOURCE_FIELDS
 
 static int payload_open(
     yvex_deepseek_payload_handoff **out,
@@ -1119,9 +1137,10 @@ const yvex_model_family_payload_api *yvex_model_deepseek_payload_api(void)
     return &api;
 }
 
-static int deepseek_compilation_source_open(
+static int deepseek_checkpoint_source_open(
     yvex_family_compilation_source *out,
-    const yvex_compilation_runtime_binding_request *request, yvex_error *err)
+    const yvex_compilation_runtime_binding_request *request,
+    const yvex_compilation_source_projection *projection, yvex_error *err)
 {
     const yvex_model_family_api *model = yvex_model_register_deepseek_v4();
     const yvex_model_family_payload_api *payload = model ? &model->payload : NULL;
@@ -1146,7 +1165,7 @@ static int deepseek_compilation_source_open(
         options.budget.chunk_bytes * options.budget.maximum_streams;
     options.chunk_bytes = options.budget.chunk_bytes;
     options.page_bytes = options.budget.page_bytes;
-    rc = payload->open(&handoff, &options, &failure, err);
+    rc = yvex_compilation_source_operations.open(&handoff, &options, projection, &failure, err);
     if (rc != YVEX_OK) return rc;
     out->owner = handoff;
     out->verification = payload->verification(handoff);
@@ -1166,6 +1185,14 @@ static int deepseek_compilation_source_open(
         return YVEX_ERR_STATE;
     }
     return YVEX_OK;
+}
+static int deepseek_compilation_source_open(yvex_family_compilation_source *out,
+    const yvex_compilation_runtime_binding_request *request, yvex_error *err) {
+    return deepseek_checkpoint_source_open(out, request, &deepseek_source_projection, err);
+}
+static int deepseek_0731_source_open(yvex_family_compilation_source *out,
+    const yvex_compilation_runtime_binding_request *request, yvex_error *err) {
+    return deepseek_checkpoint_source_open(out, request, &deepseek_0731_source_projection, err);
 }
 static void deepseek_compilation_source_close(void *owner)
 {
@@ -1372,7 +1399,7 @@ static int deepseek_semantic_model_build(
         request.schema_version = YVEX_SEMANTIC_MODEL_IR_SCHEMA_V1;
         request.family_adapter_id = YVEX_DEEPSEEK_V4_ADAPTER_ID;
         request.family_adapter_version = YVEX_DEEPSEEK_V4_ADAPTER_VERSION;
-        request.target_id = "deepseek4-v4-flash-dspark";
+        request.target_id = facts->target_id;
         request.source_model_identity = execution.source_model_identity;
         request.logical_model_identity = execution.logical_model_identity;
         request.semantic_payload_identity = execution.identity;
@@ -1521,8 +1548,8 @@ static const char *deepseek_quant_preset_name(unsigned long long index)
     return index < sizeof(names) / sizeof(names[0]) ? names[index] : NULL;
 }
 
-static int deepseek_quant_preset_open(
-    yvex_quant_policy **out, const char *name, yvex_error *err)
+static int deepseek_checkpoint_quant_preset_open(
+    yvex_quant_policy **out, const char *name, const char *target, yvex_error *err)
 {
     static const yvex_tensor_role exact_roles[] = {
         YVEX_TENSOR_ROLE_DRAFT_FEATURE_NORM, YVEX_TENSOR_ROLE_DRAFT_OUTPUT_NORM,
@@ -1532,6 +1559,7 @@ static int deepseek_quant_preset_open(
     yvex_quant_policy_definition definition;
     unsigned long long count = 0u;
     unsigned long long index;
+    const char *policy_name = name;
 
     if (out) *out = NULL;
     if (!out || !name) {
@@ -1539,6 +1567,8 @@ static int deepseek_quant_preset_open(
                        "out and preset name are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    if (!strcmp(target, YVEX_DEEPSEEK_0731_TARGET) &&
+        !strcmp(name, YVEX_DEEPSEEK_0731_QUANT_PRESET)) name = YVEX_DEEPSEEK_QUANT_RELEASE_PROFILE_NAME;
     if (strcmp(name, "source-faithful") != 0 &&
         strcmp(name, YVEX_DEEPSEEK_QUANT_RELEASE_PROFILE_NAME) != 0 &&
         strcmp(name, YVEX_DEEPSEEK_QUANT_DSPARK_PROFILE_NAME) != 0) {
@@ -1590,8 +1620,14 @@ static int deepseek_quant_preset_open(
                 "exact DSpark norm, Markov, and confidence control");
     }
     definition = (yvex_quant_policy_definition){
-        name, "deepseek4-v4-flash-dspark", "built-in-preset", rules, count};
+        policy_name, target, "built-in-preset", rules, count};
     return yvex_quant_policy_create_definition(out, &definition, err);
+}
+static int deepseek_quant_preset_open(yvex_quant_policy **out, const char *name, yvex_error *err) {
+    return deepseek_checkpoint_quant_preset_open(out, name, YVEX_SOURCE_RELEASE_TARGET_ID, err);
+}
+static int deepseek_0731_quant_preset_open(yvex_quant_policy **out, const char *name, yvex_error *err) {
+    return deepseek_checkpoint_quant_preset_open(out, name, YVEX_DEEPSEEK_0731_TARGET, err);
 }
 
 static const yvex_quant_preset_catalog *deepseek_quant_presets(void)
@@ -1612,6 +1648,39 @@ static const yvex_family_descriptor yvex_graph_family_descriptor_deepseek_v4 = {
     .tokenizer_architecture = "deepseek-v3", .tokenizer_pre = "deepseek-v3",
     .execution = deepseek_execution_binding,
     .quant_presets = deepseek_quant_presets};
+static unsigned long long deepseek_0731_preset_count(void) { return 1u; }
+static const char *deepseek_0731_preset_name(unsigned long long index) {
+    return index == 0u ? YVEX_DEEPSEEK_0731_QUANT_PRESET : NULL;
+}
+static const yvex_quant_preset_catalog *deepseek_0731_quant_presets(void) {
+    static const yvex_quant_preset_catalog catalog = {
+        YVEX_QUANT_PRESET_CATALOG_SCHEMA_V1, YVEX_DEEPSEEK_0731_TARGET,
+        deepseek_0731_preset_count, deepseek_0731_preset_name, deepseek_0731_quant_preset_open};
+    return &catalog;
+}
+static const yvex_graph_execution_binding *deepseek_0731_execution_binding(void) {
+    static const yvex_model_deployment_defaults defaults = {
+        .schema_version = YVEX_MODEL_DEPLOYMENT_DEFAULTS_SCHEMA_CURRENT,
+        .logical_family = "deepseek4", .logical_model = "v4-flash-0731",
+        .quant_preset = YVEX_DEEPSEEK_0731_QUANT_PRESET,
+        .backend = "cuda", .engine_kind = "text", .execution_strategy = "target-only"};
+    static const yvex_graph_execution_binding execution = {
+        .schema_version = YVEX_GRAPH_EXECUTION_BINDING_SCHEMA_V1,
+        .adapter_id = YVEX_DEEPSEEK_V4_ADAPTER_ID, .adapter_version = YVEX_DEEPSEEK_V4_ADAPTER_VERSION,
+        .target_id = YVEX_DEEPSEEK_0731_TARGET, .family_name = "deepseek-v4-flash-0731",
+        .logical_transform_identity = YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY, .operator_family_key = "deepseek",
+        .operator_artifact_filename = "deepseek-v4-flash-0731-q8_0-q2_k-v1.gguf",
+        .source_manifest_filename = "deepseek-v4-flash-0731.source-manifest.json",
+        .deployment_defaults = &defaults,
+        .model = yvex_model_register_deepseek_v4, .compiler = &deepseek_0731_compiler,
+        .api = &yvex_attention_execution_api};
+    return &execution;
+}
+static const yvex_family_descriptor deepseek_0731_descriptor = {
+    .schema_version = YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1,
+    .target_id = YVEX_DEEPSEEK_0731_TARGET, .family = "deepseek-v4",
+    .tokenizer_architecture = "deepseek-v3", .tokenizer_pre = "deepseek-v3",
+    .execution = deepseek_0731_execution_binding, .quant_presets = deepseek_0731_quant_presets};
 
 typedef struct {
     yvex_tensor_collection collection;
@@ -1896,7 +1965,7 @@ const yvex_model_family_lowering_api *yvex_model_deepseek_lowering_api(void)
 }
 
 static const yvex_family_descriptor *const deepseek_v4_registered_targets[] = {
-    &yvex_graph_family_descriptor_deepseek_v4};
+    &yvex_graph_family_descriptor_deepseek_v4, &deepseek_0731_descriptor};
 
 const yvex_family_target_catalog yvex_graph_family_catalog_deepseek_v4 = {
     .schema_version = YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1,

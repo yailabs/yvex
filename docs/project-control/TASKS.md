@@ -28,6 +28,24 @@ ceiling or erase pending numerical, quality, lifecycle or performance gates.
 There is one active implementation of this execution problem: `.5`.
 The historical paragraphs below retain the `.4` observations and ownership.
 
+On 2026-10-09 the operator selected the exact Flash 0731 target/support pair
+used by the pinned DwarfStar control as the initial matched-checkpoint basis
+for `.5`. Its [candidate source identities](../model-families/deepseek-v4-flash.md#selected-matched-checkpoint-candidate)
+must pass source/artifact/binding admission before YVEX timing. Preserve the
+existing DSpark checkpoint, candidate code and historical observations as
+separate identities; neither transplant its source metadata onto external
+weights nor pair its draft with the 0731 target. This selection does not grant
+an automatic installed-service replacement or qualify the new checkpoint.
+Keep the 20/700 requirements and same-checkpoint before/after gates unchanged;
+do not attribute checkpoint or quantization changes to a runtime speedup.
+
+The [0731 native preparation checkpoint](../evaluation/benchmarks/generated/qualification-deepseek-0731-native-admission-20261009.md)
+now earns complete artifact emission/reader acceptance, authenticated binding
+publication/reopen and artifact-bound official encoding controls. It does not
+earn model execution, independent representation quality, performance or rollout.
+The next live step requires release of the operator's existing DeepSeek engine;
+do not overlap both complete models or retire its preserved session for a test.
+
 The predecessor `.4` owns the retained
 [cancelled-prefill decode-clock repair](../evaluation/retained-observations.md#cancelled-prefill-decode-clock-repair-2026-10-08):
 missing first-commit timing stays unavailable rather than reporting process

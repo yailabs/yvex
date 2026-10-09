@@ -48,8 +48,8 @@ if find src -type f -path '*/families/*' | grep -E '/deepseek[^/]*_(plan|execute
 fi
 
 family_files=$(find src -type f -path '*/families/deepseek_v4.*' | wc -l | tr -d ' ')
-test "$family_files" -eq 2 || {
-  echo "topology closure: DeepSeek family projection count is $family_files/2" >&2
+test "$family_files" -eq 3 || {
+  echo "topology closure: DeepSeek family projection count is $family_files/3 (model, conversation, graph)" >&2
   exit 1
 }
 

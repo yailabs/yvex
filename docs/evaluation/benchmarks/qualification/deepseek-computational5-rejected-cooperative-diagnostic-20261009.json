@@ -1,0 +1,1013 @@
+{
+  "claims": {
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent full-model checkpoint/quality comparison in this timing series"
+      ]
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "One instrumented diagnostic sample, not a timed performance series",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "One profiled native turn; observed execution only, not throughput",
+      "required_evidence": [],
+      "evidence": {
+        "native-receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json",
+          "sha256": "00955a32688f11f9e8fb8b87b11087330c61a1380ef48f0903ffc3e55ab4f42e",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Not independently qualified by this timing capture",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent full-model checkpoint/quality comparison in this timing series"
+      ]
+    }
+  },
+  "id": "deepseek-computational5-rejected-cooperative-diagnostic-20261009",
+  "limitations": [
+    "One profiled diagnostic sample, not an unprofiled performance result.",
+    "GPU activity includes kernels, copies and memset; not all engines or hardware utilization.",
+    "API time overlaps device activity. Missing activity is not automatically removable CPU cost.",
+    "Bytes are logical API traffic, not measured physical DRAM bandwidth.",
+    "Union by kind may overlap other kinds; only the partition is disjoint.",
+    "Exact native configuration is retained. Profiling records cannot enter performance comparison.",
+    "No independent model/representation-quality claim follows from device/API timing.",
+    "Hardware-counter utilization, occupancy and physical bandwidth were not measured.",
+    "Host first-fragment publication time is unavailable; server token and client visibility clocks remain separate."
+  ],
+  "measurements": [],
+  "origin": "yvex-published",
+  "provenance": {
+    "cleanup": "owned sessions closed; generation/count checked",
+    "client_build": "20f3391399e778a2d08be31e6181bf119c344e432d6efa1cea6187e6b88e9156",
+    "engine": {
+      "active_work": 0,
+      "activity": "idle",
+      "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+      "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+      "attached_clients": 0,
+      "backend": 1,
+      "capabilities": {
+        "input_mask": 1,
+        "inputs": [
+          "text"
+        ],
+        "maximum_input_parts": 32,
+        "output_mask": 1,
+        "outputs": [
+          "text"
+        ],
+        "properties": 15
+      },
+      "capacity": {
+        "compatible_operation_batching": false,
+        "continuous_batching": false,
+        "cooperative_scheduling": false,
+        "physical_sequence_width": 1,
+        "runnable_work": 1,
+        "sessions": 8
+      },
+      "capacity_plan_identity": "fc4957d2f1947fc95dfac9dec430ec8b4a1684d5888cabfa662b7b95250821f6",
+      "configured_physical_sequence_width": 1,
+      "context_capacity": 16384,
+      "continuous_batching": false,
+      "engine_kind": "text",
+      "execution_ready": true,
+      "execution_strategy": "target-only",
+      "generation": 1,
+      "mapped_package_bytes": 95050210272,
+      "maximum_new_tokens": 16384,
+      "maximum_sessions": 8,
+      "model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+      "model_leases": 0,
+      "prefill_chunk_tokens": 512,
+      "prepared_bytes": 0,
+      "resident_device_bytes": 0,
+      "resident_host_bytes": 0,
+      "resources": {
+        "activation_arena_current_bytes": 0,
+        "activation_arena_peak_bytes": 0,
+        "available": 129,
+        "components": 1,
+        "logical_download_bytes": 0,
+        "logical_upload_bytes": 0,
+        "model_artifact_bytes": 95050210272,
+        "model_device_addressable_bytes": 95050210272,
+        "model_explicit_device_bytes": 0,
+        "model_explicit_host_bytes": 0,
+        "model_mapped_bytes": 95050210272,
+        "model_prepared_bytes": 0,
+        "physical_residency_known": false,
+        "placement": "mapped-device-addressable",
+        "process_rss_current_bytes": 0,
+        "process_rss_peak_bytes": 0,
+        "schema_version": 1,
+        "session_attention_allocated_bytes": 0,
+        "session_attention_page_table_bytes": 0,
+        "session_attention_resident_bytes": 0,
+        "session_attention_virtual_bytes": 0,
+        "session_candidate_state_bytes": 0,
+        "session_convolution_state_bytes": 0,
+        "session_physical_state_bytes": 0,
+        "session_recurrent_state_bytes": 0,
+        "transient_current_bytes": 0,
+        "transient_peak_bytes": 0,
+        "unified_memory": true,
+        "workspace_current_bytes": 0,
+        "workspace_peak_bytes": 0
+      },
+      "runtime_binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+      "sessions": 0,
+      "specialization_identity": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+      "state": "loaded",
+      "target": "deepseek4-v4-flash-dspark"
+    },
+    "evidence_class": "device-api-diagnostic",
+    "raw_evidence_sha256": "d82b9f5f5f112c2732ce521ac30a893bbd8d663b399877920adbd89d6d75c8f6",
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/resources.jsonl",
+      "allowed_pids": [
+        183009
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 25,
+      "probe_seconds": 0.5630487830003403,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 183075,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "sampling_selection": "greedy",
+    "separated_inputs": [],
+    "source_stability": "frozen",
+    "profiled": true,
+    "raw_root": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01",
+    "build": {
+      "core": {
+        "head": "25b981808348440f37cde5913d4d804c4940e5a7",
+        "state": "dirty",
+        "delta_identity": "4e0189432ac0f89fba4d37e0aee5497b7725ce6776150e30744c8a1711479f1b",
+        "tree": "a6510628c9b45227f5bd4624a1f7acd0b9c4674c"
+      },
+      "product": {
+        "build_commit": "25b981808348440f37cde5913d4d804c4940e5a7",
+        "build_identity": "20f3391399e778a2d08be31e6181bf119c344e432d6efa1cea6187e6b88e9156",
+        "local_protocol_version": 25,
+        "registry_identity": "a953f0b0ae2800162cc4b4db609c40a3a1134984c683b6c4866c807f8d50f6da",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "f1733f1644c7178caf0a91abc86164a6eeccb5469b9cb42a39dc26a0fd743145",
+        "source_delta_identity": "4e0189432ac0f89fba4d37e0aee5497b7725ce6776150e30744c8a1711479f1b",
+        "source_state": "dirty",
+        "source_tree": "a6510628c9b45227f5bd4624a1f7acd0b9c4674c",
+        "version": "0.1.0"
+      },
+      "executable_path": "/home/dgmothx/lab/yvex-computational-5/yvex",
+      "executable_sha256": "9f648d8ca80c6b3df99a5955f124903c39f41dcff6e8af36d1e836a24cf4d33e",
+      "library_sha256": "0e5761cc0286bd85f51aae7d24fe39a54dc2cd6c8f6a19eae7d610c9aaca14f0",
+      "orchestrator_sha256": "1db59bfc01e8a4390216d2e01cebd1c4f57255217d556598dc17c6cfa17eaafe"
+    },
+    "source_capture": {
+      "schema": "yvex.qualification.source-capture.v1",
+      "source": {
+        "head": "25b981808348440f37cde5913d4d804c4940e5a7",
+        "state": "dirty",
+        "delta_identity": "4e0189432ac0f89fba4d37e0aee5497b7725ce6776150e30744c8a1711479f1b"
+      },
+      "tree": "a6510628c9b45227f5bd4624a1f7acd0b9c4674c",
+      "executables": {
+        "executable-0": {
+          "observed_path": "/home/dgmothx/lab/yvex-computational-5/yvex",
+          "sha256": "9f648d8ca80c6b3df99a5955f124903c39f41dcff6e8af36d1e836a24cf4d33e"
+        },
+        "executable-1": {
+          "observed_path": "/home/dgmothx/lab/yvex-computational-5/build/lib/libyvex.a",
+          "sha256": "0e5761cc0286bd85f51aae7d24fe39a54dc2cd6c8f6a19eae7d610c9aaca14f0"
+        }
+      },
+      "files": {
+        "base.tar": "501ef5b57338f35bad6c7ad04f58e04b8317573105d34ddaf0cdde516991c220",
+        "delta.patch": "4e0189432ac0f89fba4d37e0aee5497b7725ce6776150e30744c8a1711479f1b",
+        "executable-0": "9f648d8ca80c6b3df99a5955f124903c39f41dcff6e8af36d1e836a24cf4d33e",
+        "executable-1": "0e5761cc0286bd85f51aae7d24fe39a54dc2cd6c8f6a19eae7d610c9aaca14f0",
+        "untracked.tar": "84ff92691f909a05b224e1c56abb4864f01b4f8e3c854e4bb4c7baf1d3f6d652"
+      },
+      "scope": "observed source and executable bytes; build relationship separately required"
+    },
+    "kernel_owner": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/backend-identity-captured.json",
+      "sha256": "21ea8a57a4e466c893889819f0d6f3749ae91628c349052da8513d79de17f54e"
+    },
+    "producer_provenance_join": "Externally observed isolated host executable equals the captured Rust executable",
+    "canonical_relationship": {
+      "target": "1acf1eb24857c3aeea0b79af536425157472d11afc70b1b6e94aecbbc409145c",
+      "sha256": "4f05a71578a77e13eb923a250e7c0274639bb0885769adfccb22344a301fb45c"
+    },
+    "raw_files": {
+      "host.jsonl": "70659b0a9c9abe5da28c4f5e807db12cd625fa96d5879e2d5e1fcd5f93387e91",
+      "resources.jsonl": "9ab52fd5550752f4f750022188cbc1d50c938e6e1edb490e40ab89c0008e3d20",
+      "resources.jsonl.summary.json": "4105b6c08da8cb09ee61a97c2d9aea1133ece514c19048fc59717cac0af168cd",
+      "cleanup.json": "2a062bd824c0d30a90c8bcfa6b470120b47d20a5c5bf564cf0e55d9a2300c7a8",
+      "load.json": "6559fca148480d7a66a147baa1661768e637d6cfe8cd0ddbffee140435c91054",
+      "identity.json": "dfed7c5e2e4485c7bf3be8074185ec88c33706cf41c6d7467705886537ee33d0",
+      "memory-before.json": "13b0626d22a1aa6c4734df017d1c9c9ba4e5e429ca25db28342b1eafb95eeb67",
+      "memory-after.json": "be4a36639a0e6b08c8ecdfe404f26cc1ed0e29850fbc4264efe81d4c2654d4e6"
+    },
+    "candidate_disposition": "rejected",
+    "diagnostic_summary": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json",
+      "sha256": "54c7d7a8425f8304f5866e4ee00248a8bde4f4a0549d651bc362894883f4d0ba"
+    },
+    "diagnostic_observer": {
+      "profiled": true,
+      "observer_sha256": "625f04655232a428872269bbb3c677cb5782efec6d4ade5c51b95a1489e41f08"
+    },
+    "diagnostics": [
+      {
+        "id": "turn.prompt_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "turn.reused_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "turn.prefill_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "turn.generated_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 16,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "turn.proposed_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "turn.selected_verification_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "turn.accepted_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "turn.rejected_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "turn.discarded_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server-authored population in one instrumented diagnostic turn; not timed comparison",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/native/receipt.json"
+      },
+      {
+        "id": "request_setup.wall_seconds",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0.545620539,
+        "unit": "s",
+        "definition": "Clipped phase interval: wall_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.observed_device_seconds",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0.039362916,
+        "unit": "s",
+        "definition": "Clipped phase interval: observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.api_without_observed_device_seconds",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0.491542615,
+        "unit": "s",
+        "definition": "Clipped phase interval: api_without_observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.outside_both_seconds",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0.014715008,
+        "unit": "s",
+        "definition": "Clipped phase interval: outside_both_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.kernel.count",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed kernel count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.kernel.union_seconds",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0,
+        "unit": "s",
+        "definition": "Observed kernel union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.kernel.logical_bytes",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed kernel logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.copy.count",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 133,
+        "unit": "count",
+        "definition": "Observed copy count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.copy.union_seconds",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0.000098276,
+        "unit": "s",
+        "definition": "Observed copy union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.copy.logical_bytes",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 987704,
+        "unit": "byte",
+        "definition": "Observed copy logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.memset.count",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 499,
+        "unit": "count",
+        "definition": "Observed memset count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.memset.union_seconds",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0.03926464,
+        "unit": "s",
+        "definition": "Observed memset union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.memset.logical_bytes",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 7673714764,
+        "unit": "byte",
+        "definition": "Observed memset logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.api.count",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 3399,
+        "unit": "count",
+        "definition": "Observed api count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.api.union_seconds",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": 0.530904071,
+        "unit": "s",
+        "definition": "Observed api union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "request_setup.api.logical_bytes",
+        "case": "prefill.promessi-2048/request_setup",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed api logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.wall_seconds",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0.001028355,
+        "unit": "s",
+        "definition": "Clipped phase interval: wall_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.observed_device_seconds",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Clipped phase interval: observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.api_without_observed_device_seconds",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Clipped phase interval: api_without_observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.outside_both_seconds",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0.001028355,
+        "unit": "s",
+        "definition": "Clipped phase interval: outside_both_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.kernel.count",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed kernel count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.kernel.union_seconds",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Observed kernel union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.kernel.logical_bytes",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed kernel logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.copy.count",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed copy count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.copy.union_seconds",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Observed copy union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.copy.logical_bytes",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Observed copy logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.memset.count",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed memset count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.memset.union_seconds",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Observed memset union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.memset.logical_bytes",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Observed memset logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.api.count",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "count",
+        "definition": "Observed api count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.api.union_seconds",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": 0,
+        "unit": "s",
+        "definition": "Observed api union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "tokenizer.api.logical_bytes",
+        "case": "prefill.promessi-2048/tokenizer",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed api logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.wall_seconds",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 20.740143084,
+        "unit": "s",
+        "definition": "Clipped phase interval: wall_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.observed_device_seconds",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 20.318778241,
+        "unit": "s",
+        "definition": "Clipped phase interval: observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.api_without_observed_device_seconds",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 0.106369765,
+        "unit": "s",
+        "definition": "Clipped phase interval: api_without_observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.outside_both_seconds",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 0.314995078,
+        "unit": "s",
+        "definition": "Clipped phase interval: outside_both_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.kernel.count",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 14196,
+        "unit": "count",
+        "definition": "Observed kernel count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.kernel.union_seconds",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 19.785925897,
+        "unit": "s",
+        "definition": "Observed kernel union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.kernel.logical_bytes",
+        "case": "prefill.promessi-2048/prefill",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed kernel logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.copy.count",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 17510,
+        "unit": "count",
+        "definition": "Observed copy count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.copy.union_seconds",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 0.336009202,
+        "unit": "s",
+        "definition": "Observed copy union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.copy.logical_bytes",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 40989130424,
+        "unit": "byte",
+        "definition": "Observed copy logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.memset.count",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 5882,
+        "unit": "count",
+        "definition": "Observed memset count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.memset.union_seconds",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 0.196843142,
+        "unit": "s",
+        "definition": "Observed memset union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.memset.logical_bytes",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 38276852896,
+        "unit": "byte",
+        "definition": "Observed memset logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.api.count",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 52582,
+        "unit": "count",
+        "definition": "Observed api count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.api.union_seconds",
+        "case": "prefill.promessi-2048/prefill",
+        "value": 20.348928076,
+        "unit": "s",
+        "definition": "Observed api union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "prefill.api.logical_bytes",
+        "case": "prefill.promessi-2048/prefill",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed api logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.wall_seconds",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 0.131957553,
+        "unit": "s",
+        "definition": "Clipped phase interval: wall_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.observed_device_seconds",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 0.101171964,
+        "unit": "s",
+        "definition": "Clipped phase interval: observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.api_without_observed_device_seconds",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 0.020765693,
+        "unit": "s",
+        "definition": "Clipped phase interval: api_without_observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.outside_both_seconds",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 0.010019896,
+        "unit": "s",
+        "definition": "Clipped phase interval: outside_both_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.count",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 2421,
+        "unit": "count",
+        "definition": "Observed kernel count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.union_seconds",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 0.096109439,
+        "unit": "s",
+        "definition": "Observed kernel union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.kernel.logical_bytes",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed kernel logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.copy.count",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 2193,
+        "unit": "count",
+        "definition": "Observed copy count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.copy.union_seconds",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 0.004147783,
+        "unit": "s",
+        "definition": "Observed copy union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.copy.logical_bytes",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 140196864,
+        "unit": "byte",
+        "definition": "Observed copy logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.memset.count",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 1433,
+        "unit": "count",
+        "definition": "Observed memset count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.memset.union_seconds",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 0.000914742,
+        "unit": "s",
+        "definition": "Observed memset union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.memset.logical_bytes",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 32875228,
+        "unit": "byte",
+        "definition": "Observed memset logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.api.count",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 10144,
+        "unit": "count",
+        "definition": "Observed api count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.api.union_seconds",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": 0.120115113,
+        "unit": "s",
+        "definition": "Observed api union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "first_decode.api.logical_bytes",
+        "case": "prefill.promessi-2048/first_decode",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed api logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.wall_seconds",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 1.791717632,
+        "unit": "s",
+        "definition": "Clipped phase interval: wall_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.observed_device_seconds",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 1.49855898,
+        "unit": "s",
+        "definition": "Clipped phase interval: observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.api_without_observed_device_seconds",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 0.167233003,
+        "unit": "s",
+        "definition": "Clipped phase interval: api_without_observed_device_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.outside_both_seconds",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 0.125925649,
+        "unit": "s",
+        "definition": "Clipped phase interval: outside_both_seconds; device/API-exclusive/outside partition is disjoint; phase wall is its total",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.count",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 36819,
+        "unit": "count",
+        "definition": "Observed kernel count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.union_seconds",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 1.435365126,
+        "unit": "s",
+        "definition": "Observed kernel union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.kernel.logical_bytes",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed kernel logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.copy.count",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 31623,
+        "unit": "count",
+        "definition": "Observed copy count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.copy.union_seconds",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 0.052407033,
+        "unit": "s",
+        "definition": "Observed copy union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.copy.logical_bytes",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 1998731184,
+        "unit": "byte",
+        "definition": "Observed copy logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.memset.count",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 21495,
+        "unit": "count",
+        "definition": "Observed memset count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.memset.union_seconds",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 0.010786821,
+        "unit": "s",
+        "definition": "Observed memset union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.memset.logical_bytes",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 493344804,
+        "unit": "byte",
+        "definition": "Observed memset logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.count",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 110651,
+        "unit": "count",
+        "definition": "Observed api count; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.union_seconds",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": 1.642413102,
+        "unit": "s",
+        "definition": "Observed api union_seconds; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      },
+      {
+        "id": "post_first_decode.api.logical_bytes",
+        "case": "prefill.promessi-2048/post_first_decode",
+        "value": null,
+        "unit": "byte",
+        "definition": "Observed api logical_bytes; unions of different kinds may overlap; logical bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/cooperative-expert-prefill2k-profile-01/device-activity-summary.json"
+      }
+    ]
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "backend": "cuda",
+    "backend_implementation": "backend.cuda@25b981808348440f37cde5913d4d804c4940e5a7+4e0189432ac0f89fba4d37e0aee5497b7725ce6776150e30744c8a1711479f1b",
+    "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "build": "20f3391399e778a2d08be31e6181bf119c344e432d6efa1cea6187e6b88e9156",
+    "checkpoint": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "concurrency": 1,
+    "context": 16384,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "9f648d8ca80c6b3df99a5955f124903c39f41dcff6e8af36d1e836a24cf4d33e",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA GB10",
+    "kernel_bundle": "59086ad54cc6225109474f42f1351b3a91a8cc6fcb6983ee63349f308b9dc638",
+    "memory_configuration": "coherent unified memory; CUDA-reported global memory bytes=130663165952",
+    "physical_policy": "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
+    "prefill_geometry": "chunk=512",
+    "product_path": "controlled-configuration/native-v25",
+    "reasoning": "none",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807",
+    "runtime_configuration": "fc4957d2f1947fc95dfac9dec430ec8b4a1684d5888cabfa662b7b95250821f6",
+    "runtime_toolkit": "CUDA Driver API; toolkit 13.0 / NVCC V13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "25b981808348440f37cde5913d4d804c4940e5a7",
+    "source_delta": "4e0189432ac0f89fba4d37e0aee5497b7725ce6776150e30744c8a1711479f1b",
+    "source_tree": "a6510628c9b45227f5bd4624a1f7acd0b9c4674c",
+    "specialization": "3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144",
+    "strategy": "target-only",
+    "suite": "30d56bb8992dffccc0ca9bb269d96c03f99d234e4b04e1bf0279875f01f8ab77",
+    "tokenizer_conversation": "4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd",
+    "topology": "single-node single-device coherent unified memory",
+    "transformation_ir": "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-DSpark"
+  },
+  "target_identity": "32723b394339f1ea5d98950010faeef638671d3794d4f1df10bab98facdcea81",
+  "title": "DIAGNOSTIC device/API activity / REJECTED execution candidate / GB10 controlled configuration / Rust-native prefill.promessi-2048 / none"
+}

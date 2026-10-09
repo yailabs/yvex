@@ -1,0 +1,143 @@
+<!-- docs:metadata
+title: "REJECTED execution candidate / GB10 controlled configuration / Rust-native prefill.promessi-2048 / none"
+id: yvex.evaluation.qualification.deepseek-computational5-rejected-digit-plane-prefill-20261009
+document: evaluation
+status: mixed
+owner: evaluation
+audience: [engineer, evaluator, agent]
+publication: {html: true, pdf: true, index: true}
+generated: true
+source: ../qualification/deepseek-computational5-rejected-digit-plane-prefill-20261009.json
+-->
+
+# REJECTED execution candidate / GB10 controlled configuration / Rust-native prefill.promessi-2048 / none
+
+[Benchmarks](../README.md) · [Methodology](../methodology.md)
+
+[All targets](qualification-index.md) · [Machine receipt](../qualification/deepseek-computational5-rejected-digit-plane-prefill-20261009.json)
+
+Target identity: `06209ce6da4ec3e0ce559344b544e27d9ffc9c7f59b90b61e524d96b23fe334a`. Origin: **yvex-published**.
+
+## Measurements
+
+| Metric / exact case | Median | Unit | N | Min–max | MAD |
+| --- | ---: | --- | ---: | --- | ---: |
+| admission.client / prefill.promessi-2048/turn-0 | 2.22673 | s | 3 | 1.91275–2.33987 | 0.113141 |
+| request.client-complete / prefill.promessi-2048/turn-0 | 31.1837 | s | 3 | 30.8316–31.3697 | 0.185983 |
+| ttft.client-visible / prefill.promessi-2048/turn-0 | 29.4507 | s | 3 | 29.1034–29.6388 | 0.188108 |
+| delivery.client-gap.maximum / prefill.promessi-2048/turn-0 | 0.124409 | s | 3 | 0.122735–0.125725 | 0.00131603 |
+| delivery.client-gap.mean / prefill.promessi-2048/turn-0 | 0.115391 | s | 3 | 0.115205–0.115533 | 0.000141944 |
+| ttft.server / prefill.promessi-2048/turn-0 | 27.2239 | s | 3 | 27.1906–27.2988 | 0.0333121 |
+| final.first.server / prefill.promessi-2048/turn-0 | 27.2239 | s | 3 | 27.1906–27.2988 | 0.0333121 |
+| final.first.client / prefill.promessi-2048/turn-0 | 29.4507 | s | 3 | 29.1034–29.6388 | 0.188108 |
+| final.phase-rate / prefill.promessi-2048/turn-0 | 8.63829 | token/s | 3 | 8.63404–8.64007 | 0.0017802 |
+| prefill.uncached / prefill.promessi-2048/turn-0 | 75.5611 | token/s | 3 | 75.3574–75.6716 | 0.110553 |
+| prefill.wall / prefill.promessi-2048/turn-0 | 27.1039 | s | 3 | 27.0643–27.1771 | 0.0395976 |
+
+## Runtime populations and speculative work
+
+Counters come from terminal runtime facts. Missing counters are not zero.
+Channel totals may exclude control delimiters; phase spans are not assumed additive.
+
+### prefill.promessi-2048/turn-0
+
+| Fact | Median | Unit | N | Min–max | MAD |
+| --- | ---: | --- | ---: | --- | ---: |
+| Rendered prompt | 2048 | token | 3 | 2048–2048 | 0 |
+| Reused prefix | 0 | token | 3 | 0–0 | 0 |
+| New prefill | 2048 | token | 3 | 2048–2048 | 0 |
+| Committed output | 16 | token | 3 | 16–16 | 0 |
+| Reasoning | 0 | token | 3 | 0–0 | 0 |
+| Final content | 16 | token | 3 | 16–16 | 0 |
+| Draft cycles | 0 | cycle | 3 | 0–0 | 0 |
+| Draft forwards | 0 | forward | 3 | 0–0 | 0 |
+| Proposed | 0 | token | 3 | 0–0 | 0 |
+| Selected verification | 0 | token | 3 | 0–0 | 0 |
+| Target verifications | 0 | verification | 3 | 0–0 | 0 |
+| Accepted draft | 0 | token | 3 | 0–0 | 0 |
+| Rejected draft | 0 | token | 3 | 0–0 | 0 |
+| Discarded draft | 0 | token | 3 | 0–0 | 0 |
+| Correction/bonus | 0 | token | 3 | 0–0 | 0 |
+| Per-sample mean accepted prefix | 0 | token | 3 | 0–0 | 0 |
+| Per-sample maximum accepted prefix | 0 | token | 3 | 0–0 | 0 |
+| Draft phase | 0 | s | 3 | 0–0 | 0 |
+| Verification phase | 0 | s | 3 | 0–0 | 0 |
+| Speculative commit phase | 0 | s | 3 | 0–0 | 0 |
+
+## Claim boundaries
+
+| Plane | State | Exact scope / missing gate |
+| --- | --- | --- |
+| backend-execution | UNQUALIFIED | Not independently qualified by this timing capture;  |
+| checkpoint-reference | BLOCKED | Not independently qualified by this timing capture; No independent full-model checkpoint/quality comparison in this timing series |
+| deployment-performance | CHARACTERIZED | Frozen Rust/native request path; not interactive terminal-render timing or HTTP;  |
+| family-conformance | UNQUALIFIED | Not independently qualified by this timing capture;  |
+| product-path | CHARACTERIZED | Frozen Rust/native request path; not interactive terminal-render timing or HTTP;  |
+| representation-quality | BLOCKED | Not independently qualified by this timing capture; No independent full-model checkpoint/quality comparison in this timing series |
+
+## Exact configuration
+
+| Identity / setting | Value |
+| --- | --- |
+| family_contract | deepseek-v4-flash-dspark |
+| upstream_repository | deepseek-ai/DeepSeek-V4-Flash-DSpark |
+| checkpoint | 62af8fffb2f7030cac4de2f0169f5b8d1101b646 |
+| tokenizer_conversation | 4d489a7e6340ca30f5cd6e72af004347eb246e2b9521eaf6f7c6ae56b5f995dd |
+| transformation_ir | f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8 |
+| physical_policy | 59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0 |
+| representation | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 |
+| artifact_set | b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f |
+| binding | 8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e |
+| specialization | 3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144 |
+| source_commit | 25b981808348440f37cde5913d4d804c4940e5a7 |
+| source_tree | a6510628c9b45227f5bd4624a1f7acd0b9c4674c |
+| source_delta | 6d7175fa8395548acb4e52c1addfafc11400f829207de693dd743075918b81f0 |
+| build | 517c9ffb220e145022296be637046c7dbb5aa0efb48e10be227f79ca30448994 |
+| executable | 7776b66b7a2a3cd4540ef6c58adaed3f83a99781805b88001faff73e833aac79 |
+| backend | cuda |
+| backend_implementation | backend.cuda@25b981808348440f37cde5913d4d804c4940e5a7+6d7175fa8395548acb4e52c1addfafc11400f829207de693dd743075918b81f0 |
+| kernel_bundle | 1f0b883e115a10e2b810b5d8c6f10915f83486f75f029b2631525fa4bfde86b3 |
+| hardware_model | NVIDIA GB10 |
+| device_count | 1 |
+| topology | single-node single-device coherent unified memory |
+| driver | 580.159.03 |
+| runtime_toolkit | CUDA Driver API; toolkit 13.0 / NVCC V13.0.88 |
+| memory_configuration | coherent unified memory; CUDA-reported global memory bytes=130663165952 |
+| runtime_configuration | 97d692d3d3836f2fa16165e0b4ab3c5969e44c4437f72071ff19c759c0b5097f |
+| context | 16384 |
+| prefill_geometry | chunk=512 |
+| sequence_geometry | width=1 |
+| concurrency | 1 |
+| strategy | target-only |
+| reasoning | none |
+| sampling | {"min_p":0.0,"seed":null,"seed_present":0,"stochastic":0,"temperature":0.0,"top_k":0,"top_p":1.0,"typical_p":1.0} |
+| product_path | controlled-configuration/native-v25 |
+| suite | 30d56bb8992dffccc0ca9bb269d96c03f99d234e4b04e1bf0279875f01f8ab77 |
+
+## Definitions and reproducibility
+
+- **admission.client**: client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **request.client-complete**: client dispatch including connect through terminal response. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **ttft.client-visible**: client dispatch including connect to first nonempty final/reasoning content. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **delivery.client-gap.maximum**: per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **delivery.client-gap.mean**: per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **ttft.server**: turn start to first committed model-token callback. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **final.first.server**: server turn start to first source-classified final token. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **final.first.client**: client dispatch including connect to first nonempty final fragment. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **final.phase-rate**: source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **prefill.uncached**: newly committed uncached input positions / complete prefill wall. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+- **prefill.wall**: server-authored complete newly executed prefill wall time. Scope: local client and server terminal-summary measurements; no quality qualification. Session: fresh; warm/cold: resident engine; no hidden warmup; output bound: 16. Evidence: /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/digit-plane-target-prefill2k-01/native/events.jsonl.
+
+No confidence interval is inferred from small sample counts. The machine receipt retains samples, prompt/reference identities and provenance.
+
+## Non-claims
+
+- N=3 workload-bound characterization; not 20/700, independent quality or universal product speed.
+- Controlled engine configuration exercised through the Rust/native client; not unchanged operator defaults. Context, strategy, prefill geometry and sampling are explicit experimental axes.
+- Native Rust request/committed-content observation, not REPLAI paint/editor timing or HTTP.
+- Sampling selection is greedy; resolved facts in receipt; exact temperature/stochastic fields are retained per observation. Native and HTTP defaults are not interchangeable.
+- Exact engine configuration retained; first post-load request and subsequent fresh sessions are not cold samples.
+- Unreached reasoning/final transitions remain NOT MEASURED; bounded output does not imply natural EOS.
+- Sampled process witness cannot prove uninterrupted reservation. RSS/mapping/CUDA ownership overlap.
+- First-fragment server publication remains unavailable; client-visible and internal clocks are separate.
+- Phase-local expanded expert digits regress full-model prefill and add preparation/workspace; not retained.

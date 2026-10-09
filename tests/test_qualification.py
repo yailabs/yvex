@@ -610,7 +610,10 @@ class MeasurementTests(unittest.TestCase):
         spec.loader.exec_module(reference)
         modes = ("none", "high", "maximum")
         base = dict(id="conversation.fixture", turns=["hello", "write code"], reasoning_modes=modes)
-        inputs = dict(authority={"revision":"fixture"}, cases=[dict(case=base["id"], reasoning=mode,
+        suite = measurement.corpus(reference.CORPUS)
+        inputs = dict(authority=reference.source_authority(suite),
+                      corpus_sha256=measurement.digest(reference.CORPUS),
+                      cases=[dict(case=base["id"], reasoning=mode,
                       conversation_mode="chat" if mode == "none" else "thinking",
                       messages=[{"role":"user", "content":"hello"}], input_identity="input-" + mode)
                       for mode in modes])
@@ -620,7 +623,6 @@ class MeasurementTests(unittest.TestCase):
         tokenizer.decode.return_value = "independently generated greeting"
         assistant = dict(role="assistant", content="actual greeting", reasoning_content="", tool_calls=[])
         encoding = SimpleNamespace(parse_message_from_completion_text=Mock(return_value=assistant))
-        source_spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda module: None))
         def prepared(case, *args):
             return dict(case=case["id"], messages=case["messages"], reasoning=case["reasoning"],
                         input_identity="replace", inference_reference_status="MISSING", reference_output=None)
@@ -628,9 +630,8 @@ class MeasurementTests(unittest.TestCase):
             return {"state":{"none":"PASS", "high":"FAIL", "maximum":"NOT_MEASURED_TRUNCATED"}[mode]}
         with patch.dict(sys.modules, {"tokenizers":SimpleNamespace(Tokenizer=SimpleNamespace(from_file=lambda p: tokenizer))}), \
                 patch.object(reference, "validate_reference") as authenticate, \
-                patch.object(reference.measurement, "corpus", return_value={"cases":[base]}), \
-                patch.object(reference.importlib.util, "spec_from_file_location", return_value=source_spec), \
-                patch.object(reference.importlib.util, "module_from_spec", return_value=encoding), \
+                patch.object(reference.measurement, "corpus", return_value=dict(suite, cases=[base])), \
+                patch.object(reference, "load_encoding", return_value=encoding), \
                 patch.object(reference, "prepare_case", side_effect=prepared), \
                 patch.object(reference, "output_grammar", side_effect=grammar):
             result = reference.prepare_continuations(inputs, evidence, Path("/fixture/captures"), Path("/fixture/source"))
@@ -974,6 +975,54 @@ class MeasurementTests(unittest.TestCase):
 
 
 class QualificationTests(unittest.TestCase):
+    def test_reference_encoder_neither_writes_nor_reads_bytecode_cache(self):
+        import py_compile
+        spec = importlib.util.spec_from_file_location("reference", ROOT / "tests/reference/deepseek_inference.py")
+        reference = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(reference)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "encoding/encoding_dsv4.py"
+            source.parent.mkdir()
+            source.write_text("value = 1\n")
+            self.assertEqual(reference.load_encoding(root).value, 1)
+            self.assertEqual(list(source.parent.iterdir()), [source])
+            # An unchecked cache is a negative control: the source bytes, not
+            # previously compiled code, must remain the reference authority.
+            py_compile.compile(str(source), invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)
+            source.write_text("value = 2\n")
+            before = {str(p):p.read_bytes() for p in root.rglob("*") if p.is_file()}
+            self.assertEqual(reference.load_encoding(root).value, 2)
+            self.assertEqual(before, {str(p):p.read_bytes() for p in root.rglob("*") if p.is_file()})
+
+    def test_checkpoint_specific_encoding_authority(self):
+        spec = importlib.util.spec_from_file_location("reference", ROOT / "tests/reference/deepseek_inference.py")
+        reference = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(reference)
+        old = measurement.corpus(reference.CORPUS)
+        new = measurement.corpus(ROOT / "tests/vectors/deepseek_0731_product.json")
+        old_authority = reference.source_authority(old)
+        new_authority = reference.source_authority(new)
+        self.assertEqual(old["cases"], new["cases"])
+        self.assertNotEqual(old_authority["revision"], new_authority["revision"])
+        self.assertEqual(old_authority["files"]["tokenizer.json"], new_authority["files"]["tokenizer.json"])
+        self.assertNotEqual(old_authority["files"]["encoding/encoding_dsv4.py"],
+                            new_authority["files"]["encoding/encoding_dsv4.py"])
+        for kind in ("prefill", "competitive"):
+            previous = measurement.corpus(ROOT / f"tests/vectors/deepseek_{kind}.json")
+            selected = measurement.corpus(ROOT / f"tests/vectors/deepseek_0731_{kind}.json")
+            self.assertEqual(previous["cases"], selected["cases"])
+            self.assertNotEqual(q.identity(previous), q.identity(selected))
+            self.assertEqual(reference.source_authority(selected), new_authority)
+        bad = copy.deepcopy(new)
+        bad["source_authority"] = old["source_authority"]
+        with self.assertRaisesRegex(ValueError, "checkpoint differs"):
+            reference.source_authority(bad)
+        for selector in ("../foreign.json#authority", "tests/vectors/manifest.json#missing"):
+            bad["source_authority"] = selector
+            with self.assertRaises(ValueError):
+                reference.source_authority(bad)
+
     def test_independent_output_grammar_is_not_capture_or_yvex_pass(self):
         spec = importlib.util.spec_from_file_location("reference", ROOT / "tests/reference/deepseek_inference.py")
         reference = importlib.util.module_from_spec(spec)

@@ -896,7 +896,8 @@ test-runtime-deepseek-tokenizer-live: cuda $(TOKENIZER_LIVE_RUNNER) $(LOGITS_LIV
 		>"$$tmp_dir/tokenizer.out"; \
 	PYTHONDONTWRITEBYTECODE=1 "$$reference_python" tests/reference/tokenizer.py "$(DEEPSEEK_SOURCE)" \
 		"$(DEEPSEEK_SELECTED_ARTIFACT)" \
-		"$(abspath $(TOKENIZER_LIVE_RUNNER))" "$$binding" >"$$tmp_dir/reference.out"; \
+		"$(abspath $(TOKENIZER_LIVE_RUNNER))" "$$binding" \
+		--authority "$(YVEX_TOKENIZER_REFERENCE_AUTHORITY)" >"$$tmp_dir/reference.out"; \
 	$(YVEX_BIN) inspect tokenizer "$(DEEPSEEK_SELECTED_ARTIFACT)" >"$$tmp_dir/inspect.out"; \
 	$(YVEX_BIN) inspect tokenizer encode "$(DEEPSEEK_SELECTED_ARTIFACT)" --text 'hello world' --pieces \
 		>"$$tmp_dir/tokenize.out"; \
@@ -919,7 +920,7 @@ test-deepseek-official-vectors: $(TOKENIZER_LIVE_RUNNER)
 	PYTHONDONTWRITEBYTECODE=1 "$(YVEX_TOKENIZER_REFERENCE_PYTHON)" \
 		tests/reference/tokenizer.py "$(DEEPSEEK_SOURCE)" \
 		"$(DEEPSEEK_SELECTED_ARTIFACT)" "$(abspath $(TOKENIZER_LIVE_RUNNER))" \
-		"$(YVEX_RUNTIME_BINDING)"
+		"$(YVEX_RUNTIME_BINDING)" --authority "$(YVEX_TOKENIZER_REFERENCE_AUTHORITY)"
 
 # This serial lane proves sampled-token feedback with independent lower-owner composition.
 test-runtime-deepseek-generation-live: cuda $(GENERATION_LIVE_RUNNER) $(YVEX_BIN)

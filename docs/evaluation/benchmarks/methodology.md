@@ -406,6 +406,13 @@ The default receipt origin is local; public maintainer adoption remains delibera
 
 For independent DeepSeek capture, `tests/reference/deepseek_inference.py`
 authenticates the pinned upstream encoder/tokenizer and prepares exact inputs.
+Its `--suite` selection resolves the manifest's explicit source-authority
+reference and refuses a repository/revision mismatch. The default historical
+suite remains unchanged; `tests/vectors/deepseek_0731_product.json` projects the
+same logical cases onto the separately pinned 0731 encoder, including its
+different high/maximum instructions. Identical tokenizer bytes do not make
+these conversation authorities interchangeable. Continuation preparation must
+retain the same suite digest and checkpoint authority as its first input.
 Preparation returns BLOCKED when independent model outputs are absent. Reference
 admission checks checkpoint, implementation provenance and each case/mode input
 identity against bounded external raw captures containing `input_identity`,

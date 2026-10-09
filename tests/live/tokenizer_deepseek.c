@@ -31,11 +31,13 @@ static int official_prompt_render(const yvex_tokenizer *tokenizer,
     unsigned long long count = 0ull;
     int index, rc, start = 5;
     if (argc < 6) return YVEX_ERR_BOUNDS;
-    if (strcmp(argv[4], "thinking") && strcmp(argv[4], "chat")) return YVEX_ERR_UNSUPPORTED;
-    options.mode = !strcmp(argv[4], "thinking")
-        ? YVEX_PROMPT_MODE_THINKING : YVEX_PROMPT_MODE_CHAT;
+    if (strcmp(argv[4], "thinking") && strcmp(argv[4], "maximum") &&
+        strcmp(argv[4], "chat")) return YVEX_ERR_UNSUPPORTED;
+    options.mode = !strcmp(argv[4], "chat")
+        ? YVEX_PROMPT_MODE_CHAT : YVEX_PROMPT_MODE_THINKING;
     options.reasoning_policy = options.mode == YVEX_PROMPT_MODE_THINKING
         ? YVEX_REASONING_ENABLED : YVEX_REASONING_DISABLED;
+    if (!strcmp(argv[4], "maximum")) options.reasoning_policy = YVEX_REASONING_MAXIMUM;
     options.add_generation_prompt = 1;
     if ((argc - start) % 3 || argc <= start || argc > start + 96) return YVEX_ERR_BOUNDS;
     for (index = start; index < argc; index += 3) {

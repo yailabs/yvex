@@ -747,6 +747,71 @@ static int test_source_prompt_modes(void)
     return 0;
 }
 
+static int test_0731_source_prompt_modes(void)
+{
+    /* Derived with the authenticated 0731 upstream encoder, not YVEX output.
+     * These request controls supplement, not replace, its four official vectors. */
+    static const char *const expected[] = {
+        "5ec6ff56a432b916c342465ba509744d13252c6c92ff10b28157b8213b4d4699",
+        "f1d70259df3c292ccaeef08217cda85e4db5356393669056c44bfe8ef23e0ab5",
+        "0ce3d626d2d6b5eaca9808ac016415267b57ffd1ae806e4d835c246cc1e8ab1f"};
+    const yvex_reasoning_policy modes[] = {
+        YVEX_REASONING_DISABLED, YVEX_REASONING_ENABLED, YVEX_REASONING_MAXIMUM};
+    yvex_tokenizer tokenizer;
+    yvex_token_info tokens[4];
+    yvex_conversation_protocol source;
+    yvex_provider_message message = {0};
+    yvex_provider_request request;
+    yvex_prompt_message native = {0};
+    yvex_prompt_options options = {
+        .add_bos = 1, .add_generation_prompt = 1, .drop_thinking = 1};
+    yvex_rendered_prompt provider = {0}, local = {0};
+    yvex_error err;
+    unsigned int index;
+    fixture_open(&tokenizer, tokens);
+    YVEX_TEST_ASSERT(
+        !yvex_tokenizer_deepseek_v4_conversation(&source, "unknown-checkpoint") &&
+            source.schema_version == 0u &&
+            yvex_tokenizer_deepseek_v4_conversation(&source, "deepseek4-v4-flash-0731") &&
+            !strcmp(source.source_revision, "7872f01b1d1fe23eabc4c98b48bffcef5a386062") &&
+            !strcmp(source.source_encoding_identity,
+                "abc0d26120250dda0ae077dc64aa28836026e61e970854aaeb792445e6a0dde6") &&
+            yvex_tokenizer_family_policy_compile(
+                &tokenizer.compiled_policy, &source, YVEX_TOKENIZER_KIND_GGML_GPT2,
+                YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL,
+                YVEX_TOKENIZER_PROMPT_CONVERSATION, &err) == YVEX_OK &&
+            yvex_tokenizer_family_policy_conversation(
+                &tokenizer.compiled_policy, &tokenizer.conversation_view),
+        "0731 conversation selection is exact and refuses unknown checkpoints");
+    message.role = YVEX_PROVIDER_ROLE_USER;
+    message.content = text_span("hello");
+    native.schema_version = YVEX_PROMPT_MESSAGE_SCHEMA_V1;
+    native.role = YVEX_PROMPT_ROLE_USER;
+    native.content = "hello";
+    yvex_provider_request_default(&request);
+    strcpy(request.model, "deepseek4-v4-flash-0731");
+    request.messages = &message;
+    request.message_count = 1u;
+    request.maximum_output_tokens = 16u;
+    for (index = 0u; index < 3u; ++index) {
+        char digest[YVEX_SHA256_HEX_CAP];
+        request.reasoning_policy = options.reasoning_policy = modes[index];
+        options.mode = index ? YVEX_PROMPT_MODE_THINKING : YVEX_PROMPT_MODE_CHAT;
+        YVEX_TEST_ASSERT(
+            request_reseal(&request, &err) == YVEX_OK &&
+                yvex_tokenizer_provider_prompt(
+                    &tokenizer, &request, &provider, &err) == YVEX_OK &&
+                yvex_prompt_render(
+                    &local, &tokenizer, &native, 1u, &options, &err) == YVEX_OK &&
+                !strcmp(provider.text, local.text) &&
+                prompt_digest(&local, digest) && !strcmp(digest, expected[index]),
+            "0731 none/high/maximum native and provider prefixes match independent upstream bytes");
+        yvex_rendered_prompt_free(&provider);
+        yvex_rendered_prompt_free(&local);
+    }
+    return 0;
+}
+
 static int test_source_multiturn_and_tools(void)
 {
     static const char expected_drop[] =
@@ -1345,6 +1410,8 @@ static int test_candidate_transactions(void)
 
 int yvex_test_runtime_tokenizer(void)
 {
+    if (test_0731_source_prompt_modes() != 0)
+        return 1;
     if (test_versioned_reasoning_instructions() != 0)
         return 1;
     if (test_nfc_normalization() != 0)

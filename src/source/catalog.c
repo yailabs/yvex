@@ -430,6 +430,26 @@ static const yvex_source_target_identity source_target_identities[] = {
         .logical_model = &release_logical_model,
     },
     {
+        /* Independently pinned source candidate. Do not inherit the release's
+         * logical alias, runtime admission, payload trust or calibration. The
+         * index has identical tensor locations, not identical tensor values. */
+        .target_id = "deepseek4-v4-flash-0731",
+        .family_key = "deepseek",
+        .family_display = "DeepSeek",
+        .model_name = "DeepSeek-V4-Flash-0731",
+        .upstream_repo_id = "deepseek-ai/DeepSeek-V4-Flash-0731",
+        .source_dir_leaf = "DeepSeek-V4-Flash-0731",
+        .upstream_revision = "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+        .upstream_index_path = "model.safetensors.index.json",
+        .upstream_index_oid = "c3b10d45a829545fbf0d9d2880a1aa0b9ab3b43a",
+        .upstream_index_size = 5602871ull,
+        .upstream_inventory_authority = "upstream-index",
+        .config_model_type = "deepseek_v4",
+        .config_architecture = "DeepseekV4ForCausalLM",
+        .config_validation = YVEX_SOURCE_CONFIG_VALIDATION_DEEPSEEK_V4,
+        .required_sidecars = YVEX_SOURCE_SIDECARS_DEEPSEEK_V4,
+    },
+    {
         .target_id = YVEX_SOURCE_MINIMAX_H3_TARGET_ID,
         .family_key = YVEX_SOURCE_MINIMAX_H3_FAMILY_KEY,
         .family_display = YVEX_SOURCE_MINIMAX_H3_FAMILY_DISPLAY,

@@ -48,6 +48,111 @@ The superseded `deepseek-ai/DeepSeek-V4-Flash` snapshot and
 refuse the old target spelling with one migration hint. Historical records and
 Git retain its provenance.
 
+## Selected matched-checkpoint candidate
+
+On 2026-10-09 the operator selected Flash 0731 for the initial matched-checkpoint
+comparison in `V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5`.
+This is a separately identified candidate, not a replacement of the admitted
+source above or a claim that the release label proves chronological recency.
+
+The external control uses DwarfStar commit
+`9139e2ae58a41503968a500f36f75895c1ba63fc`. Its paired files are distributed by
+[`antirez/deepseek-v4-gguf`](https://huggingface.co/antirez/deepseek-v4-gguf/tree/f71f23d552d664e523b422157b2befbf74040380)
+at immutable revision `f71f23d552d664e523b422157b2befbf74040380`:
+
+| Role | Distribution file | Provider SHA-256 | Bytes |
+| --- | --- | --- | ---: |
+| Target | `DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf` | `ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0` | 86720111488 |
+| Draft/support | `DeepSeek-V4-Flash-DSpark-support-0731.gguf` | `7e319924541db3f7a163ed7e11d7532a70d48228ab59d36cb81e1d4511885360` | 5989114272 |
+
+These identities authenticate the released quantized payloads; their GGUF
+metadata does not supply the original upstream revision. The separately pinned
+official source candidate is
+[`deepseek-ai/DeepSeek-V4-Flash-0731`](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731/tree/7872f01b1d1fe23eabc4c98b48bffcef5a386062)
+at `7872f01b1d1fe23eabc4c98b48bffcef5a386062`, catalog target
+`deepseek4-v4-flash-0731`. Its index is Git blob
+`c3b10d45a829545fbf0d9d2880a1aa0b9ab3b43a` (5,602,871 bytes, 48 shards).
+The source catalog does not promote this candidate to the release alias or
+installed model. A separate compiler target now owns source reopening,
+conversation compilation and physical-variant preparation for this exact pin.
+The family architecture interpreter accepts its exact verified source tuple and
+derives a distinct model identity. Fixture controls reject a 0731 target paired
+with the old repository/revision and preserve the 43 target / 3 support-layer
+geometry. This bounded IR admission is not a complete artifact/compiler binding
+or a deployment; neither the old transform identity nor calibration is reused.
+The source-derived Transformation IR is
+`ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d`.
+Its initial native preset `deepseek-v4-flash-0731-q8_0-q2_k-v1` has policy identity
+`d66294b5e016806f2e283e8b0160e25385302fa6c9db4ac24a49e94140fa0ea9`:
+Q8_0 approximable projections and Q2_K routed aggregates, with the recipe's
+preserved exact/source classes unchanged. It requires no imatrix. The previous
+checkpoint's calibration is not admitted by this compiler pipeline. This is a
+different quantization from the external 0731 IQ2_XXS control, not same-weight
+engine equivalence. Planned storage and qtype compatibility do not establish
+emitted integrity, runtime admission, quality or speed. The isolated preparation
+does not replace the installed engine or retarget existing aliases.
+
+The [native preparation record](../evaluation/benchmarks/generated/qualification-deepseek-0731-native-admission-20261009.md)
+now records complete emission, native roundtrip, the independent pinned ggml
+reader, authenticated binding publication and reopen. Artifact
+`4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a`
+binds to
+`29676295361a8c99b86b3e1837a64e23791337f862d01fbeaeb2b5361399cc6d`;
+the sealed tokenizer policy is
+`bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819`.
+This establishes preparation, not engine residency, a model forward or
+independent quantization quality. No hosted 0731 generation is qualified yet.
+
+Configuration, tokenizer and index bytes match the prior DSpark source, but an
+identical index does not authenticate identical tensor payloads. The retained
+43-tensor preserved-F32 comparison establishes that the external target differs
+from the old admitted DSpark source. The new source's 48 payload shards now pass
+native upstream-digest authentication (72,317 tensors, 166,886,535,336 bytes read;
+manifest v3 payload identity
+`d46c2f3a4305155f357191e0bd804defe33764b92997c3de123b3b5cab41e5ce`).
+All 43 preserved F32 attention sinks match the external target. This bounded
+relationship does not authenticate every quantized parameter or the support
+model; complete checkpoint equivalence remains UNPROVEN. Old checkpoint
+reference and representation-quality claims cannot transfer.
+
+The new encoding implementation has SHA-256
+`abc0d26120250dda0ae077dc64aa28836026e61e970854aaeb792445e6a0dde6`.
+Its four official encoding/parsing cases pass, with unchanged fixture bytes,
+but its reasoning policy differs: `high` now uses the previous maximum
+instruction and `max` has a distinct upstream instruction. Neither the four
+vectors nor tokenizer equality qualifies native high/maximum prompt parity.
+The new conversation policy must be admitted independently; reusing the old
+maximum instruction or silently mapping the two levels is forbidden.
+Checkpoint-owned conversation recipes now reside in the tokenizer family
+projection, separate from model topology and generic rendering. Compilation
+selects an exact target and seals its pointer-free policy; runtime does not look
+up a family. Three bounded `hello` request controls (none/high/maximum), derived
+from the authenticated 0731 encoder, match native/provider prompt bytes. They
+supplement the official vectors. The emitted artifact and compiled binding now
+also pass all four official BPE controls, one upstream request-prefix control,
+13 supplemental BPE controls and four supplemental prompt controls spanning
+none/high/maximum. This does not qualify complete tool/history projection,
+model execution or quality. The old checkpoint's
+prompt digests remain unchanged.
+
+The `deepseek_0731_official_encoding` entry in `tests/vectors/manifest.json` owns the new
+upstream input hashes. `tests/vectors/deepseek_0731_product.json` preserves the
+previous suite's logical cases under this separate checkpoint authority.
+Thirty case/mode inputs are prepared with the upstream encoder; independent
+full-model outputs and native forward execution qualification remain absent.
+The separate `deepseek_0731_prefill.json` and `deepseek_0731_competitive.json`
+suites retain the earlier logical workload bytes under the new checkpoint
+authority. They do not inherit earlier speed or quality claims.
+
+Initial engine A/B should preserve these exact quantized weights wherever
+admission permits. Any required conversion must carry an explicit per-tensor
+equivalence relationship; requantization or a different physical policy is a
+separate experimental axis. Native source interpretation, tokenizer/conversation,
+target/support pairing, complete artifact and binding admission, numerical
+qualification and hosted execution remain prerequisites, not consequences of
+having the files locally. Never relabel this pair with the existing source pin,
+reuse a foreign runtime binding, or silently mix target and draft checkpoints.
+
 ## Target architecture
 
 Layers 0 and 1 use sliding-window attention. Layers 2 through 42 alternate 21

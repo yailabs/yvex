@@ -19,6 +19,36 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## DeepSeek 0731 native preparation (2026-10-09)
+
+The active `.5` source-to-binding checkpoint is published through the
+[generated target detail](benchmarks/generated/qualification-deepseek-0731-native-admission-20261009.md).
+It retains exact source, physical policy, complete artifact, binding and tokenizer
+identities. The source remains separate from the installed older DSpark engine.
+Native emission roundtrip and the pinned independent ggml reader accepted the
+complete file. Compiled binding reopen retains full-file authentication; the
+tokenizer gate passes the four immutable official vectors and bounded native
+prompt controls for none/high/maximum. Neither reader acceptance nor tokenizer
+parity establishes model logits, quality, full forward execution or performance.
+
+A reference-harness defect was observed and repaired at this boundary: importing
+the upstream encoder wrote a Python bytecode cache into the authenticated source
+inventory. Source reopening correctly refused that drift. Only the generated
+cache was moved into the external evidence directory; no source tensor or
+manifest was rewritten. Reference loading now compiles source bytes directly,
+neither producing nor trusting cached bytecode. The negative regression uses an
+unchecked stale bytecode cache and proves that current source bytes execute
+without modifying the source inventory. The old checkpoint's official controls
+still pass independently.
+
+Software evidence includes 72 qualification-contract tests, the exact-checkpoint
+artifact catalog regression, runtime and quantization ASan/LSan/UBSan, and a
+19-PASS structural lane. Those are bounded software evidence, not numerical
+qualification of the new complete model. The installed DeepSeek generation 18
+still retains an operator session; finite generation 2 and the listeners were
+not changed. No new GPU timing or hosted 0731 result was collected while that
+resource boundary remained occupied. The 20/700 exit stays unearned.
+
 ## Installed native coding control (2026-10-09)
 
 The [installed coding target](benchmarks/generated/qualification-deepseek-installed-native-coding-20261009.md)
@@ -3020,3 +3050,78 @@ production code enters the decoder change. Static register counts do not prove
 occupancy or a cause. Raw `compact-expert-tree-*` captures, source, decisions and
 sanitizer evidence remain in the same external root; both idle windows restore
 the installed DeepSeek configuration and preserve finite generation 1.
+
+## Computational reconstruction baseline and rejected realizations (2026-10-09)
+
+Task `.5` starts from the retained `337e7e73` implementation. Its selection
+commit `25b98180` changes project control only; it is not an acceleration.
+The following source-frozen measurements use the exact mixed YVEX artifact,
+one GB10, a resident isolated engine, fresh sessions, greedy non-thinking input
+and the Rust client over native protocol v25. They deliberately select an
+engineering configuration: coding uses context 4096 and 256 committed outputs;
+prefill uses context 16384 and 2048/8192 newly executed inputs. Both use chunk
+512. They are not unchanged operator-default chat measurements, HTTP timings
+or a new DwarfStar same-checkpoint comparison.
+
+| Exact controlled lane | Generated observation |
+| --- | --- |
+| Target-only coding | [Baseline](benchmarks/generated/qualification-deepseek-computational5-baseline-target-coding-20261009.md) |
+| DSpark coding | [Baseline](benchmarks/generated/qualification-deepseek-computational5-baseline-speculative-coding-20261009.md) |
+| Target-only uncached prefill | [2K](benchmarks/generated/qualification-deepseek-computational5-baseline-prefill-2048-20261009.md); [8K](benchmarks/generated/qualification-deepseek-computational5-baseline-prefill-8192-20261009.md) |
+| Instrumented execution, excluded from timing series | [Coding](benchmarks/generated/qualification-deepseek-computational5-baseline-coding-diagnostic-20261009.md); [2K](benchmarks/generated/qualification-deepseek-computational5-baseline-prefill-diagnostic-20261009.md) |
+
+Unprofiled cells retain three complete samples, dispersion and actual committed
+populations. Source-captured libraries independently supply the typed kernel
+identity; the current checkout's library is not substituted for a rejected
+binary. CUPTI diagnostics partition observed device activity, API time outside
+that activity and time outside both. Synchronization waits overlap kernels and
+are not added to them. Logical copy/memset extents are not DRAM traffic or
+physical bandwidth. Hardware-counter occupancy/utilization remains unmeasured.
+
+The observed prefill critical path is predominantly device execution, spread
+across routed expert matrices, attention reduction, ordinary/quantized dense
+projections and positional operations. Decode also has meaningful host/API and
+unattributed intervals; their duration is not automatically removable overhead.
+Kernel grid dimensions alone do not identify tensor roles: the retained shape
+authority identifies the target output head as BF16, not the Q8 support
+projection. Already-resident page warming remains the predecessor's negative
+result and is not rerun here.
+
+### Rejected physical/numerical candidates
+
+| Candidate | Complete-model disposition and generated evidence |
+| --- | --- |
+| Final-publication interval certificate | Preserves intermediate F32 and optional BF16; [coding](benchmarks/generated/qualification-deepseek-computational5-rejected-publication-coding-20261009.md) regresses and [2K](benchmarks/generated/qualification-deepseek-computational5-rejected-publication-prefill-20261009.md) does not improve. Removed. |
+| Phase-local IQ2 signed-digit planes | Prepares selected expert bytes once per chunk without changing the F32 reduction tree. [2K](benchmarks/generated/qualification-deepseek-computational5-rejected-digit-plane-prefill-20261009.md) regresses; [diagnostic](benchmarks/generated/qualification-deepseek-computational5-rejected-digit-plane-diagnostic-20261009.md) attributes additional time to both preparation and consumption. Extra workspace/preparation is not justified. Removed. |
+| Lossless Q8 activation digits | Extends the certified scaled-dot realization, without activation quantization or a different numerical class. [Target-only](benchmarks/generated/qualification-deepseek-computational5-rejected-scaled-q8-target-20261009.md) and [DSpark](benchmarks/generated/qualification-deepseek-computational5-rejected-scaled-q8-speculative-20261009.md) coding earn no material benefit. Removed. |
+| Cooperative expert input tiles | Shares one exact decoded weight tile between independent input warps in CTA-local storage, retaining integer products and F32 trees. [2K](benchmarks/generated/qualification-deepseek-computational5-rejected-cooperative-prefill-20261009.md) regresses; [diagnostic](benchmarks/generated/qualification-deepseek-computational5-rejected-cooperative-diagnostic-20261009.md) localizes the additional device time to the changed expert-up kernel. Removed. |
+
+Six explicit baseline/candidate comparisons pass 69 canonical metric
+comparability gates plus six ordered-fragment/population controls. Source,
+build and kernel changes are declared experimental axes; the expanded-workspace
+candidate also declares its capacity-plan change. Exact internal emitted bytes
+are not an independent checkpoint oracle. None of these candidates is installed
+or retained as production acceleration.
+
+| Control | Authority / input | Expected / observed | Result and exact scope |
+| --- | --- | --- | --- |
+| Final-publication certificate | Independent literal host F64, midpoint and cancellation controls | Zero publication differences in the retained bounded controls; sanitizer reports no errors | PASS for the candidate numerical realization, not upstream model quality |
+| IQ2 digit planes | Independent CPU decode/F64 bounds, original-versus-prepared exact output, tails, malformed work and canaries | Registered `cuda.moe_rows` passes; memcheck reports no errors | PASS at captured geometries; performance rejects it |
+| Q8 digits | Independent literal host F64, finite/subnormal/exceptional inputs, workspace and qtype controls | `cuda.dot_finiteness`, `cuda.quant_qtype` pass; memcheck reports no errors | PASS at captured geometries; performance rejects it |
+| Cooperative tiles | Independent CPU decode/F64 bounds plus exact original/cooperative output, partial rows/columns, bucket boundaries, refusal and recovery | `cuda.moe_rows` and `structural.code-natural` pass; synccheck reports zero errors | PASS for tested numerical/launch controls; not a complete sanitizer or model-quality qualification |
+
+Raw frozen sources, binaries, libraries, profiles, journals, resource witnesses,
+typed kernel reports and `comparisons.json` remain outside Git under
+`/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe`.
+The rejected publication candidate's first attempt fails on an unknown fixture
+before touching the service; it is excluded, not converted into a sample.
+Approved idle windows unload only DeepSeek and restore its original profile,
+strategy, context and chunk on the unchanged installed Host. Finite generation
+2 and approved listeners/trust remain unchanged. Reloaded DeepSeek generations
+are recorded per window; no old generation is represented as current.
+
+This is an incomplete `.5` implementation checkpoint, not its exit. No accepted
+architectural speedup, independent full-model quality promotion, high/maximum
+matrix completion, 20/700 gate, hardware ceiling or installed upgrade is earned
+by these records. `.4` remains stopped with its original requirements unearned;
+`.5` alone owns further computational implementation.

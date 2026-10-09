@@ -19,6 +19,10 @@
 #define YVEX_SELECTED_DEEPSEEK_FILE_BYTES 108285860832ull
 #define YVEX_DEEPSEEK_CURRENT_LOGICAL_TRANSFORM_IDENTITY \
     "f1fca7b4ec04d1b0de2a0f0707b3f78c5600e9a6486a83c6fc9f3a4bd70f88e8"
+#define YVEX_DEEPSEEK_0731_TARGET "deepseek4-v4-flash-0731"
+#define YVEX_DEEPSEEK_0731_QUANT_PRESET "deepseek-v4-flash-0731-q8_0-q2_k-v1"
+#define YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY \
+    "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d"
 #define YVEX_DEEPSEEK_LEGACY_ARTIFACT_TRANSFORM_IDENTITY \
     "cb857e6be90168ddde621c1352b0d45084901c683520f1eb1241d5559e01b7b5"
 #define YVEX_DEEPSEEK_REBIND_ARTIFACT_IDENTITY \
@@ -413,6 +417,7 @@ int yvex_runtime_descriptor_build_deepseek(
     const yvex_semantic_model_ir *semantic_model,
     yvex_runtime_descriptor_failure *failure, yvex_error *err);
 const yvex_model_family_api *yvex_model_register_deepseek_v4(void);
-const yvex_conversation_protocol *yvex_model_deepseek_v4_conversation(void);
+int yvex_tokenizer_deepseek_v4_conversation(
+    yvex_conversation_protocol *out, const char *target_id);
 const yvex_family_compiler_adapter *yvex_compiler_family_deepseek_v4(void);
 #endif

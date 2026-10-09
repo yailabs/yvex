@@ -1019,6 +1019,28 @@ int yvex_test_source_verify(void)
             !yvex_source_target_identity_find_repository("unknown/model"),
         "one source catalog owns qualified target repository and revision truth");
     {
+        const yvex_source_target_identity *candidate =
+            yvex_source_target_identity_find("deepseek4-v4-flash-0731");
+        YVEX_TEST_ASSERT(candidate && candidate != yvex_source_release_identity() &&
+            candidate == yvex_source_target_identity_find_repository(
+                "deepseek-ai/DeepSeek-V4-Flash-0731") &&
+            !strcmp(candidate->upstream_revision,
+                "7872f01b1d1fe23eabc4c98b48bffcef5a386062") &&
+            !strcmp(candidate->upstream_index_oid,
+                "c3b10d45a829545fbf0d9d2880a1aa0b9ab3b43a") &&
+            candidate->upstream_index_size == 5602871ull &&
+            !candidate->logical_model &&
+            !yvex_source_is_release_target(candidate->target_id) &&
+            !yvex_source_logical_model_for_revision("hf", candidate->upstream_repo_id,
+                candidate->upstream_revision) &&
+            !yvex_source_logical_model_for_revision("hf", candidate->upstream_repo_id,
+                YVEX_SOURCE_RELEASE_REVISION) &&
+            yvex_source_target_path(path, sizeof(path), "/models", candidate) &&
+            !strcmp(path, "/models/source/hf/deepseek-ai/DeepSeek-V4-Flash-0731/"
+                "7872f01b1d1fe23eabc4c98b48bffcef5a386062"),
+            "0731 source pin stays separate from release alias, path and qualification");
+    }
+    {
         const yvex_source_logical_model *relation =
             yvex_source_logical_model_for_registry("deepseek4", "v4-flash");
         YVEX_TEST_ASSERT(relation &&

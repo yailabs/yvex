@@ -10,13 +10,37 @@
 #include <string.h>
 
 typedef struct {
+    unsigned long long snapshot, mapping;
+    const char *payload;
+} deepseek_artifact_source;
+
+/* A family catalog is not one checkpoint: every physical row explicitly
+ * retains its source lineage, including historical representations. */
+static const deepseek_artifact_source deepseek_dspark_source = {
+    0x8d8da435dea23049ull, 0x779aa44d104fc718ull,
+    "e05ddb86f9783bf665d05395636588f4e8dbd1ee6f1ba54be4140f84369ee939"};
+static const deepseek_artifact_source deepseek_0731_source = {
+    0x8d8da435dea23049ull, 0x779aa44d104fc718ull,
+    "d46c2f3a4305155f357191e0bd804defe33764b92997c3de123b3b5cab41e5ce"};
+
+typedef struct {
+    const deepseek_artifact_source *source;
     unsigned long long payload_bytes, file_bytes;
     const char *transform, *profile, *name, *quant, *payload_plan;
     const char *payload_bytes_id, *writer, *artifact;
 } deepseek_artifact_variant;
 
 static const deepseek_artifact_variant deepseek_artifact_catalog[] = {
-    {108274154488ull, YVEX_SELECTED_DEEPSEEK_FILE_BYTES,
+    {&deepseek_0731_source, 107066194936ull, 107077901216ull,
+     YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY,
+     "09312d58916c4081ef9091e41bfd35caecc51ed698847a44c2f25740f3db1024",
+     YVEX_DEEPSEEK_0731_QUANT_PRESET,
+     "6ed4f6dd5656e009f4e53ad3731f99560551813de8e6c241e2c0bd8c1307ec88",
+     "90e714a2b1f28adbfcdde935d1c56f1e5b7e75605a36b592b91130f740b8a775",
+     "3881a6aea47fe1a96c8892148bcc3e592c99aaad25de6cff6413e950ce3baa28",
+     "d7f99c3431600567251a1107f6b0e7bced7ea30c678db214a6d5dfa7118a7005",
+     "4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a"},
+    {&deepseek_dspark_source, 108274154488ull, YVEX_SELECTED_DEEPSEEK_FILE_BYTES,
      YVEX_DEEPSEEK_LEGACY_ARTIFACT_TRANSFORM_IDENTITY,
      "a48d43c8594999a1af3a5b1f572b34a5823042cb767832d558642bb804b036c5",
      "deepseek-v4-flash-dspark-bootstrap-q2-v1",
@@ -25,7 +49,8 @@ static const deepseek_artifact_variant deepseek_artifact_catalog[] = {
      "6dce1edb82810715687d40c6d62273e992cfe9e0aa610cb9598447e06fb7099f",
      "1ba1ceaa709862145b1a145e938cf03327cd58da27bca42ade2f884e2b2fc635",
      "bf80bd7372e9ff754cd61d8f6e849ca8eff2177fad40840a2dad8e840b35690a"},
-    {98006498296ull, 98018204640ull, YVEX_DEEPSEEK_LEGACY_ARTIFACT_TRANSFORM_IDENTITY,
+    {&deepseek_dspark_source, 98006498296ull, 98018204640ull,
+     YVEX_DEEPSEEK_LEGACY_ARTIFACT_TRANSFORM_IDENTITY,
      "6a99e9f7c374e3f718cce705002bf2b799db9cc1b86f65091631857f52c1c587",
      "deepseek-v4-flash-dspark-native-drafter-candidate",
      "35002244d5854a2d51b877ea31614cd985c9795d11c7e0904ed3475fec7fcb77",
@@ -33,7 +58,7 @@ static const deepseek_artifact_variant deepseek_artifact_catalog[] = {
      "c79712bb85e31ebdcbd71ef0256709a001ae4cc62c4150ba8726d5dc5722dcd0",
      "2d4694925c02c04811ea846f389a94dbf524d26809a292c93f2c46ca8f05a025",
      "59c4649b19bb9f3eb7c01559e12ae52c3d4fbd067957e35de0a1a851759c7cc1"},
-    {95038503928ull, 95050210304ull,
+    {&deepseek_dspark_source, 95038503928ull, 95050210304ull,
      YVEX_DEEPSEEK_CURRENT_LOGICAL_TRANSFORM_IDENTITY,
      "b9825a070028a66af28cdb25614f7a86c6ad1ec396eed6ae961039db1507ce0e",
      "deepseek-v4-flash-dspark-compact-selective-mxfp4-candidate",
@@ -42,7 +67,7 @@ static const deepseek_artifact_variant deepseek_artifact_catalog[] = {
      "85b52eae100a482f557611ac9b5e84e9bd133525d01a3a7a27fc7520aa819fd5",
      "c4484184f0d4b3aeba9ae306b3247f4e3134e734ecfa6cd0f5d79ac24c524bce",
      "d27b87a9e7c7959c442b0231621588d274f22a8aa916cb05750508cd39ff6f53"},
-    {98006498296ull, 98018204640ull,
+    {&deepseek_dspark_source, 98006498296ull, 98018204640ull,
      YVEX_DEEPSEEK_CURRENT_LOGICAL_TRANSFORM_IDENTITY,
      "4aac0961d3159f8a3d585cd4b08e2d15115c3577ca9df080875238bb79290b2c",
      "deepseek-v4-flash-mixed-iq2xxs-q2k-q8-v1",
@@ -51,7 +76,7 @@ static const deepseek_artifact_variant deepseek_artifact_catalog[] = {
      "c79712bb85e31ebdcbd71ef0256709a001ae4cc62c4150ba8726d5dc5722dcd0",
      "5ee95f33d4ecff5ee7a1c0f6b4c670715191ae1536fcda54afa2a6c00faa663a",
      "51f459af06e60efd411b308aa4ece518f3730b1023a95f86e20e8c2a5422b706"},
-    {95038503928ull, 95050210272ull,
+    {&deepseek_dspark_source, 95038503928ull, 95050210272ull,
      YVEX_DEEPSEEK_CURRENT_LOGICAL_TRANSFORM_IDENTITY,
      "59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0",
      "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1",
@@ -65,7 +90,6 @@ static const deepseek_artifact_variant deepseek_artifact_catalog[] = {
 static int deepseek_catalog_find(unsigned long long file_bytes, const char *profile,
                                  yvex_complete_artifact_admission *out)
 {
-    const char *payload = "e05ddb86f9783bf665d05395636588f4e8dbd1ee6f1ba54be4140f84369ee939";
     size_t index;
 
     for (index = 0u; index < sizeof(deepseek_artifact_catalog) /
@@ -80,12 +104,12 @@ static int deepseek_catalog_find(unsigned long long file_bytes, const char *prof
             .artifact_class = YVEX_ARTIFACT_CLASS_COMPLETE_YVEX,
             .metadata_count = 76ull, .tensor_count = 1409ull,
             .payload_bytes = row->payload_bytes, .file_bytes = row->file_bytes,
-            .source_snapshot_identity = 0x8d8da435dea23049ull,
-            .mapping_identity = 0x779aa44d104fc718ull,
+            .source_snapshot_identity = row->source->snapshot,
+            .mapping_identity = row->source->mapping,
             .tokenizer_complete = 1, .native_reader_accepted = 1,
             .official_reader_accepted = 1, .payload_integrity_accepted = 1,
             .materialization_input_ready = 1};
-        yvex_core_text_copy(out->payload_identity, sizeof(out->payload_identity), payload);
+        yvex_core_text_copy(out->payload_identity, sizeof(out->payload_identity), row->source->payload);
         yvex_core_text_copy(out->transform_identity, sizeof(out->transform_identity), row->transform);
         yvex_core_text_copy(out->profile_identity, sizeof(out->profile_identity), row->profile);
         yvex_core_text_copy(out->profile_name, sizeof(out->profile_name), row->name);

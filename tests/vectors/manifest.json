@@ -35,5 +35,25 @@
       "id": "cuda.embed.f32.small",
       "file": "cuda.jsonl"
     }
-  ]
+  ],
+  "deepseek_0731_official_encoding": {
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "revision": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "scope": "official conversation encoding/parsing inputs; native prompt parity and full-model inference unqualified",
+    "license": "MIT, Copyright (c) 2023 DeepSeek; external snapshot LICENSE retained",
+    "files": {
+      "tokenizer.json": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+      "LICENSE": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+      "encoding/encoding_dsv4.py": "abc0d26120250dda0ae077dc64aa28836026e61e970854aaeb792445e6a0dde6",
+      "encoding/test_encoding_dsv4.py": "c2bc54c4c934f5c64096bd9c555efa7d1ddf179c1eff58f01ceb2dcd60adcf28",
+      "encoding/tests/test_input_1.json": "10e0c074c977c3a80daab758af28219c6b1c2bd7f3f5cf2890c84b361cc32897",
+      "encoding/tests/test_input_2.json": "c44ae0db20fafff38a6021e8068d7ed6e28605d76cafd20be80b03398509f447",
+      "encoding/tests/test_input_3.json": "37bf8ef95e0411ea5f411be0b02fbafec7363438b6ccefddca0c52ec9aeaf69a",
+      "encoding/tests/test_input_4.json": "c45bbd0a1b7a2f75033d8db4ba74ee5b7653bd01114045a52f79d3b387663465",
+      "encoding/tests/test_output_1.txt": "9b366d9d2eac842a6e890594aac0b58648e5623717202b33497afadf03e26540",
+      "encoding/tests/test_output_2.txt": "ca66b01a1ac3a204bb032c928fb607d4877171e998a50f7f89f39fa821b75665",
+      "encoding/tests/test_output_3.txt": "b3b1cd8748b7b90d3c6be6da3f786f12e4d70be073bd445ea162dfad4dc01a64",
+      "encoding/tests/test_output_4.txt": "60e1643840ba9e4aeede450feb7b0498fa66ee24e4a939d48855ce04ec6fc375"
+    }
+  }
 }

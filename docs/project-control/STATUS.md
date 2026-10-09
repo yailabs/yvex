@@ -33,6 +33,19 @@ residency negatives, numerical classes and rejected candidates are retained.
 Selection changes no maturity count and starts neither A03 nor the deferred
 documentation atlas; REPLAI flow integration remains a retained consumer result.
 
+The operator subsequently selected the exact Flash 0731 target/support pair
+used by the DwarfStar control for initial matched-checkpoint experiments inside
+`.5`. The [family record](../model-families/deepseek-v4-flash.md#selected-matched-checkpoint-candidate)
+keeps its distribution identities and pending admission separate from the
+currently admitted DSpark source. No new checkpoint, representation, performance
+or installed-generation claim follows from this selection.
+
+The 0731 native candidate has since completed emission, pinned-reader structural
+acceptance, authenticated binding publication/reopen and artifact-bound official
+encoding/BPE controls. Its [exact preparation record](../evaluation/benchmarks/generated/qualification-deepseek-0731-native-admission-20261009.md)
+keeps forward execution, independent quality and all performance gates unearned.
+The installed DeepSeek/finite generations are not replaced by preparation.
+
 ## Compute product refoundation
 
 The separately selected `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` reconciles
