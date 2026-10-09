@@ -43,8 +43,15 @@ The [0731 native preparation checkpoint](../evaluation/benchmarks/generated/qual
 now earns complete artifact emission/reader acceptance, authenticated binding
 publication/reopen and artifact-bound official encoding controls. It does not
 earn model execution, independent representation quality, performance or rollout.
-The next live step requires release of the operator's existing DeepSeek engine;
-do not overlap both complete models or retire its preserved session for a test.
+The operator subsequently authorized closing the retained session and temporarily
+unloading the existing DeepSeek engine. The clean published build's first
+[native 0731 load](../evaluation/benchmarks/generated/qualification-deepseek-0731-native-load-refusal-20261009.md)
+then refused the current system-memory envelope before residency or inference.
+The old artifact/profile was restored at a new generation; finite and listeners
+were preserved. Resolving this admission boundary precedes profiling. A coordinated
+installed-process restart requires separate authority; alternatively a smaller
+representation needs its own preparation/qualification. No reserve reduction,
+automatic rollout, hardware throughput ceiling or 20/700 completion is claimed.
 
 The predecessor `.4` owns the retained
 [cancelled-prefill decode-clock repair](../evaluation/retained-observations.md#cancelled-prefill-decode-clock-repair-2026-10-08):

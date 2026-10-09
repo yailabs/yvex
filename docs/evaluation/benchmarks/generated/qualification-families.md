@@ -19,6 +19,7 @@ Every row links its complete context. Missing metrics are not zero; these rows d
 | Target | family_contract | upstream_repository | checkpoint | Quality | Performance |
 | --- | --- | --- | --- | --- | --- |
 | [DeepSeek 0731 native artifact and binding; inference unqualified](qualification-deepseek-0731-native-admission-20261009.md) | deepseek-v4-flash-dspark | deepseek-ai/DeepSeek-V4-Flash-0731 | 7872f01b1d1fe23eabc4c98b48bffcef5a386062 | BLOCKED | UNQUALIFIED |
+| [DeepSeek 0731 Q8/Q2: native load blocked by memory admission](qualification-deepseek-0731-native-load-refusal-20261009.md) | deepseek-v4-flash-dspark | deepseek-ai/DeepSeek-V4-Flash-0731 | 7872f01b1d1fe23eabc4c98b48bffcef5a386062 | BLOCKED | BLOCKED |
 | [DeepSeek candidate — diagnostic whole-model CUDA submission profile](qualification-deepseek-candidate-compute-profile-12.md) | deepseek-v4-flash-dspark | deepseek-ai/DeepSeek-V4-Flash-DSpark | 62af8fffb2f7030cac4de2f0169f5b8d1101b646 | BLOCKED | UNQUALIFIED |
 | [DeepSeek candidate — explicit page warming, coding target-only native v24](qualification-deepseek-candidate-explicit-warm-coding-11.md) | deepseek-v4-flash-dspark | deepseek-ai/DeepSeek-V4-Flash-DSpark | 62af8fffb2f7030cac4de2f0169f5b8d1101b646 | BLOCKED | CHARACTERIZED |
 | [Candidate target-only: native C hash-table coding control](qualification-deepseek-candidate-native-coding-17.md) | deepseek-v4-flash-dspark | deepseek-ai/DeepSeek-V4-Flash-DSpark | 62af8fffb2f7030cac4de2f0169f5b8d1101b646 | BLOCKED | CHARACTERIZED |

@@ -46,6 +46,13 @@ encoding/BPE controls. Its [exact preparation record](../evaluation/benchmarks/g
 keeps forward execution, independent quality and all performance gates unearned.
 The installed DeepSeek/finite generations are not replaced by preparation.
 
+The subsequent operator-released window produced a source-stable
+[native load refusal](../evaluation/benchmarks/generated/qualification-deepseek-0731-native-load-refusal-20261009.md):
+the initial Q8/Q2 representation plus existing transient/reserve admission exceeds
+the current host-preserving memory envelope. No 0731 forward or throughput was
+measured. The same older DeepSeek profile was restored, finite stayed on its
+original generation, and `.5` remains selected with its performance exit unearned.
+
 ## Compute product refoundation
 
 The separately selected `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` reconciles

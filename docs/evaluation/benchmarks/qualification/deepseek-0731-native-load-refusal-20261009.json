@@ -1,0 +1,191 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-0731-native-load-refusal-20261009",
+  "title": "DeepSeek 0731 Q8/Q2: native load blocked by memory admission",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "physical_policy": "d66294b5e016806f2e283e8b0160e25385302fa6c9db4ac24a49e94140fa0ea9",
+    "representation": "deepseek-v4-flash-0731-q8_0-q2_k-v1",
+    "artifact_set": "4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a",
+    "binding": "29676295361a8c99b86b3e1837a64e23791337f862d01fbeaeb2b5361399cc6d",
+    "specialization": null,
+    "source_commit": "4ecc2b6b4abde7e76e34ba3758b946842f0a04f3",
+    "source_tree": "599754283780af35ae3b6bfcda2f5f1448741207",
+    "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build": "90f1b0db1d8341e7608359d5dc68fa665637f26cd86c773d6922a82311a515ef",
+    "executable": "f3d1611be8a322d080117380d9cf61591f0544173cc20071095d85e5a9c53c72",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "device_count": 1,
+    "topology": "single GB10 coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "runtime_configuration": "requested 4096 context; native host isolated; no engine admitted",
+    "context": 4096,
+    "prefill_geometry": "not admitted; configured CUDA default 512 not reached",
+    "sequence_geometry": "requested width 1; no session created",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none intended; no request submitted",
+    "sampling": "greedy intended; no request submitted",
+    "product_path": "isolated Rust host / native protocol v25 load admission",
+    "suite": null
+  },
+  "target_identity": "cf323fcb612cf1e88ba9f3ca25af7291be31ed2e18e6b61297700b91a6ada6da",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "CHARACTERIZED",
+      "scope": "Four official encoding vectors plus artifact-bound BPE and bounded none/high/maximum prompt controls; not full tool/history semantics",
+      "required_evidence": [],
+      "evidence": {
+        "native-tokenizer": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-binding-tokenizer-evidence.json",
+          "sha256": "404ab4490c787bf443c976e8d9c17f5a10ed5a3107d23ba6a71e157e0af4f94a",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Exact 0731 source; independent full-model checkpoint reference remains missing",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No checkpoint-matched independent full-model output/logit evidence"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Native Q8_0/Q2_K artifact integrity is not quantization quality",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent checkpoint-matched quality comparison for this physical variant"
+      ]
+    },
+    "backend-execution": {
+      "state": "BLOCKED",
+      "scope": "0731 full-model execution and timing unearned",
+      "required_evidence": [],
+      "evidence": {
+        "native-load": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01/failure.json",
+          "sha256": "49cff4de54191f3937272354e3d19975ce51ddf1bbe96ea6e6400310f55ed175",
+          "result": "BLOCKED"
+        }
+      },
+      "blockers": [
+        "Native engine load refuses before residency: minimum preflight is 124458152440 bytes; current host-preserving system window has about 120.4 GB available. No 0731 forward executed. A service-memory/reconfiguration window or separately admitted smaller representation is required; this is not a hardware throughput ceiling."
+      ]
+    },
+    "deployment-performance": {
+      "state": "BLOCKED",
+      "scope": "0731 full-model execution and timing unearned",
+      "required_evidence": [],
+      "evidence": {
+        "native-load": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01/failure.json",
+          "sha256": "49cff4de54191f3937272354e3d19975ce51ddf1bbe96ea6e6400310f55ed175",
+          "result": "BLOCKED"
+        }
+      },
+      "blockers": [
+        "Native engine load refuses before residency: minimum preflight is 124458152440 bytes; current host-preserving system window has about 120.4 GB available. No 0731 forward executed. A service-memory/reconfiguration window or separately admitted smaller representation is required; this is not a hardware throughput ceiling."
+      ]
+    },
+    "product-path": {
+      "state": "BLOCKED",
+      "scope": "Observed fail-closed native load; no generation or rollout",
+      "required_evidence": [],
+      "evidence": {
+        "native-load": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01/failure.json",
+          "sha256": "49cff4de54191f3937272354e3d19975ce51ddf1bbe96ea6e6400310f55ed175",
+          "result": "BLOCKED"
+        }
+      },
+      "blockers": [
+        "Native engine load refuses before residency: minimum preflight is 124458152440 bytes; current host-preserving system window has about 120.4 GB available. No 0731 forward executed. A service-memory/reconfiguration window or separately admitted smaller representation is required; this is not a hardware throughput ceiling."
+      ]
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "scope": "Clean published source and captured binary; refused native load, not a performance sample",
+    "evidence_root": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01",
+    "profiled": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01/source-capture.json",
+    "accounting": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-memory-preflight.json",
+      "sha256": "e16308218c0638b49d9ab72dd3b07f3b7f26274b2342858d615d8c42c02f4ebd"
+    },
+    "restoration": {
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01/production-after.json",
+      "sha256": "87c698a81a43b10e10f3b77016daf4ef48d968cec26b11ec30df3ce2f055ef31",
+      "old_checkpoint_generation": 19,
+      "finite_generation": 2,
+      "installed_source": "337e7e73057abd8a784a67eea58ad8a6f079869d"
+    },
+    "diagnostics": [
+      {
+        "id": "artifact.payload-bytes",
+        "case": "native-load-admission",
+        "value": 107066194936,
+        "unit": "byte",
+        "definition": "Encoded payload, included once in preflight; not measured residency",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-memory-preflight.json"
+      },
+      {
+        "id": "admission.maximum-tensor-transient-bytes",
+        "case": "native-load-admission",
+        "value": 1059061760,
+        "unit": "byte",
+        "definition": "Existing preflight maximum encoded tensor transient; not an observed allocation",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-memory-preflight.json"
+      },
+      {
+        "id": "admission.system-reserve-bytes",
+        "case": "native-load-admission",
+        "value": 16332895744,
+        "unit": "byte",
+        "definition": "Existing mandatory total-memory/8 reserve; unchanged",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-memory-preflight.json"
+      },
+      {
+        "id": "admission.minimum-preflight-bytes",
+        "case": "native-load-admission",
+        "value": 124458152440,
+        "unit": "byte",
+        "definition": "Sum of payload, reserve and maximum tensor; excludes later startup-workspace qualification",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-memory-preflight.json"
+      },
+      {
+        "id": "admission.available-at-accounting-probe",
+        "case": "native-load-admission",
+        "value": 120408330240,
+        "unit": "byte",
+        "definition": "Later read-only system capacity observation with old engine restored; not the exact failed-load instant",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-memory-preflight.json"
+      }
+    ]
+  },
+  "limitations": [
+    "Failed load is not a zero-throughput measurement. No new prefill, decode, TTFT or quality result exists.",
+    "Per-plane family/reference/quality history is inherited only for this exact artifact/checkpoint; it does not qualify this new build.",
+    "The reserve is unchanged. No operator model was loaded concurrently with the candidate; finite generation 2 and installed listeners remained available.",
+    "Operator authorized closure of main and temporary old DeepSeek unloading. The same old artifact/binding/profile was restored at generation 19; session context was not replayed.",
+    "Unaccepted CUDA candidate remains outside the clean measured build. Page warming and managed prefetch negatives were not rerun.",
+    "Restarting the installed host is not authorized implicitly; a separate coordinated request was issued. No physical impossibility or performance ceiling is established."
+  ]
+}

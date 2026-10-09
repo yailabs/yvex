@@ -49,6 +49,30 @@ still retains an operator session; finite generation 2 and the listeners were
 not changed. No new GPU timing or hosted 0731 result was collected while that
 resource boundary remained occupied. The 20/700 exit stays unearned.
 
+## DeepSeek 0731 native load admission (2026-10-09)
+
+After explicit operator authorization, the detached `main` session was closed
+and only the previous DeepSeek engine was unloaded. A clean build of `4ecc2b6b`
+then attempted the exact prepared 0731 artifact/binding through an isolated Rust
+host, native protocol v25, requested target-only strategy and context 4096.
+The [identity-bound load record](benchmarks/generated/qualification-deepseek-0731-native-load-refusal-20261009.md)
+retains the failed admission, exact build/source capture, current accounting and
+restoration evidence. The public view derives its byte facts from that record.
+
+The initial preflight requires encoded payload plus the existing maximum-tensor
+transient and mandatory system reserve. It refused before residency; no session,
+forward, decode or prefill sample was produced. The later read-only accounting
+probe is explicitly a separate memory observation, not the exact load instant.
+The full startup/workspace gate has not yet been reached. This is a current
+deployment-envelope blocker, not proof of physical impossibility or a throughput
+ceiling. The reserve and numerical contracts were not changed.
+
+The isolated host was stopped after confirmed idle cleanup. The installed binary
+was not replaced or restarted; the same old DeepSeek artifact, binding and
+configuration were restored at generation 19. Finite stayed at generation 2 and
+its listeners remained available. The closed session's context was not replayed.
+Unaccepted CUDA changes remain separate from the clean attempted baseline.
+
 ## Installed native coding control (2026-10-09)
 
 The [installed coding target](benchmarks/generated/qualification-deepseek-installed-native-coding-20261009.md)
