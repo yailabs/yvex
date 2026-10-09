@@ -86,7 +86,19 @@ pub(crate) fn identity(invocation: &Invocation<'_>, control: bool) -> Result<Box
             .or(invocation.value("--asset-name"))
             .unwrap_or(repository.rsplit('/').next().unwrap_or(""));
         let provider = invocation.value("--provider").unwrap_or("huggingface");
-        let mut record = ffi::catalog::acquired_target(root, name)?.unwrap_or_default();
+        // An explicit repository/revision/selection identifies a new acquisition,
+        // not a request to resolve a potentially ambiguous retained short name.
+        // Reconstruct it identically in the supervisor; configure/start still
+        // fence the exact durable path, operation identity and generation.
+        let explicit_selection = !control
+            && invocation.has("--family")
+            && invocation.has("--revision")
+            && (invocation.has("--include") || invocation.has("--exclude"));
+        let mut record = if explicit_selection {
+            Box::<Provenance>::default()
+        } else {
+            ffi::catalog::acquired_target(root, name)?.unwrap_or_default()
+        };
         let retained_family = ffi::text(&record.family);
         let family = if matches!(provider, "gh" | "github") {
             "github"

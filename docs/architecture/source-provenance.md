@@ -32,6 +32,15 @@ stale PID or a foreign generation cannot silently resume a different transfer.
 Unknown provider progress remains unknown. A successful download does not
 establish a model's architecture or executable support.
 
+Explicit repository, family, revision and file-selection acquisition resolves
+that exact selection, including supervisor re-entry, rather than an ambiguous
+retained short name. Metadata-only and complete-payload selections may coexist;
+an ambiguous short-name control request still refuses. A supervisor that never
+publishes its process identity leaves STARTING only for the bounded startup
+window, then becomes stopped/resumable. A late worker must still own the exact
+live operation before starting a provider; this does not time out a healthy
+download merely because payload progress is unavailable.
+
 Atomic sidecar publication and bounded reading compose through one opened file
 identity. The generic metadata reader sizes and reads that descriptor, rather
 than sizing a pathname which can be replaced before open. A concurrent reader

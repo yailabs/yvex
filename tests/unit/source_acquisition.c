@@ -103,6 +103,23 @@ static int test_reconciliation(void)
     operation.progress.last_progress_unix =
         (yvex_source_acquisition_u64){100ull, 1};
     yvex_error_clear(&err);
+    operation.lifecycle = YVEX_SOURCE_ACQUISITION_STARTING;
+    operation.created_unix = 100ull;
+    YVEX_TEST_ASSERT(yvex_source_acquisition_reconcile(
+                         &operation, 99ull, 10ull, &err) == YVEX_OK &&
+                         operation.lifecycle == YVEX_SOURCE_ACQUISITION_STARTING,
+                     "backward wall clock does not expire startup");
+    YVEX_TEST_ASSERT(yvex_source_acquisition_reconcile(
+                         &operation, 109ull, 10ull, &err) == YVEX_OK &&
+                         operation.lifecycle == YVEX_SOURCE_ACQUISITION_STARTING,
+                     "unpublished supervisor retains bounded startup grace");
+    YVEX_TEST_ASSERT(yvex_source_acquisition_reconcile(
+                         &operation, 110ull, 10ull, &err) == YVEX_OK &&
+                         operation.lifecycle == YVEX_SOURCE_ACQUISITION_STOPPED &&
+                         !strcmp(operation.reason, "supervisor-not-started") &&
+                         !strcmp(operation.result, "interrupted-resumable"),
+                     "pre-publication worker failure cannot remain starting forever");
+    operation.lifecycle = YVEX_SOURCE_ACQUISITION_DOWNLOADING;
     YVEX_TEST_ASSERT(yvex_source_acquisition_reconcile(
                          &operation, 109ull, 10ull, &err) == YVEX_OK,
                      "reconcile slow but fresh progress");

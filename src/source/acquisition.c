@@ -711,6 +711,18 @@ int yvex_source_acquisition_reconcile(
         return acquisition_refuse(err, YVEX_ERR_FORMAT, "source.acquisition.reconcile",
                                   "operation schema is unsupported");
     if (yvex_source_acquisition_terminal(operation->lifecycle)) return YVEX_OK;
+    /* A child may fail before publishing its process identity. Bound that
+     * STARTING state too; a late worker must refuse this retired operation. */
+    if (operation->lifecycle == YVEX_SOURCE_ACQUISITION_STARTING &&
+        !operation->supervisor.present && now_unix >= operation->created_unix &&
+        now_unix - operation->created_unix >= stall_window_seconds) {
+        operation->lifecycle = YVEX_SOURCE_ACQUISITION_STOPPED;
+        operation->health = YVEX_SOURCE_ACQUISITION_HEALTH_DEGRADED;
+        operation->updated_unix = now_unix;
+        snprintf(operation->reason, sizeof(operation->reason), "supervisor-not-started");
+        snprintf(operation->result, sizeof(operation->result), "interrupted-resumable");
+        return YVEX_OK;
+    }
     supervisor_alive = yvex_source_acquisition_process_matches(&operation->supervisor);
     if (operation->supervisor.present && !supervisor_alive) {
         operation->lifecycle = YVEX_SOURCE_ACQUISITION_STOPPED;

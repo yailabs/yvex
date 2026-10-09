@@ -2756,6 +2756,27 @@ def supervised_acquisition(binary: Path, reference: Path | None) -> int:
         assert value["local_source_dir"] == selected_source and value["include_patterns"] == ["*.json"]
         assert value["exclude_patterns"] == ["*.md"]
         count += 1
+        # Metadata-only then full selection of the SAME source: the worker
+        # must reopen its exact operation, not resolve an ambiguous alias.
+        multiple = directory / "multiple-selections"
+        common = ["source", "acquire", "--repo", "test-org/test-model", "--family", "gemma",
+                  "--name", "selected-model", "--revision",
+                  "b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08", "--models-root", str(multiple),
+                  "--auth", "required", "--json", "--stall-seconds", "2"]
+        selected_paths = []
+        for pattern in ("*.json", "*", "*.safetensors"):
+            result = invoke(binary, [*common, "--include", pattern], environment)
+            assert result.returncode == 0, result
+            receipt = json.loads(result.stdout)
+            assert receipt["status"] == "model-download-pass", receipt
+            selected_paths.append(receipt["local_source_dir"])
+            count += 1
+        assert len(set(selected_paths)) == 3 and all(Path(p).is_dir() for p in selected_paths)
+        result = invoke(binary, ["source", "status", "--repo", "test-org/test-model",
+                                 "--family", "gemma", "--name", "selected-model",
+                                 "--models-root", str(multiple), "--json"], environment)
+        assert result.returncode != 0 and "ambiguous" in result.stderr, result
+        count += 1
         failed = directory / "failed"
         value = checked("acquire", failed, "--auth", "required", expected=1,
                         extra={"YVEX_FAKE_HF_FAIL_AT_STEP": "2"})
