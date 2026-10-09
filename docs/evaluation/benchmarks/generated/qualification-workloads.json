@@ -1940,6 +1940,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-installed-native-coding-20261009",
+          "target_identity": "13b1c5bf203ad5e0c139fb7609d60b89efca6e9cf5681ac84221bdcd9d9b2349",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-native-clean-baseline-20261009-coding",
           "target_identity": "fccdfdcd4460858a2727b0b62c83f1024905e718611ad5f8c84aea772b09da04",
           "path": "product-native-v25",
@@ -1988,6 +1996,22 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-native-lossless-mxfp4-eligible-16k-20261009-coding",
+          "target_identity": "0ce1a4dc8bfd654147da9586f3f83721bcf0049b155b2cc415f60ed576254ef2",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-lossless-mxfp4-matrix-16k-20261009-coding",
+          "target_identity": "b8e6cc68f8d58262f2e085b2c7c938ed8e06dc51760d59f9f2216940fdf0e9bf",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-native-operator-baseline",
           "target_identity": "47b709776420f206218c1e39b1eaa8e8cfa24467a46bdd50018d1e5e7c69e78c",
           "path": "product-native-v24",
@@ -2022,6 +2046,14 @@
         {
           "id": "deepseek-native-q8-decoded-dispatch-candidate-20261009-coding",
           "target_identity": "211b54b8b11b5bccb899e6644ff6765c2b37aae6e2b950b99891d96e42543be6",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-native-qtype-combined-16k-20261009-coding",
+          "target_identity": "21aabfd5a70cb9b02c08a578e7edcf7585be8ce0ebb30f4add5887f5338cd208",
           "path": "product-native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",

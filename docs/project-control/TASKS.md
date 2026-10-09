@@ -236,6 +236,13 @@ separates controlled/native complete-model effects from CPU/device diagnostics.
 The installed runtime is not republished by these measurements; the same full
 inference Task and its unearned 20/700 gates continue.
 
+The [installed native coding control and lossless-matrix comparison](../evaluation/retained-observations.md#installed-native-coding-control-2026-10-09)
+retain the actual installed 32K/chunk-64 producer separately from matched
+16K/chunk-512 experiments. Lossless matrix candidates preserve numerical and
+committed-fragment controls but do not earn a material complete-model gain;
+their code is not adopted. Explicitly authorized idle windows restore DeepSeek
+and preserve finite/transports. The same Task and unearned 20/700 exit continue.
+
 Sixteen-column expert input reuse is rejected after unchanged-population,
 source-stable complete-model prefill regressions. [Retained rejection](../evaluation/retained-observations.md#rejected-sixteen-column-expert-input-reuse-2026-10-08)
 separates exact component controls, profiler attribution and unprofiled results;

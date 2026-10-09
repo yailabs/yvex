@@ -19,6 +19,74 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Installed native coding control (2026-10-09)
+
+The [installed coding target](benchmarks/generated/qualification-deepseek-installed-native-coding-20261009.md)
+records three fresh `coding.metal` requests against the actual resident
+`7fc562d5` executable, DeepSeek generation 44, context 32768, chunk 64,
+speculative strategy, reasoning none and explicitly greedy sampling. Each
+request commits 256 output tokens from 53 newly prefilled positions. This is
+native protocol v25, not HTTP, interactive paint timing, target-only decode or
+a canonical 2K/8K prefill gate. Median, range and dispersion come from that
+structured receipt; they are not maintained separately in prose.
+
+The observed process executable matches the previously retained clean source,
+binary and static-library capture. A separate post-sample native backend probe
+links that exact library and its captured headers to the kernel identity. Only
+source/build provenance is reused from the earlier finite rollout: no finite
+model qualification transfers to DeepSeek. The detached operator session,
+engine generations and configurations remain unchanged throughout sampling.
+Hardware thermal/clock facts are post-sample observations. The process witness
+is sampled, not an uninterrupted reservation; compiler absence was checked
+before sampling, not continuously. Server first-fragment publication remains
+unavailable, so subtracting internal TTFT from client visibility is not a pure
+transport-delay measurement.
+
+Raw evidence is retained under `full-system-20261008.k2BN6u/installed-native-coding-20261009-flow-window-02`.
+Attempt 01 refused the measurement client's device lock before dispatch because
+its parent also held that lock. The corrected observer lets the canonical Rust
+qualification command own the lock; there was no failed inference or uncertain
+request replay. Context/chunk differences from the separately published
+development candidate must remain explicit. Independent model quality and the
+20/700 exit remain unearned.
+
+### Rejected lossless matrix coding realization
+
+The same-window native comparison keeps the mixed artifact, bindings, greedy
+coding workload, 256 committed output tokens, reasoning none, one sequence and
+speculative strategy fixed. Its context is explicitly **16384**, chunk 512,
+not the installed 32768/chunk-64 product target above. The initial 32768 candidate
+load refused before inference because the observed available memory could not
+preserve the existing reserve. No reserve, finite engine or foreign process was
+removed to admit it; both compared arms instead use the same smaller context.
+
+| Exact arm | Native N=3 result | Disposition |
+| --- | --- | --- |
+| Retained decoder baseline | [Exact target](benchmarks/generated/qualification-deepseek-native-qtype-combined-16k-20261009-coding.md) | Same-window comparison authority |
+| Lossless MXFP4 matrix | [Exact target](benchmarks/generated/qualification-deepseek-native-lossless-mxfp4-matrix-16k-20261009-coding.md) | Rejected: complete coding regresses |
+| Matrix with empty-eligibility tile refusal | [Exact target](benchmarks/generated/qualification-deepseek-native-lossless-mxfp4-eligible-16k-20261009-coding.md) | Rejected: no material complete-model gain |
+
+The candidate reuses exact encoded weights across lossless activation columns
+with integer MMA, retaining the ordered-F64 publication certificate and original
+cooperative fallback. Its second revision skips matrix tiles with no admitted
+columns. Five mapped controls pass, including independent CPU ordered-F64 results,
+F32/BF16 publication, all-ineligible and partial tiles, grouped populations,
+nonfinite/prior-status refusal, canaries and cleanup. Both complete-model
+comparisons preserve all 768 ordered typed fragments and terminal speculative
+populations exactly. This does not supply an upstream model-quality oracle.
+No candidate code is adopted or deployed. No candidate long-prefill claim is
+earned from these short-prompt coding controls.
+
+External `full-system-20261008.k2BN6u` directories `qtype-combined-native-coding-16k-20261009-01`,
+`lossless-mxfp4-matrix-native-coding-16k-20261009-01` and
+`lossless-mxfp4-eligible-native-coding-16k-20261009-01` retain source/binary
+captures, typed backend identity, resource observations and strict comparison
+decisions. The separate failed 32K load remains under
+`lossless-mxfp4-matrix-native-coding-20261009-01`. Every completed window restores
+the installed model/configuration; the final observed DeepSeek generation is 48,
+finite remains 1, and approved transports/grants are unchanged. Closing the
+operator's detached `main` context was explicitly authorized before these windows.
+
 ## Native output-flow consumer (2026-10-09)
 
 The active `V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4`
@@ -77,6 +145,30 @@ without replacing the random source or changing its contract. Node 22 is now
 explicit in the native lane for the pinned terminal observer. Linux platform
 regression passes; the newly published macOS consumer must still earn its own
 hosted evidence, not inherit a Linux result.
+
+At published merge `8f48bb10`, Linux reruns all six consumer/platform/documentation
+lanes successfully. Hosted macOS run
+[37931093173](https://github.com/yailabs/yvex/actions/runs/37931093173), receipt
+`2a491f2b`, separately passes Rust shell, REPL and terminal-flow/reflow. The whole
+native lane is **16 PASS / 4 FAIL / 4 BLOCKED**, not a green aggregate: three
+management fixtures exceed Darwin Unix-socket path limits and one acquisition
+fixture fails its domain operation. Four SDK lanes lack configured external
+example executables. The fixture correction uses a short canonical temporary
+root, matching the existing source-acquisition lifecycle fixture, without
+weakening production socket or filesystem checks. Linux's four affected
+management fixtures pass; a new hosted run must establish the Darwin repair.
+These failures and missing SDK prerequisites do not inherit the narrower
+terminal consumer PASS.
+
+The same run's Linux hermetic lane records **128 PASS / 3 FAIL**: the terminal
+observer installed dependencies under `tests/`, and its npm lock filename
+violated source-layout naming. The repair retains the exact package integrity
+as `tests/terminal_flow/npm_lock.json`, stages npm's expected filenames and
+observer below the selected build test directory, and tracks both inputs in
+Make. Structural rules are unchanged. Fresh Linux receipts pass terminal flow
+(`c2b47d27`), repository layout (`8ddc6694`), source layout (`61111e0d`) and
+topology closure (`344a04e4`). The old local dependency directory was moved to
+an external temporary location, not committed or recursively deleted.
 
 Limitations: emulator evidence covers retained scrollback, not its active
 cursor paragraph or every terminal. Null padding before a wrapped wide glyph
