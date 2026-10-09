@@ -2986,7 +2986,16 @@
       "strategy": "speculative",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-native-qtype-combined-long-coding-maximum-16k-20261009",
+          "target_identity": "5d431819beb217506ce8147460ae3b49754f8a1606dab5c535803ec23a9d47eb",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-turn-lifecycle",

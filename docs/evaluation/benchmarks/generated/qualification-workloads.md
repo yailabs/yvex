@@ -57,7 +57,7 @@ Native adapter exclusions:
 
 | Case | Class | speculative / high | target-only / high | speculative / maximum | target-only / maximum | speculative / none | target-only / none |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| coding.metal | representative | [deepseek-gb10-long-turn-native-coding-high-20261008: product-path CHARACTERIZED](qualification-deepseek-gb10-long-turn-native-coding-high-20261008.md)<br>[deepseek-native-qtype-combined-long-coding-high-16k-20261009: product-path CHARACTERIZED](qualification-deepseek-native-qtype-combined-long-coding-high-16k-20261009.md) | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
+| coding.metal | representative | [deepseek-gb10-long-turn-native-coding-high-20261008: product-path CHARACTERIZED](qualification-deepseek-gb10-long-turn-native-coding-high-20261008.md)<br>[deepseek-native-qtype-combined-long-coding-high-16k-20261009: product-path CHARACTERIZED](qualification-deepseek-native-qtype-combined-long-coding-high-16k-20261009.md) | UNQUALIFIED | [deepseek-native-qtype-combined-long-coding-maximum-16k-20261009: product-path CHARACTERIZED](qualification-deepseek-native-qtype-combined-long-coding-maximum-16k-20261009.md) | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
 | conversation.coding | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
 | reasoning.schedule | representative | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED | UNQUALIFIED |
 

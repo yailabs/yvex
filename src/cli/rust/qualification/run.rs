@@ -192,6 +192,43 @@ fn terminal_refusal(reply: &raw::yvex_client_message, session: &Session) -> Valu
         "measurement":false,"retry":false})
 }
 
+#[derive(Default)]
+struct VisibleDelivery {
+    last_seconds: Option<f64>,
+    fragments: u64,
+    gap_sum: f64,
+    gap_maximum: f64,
+}
+
+impl VisibleDelivery {
+    fn observe(&mut self, bytes: usize, channel: u32, seconds: f64) -> Result<()> {
+        if bytes == 0 || !matches!(channel, 1 | 2) {
+            return Ok(());
+        }
+        require(
+            seconds.is_finite() && seconds >= 0.0,
+            "invalid delivery clock",
+        )?;
+        if let Some(previous) = self.last_seconds {
+            require(seconds >= previous, "delivery clock regressed")?;
+            let gap = seconds - previous;
+            self.gap_sum += gap;
+            self.gap_maximum = self.gap_maximum.max(gap);
+        }
+        self.last_seconds = Some(seconds);
+        self.fragments += 1;
+        Ok(())
+    }
+
+    fn maximum_gap(&self) -> Option<f64> {
+        (self.fragments >= 2).then_some(self.gap_maximum)
+    }
+
+    fn mean_gap(&self) -> Option<f64> {
+        (self.fragments >= 2).then(|| self.gap_sum / (self.fragments - 1) as f64)
+    }
+}
+
 fn turn(
     session: &Session,
     prompt: &str,
@@ -232,6 +269,7 @@ fn turn(
     let mut first_reasoning = None;
     let mut first_final = None;
     let mut admitted = None;
+    let mut delivery = VisibleDelivery::default();
     loop {
         let reply = connection.receive()?;
         require(
@@ -264,6 +302,7 @@ fn turn(
                 require(count <= reply.bytes.len(), "fragment exceeds native bound")?;
                 let visible = count > 0 && matches!(reply.stream_channel, 1 | 2);
                 let seconds = started.elapsed().as_secs_f64();
+                delivery.observe(count, reply.stream_channel, seconds)?;
                 if visible {
                     first_visible.get_or_insert(seconds);
                     if reply.stream_channel == 1 {
@@ -297,6 +336,9 @@ fn turn(
                     "client_admitted_seconds":admitted,"sampling":sampling,
                     "client_first_visible_seconds":first_visible,"client_first_reasoning_seconds":first_reasoning,
                     "client_first_final_seconds":first_final,"server_first_token_seconds":reply.first_token_seconds,
+                    "client_visible_fragments":delivery.fragments,
+                    "client_visible_gap_max_seconds":delivery.maximum_gap(),
+                    "client_visible_gap_mean_seconds":delivery.mean_gap(),
                     "first_fragment_publication_seconds":null,"prompt_tokens":reply.prompt_tokens,
                     "reused_tokens":reply.reused_tokens,"prefill_tokens":reply.prefill_tokens,
                     "prefill_seconds":reply.prefill_seconds,"prefill_rate":reply.prefill_rate,
@@ -697,6 +739,14 @@ fn measurements(
                 ("admission.client", "client_admitted_seconds"),
                 ("request.client-complete", "client_complete_seconds"),
                 ("ttft.client-visible", "client_first_visible_seconds"),
+                (
+                    "delivery.client-gap.maximum",
+                    "client_visible_gap_max_seconds",
+                ),
+                (
+                    "delivery.client-gap.mean",
+                    "client_visible_gap_mean_seconds",
+                ),
                 ("ttft.server", "server_first_token_seconds"),
                 ("reasoning.first.server", "server_first_reasoning_seconds"),
                 ("reasoning.first.client", "client_first_reasoning_seconds"),
@@ -840,6 +890,8 @@ fn receipt(
         "limitations":["Not YVEX-published qualification or a model-quality claim.",
             "Host source/build/checkpoint/hardware provenance unavailable; unknown fields refuse comparison.",
             "First fragment publication and reasoning-to-final transition not measured.",
+            concat!("Delivery gaps measure consecutive nonempty native content fragments, ",
+                "not GPU token intervals, transport-only delay or terminal paint; observer work is included."),
             concat!("Different generated histories are separate input groups, ",
                 "never pooled or treated as deterministic agreement."),
             "Advisory locks do not prove hardware exclusivity; external resource observation is required.",
@@ -850,6 +902,60 @@ fn receipt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visible_delivery_keeps_ttft_controls_and_absent_gaps_separate() {
+        let mut delivery = VisibleDelivery::default();
+        assert_eq!(delivery.maximum_gap(), None);
+        assert_eq!(delivery.mean_gap(), None);
+        delivery.observe(0, 1, 9.0).unwrap();
+        delivery.observe(5, 0, 9.5).unwrap();
+        assert_eq!(delivery.fragments, 0);
+        delivery.observe(5, 2, 10.0).unwrap();
+        assert_eq!(delivery.mean_gap(), None);
+        delivery.observe(0, 2, 10.1).unwrap();
+        delivery.observe(3, 1, 10.25).unwrap();
+        delivery.observe(4, 1, 10.25).unwrap();
+        delivery.observe(4, 2, 11.5).unwrap();
+        assert_eq!(delivery.fragments, 4);
+        assert_eq!(delivery.maximum_gap(), Some(1.25));
+        assert_eq!(delivery.mean_gap(), Some(0.5));
+        for invalid in [11.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert!(delivery.observe(1, 1, invalid).is_err());
+            assert_eq!(delivery.fragments, 4);
+            assert_eq!(delivery.maximum_gap(), Some(1.25));
+        }
+    }
+
+    #[test]
+    fn delivery_metrics_require_two_observed_visible_fragments() {
+        let rules: Value = serde_json::from_str(RULES).unwrap();
+        for count in [Value::Null, json!(0), json!(1), json!(2), json!(4)] {
+            let rows = vec![json!({"turn_index":0,"input_identity":"fixture",
+                "client_visible_fragments":count,"client_visible_gap_max_seconds":1.25,
+                "client_visible_gap_mean_seconds":0.5})];
+            let (metrics, _) = measurements(
+                &json!({"id":"fixture","maximum_output":32}),
+                &["prompt".into()],
+                &rows,
+                &rules,
+                Path::new("/fixture"),
+            )
+            .unwrap();
+            assert_eq!(
+                metrics.len(),
+                if count.as_u64().is_some_and(|n| n >= 2) {
+                    2
+                } else {
+                    0
+                }
+            );
+            if !metrics.is_empty() {
+                assert_eq!(metrics[0]["samples"], json!([1.25]));
+                assert_eq!(metrics[1]["samples"], json!([0.5]));
+            }
+        }
+    }
 
     #[test]
     fn metric_populations_keep_bursts_and_prefix_reuse_out_of_benchmark_rows() {
@@ -1018,6 +1124,7 @@ mod tests {
             ("WAIT_REASONING_CANCEL", "high"),
             ("PARTIAL_FENCE", "none"),
             ("PARTIAL_REASONING", "high"),
+            ("PROGRESSIVE_STREAM", "none"),
         ]
         .into_iter()
         .enumerate()
@@ -1058,14 +1165,28 @@ mod tests {
             }
             cancellation.finish().unwrap();
             let result = result.unwrap();
-            if prompt.starts_with("WAIT_") {
+            if prompt == "PROGRESSIVE_STREAM" {
+                assert_eq!(result["kind"], "turn");
+                assert_eq!(result["client_visible_fragments"], 2);
+                assert!(result["client_visible_gap_max_seconds"].as_f64().unwrap() >= 0.6);
+                assert_eq!(
+                    result["client_visible_gap_max_seconds"],
+                    result["client_visible_gap_mean_seconds"]
+                );
+                assert!(
+                    result["client_first_visible_seconds"].as_f64().unwrap()
+                        < result["client_complete_seconds"].as_f64().unwrap()
+                );
+                assert!(result["first_fragment_publication_seconds"].is_null());
+            } else if prompt.starts_with("WAIT_") {
                 assert_eq!(result["kind"], "cancelled");
+                assert_eq!(result["measurement"], false);
             } else {
                 assert_eq!(result["kind"], "refused");
                 assert_eq!(result["partial"]["reset_required"], 1);
                 assert!(result["partial"]["committed_tokens"].as_u64().unwrap() > 0);
+                assert_eq!(result["measurement"], false);
             }
-            assert_eq!(result["measurement"], false);
             session
                 .operation(
                     raw::yvex_client_operation_YVEX_CLIENT_OP_SESSION_CLOSE,

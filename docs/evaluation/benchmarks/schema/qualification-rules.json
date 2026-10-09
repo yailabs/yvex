@@ -160,6 +160,16 @@
       "s",
       "client dispatch including connect to first nonempty final/reasoning content"
     ],
+    "delivery.client-gap.maximum": [
+      "product-path",
+      "s",
+      "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint"
+    ],
+    "delivery.client-gap.mean": [
+      "product-path",
+      "s",
+      "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint"
+    ],
     "reasoning.first.server": [
       "deployment-performance",
       "s",
@@ -242,6 +252,16 @@
     ]
   },
   "metric_admission": {
+    "delivery.client-gap.maximum": {
+      "client_visible_fragments": {
+        "minimum": 2
+      }
+    },
+    "delivery.client-gap.mean": {
+      "client_visible_fragments": {
+        "minimum": 2
+      }
+    },
     "decode.post-first.committed": {
       "post_first_decode_units": {
         "minimum": 32

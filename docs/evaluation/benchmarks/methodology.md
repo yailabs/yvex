@@ -138,6 +138,20 @@ Subtracting server TTFT from client-visible TTFT does not, by itself, measure
 network latency. First-fragment publication remains unavailable unless the
 producer explicitly supplies it.
 
+Native local receipts also retain the number of nonempty final/reasoning
+fragments observed and the maximum and arithmetic-mean interval between
+consecutive visible fragments. These per-turn gap metrics exclude the interval
+before first content (TTFT), empty fragments and control-only channels; at least
+two visible fragments are required. Missing or single-fragment observations
+remain unavailable, not zero. Each performance sample is a complete turn's gap
+statistic, not a pooled token average. The raw journal preserves receive-relative
+monotonic times and fragment hashes without model prose. Observer/hash/journal
+work and model, publication or transport waits can contribute to the intervals;
+they are not isolated network delay, GPU token timing or REPLAI/PTY paint timing.
+Legitimate verified speculative blocks may arrive close together. The observer
+does not delay, animate or change their publication. Historical receipts do not
+acquire missing observations from a new client version.
+
 Suite manifests own immutable logical cases, provenance/license, applicability,
 output bounds, sampling and admissible reasoning/strategy axes. Discovery uses
 the supported suite schema, not a family name or filename suffix. Unknown suite

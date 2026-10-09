@@ -49,6 +49,8 @@ METRICS = {
     "prefill.uncached": ("deployment-performance", "token/s", "newly committed uncached input positions / complete prefill wall"),
     "ttft.server": ("deployment-performance", "s", "turn start to first committed model-token callback"),
     "ttft.client-visible": ("product-path", "s", "client dispatch including connect to first nonempty final/reasoning content"),
+    "delivery.client-gap.maximum": ("product-path", "s", "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint"),
+    "delivery.client-gap.mean": ("product-path", "s", "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint"),
     "reasoning.first.server": ("deployment-performance", "s", "server turn start to first source-classified reasoning token"),
     "reasoning.first.client": ("product-path", "s", "client dispatch including connect to first nonempty reasoning fragment"),
     "final.first.server": ("deployment-performance", "s", "server turn start to first source-classified final token"),
@@ -69,6 +71,8 @@ METRICS = {
 # Publication eligibility, not runtime admission or a universal sustained-rate
 # guarantee. Both native consumers use this generated population contract.
 METRIC_ADMISSION = {
+    "delivery.client-gap.maximum": {"client_visible_fragments": {"minimum": 2}},
+    "delivery.client-gap.mean": {"client_visible_fragments": {"minimum": 2}},
     "decode.post-first.committed": {"post_first_decode_units": {"minimum": 32}},
     "prefill.uncached": {"reused_tokens": {"maximum": 0}, "prefill_tokens": {"minimum": 1}},
 }

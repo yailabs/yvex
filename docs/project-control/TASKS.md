@@ -40,6 +40,12 @@ composition against fresh same-day Rust/native controls. The numerical class,
 artifact and target verification are unchanged. Complete-model gains remain
 bounded characterization, not installed-Host rollout or the 20/700 exit.
 
+Its bounded [native output-flow integration](../evaluation/retained-observations.md#native-output-flow-consumer-2026-10-09)
+and [client delivery observations](../evaluation/benchmarks/methodology.md#product-lanes-and-reasoning-matrix)
+remain separate from computational acceptance. Terminal/fixture evidence cannot
+close the throughput exit; installed Host and consumer source identities are
+reported independently, and unobserved publication stages remain unavailable.
+
 The independently authorized YVEX repair
 `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` has a qualified bounded producer and
 component repair, but its full mandatory QA gate is BLOCKED by the unavailable

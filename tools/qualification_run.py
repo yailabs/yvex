@@ -494,6 +494,8 @@ def native_measurements(config, rows, scope, evidence, skip_first):
         groups.setdefault(key, []).append(m)
     fields = {"admission.client":"client_admitted_seconds", "prefill.wall":"prefill_seconds",
               "ttft.server":"server_first_token_seconds", "ttft.client-visible":"client_first_visible_seconds",
+              "delivery.client-gap.maximum":"client_visible_gap_max_seconds",
+              "delivery.client-gap.mean":"client_visible_gap_mean_seconds",
               "request.client-complete":"client_complete_seconds",
               "reasoning.first.server":"first_reasoning_seconds", "reasoning.first.client":"client_first_reasoning_seconds",
               "final.first.server":"first_final_seconds", "final.first.client":"client_first_final_seconds"}

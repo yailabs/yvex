@@ -121,6 +121,35 @@ The original mixed artifact and published decoder implementation are unchanged.
 Independent checkpoint quality, remaining reasoning/strategy cells and 20/700
 remain unearned.
 
+The separate [maximum target](benchmarks/generated/qualification-deepseek-native-qtype-combined-long-coding-maximum-16k-20261009.md)
+uses the same logical case, output bound, implementation and isolated deployment,
+including the complete source-authored maximum-effort instruction. Its three
+fresh sessions also reach natural EOS. Rendered prompt and realized continuation
+populations differ from high and remain visible in the generated matrix; modes
+are neither pooled nor ranked as if their work were identical. Frozen capture
+`qtype-combined-native-long-coding-maximum-16k-20261009-01` retains the raw evidence
+in the same root. Teardown restores the installed DeepSeek configuration at
+generation 51, with finite generation 1 and the approved services unchanged.
+
+### Native delivery-gap observation
+
+The Rust qualification client now records mean/maximum intervals between
+consecutive nonempty final/reasoning fragments, alongside existing first-visible
+and server-phase facts. The generic metric authority generates the Rust rules
+and public vocabulary. Empty/control fragments and TTFT do not become gaps;
+fewer than two visible fragments yields no metric, not zero. The constant-space
+observer never delays or republishes content. Hash/journal and client work remain
+inside the observed intervals; no transport-only or GPU-timing claim follows.
+
+Rust-shell receipt `3df7671f` passes the new observation and projection controls,
+including a real native fixture's separately emitted fragments, malformed/absent
+counts, clock regression/nonfinite refusal, partial refusals and cancellation.
+The fixture's deliberate delay is not a model performance sample. Earlier
+high/maximum model captures retain their original receipts and do not silently
+acquire these new fields. No C API, private wire, model policy or runtime
+publication changes. [Methodology](benchmarks/methodology.md#product-lanes-and-reasoning-matrix)
+owns the measurement definitions and limitations.
+
 ## Native output-flow consumer (2026-10-09)
 
 The active `V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4`
@@ -216,6 +245,16 @@ management (`b07e6b9c`), ownership (`7df82ce4`) and source-layout (`23aaf8a0`)
 pass this correction; a new hosted macOS run must establish its platform result.
 The four external SDK prerequisites remain blocked, not waived. No operator
 management service is restarted or replaced by these isolated tests.
+
+Hosted [37937272835](https://github.com/yailabs/yvex/actions/runs/37937272835)
+at `b129936f` establishes the stream correction: macOS receipt `b5a80b70`
+records **20 PASS / 0 FAIL / 4 BLOCKED**, including both TLS tests and the
+Rust-shell/REPL/flow controls. Missing `YVEX_SDK_CONNECTIONS_EXAMPLE` and
+`YVEX_SDK_PRODUCT_EXAMPLE` remain four explicit consumer prerequisites. The
+subsequent workflow ownership/package steps are skipped rather than claimed
+passed. Its Linux hermetic lane passes all 131 tests. This source publication
+does not replace the operator's installed management service or computational
+Host and does not establish a new real-LAN consumer acceptance.
 
 Limitations: emulator evidence covers retained scrollback, not its active
 cursor paragraph or every terminal. Null padding before a wrapped wide glyph

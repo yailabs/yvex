@@ -224,6 +224,14 @@ class NativeReceiptTests(unittest.TestCase):
                             and r["statistics"]["count"] == 1 for r in observations))
 
     def test_shared_metric_population_rules_refuse_missing_malformed_or_short_counts(self):
+        for name in ("delivery.client-gap.maximum", "delivery.client-gap.mean"):
+            for count, expected in ((0, False), (1, False), (2, True), (12, True)):
+                self.assertEqual(q.metric_observation_admitted(name,
+                    dict(client_visible_fragments=count)), expected)
+            for count in (None, True, -1, 2.0, "2"):
+                self.assertFalse(q.metric_observation_admitted(name,
+                    dict(client_visible_fragments=count)))
+            self.assertFalse(q.metric_observation_admitted(name, {}))
         for units, admitted in ((0, False), (9, False), (31, False), (32, True), (255, True)):
             self.assertEqual(q.metric_observation_admitted("decode.post-first.committed",
                 dict(post_first_decode_units=units)), admitted)
@@ -237,6 +245,22 @@ class NativeReceiptTests(unittest.TestCase):
             self.assertFalse(q.metric_observation_admitted("prefill.uncached",
                 dict(prefill_tokens=tokens, reused_tokens=reused)))
         self.assertFalse(q.metric_observation_admitted("unknown", {}))
+
+    def test_native_delivery_gap_projection_preserves_absent_values(self):
+        config = dict(case="fixture-delivery", output_bound=32, warm_state="fixture")
+        for count in (None, 0, 1, 2, 4):
+            metrics = dict(client_complete_seconds=3, client_visible_fragments=count,
+                client_visible_gap_max_seconds=1.25, client_visible_gap_mean_seconds=0.5)
+            rows = [dict(repetition=0, input_identity="fixture",
+                configuration={"turn_index":0}, metrics=metrics)]
+            observations, _ = measurement.native_measurements(config, rows, "fixture", "fixture", 0)
+            gaps = {r["metric"]:r for r in observations if r["metric"].startswith("delivery.")}
+            self.assertEqual(len(gaps), 2 if count in (2, 4) else 0)
+            if gaps:
+                self.assertEqual(gaps["delivery.client-gap.mean"]["samples"], [0.5])
+                metrics["client_visible_gap_mean_seconds"] = None
+                observations, _ = measurement.native_measurements(config, rows, "fixture", "fixture", 0)
+                self.assertFalse(any(r["metric"] == "delivery.client-gap.mean" for r in observations))
 
 
 class MeasurementTests(unittest.TestCase):

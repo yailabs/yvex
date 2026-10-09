@@ -98,6 +98,13 @@ build. The journal retains unresolved delivery rather than retrying or blindly
 closing it. Cancellation requires correlated terminal settlement, not merely a
 cancel ACK, before scoped cleanup.
 
+The native client observes visible-fragment arrival intervals separately from
+server phases and first-visible latency. Mean/maximum gaps require at least two
+nonempty content fragments; control messages and pre-first-content waiting are
+excluded. These client observations include observer work and do not reconstruct
+GPU timing, server publication timestamps, transport-only cost or terminal paint.
+The generic qualification vocabulary owns their definitions and population gates.
+
 [Qualification methodology](../evaluation/benchmarks/methodology.md#operator-inspection-and-local-measurement)
 owns metric definitions and claim scope. Protocol fixtures qualify correlation
 and lifecycle only; independent checkpoint/model evidence remains separate.
