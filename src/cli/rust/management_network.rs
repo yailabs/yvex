@@ -292,11 +292,17 @@ struct DeadlineSocket {
     deadline: Instant,
 }
 impl DeadlineSocket {
-    fn new(socket: Socket) -> Self {
-        Self {
+    fn new(socket: Socket) -> io::Result<Self> {
+        // Accepted sockets may inherit the listener's nonblocking mode on
+        // Darwin. Worker I/O uses bounded blocking deadlines on every platform.
+        match &socket {
+            Socket::Tcp(s) => s.set_nonblocking(false)?,
+            Socket::Local(s) => s.set_nonblocking(false)?,
+        }
+        Ok(Self {
             socket,
             deadline: Instant::now() + Duration::from_secs(READ_SECONDS),
-        }
+        })
     }
     fn remaining(&self) -> io::Result<Duration> {
         self.deadline
@@ -357,7 +363,10 @@ fn tcp_client(socket: TcpStream, config: Arc<ServerConfig>, service: Arc<Service
     let Ok(connection) = ServerConnection::new(config) else {
         return;
     };
-    let mut stream = StreamOwned::new(connection, DeadlineSocket::new(Socket::Tcp(socket)));
+    let Ok(socket) = DeadlineSocket::new(Socket::Tcp(socket)) else {
+        return;
+    };
+    let mut stream = StreamOwned::new(connection, socket);
     let reply = match read_request(&mut stream) {
         Ok(request) => service.route(request, None),
         Err(_) if stream.conn.is_handshaking() => return,
@@ -373,7 +382,9 @@ fn local_client(socket: UnixStream, service: Arc<Service>) {
     let Ok(uid) = local::same_user(&socket) else {
         return;
     };
-    let mut stream = DeadlineSocket::new(Socket::Local(socket));
+    let Ok(mut stream) = DeadlineSocket::new(Socket::Local(socket)) else {
+        return;
+    };
     let reply = match read_request(&mut stream) {
         Ok(request) => service.route(request, Some(uid)),
         Err(reason) => (
@@ -541,6 +552,48 @@ pub(crate) fn dispatch(invocation: &Invocation<'_>) -> Result<Output> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn accepted_nonblocking_streams_obey_worker_deadlines() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let tcp_peer = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut tcp, _) = listener.accept().unwrap();
+        let (mut local, local_peer) = UnixStream::pair().unwrap();
+        tcp.set_nonblocking(true).unwrap();
+        local.set_nonblocking(true).unwrap();
+        // Negative control: inherited nonblocking sockets cannot wait for a
+        // bounded request, even though the connection itself is established.
+        for socket in [&mut tcp as &mut dyn Read, &mut local as &mut dyn Read] {
+            assert_eq!(
+                socket.read(&mut [0u8; 1]).unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+        }
+        for (socket, peer) in [
+            (Socket::Tcp(tcp), Socket::Tcp(tcp_peer)),
+            (Socket::Local(local), Socket::Local(local_peer)),
+        ] {
+            let mut stream = DeadlineSocket::new(socket).unwrap();
+            let mut peer = DeadlineSocket::new(peer).unwrap();
+            peer.write_all(b"x").unwrap();
+            let mut byte = [0u8; 1];
+            stream.read_exact(&mut byte).unwrap();
+            assert_eq!(&byte, b"x");
+            stream.deadline = Instant::now() + Duration::from_millis(30);
+            let started = Instant::now();
+            let error = stream.read(&mut [0u8; 1]).unwrap_err();
+            assert!(matches!(
+                error.kind(),
+                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+            ));
+            assert!(started.elapsed() >= Duration::from_millis(15));
+            stream.deadline = Instant::now();
+            assert_eq!(
+                stream.remaining().unwrap_err().kind(),
+                io::ErrorKind::TimedOut
+            );
+        }
+    }
+
     #[test]
     fn framing_does_not_accept_ambiguous_or_browser_requests() {
         for extra in [

@@ -91,6 +91,12 @@ reset the deadline by sending individual bytes. Connections and worker count are
 bounded before TLS admission. The product body remains bounded to 128 KiB and
 response to 1 MiB. Unknown fields and unsupported operations retain strict refusal.
 
+Listeners stay nonblocking for bounded accept/shutdown coordination. Each
+accepted TCP or local stream explicitly enters blocking mode before its worker
+uses absolute read/write deadlines. The worker does not rely on platform-specific
+inheritance of listener flags; restoring blocking mode does not remove timeouts
+or change authentication, connection capacity or transport records.
+
 `GET /v1/identity` is public and returns only:
 
 ```json
