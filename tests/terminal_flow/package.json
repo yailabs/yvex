@@ -1,0 +1,6 @@
+{
+  "name": "yvex-terminal-flow-observer",
+  "private": true,
+  "engines": { "node": "22.x" },
+  "dependencies": { "@xterm/headless": "5.5.0" }
+}

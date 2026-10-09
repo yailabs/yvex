@@ -2,6 +2,7 @@
 """Native Rust chat over the existing typed producer fixture, never the public host."""
 import argparse
 import fcntl
+import json
 import os
 import re
 from pathlib import Path
@@ -25,6 +26,10 @@ def run(binary, fixture, output):
         socket = runtime / "yvex/yvexd.sock"
         socket.parent.mkdir(parents=True, mode=0o700)
         log_path = output / "host.log"
+        # A terminal-unsafe completion label exercises coordinated notices
+        # without injecting controls into the editor or touching operator files.
+        (Path(directory) / "bad\ncandidate").write_text("fixture")
+        (Path(directory) / "badXTAIL").write_text("attachment fixture")
         previous = os.environ.get("XDG_RUNTIME_DIR")
         os.environ["XDG_RUNTIME_DIR"] = str(runtime)
         with log_path.open("wb") as log:
@@ -42,6 +47,56 @@ def run(binary, fixture, output):
                     chat = Chat(binary, f"replai-rust-{columns}", output, plain=plain, columns=columns)
                     try:
                         assert b"/attachments-clear" not in chat.data, "startup dumps command catalog"
+                        draft = f"/attach {directory}/badTAIL".encode()
+                        start = chat.send(draft + b'\x1b[D' * 4 + b'\t')
+                        chat.wait(b'completion unavailable:', start)
+                        chat.quiet()
+                        # Insertion at the original cursor proves both suffix
+                        # and cursor survived output_flow, not merely the prompt.
+                        start = chat.send(b'X\r')
+                        chat.wait(b'1 staged for next turn', start)
+                        chat.wait(ENABLE, start)
+                        start = chat.send(b'/attachments-clear\r')
+                        chat.wait(b'cleared', start)
+                        chat.wait(ENABLE, start)
+                        # Real native fragments, including byte-split UTF-8, keep
+                        # their authored lines at every width and after resize.
+                        flow = []
+                        for request, resized in ((b'FORMAT_WHOLE', columns), (b'FORMAT_BYTES', 24), (b'FORMAT_WHOLE', 200)):
+                            fcntl.ioctl(chat.slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, resized, 0, 0))
+                            os.kill(chat.process.pid, signal.SIGWINCH)
+                            chat.quiet()
+                            start = chat.send(request + b'\r')
+                            chat.wait(ENABLE, start)
+                            raw = bytes(chat.data[start:])
+                            text = re.sub(rb'\x1b\[[0-9;]*m', b'', raw).replace(b'\r\n', b'\n')
+                            text = text[text.index(b'FORMAT BEGIN'):text.index(b'FORMAT END')]
+                            identifier = b'identifier_' + b'abcdefghijklmnopqrstuvwxyz_' * 5 + b'abcdefghijklmnopqrstuvwxyz'
+                            assert identifier in text, 'identifier physically hard-wrapped'
+                            assert b'Spacing:    alpha   bold words   omega.' in text
+                            flow.append(text)
+                            (output / f'flow-{columns}-{resized}-{request.decode()}.txt').write_bytes(text)
+                        assert flow[0] == flow[1] == flow[2], 'resize/fragmentation changed logical content'
+                        start = chat.send(b'PROGRESSIVE_STREAM\r')
+                        chat.wait(b'arrive now', start)
+                        first_visible_ns = time.monotonic_ns()
+                        first_visible = time.monotonic()
+                        assert b'finish later' not in transcript(chat.data[start:]), 'client batched separately published fragments'
+                        chat.wait(b'finish later', start)
+                        print(f'flow first-to-last fragment gap={time.monotonic() - first_visible:.6f}s (fixture separation 0.7s)', flush=True)
+                        chat.wait(ENABLE, start)
+                        publications = re.findall(r'flow-publication request=(\d+) fragment=0 monotonic_ns=(\d+)', log_path.read_text())
+                        request_id, published_ns = publications[-1]
+                        delivery_ns = first_visible_ns - int(published_ns)
+                        assert 0 <= delivery_ns < 700_000_000, 'first publication waited for the next fragment'
+                        (output / f'flow-delivery-{columns}.json').write_text(json.dumps({
+                            'scope': 'isolated native protocol fixture to client PTY read; not GPU/model TTFT',
+                            'request': request_id, 'fragment': 0,
+                            'server_before_send_monotonic_ns': int(published_ns),
+                            'client_pty_visible_monotonic_ns': first_visible_ns,
+                            'delivery_observation_ns': delivery_ns,
+                            'next_fragment_fixture_delay_ns': 700_000_000,
+                        }, indent=2) + '\n')
                         start = chat.send(b"/help\r")
                         chat.wait(b"/quit", start)
                         chat.wait(ENABLE, start)

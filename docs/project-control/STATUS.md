@@ -483,6 +483,11 @@ tokenizer kind is explicitly weaker than executing its processor.
 
 ## Interfaces and portability
 
+The [native output-flow consumer](../evaluation/retained-observations.md#native-output-flow-consumer-2026-10-09)
+has separate Linux PTY and pinned-emulator evidence. Historical macOS interface
+qualification remains bound to its recorded source; the new flow consumer does
+not inherit a macOS rerun or a model-throughput claim from REPLAI producer CI.
+
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |
 | Native CLI | 🟢 ESTABLISHED | Product operations consume typed owners. | Preserve thin parsing/rendering boundaries as operations grow. | X | [Command architecture][commands] |

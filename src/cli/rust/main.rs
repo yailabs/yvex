@@ -16,17 +16,12 @@ fn main() -> std::process::ExitCode {
     };
     let stdout = io::stdout();
     let stderr = io::stderr();
-    let width = std::env::var("COLUMNS")
+    let fallback = std::env::var("COLUMNS")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .filter(|value| (8..=4096).contains(value))
-        .or_else(|| {
-            rustix::termios::tcgetwinsize(&stdout)
-                .ok()
-                .map(|size| usize::from(size.ws_col))
-                .filter(|value| (8..=4096).contains(value))
-        })
         .unwrap_or(120);
+    let width = yvex::presentation::destination_width(fallback);
     let output = yvex::execute(&arguments, width, stdout.is_terminal());
     let write = if output.diagnostic {
         stderr.lock().write_all(output.text.as_bytes())

@@ -19,6 +19,74 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Native output-flow consumer (2026-10-09)
+
+The active `V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4`
+Task separately qualifies terminal delivery and model execution. This bounded
+consumer change is not a prefill/decode speedup or an installed-Host rollout.
+
+`config/replai.json` pins revision `c8e8f07faa6f0f7fc93c73d63c1e81627ee78334`,
+tree `603436f4e5bc49690634f596a0853f5125155c44`, archive SHA-256
+`de58ee7d220fce820a702eb1de491995286796f164cf6ba2c6b308bb5e2b8417`.
+Archive authentication and the generated Cargo source receipt pass through
+`tools/prepare_replai.py`, without a sibling dependency. Producer generation
+21, runtime CI [37213638790](https://github.com/mothx9/replai/actions/runs/37213638790)
+and final-pin CI [37214662128](https://github.com/mothx9/replai/actions/runs/37214662128)
+are verified separately from YVEX consumer evidence. C ABI 1/P1 is unchanged.
+
+YVEX removes its 96-column prose cap, width-based continuation newlines and
+whitespace collapsing from native stream presentation. Text fragments and log
+records use safe flow encoding; authored LF/TAB and code identifiers remain
+intact. Existing bounded markup/channel meaning remains YVEX-owned. Fixed grids
+retain fixed rendering against current output-TTY geometry. `COLUMNS` no longer
+overrides an observed live destination width; driven editor resize and scoped
+quiet-generation lifetime remain unchanged. Editor notices use coordinated
+`Interaction::output_flow`.
+
+| Consumer control | Expected and observed scope |
+| --- | --- |
+| Real native PTYs | 40/80/180 columns, styled/NO_COLOR, byte-fragmented UTF-8, code/list/explicit LF, long identifiers, resize to 24/200, cancellation/reconnect and terminal restoration pass |
+| Fragment immediacy | First fragment is visible before a second fragment deliberately sent 700 ms later; monotonic server-before-send and PTY-observation receipts retain actual delivery intervals, not GPU TTFT |
+| Active-editor notice | An invalid completion label emits a safe flow notice; insertion at the restored cursor preserves both the draft suffix and the admitted attachment identity at all three PTY widths |
+| Log subscriber | Width-independent logical history at 40/80/180, stale `COLUMNS`, styled/NO_COLOR/dumb, follow resize, JSONL, SIGINT/EPIPE detach and unchanged producer/termios pass |
+| Retained scrollback | Pinned xterm/headless 5.5.0 consumes nine actual YVEX captures at 40→180→24→240→40; logical lines survive narrowing/widening |
+| Negative control | The prior `46546a46` executable fails the same identifier-preservation assertion; an explicit hard-LF emulator control remains broken after widening |
+| Product contracts | Rust unit/ownership/clippy, native CLI JSON/refusal contracts and existing REPL PTY lifecycle pass; machine serializers and runtime arithmetic are unchanged |
+
+The source-stable consumer receipt `dc105142` binds `46546a46` plus delta
+`f455ccd6fd7ac0cdd88470a2cb31c09a55ba3887e66874aaeb07b9c0a7583851`.
+Reproduce with `make test-rust-shell test-repl test-terminal-flow`; the last
+target requires Node/npm and installs its integrity-locked test-only emulator.
+Captures and monotonic receipts are under `build/tests/terminal-flow`, with
+registered QA evidence under `build/qa/evidence`. No model/GPU work is needed.
+The registered Rust-shell rerun `2c3b0bec` passes after repairing a test-only
+temporary-directory collision: parallel pairing fixtures now add a monotonic
+counter instead of assuming wall-clock nanoseconds are unique. The earlier
+`869a25e4` failure is retained; no pairing production behavior changed.
+The final Linux registered runs pass `integration.cli` (`e6c10ccf`),
+`integration.terminal-flow` (`26156446`), `integration.rust-shell` (`64eccae1`),
+`integration.repl` (`fff9ecd1`), `unit.platform` (`26d0bd6d`) and
+`structural.documentation` (`6d8a45f5`). The intermediate CLI receipt
+`6ce90c18` correctly caught flow accidentally applied to a geometric catalog
+row; fixed-grid spans are again rendered at the current destination width.
+
+Hosted macOS run `37927880499` at the preceding decoder publication exposes a
+pre-existing undeclared `getentropy` call. The consumer prerequisite repair
+includes Darwin's [declaring header](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/random.h),
+without replacing the random source or changing its contract. Node 22 is now
+explicit in the native lane for the pinned terminal observer. Linux platform
+regression passes; the newly published macOS consumer must still earn its own
+hosted evidence, not inherit a Linux result.
+
+Limitations: emulator evidence covers retained scrollback, not its active
+cursor paragraph or every terminal. Null padding before a wrapped wide glyph
+is distinguished from an authored space by the observer. No macOS consumer
+rerun is inferred from producer CI. Synthetic publication timings do not locate
+all six stages of real-model delivery or explain speculative-cycle latency.
+Interactive output budgets remain caller-controlled through
+`yvex chat --max-new-tokens N`; omission retains the admitted runtime default.
+No output truncation or reasoning-policy change is used to improve a number.
+
 ## Rust product-shell qualification (2026-10-03)
 
 `INTERFACES.CLI.RUST.PRODUCT.SHELL.MIGRATION.0` moves operator ownership,

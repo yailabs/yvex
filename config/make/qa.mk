@@ -1229,7 +1229,14 @@ test-qwen-admission-live: $(QWEN_ADMISSION_LIVE_RUNNER)
 check-docs: test-documentation-architecture test-project-control test-docs-surface
 	@echo "yvex documentation: ok"
 
-.PHONY: test-rust-shell rust-ffi-index test-finite-remote
+.PHONY: test-rust-shell rust-ffi-index test-finite-remote test-terminal-flow
+
+test-terminal-flow: rust-client $(OPENAI_FAKE_HOST) $(TERMIOS_PROBE)
+	npm ci --ignore-scripts --prefix tests/terminal_flow
+	YVEX_TEST_TERMIOS_PROBE='$(abspath $(TERMIOS_PROBE))' \
+		python3 tests/rust_chat_pty.py --binary '$(RUST_SHELL_BIN)' \
+		--fixture '$(OPENAI_FAKE_HOST)' --output '$(TEST_DIR)/terminal-flow'
+	node tests/terminal_flow/reflow.cjs '$(TEST_DIR)/terminal-flow'
 $(TEST_DIR)/finite-remote-peer: $(OBJ_DIR)/tests/integration/finite_remote_peer.o $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@

@@ -105,6 +105,15 @@ selected. Current operator service and finite producer are protected. Explicit
 idle windows permit supported sequential DeepSeek unload/reload, not overlapping
 model processes or user-prompt replay. The first evidence-authority publication
 is a software/documentation checkpoint, not competitive or throughput closure.
+
+The 2026-10-09 steering adds the bounded native output-flow consumer integration
+to this same Task. REPLAI revision `c8e8f07` supplies independently qualified
+logical-flow primitives; YVEX removes its 96-column cap and physical pre-wrapping,
+refreshes destination geometry for fixed grids and qualifies actual stream/PTY
+delivery. Producer evidence is not consumer evidence. This acceptance is separate
+from full-model numerical/performance acceptance and cannot close the 20/700 exit.
+No installed engine generation is implicitly replaced; documentation-atlas work
+is deferred outside this execution boundary.
 The registry-derived Rust qualification consumer is now independently exercised
 through native protocol, settled cancellation and scoped session cleanup;
 [consumer evidence](../evaluation/retained-observations.md#qualification-operator-consumer-2026-10-07)

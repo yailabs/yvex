@@ -338,8 +338,8 @@ impl Options {
     }
 }
 
-fn print(lines: &[String], width: usize, styled: bool) -> Result<()> {
-    let text = presentation::lines(lines, width, styled)?;
+fn print(lines: &[String], _width: usize, styled: bool) -> Result<()> {
+    let text = presentation::flow_lines(lines, styled)?;
     let mut output = io::stdout().lock();
     output.write_all(text.as_bytes())?;
     output.flush()?;
@@ -858,14 +858,18 @@ pub(crate) fn run(
                 Some(Event::EndOfInput) => break None,
                 Some(Event::CompletionRequested) => {
                     if let Err(error) = complete(registry, &session.binding, &mut input) {
-                        input.external_output(
-                            Role::Warning,
-                            &format!("completion unavailable: {error}"),
-                        )?;
+                        input.output_flow(&replai::Document::new(vec![
+                            replai::Block::Paragraph(presentation::safe_text(
+                                &format!("completion unavailable: {error}"),
+                                Role::Warning,
+                            )?),
+                        ])?)?;
                     }
                 }
                 Some(Event::Rejected(error)) => {
-                    input.external_output(Role::Warning, &error.to_string())?
+                    input.output_flow(&replai::Document::new(vec![replai::Block::Paragraph(
+                        presentation::safe_text(&error.to_string(), Role::Warning)?,
+                    )])?)?
                 }
                 Some(Event::SubmissionRequested(_)) => {
                     return Err("unexpected opt-in submission event".into());

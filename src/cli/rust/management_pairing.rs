@@ -778,13 +778,16 @@ mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
     fn store() -> Store {
+        // Parallel tests may observe the same platform clock tick.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
-            "yvex-pairing-{}-{}",
+            "yvex-pairing-{}-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         fs::DirBuilder::new().mode(0o700).create(&path).unwrap();
         Store::open(path.join("service").to_str()).unwrap()

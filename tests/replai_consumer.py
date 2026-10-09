@@ -192,7 +192,7 @@ def audit(binary):
 
 def reply_format(binary, output, memcheck):
     import re
-    import unicodedata
+    reference = None
     for plain, columns in ((False, 100), (True, 100), (True, 40)):
         c = Chat(binary, 'replai-format', output, plain=plain, memcheck=memcheck, columns=columns)
         try:
@@ -211,20 +211,19 @@ def reply_format(binary, output, memcheck):
                 text = plain_reply[plain_reply.index(b'FORMAT BEGIN'):plain_reply.index(b'FORMAT END')].decode().replace('\r\n', '\n')
                 assert '**' not in text, text
                 assert '你指的是C.I.A.A.吗？' in text, text
-                assert 'Spacing: alpha bold words omega.' in text, text
+                assert 'Spacing:    alpha   bold words   omega.' in text, text
                 assert '👩‍💻' in text and '👍🏽' in text and '🇮🇹' in text, text
                 assert '  • CIA' in text, text
                 assert any(line.startswith('    ') for line in text.splitlines()), text
+                assert '\tint identifier_' + 'abcdefghijklmnopqrstuvwxyz_' * 5 + 'abcdefghijklmnopqrstuvwxyz = 7;' in text
                 assert '\n\n\n' not in text, text
-                for line in text.splitlines():
-                    cells = sum(0 if unicodedata.combining(ch) else
-                                2 if unicodedata.east_asian_width(ch) in ('W', 'F') else 1
-                                for ch in line)
-                    assert cells <= min(96, columns - 2), (cells, line)
                 rendered.append(text)
             assert rendered[0] == rendered[1], rendered
+            if reference is not None:
+                assert rendered[0] == reference, 'terminal width changed logical output'
+            reference = rendered[0]
             c.finish()
-            print(f'reply: whole == byte fragments; cells <= {min(96, columns - 2)}; inline bold/bullets/spacing preserved', flush=True)
+            print(f'reply: whole == byte fragments; logical flow independent of {columns} columns; inline bold/bullets/spacing preserved', flush=True)
         finally: c.dispose()
 
 

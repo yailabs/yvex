@@ -189,6 +189,16 @@ event; during generation it enters YVEX cancellation and quiet-output handling.
 EOF, exit and transport failure follow their distinct close/recovery paths.
 Historical `repl_` helper names do not establish another editor.
 
+Ordinary chat fragments, logical notices and host log records use REPLAI's
+flow encoding: authored logical lines remain intact and the terminal owns visual
+wrapping. The consumer does not impose a 96-column cap or insert continuation
+newlines. Live fixed-grid rendering remeasures the output TTY instead of trusting
+inherited `COLUMNS`; the existing driven editor delivers `Wake::Resize`.
+Flow output does not reconstruct scrollback or promise universal emulator reflow.
+Committed native fragments are written and flushed as received, without a typing
+animation or publication of unverified drafts. UTF-8 completion and the existing
+bounded markup-prefix recognition are separate from width-independent layout.
+
 `src/cli/rust/interaction.rs` adapts borrowed REPLAI input readiness, decoder
 deadlines and process-scoped notifications. It joins its notification worker
 before application context expires. Borrowed FDs and signals are mechanics,

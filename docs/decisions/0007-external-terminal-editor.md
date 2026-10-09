@@ -34,7 +34,9 @@ presentation grammar. Keeping two live editors would leave ownership ambiguous.
 The historical [C chat consumer](https://github.com/yailabs/yvex/blob/67a7905ea9deb98b0704629a1f979634e19007fb/src/cli/io/client.c)
 consumed REPLAI C ABI 1 through its installed header. The
 exact revision, Git tree and downloaded archive checksum are owned by
-`config/replai.json`: active revision `93d62f6d34cfb933a1f59407ade027152e1ef2ba`.
+`config/replai.json` owns the active immutable revision. The flow consumer uses
+`c8e8f07faa6f0f7fc93c73d63c1e81627ee78334`; historical platform evidence retains
+the revision actually tested, not this updated identity.
 Base C ABI 1 remains unchanged; the separately queried presentation extension 1
 adds bounded semantic documents, composed prompts, candidate sets, driven events
 and an exclusive quiet-output scope. It exports no Rust layouts or YVEX meaning.

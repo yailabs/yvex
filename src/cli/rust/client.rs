@@ -533,7 +533,7 @@ fn render_log_record(
         }
     }
     let sequence = if verbose {
-        format!(" #{}", event.sequence)
+        format!("#{}", event.sequence)
     } else {
         String::new()
     };

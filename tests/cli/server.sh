@@ -332,6 +332,9 @@ def capture(width, extra=(), overrides=None, follow=False):
             elif process.poll() is not None:
                 break
             if follow and b'fail' in data:
+                for resized in (24, 200):
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, resized, 0, 0))
+                    os.kill(process.pid, signal.SIGWINCH)
                 os.kill(process.pid, signal.SIGINT)
                 process.wait(timeout=5)
                 follow = False
@@ -346,11 +349,16 @@ def capture(width, extra=(), overrides=None, follow=False):
         os.close(master)
         os.close(slave)
 
+flow_reference = None
 for width in (40, 80, 180):
     styled = capture(width)
     plain = capture(width, overrides={'NO_COLOR': ''})
     assert '\x1b[' in styled and '\x1b' not in plain
     assert ansi.sub('', styled) == plain, (width, styled, plain)
+    if flow_reference is not None:
+        assert plain == flow_reference, 'log flow invented width-dependent physical lines'
+    flow_reference = plain
+    assert capture(width, overrides={'NO_COLOR': '', 'COLUMNS': '9'}) == plain
     assert 'fail' in styled and 'runtime' in styled
     headers = [line for line in plain.splitlines()
                if re.match(r'^\d{2}:\d{2}:\d{2} ', line)]

@@ -400,6 +400,9 @@ static int send_native_format(int fd, const yvex_client_request *request,
         "Spacing:    alpha   **bold words**   omega.\r\n"
         "Unicode: 界🌍é 界🌍é 界🌍é 界🌍é 界🌍é 界🌍é 界🌍é 界🌍é\n"
         "Joined: 👩‍💻 👍🏽 🇮🇹 é\n"
+        "```c\n"
+        "\tint identifier_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz = 7;\n"
+        "```\n"
         "FORMAT END\n";
     size_t offset = 0u, step = bytewise ? 1u : sizeof(text) - 1u;
     int rc = YVEX_OK;
@@ -435,6 +438,13 @@ static int send_native_progressive(int fd, const yvex_client_request *request,
                                    yvex_error *err)
 {
     const struct timespec delay = {0, 700000000L};
+    struct timespec publication;
+    (void)clock_gettime(CLOCK_MONOTONIC, &publication);
+    fprintf(stderr, "flow-publication request=%llu fragment=0 monotonic_ns=%llu\n",
+        (unsigned long long)request->request_number,
+        (unsigned long long)publication.tv_sec * 1000000000ull +
+        (unsigned long long)publication.tv_nsec);
+    fflush(stderr);
     int rc = send_fragment(fd, request, YVEX_PROVIDER_OUTPUT_ASSISTANT_TEXT,
                            "Letters **arrive now", NULL, NULL, err);
     if (rc == YVEX_OK) (void)nanosleep(&delay, NULL);
