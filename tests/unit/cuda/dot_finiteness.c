@@ -60,6 +60,7 @@ static int dot_fixture(dot_storage *s, unsigned int qtype, unsigned int scenario
     if (scenario == 4u) {
         if (qtype == YVEX_GGUF_QTYPE_F32) { uint32_t bits = 0x7fc00000u; memcpy(s->weights + 37u * 4u, &bits, 4u); }
         else if (qtype == YVEX_GGUF_QTYPE_MXFP4) s->weights[17] = 255u;
+        else if (qtype == YVEX_GGUF_QTYPE_Q8_0) { uint16_t bits = 0x7e00u; memcpy(s->weights + 34u, &bits, 2u); }
         else { uint16_t bits = qtype == YVEX_GGUF_QTYPE_F16 ? 0x7e00u : 0x7fc0u; memcpy(s->weights + 37u * 2u, &bits, 2u); }
     }
     if (scenario == 5u) s->status = 1;
@@ -248,6 +249,99 @@ static int certificate_case(yvex_backend *backend, unsigned int qtype,
         qtype, width, ROWS);
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
         "release certificate oracle ownership");
+    free(before);
+    free(after);
+    return 0;
+}
+
+/* Check the encoded Q8_0 class against CPU block decoding plus a literal F64
+ * oracle, including rounding ties, cancellation, signed zero and subnormals.
+ * Nine independent inputs and nineteen rows cover both partial warp tiles. */
+static int q8_certificate_case(yvex_backend *backend, unsigned long long width)
+{
+    enum { ROWS = 19, TOKENS = 9, OUTPUTS = ROWS * TOKENS };
+    unsigned qtype = YVEX_GGUF_QTYPE_Q8_0, grid, block;
+    unsigned long long bytes = width / 32ull * 34ull, rows = ROWS, tokens = TOKENS, zero = 0ull;
+    size_t input_offset = (size_t)((bytes * ROWS + 7ull) & ~7ull);
+    size_t output_offset = input_offset + (size_t)width * TOKENS * sizeof(float) + sizeof(float);
+    size_t status_offset = output_offset + (OUTPUTS + 1u) * sizeof(float), total = status_offset + sizeof(int);
+    unsigned char *before = calloc(1u, total), *after = malloc(total);
+    float expected[OUTPUTS], published[OUTPUTS], decoded[32], canary = 12345.0f;
+    yvex_backend_tensor_desc desc = {.name = "q8-ordered-certificate", .dtype = YVEX_DTYPE_I8, .rank = 1u};
+    yvex_device_tensor *arena = NULL;
+    yvex_quant_failure failure;
+    yvex_error err;
+    int block_row, no = 0, device_wide = 0;
+    YVEX_TEST_ASSERT(before && after && width >= 32ull && width % 32ull == 0ull,
+        "allocate bounded Q8 certificate oracle");
+    float *input = (float *)(before + input_offset);
+    for (unsigned token = 0u; token < TOKENS; ++token)
+        for (unsigned long long i = 0ull; i < width; ++i)
+            input[token * width + i] = token == 0u ? 1.0f : token == 1u ?
+                (i == 0ull ? 1.0f : i == 1ull ? 0x1p-24f : 0.0f) : token == 2u ?
+                (i == 0ull ? 0x1p-125f : 0.0f) :
+                (float)((int)((i * 37ull + token * 13u) % 251ull) - 125) / 127.0f;
+    for (unsigned row = 0u; row < ROWS; ++row) {
+        double sums[TOKENS] = {0};
+        for (unsigned long long first = 0ull; first < width; first += 32ull) {
+            unsigned char *encoded = before + row * bytes + first / 32ull * 34ull;
+            uint16_t scale = row == 3u ? 0x0001u : row == 4u ? 0x8000u :
+                (uint16_t)(0x3400u + ((first / 32ull + row) % 9ull) * 0x400u);
+            if (row == 1u || row == 2u) scale = 0x3c00u;
+            encoded[0] = (unsigned char)scale;
+            encoded[1] = (unsigned char)(scale >> 8u);
+            for (unsigned i = 0u; i < 32u; ++i) {
+                int value = row == 1u ? (first + i < 2ull ? 1 : 0) : row == 2u ?
+                    (i & 1u ? -1 : 1) : row == 3u ? 1 :
+                    (int)((first * 17ull + i * 23u + row * 29u) % 256ull) - 128;
+                encoded[2u + i] = (unsigned char)value;
+            }
+            YVEX_TEST_ASSERT(yvex_quant_decode_block(qtype, encoded, 34u, decoded, 32u,
+                &failure, &err) == YVEX_OK, "independent canonical Q8 block decode");
+            for (unsigned token = 0u; token < TOKENS; ++token)
+                for (unsigned i = 0u; i < 32u; ++i)
+                    sums[token] = fma((double)decoded[i], (double)input[token * width + first + i], sums[token]);
+        }
+        for (unsigned token = 0u; token < TOKENS; ++token)
+            expected[token * ROWS + row] = (float)sums[token];
+    }
+    memcpy(before + output_offset - sizeof(float), &canary, sizeof(canary));
+    memcpy(before + output_offset + OUTPUTS * sizeof(float), &canary, sizeof(canary));
+    desc.bytes = desc.dims[0] = total;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &arena, &err) == YVEX_OK &&
+        yvex_cuda_qtype_matvec_geometry(rows, width, tokens, qtype, 1, 1,
+            &grid, &block, &block_row) && !block_row, "admit decoded Q8 partial tiles");
+    CUdeviceptr base = yvex_cuda_activation_pointer(backend, arena), absent = 0ull;
+    CUdeviceptr device_input = base + input_offset, output = base + output_offset, status = base + status_offset;
+    for (int publication = 0; publication < 4; ++publication)
+    for (int forensic = 0; forensic <= 1; ++forensic) {
+        int bf16 = publication & 1;
+        CUdeviceptr additive = publication & 2 ? device_input : absent;
+        for (unsigned i = 0u; i < OUTPUTS; ++i) {
+            float value = additive ? expected[i] + input[i] : expected[i];
+            published[i] = bf16 ? yvex_quant_bf16_decode(yvex_quant_bf16_encode(value)) : value;
+        }
+        void *params[] = {&base, &bytes, &width, &zero, &rows, &tokens, &qtype,
+            &device_input, &width, &no, &block_row, &forensic, &additive, &output,
+            &rows, &bf16, &status};
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, before, total, &err) == YVEX_OK &&
+            yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                yvex_cuda_state(backend)->qtype_matvec_function, grid, block, 0u, params,
+                "cuda.test.q8-certificate", &err) == YVEX_OK &&
+            yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                &device_wide, "cuda.test.q8-certificate", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, after, total, &err) == YVEX_OK,
+            "execute certified and literal Q8 decoded realizations");
+        YVEX_TEST_ASSERT(*(int *)(after + status_offset) == 0 &&
+            !memcmp(published, after + output_offset, sizeof(published)),
+            "Q8 F32/BF16/additive publication matches literal F64 bitwise");
+        YVEX_TEST_ASSERT(!memcmp(before, after, output_offset) &&
+            !memcmp(before + output_offset + sizeof(expected), after + output_offset + sizeof(expected),
+                total - output_offset - sizeof(expected)), "Q8 certificate preserves inputs and output canaries");
+    }
+    printf("ordered Q8 certificate: width=%llu rows=%u inputs=%u realizations=2 publications=4 bit_differences=0\n",
+        width, ROWS, TOKENS);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK, "release Q8 certificate");
     free(before);
     free(after);
     return 0;
@@ -458,18 +552,86 @@ static int prepared_workspace_refusal(yvex_backend *backend)
     return 0;
 }
 
+/* Exhaust the complete finite F16 population through the production gather,
+ * not a host/device helper agreement. Exceptional rows must publish nothing. */
+static int f16_codec_case(yvex_backend *backend)
+{
+    enum { VALUES = 65536, FINITE = 63488, NONFINITE = 2048 };
+    size_t ids_offset = VALUES * 2u, output_offset = ids_offset + FINITE * sizeof(unsigned) + sizeof(float);
+    size_t status_offset = output_offset + (FINITE + 1u) * sizeof(float), total = status_offset + sizeof(int);
+    unsigned char *before = calloc(1u, total), *after = malloc(total);
+    float *expected = malloc(FINITE * sizeof(float)), canary = 12345.0f;
+    yvex_backend_tensor_desc desc = {.name = "f16-complete-codec", .dtype = YVEX_DTYPE_I8, .rank = 1u};
+    yvex_device_tensor *arena = NULL;
+    yvex_error err;
+    unsigned qtype = YVEX_GGUF_QTYPE_F16;
+    unsigned long long row_bytes = 2ull, width = 1ull, rows = VALUES, selected;
+    int device_wide = 0;
+    YVEX_TEST_ASSERT(before && after && expected, "allocate complete F16 conversion oracle");
+    unsigned *ids = (unsigned *)(before + ids_offset);
+    for (unsigned i = 0u; i < VALUES; ++i) {
+        before[i * 2u] = (unsigned char)i;
+        before[i * 2u + 1u] = (unsigned char)(i >> 8u);
+    }
+    memcpy(before + output_offset - sizeof(float), &canary, sizeof(canary));
+    memcpy(before + output_offset + FINITE * sizeof(float), &canary, sizeof(canary));
+    desc.bytes = desc.dims[0] = total;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &arena, &err) == YVEX_OK,
+        "allocate exhaustive F16 device fixture");
+    CUdeviceptr base = yvex_cuda_activation_pointer(backend, arena);
+    CUdeviceptr indices = base + ids_offset, output = base + output_offset, status = base + status_offset;
+    for (unsigned scenario = 0u; scenario < 3u; ++scenario) {
+        unsigned n = 0u;
+        for (unsigned i = 0u; i < VALUES; ++i)
+            if (((i & 0x7c00u) != 0x7c00u) == (scenario != 1u)) {
+                ids[n] = i;
+                if (scenario != 1u) expected[n] = yvex_quant_f16_decode((unsigned short)i);
+                ++n;
+            }
+        YVEX_TEST_ASSERT(n == (scenario == 1u ? NONFINITE : FINITE), "exact finite/exceptional F16 population");
+        selected = n;
+        for (unsigned i = 0u; i < FINITE; ++i)
+            memcpy(before + output_offset + i * sizeof(float), &canary, sizeof(canary));
+        *(int *)(before + status_offset) = scenario == 2u;
+        void *params[] = {&base, &row_bytes, &width, &rows, &indices, &selected, &qtype, &output, &status};
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, before, total, &err) == YVEX_OK &&
+            yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                yvex_cuda_state(backend)->qtype_gather_function, (n + 255u) / 256u, 256u, 0u,
+                params, "cuda.test.f16-codec", &err) == YVEX_OK &&
+            yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                &device_wide, "cuda.test.f16-codec", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, after, total, &err) == YVEX_OK,
+            "execute complete F16 conversion/refusal control");
+        YVEX_TEST_ASSERT(*(int *)(after + status_offset) == (scenario != 0u) &&
+            !memcmp(before, after, output_offset) &&
+            !memcmp(before + output_offset + FINITE * sizeof(float),
+                after + output_offset + FINITE * sizeof(float), sizeof(float)),
+            "F16 status, immutable inputs and output canaries are preserved");
+        YVEX_TEST_ASSERT(!memcmp(scenario ? before + output_offset : (unsigned char *)expected,
+            after + output_offset, FINITE * sizeof(float)),
+            "all finite F16 bits match CPU conversion; exceptional/prior refusal publishes nothing");
+    }
+    printf("F16 conversion: finite=%u exceptional=%u bit_differences=0 refused_output_writes=0\n", FINITE, NONFINITE);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK, "release complete F16 fixture");
+    free(expected);
+    free(before);
+    free(after);
+    return 0;
+}
+
 int yvex_cuda_test_dot_finiteness(void)
 {
     const unsigned int qtypes[] = {YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_F16,
-        YVEX_GGUF_QTYPE_BF16, YVEX_GGUF_QTYPE_MXFP4};
+        YVEX_GGUF_QTYPE_BF16, YVEX_GGUF_QTYPE_MXFP4, YVEX_GGUF_QTYPE_Q8_0};
     yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
     yvex_backend *backend = NULL;
     yvex_error err;
     int rc = yvex_backend_open(&backend, &options, &err);
     if (rc == YVEX_ERR_UNSUPPORTED) return 77;
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open dot CUDA backend");
+    if (f16_codec_case(backend)) return 1;
     if (prepared_workspace_refusal(backend)) return 1;
-    for (unsigned int q = 0u; q < 4u; ++q)
+    for (unsigned int q = 0u; q < sizeof(qtypes) / sizeof(qtypes[0]); ++q)
         for (unsigned int mode = 0u; mode < 3u; ++mode)
             for (unsigned int scenario = 0u; scenario < 6u; ++scenario)
                 if (dot_case(backend, qtypes[q], scenario, mode)) return 1;
@@ -482,6 +644,7 @@ int yvex_cuda_test_dot_finiteness(void)
     const unsigned long long prefix_widths[] = {4096ull, 16384ull, 32768ull, 32769ull};
     for (unsigned i = 0u; i < sizeof(prefix_widths) / sizeof(prefix_widths[0]); ++i)
         if (certificate_case(backend, YVEX_GGUF_QTYPE_F32, prefix_widths[i], 1)) return 1;
+    if (q8_certificate_case(backend, 128ull) || q8_certificate_case(backend, 12288ull)) return 1;
     for (int scenario = 0; scenario < 3; ++scenario)
         if (prepared_case(backend, 96u, 65u, scenario)) return 1;
     if (prepared_case(backend, 4096u, 33u, 0)) return 1;

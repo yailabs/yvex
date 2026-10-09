@@ -307,6 +307,17 @@ policy. [Pipeline characterization](../evaluation/retained-observations.md#deeps
 separates these kernel gains from canonical arena sizing and complete-request
 preparation/teardown cost.
 
+Decoded Q8_0 projections select their constant-format certified and literal
+realizations before column traversal, just like the other admitted storage
+formats. Generic finite F16 decoding uses the device's exact binary16-to-F32
+conversion; exceptional encodings retain the original explicit bit mapping.
+Neither mechanism changes the numerical class, physical policy, buffers,
+workspace, engine state or completion boundary. The
+[decoder qualification](../evaluation/retained-observations.md#native-decoder-realizations-2026-10-09)
+keeps component bit controls, same-day complete-model characterization and
+installed-product identity separate. This is not a new quantization or a
+claim for other checkpoints/hardware.
+
 The competitive computational integration subsequently adds the
 [certified equivalent decoded-dot realization](../contracts/numerical-abi.md#ordered-decoded-dot-publication).
 Parallel work is admitted only when conservative bounds prove identical F32

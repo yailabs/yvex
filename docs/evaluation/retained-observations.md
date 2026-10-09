@@ -2606,3 +2606,171 @@ the installed DeepSeek identity/configuration; finite generation 1 and approved
 listeners/grants are unchanged. No operator prompt is replayed. Independent
 checkpoint/representation quality, complete reasoning/strategy characterization,
 competitive closure and the original 20/700 exit remain unearned.
+
+## Native decoder realizations (2026-10-09)
+
+The same competitive/full-system Task isolates two generic CUDA mechanisms:
+constant-format Q8_0 dispatch in both certified and literal decoded dots, and
+native exact conversion of finite binary16 storage to F32. Exceptional F16
+encodings keep their original explicit mapping. No accumulation order,
+publication, quantization, physical policy, artifact/binding, preparation arena,
+target verification, session state or transport contract changes.
+
+Fresh same-day baseline and candidate arms use clean `46546a46`, tree
+`6dfcdbb7`, plus their separately retained source deltas. The composed candidate
+delta is `3ba765d1847e8226b19edadb7e2e89d59f76d7767977636901e265551a522633`.
+Every receipt authenticates the actual Rust executable, library, typed backend
+image, loaded engine and immutable suite. This source is not the installed
+Host. The three unprofiled requests per arm/case use one GB10, the unchanged
+mixed DeepSeek artifact, native v25, context 32768, chunk 512, one sequence,
+fresh sessions, no prefix reuse, reasoning none and greedy temperature zero.
+
+| Exact native case | Fresh baseline | Q8_0 dispatch only | F16 conversion only | Composed decoder |
+| --- | --- | --- | --- | --- |
+| Promessi 2K uncached | [Baseline](benchmarks/generated/qualification-deepseek-native-q8-dispatch-baseline-20261009-2048.md) | [Q8_0](benchmarks/generated/qualification-deepseek-native-q8-decoded-dispatch-candidate-20261009-2048.md) | [F16](benchmarks/generated/qualification-deepseek-native-half-codec-candidate-20261009-2048.md) | [Composed](benchmarks/generated/qualification-deepseek-native-qtype-decoder-combined-candidate-20261009-2048.md) |
+| Promessi 8K uncached | [Baseline](benchmarks/generated/qualification-deepseek-native-clean-baseline-20261009-8192.md) | Not measured | Not measured | [Composed](benchmarks/generated/qualification-deepseek-native-qtype-decoder-combined-candidate-20261009-8192.md) |
+| Metal coding request | [Baseline](benchmarks/generated/qualification-deepseek-native-clean-baseline-20261009-coding.md) | [Q8_0](benchmarks/generated/qualification-deepseek-native-q8-decoded-dispatch-candidate-20261009-coding.md) | [F16](benchmarks/generated/qualification-deepseek-native-half-codec-candidate-20261009-coding.md) | [Composed](benchmarks/generated/qualification-deepseek-native-qtype-decoder-combined-candidate-20261009-coding.md) |
+
+The composed arm improves complete newly executed prefill and the coding turn
+in this bounded sample set. Generated records own values, samples, medians,
+dispersion and every configuration dimension. The 16-output prefill controls
+do not establish sustained decode; coding measures 53 input and 256 committed
+output tokens. These native speculative observations are not target-only,
+HTTP, reasoning high/maximum, cold load or interactive terminal-paint timing.
+Small sample sets do not establish a universal speedup or statistical confidence.
+
+The same exact hash-table workload is separately captured through the controlled
+public-C host/native v25 lane, context 4096, chunk 512, target-only, none and
+greedy sampling. [Baseline](benchmarks/generated/qualification-deepseek-controlled-clean-baseline-20261009-target-only-coding-hash-table.md)
+and [composed decoder](benchmarks/generated/qualification-deepseek-controlled-qtype-decoder-combined-candidate-20261009-target-only-coding-hash-table.md)
+have three samples each and identical committed content/populations. This
+first target-only coding window shows a small sustained-decode/request
+regression, despite the separate speculative product-native gains. A separate
+three-sample replication reverses the arm order (candidate before baseline):
+[baseline replication](benchmarks/generated/qualification-deepseek-controlled-clean-baseline-repeat-20261009-target-only-coding-hash-table.md)
+and [decoder replication](benchmarks/generated/qualification-deepseek-controlled-qtype-decoder-combined-repeat-20261009-target-only-coding-hash-table.md)
+retain exact committed content/populations, but do not reproduce that regression.
+Both windows remain independently visible: the small sign-changing effect does
+not establish a sustained target-only gain or regression across windows. It is
+neither averaged into a positive universal result nor selectively replaced by
+the later window. These C-host observations are not installed Rust/chat
+measurements; configuration and metric comparability remain explicit. Load has
+one sample with uncontrolled file-cache state and is excluded from causal speed
+comparisons.
+
+Strict comparisons declare source-delta/build/executable/backend/kernel and
+runtime-plan identity changes while refusing mismatched workload, sampling,
+prompt or phase definitions. All ordered committed fragment bytes/channels
+and terminal speculative populations agree: 48 fragments per prefill band
+and 768 per coding arm comparison. This is internal preservation, not an
+independent full-model checkpoint or quantization-quality reference.
+
+The strengthened `cuda.dot_finiteness` fixture independently decodes Q8_0 on
+CPU and accumulates literal F64 at widths 128 and 12288, with 19 rows and nine
+inputs. Certified/literal realizations and four F32/BF16/additive publication
+forms agree bitwise across ties, cancellation, subnormals, signed zero and
+partial tiles. Q8 nonfinite scales refuse in ordinary/grouped/MoE controls.
+The production F16 gather matches all 63488 finite encodings exactly, rejects
+all 2048 exceptional encodings and preserves prior-status no-write semantics,
+canaries and input. `cuda.quant_qtype`, `cuda.moe_rows`, `unit.backend_ops` and
+`structural.code-natural` also pass at the frozen composed source. Separate
+actual-kernel memcheck, synccheck and racecheck report zero errors; none is a timed
+performance sample.
+
+At that same frozen composed source, mapped QA receipt
+`d14b2e6f0b8d578af34ab5f6b376f5fd427b0af9bf73465cfc7bd0d0f04f9361`
+reports **143 PASS / 0 FAIL / 0 SKIP / 10 BLOCKED / 0 ERROR**, with unchanged
+source identity. Runtime/quantization ASan/UBSan, native/CLI/PTY, finite remote,
+public ABI and structural/software regressions pass. The default invocation
+does not configure legacy attention, SDK examples, live model assets or the
+Node/npm HTTP consumer prerequisite; those mandatory lanes remain BLOCKED in
+that receipt, not silently passed. The separately configured exact source,
+artifact, binding and reference Python run passes
+`reference.deepseek.official-encoding` (`cd779f007bddbd9bf6baca1a35b4a6c23cb44857ac801b865e765abbb68399aa`):
+four immutable upstream encoding/parsing vectors, four native BPE cases and
+one native request-prefix case, with 13 tokenizer and three prompt controls.
+It does not qualify full native tool/reminder projection, upstream model logits
+or checkpoint/representation quality. Additional actual-kernel racecheck has
+zero errors or warnings. The remaining missing default prerequisites are not
+erased by these bounded component and complete-turn captures.
+
+The decoder change is retained for exact decoding equivalence and its bounded
+native speculative prefill/coding benefit, not for a universal target-only
+throughput claim. The paired and compact expert candidates below are excluded.
+The composed publication worktree independently passes its affected CUDA
+fixtures, backend operations, source policy, qualification properties, generated
+views, documentation/project control and HTML publication. Its production/test
+file contents match the separately timed composed source; its documentation
+delta and build identity remain distinct and are not retroactively attached to
+the earlier timings. Rust-shell inspection exposes each exact receipt, and
+comparison without declared changed axes refuses; explicitly declared
+experiments remain non-ranking. Generic software fixtures cover other operation
+consumers, but no new non-DeepSeek full-model performance claim is earned.
+
+The publication snapshot's mapped receipt `4ce50c9a` retains 142 PASS,
+one FAIL and ten BLOCKED: the documentation lane failed because the default
+Python lacked the declared Markdown dependency. On the unchanged source,
+receipt `de264a35` reruns that lane in the declared documentation environment
+and passes. Together they resolve the 143 executable lanes without erasing the
+initial environment failure or promoting the ten missing-prerequisite gates.
+
+Raw snapshots, receipts, strict decisions and component logs remain outside
+Git under `full-system-20261008.k2BN6u`: `qualified-native-baseline-*`,
+`q8-decoded-dispatch-*`, `native-half-codec-*` and
+`qtype-decoder-combined-*`. Each admitted interval has an `OBSERVED_CLEAR`
+sampled resource witness and no compilation, dropped isolated telemetry,
+failed inference, user-request replay or uncertain retry. Sampled observations
+do not prove an uninterrupted hardware reservation. File-backed/model/process
+memory categories overlap and must not be added; uncontrolled post-cache load
+captures do not qualify cold-load latency.
+
+Idle windows restore the installed DeepSeek configuration and preserve finite
+generation 1 and approved listeners/grants. Installed rollout, independent
+checkpoint/representation quality, full reasoning/strategy characterization,
+competitive closure and 20/700 remain unearned. The same Task stays IN PROGRESS.
+
+### Rejected paired expert projection
+
+A separately frozen gate/up pairing experiment shares activation fragments while
+retaining independent integer products and F32 trees. Its generic CUDA fixture
+uses distinct gate/up weights, ordinary-realization bitwise comparison, partial
+tiles, bucket boundaries and nonfinite refusal; five mapped component/structural
+checks pass. Complete-model evidence rejects the production change: uncached
+[2K](benchmarks/generated/qualification-deepseek-native-paired-expert-rejected-20261009-2048.md)
+and [8K](benchmarks/generated/qualification-deepseek-native-paired-expert-rejected-20261009-8192.md)
+prefill regress against the same-day baseline, whereas
+[coding](benchmarks/generated/qualification-deepseek-native-paired-expert-rejected-20261009-coding.md)
+decode improves only slightly. All ordered fragments and terminal populations
+remain identical. The compiler reserves more registers in the up kernel, but
+static resource counts do not establish measured occupancy or prove a causal
+share. This rejected code is not included in the composed decoder candidate.
+
+Raw `paired-expert-projection-*` captures and strict comparison decisions remain
+in the same external evidence root. Two orchestration/preflight failures precede
+the admitted 2K capture: one incorrect manifest case fails before touching the
+Host; one relative registry path fails before inference and restores the
+installed DeepSeek configuration. Both are preserved as failed experiments,
+excluded from performance series, and do not represent indeterminate request
+retries. The successful window uses resolved absolute paths and restores the
+installed Host's models; finite generation and public trust are unchanged.
+
+### Rejected compact expert reduction tree
+
+A separate candidate prunes only empty positive-zero subtrees from the encoded
+expert matrix reduction, retaining signed-zero normalization and the nonempty
+block/addition order. Independent CPU decode/F64 bounds and bitwise original
+up/down controls cover 1, 7, 8, 15, 16 and 17 blocks, distinct gate/up weights,
+partial tiles, bucket boundaries, negative-zero activation scales, exceptional
+recovery and refusal/canaries. Five component/structural checks and separate
+memcheck, synccheck and racecheck pass at the frozen candidate.
+
+The [2K](benchmarks/generated/qualification-deepseek-native-compact-expert-tree-rejected-20261009-2048.md)
+and [coding](benchmarks/generated/qualification-deepseek-native-compact-expert-tree-rejected-20261009-coding.md)
+Rust/native comparisons retain exact fragments and terminal populations, but
+show no material complete-model benefit sufficient to retain the three-way
+compiled realization. The candidate is rejected; 8K and reasoning transitions
+remain NOT MEASURED for this arm, not implicitly qualified. No compact-tree
+production code enters the decoder change. Static register counts do not prove
+occupancy or a cause. Raw `compact-expert-tree-*` captures, source, decisions and
+sanitizer evidence remain in the same external root; both idle windows restore
+the installed DeepSeek configuration and preserve finite generation 1.

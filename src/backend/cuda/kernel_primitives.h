@@ -10,28 +10,14 @@
 #ifdef __CUDACC__
 static __device__ float f16_bits_to_float(unsigned int h)
 {
-    unsigned int sign = (h & 0x8000u) << 16;
-    unsigned int exp = (h >> 10) & 0x1fu;
-    unsigned int mant = h & 0x03ffu;
-    unsigned int raw;
-    if (exp == 0u) {
-        if (mant == 0u) {
-            raw = sign;
-        } else {
-            unsigned int shift = 0u;
-            while ((mant & 0x0400u) == 0u) {
-                mant <<= 1;
-                shift++;
-            }
-            mant &= 0x03ffu;
-            raw = sign | ((113u - shift) << 23) | (mant << 13);
-        }
-    } else if (exp == 31u) {
-        raw = sign | 0x7f800000u | (mant << 13);
-    } else {
-        raw = sign | ((exp + (127u - 15u)) << 23) | (mant << 13);
-    }
-    return __uint_as_float(raw);
+    /* Every finite binary16 value is exact in F32, including signed zero and
+     * subnormals. Preserve the original exceptional payload explicitly. */
+    if ((h & 0x7c00u) == 0x7c00u)
+        return __uint_as_float(((h & 0x8000u) << 16u) |
+            0x7f800000u | ((h & 0x03ffu) << 13u));
+    float value;
+    asm("cvt.f32.f16 %0, %1;" : "=f"(value) : "h"((unsigned short)h));
+    return value;
 }
 static __device__ unsigned int qtype_load_u16(const unsigned char *bytes)
 {
