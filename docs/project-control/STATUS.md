@@ -70,6 +70,10 @@ remain separate closure requirements; the milestone is not declared complete.
   [Certified projection experiments and device/API attribution](../evaluation/retained-observations.md#certified-projection-candidates-and-device-activity-attribution-2026-10-08)
   retain rejected complete-model candidates and separate instrumented diagnosis
   from unprofiled native timing; they do not promote the performance exit.
+  [Exact decoder realizations](../evaluation/retained-observations.md#native-decoder-realizations-2026-10-09)
+  retain same-day native coding/2K/8K comparisons without changing quantization
+  or numerical publication; installed rollout, independent quality and the
+  throughput exit remain separate.
   The [remote finite producer](../contracts/finite-decision-remote.md) separately
   exposes one identity-bound computation under an explicit SSH peer grant.
   [Installed Exon→DGX finite execution](../evaluation/finite-decision-remote.md#installed-lan-producer)

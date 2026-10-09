@@ -28,6 +28,8 @@ static __device__ float qtype_dot_recover_f64(
         return qtype_ordered_dot_f64<YVEX_GGUF_QTYPE_F16>(row, input, width);
     case YVEX_GGUF_QTYPE_BF16:
         return qtype_ordered_dot_f64<YVEX_GGUF_QTYPE_BF16>(row, input, width);
+    case YVEX_GGUF_QTYPE_Q8_0:
+        return qtype_ordered_dot_f64<YVEX_GGUF_QTYPE_Q8_0>(row, input, width);
     case YVEX_GGUF_QTYPE_IQ2_XXS:
         return qtype_ordered_dot_f64<YVEX_GGUF_QTYPE_IQ2_XXS>(row, input, width);
     case YVEX_GGUF_QTYPE_Q2_K:
@@ -182,6 +184,8 @@ static __device__ float qtype_dot_certified_f64(
         return qtype_interval_dot_f64<YVEX_GGUF_QTYPE_F16>(row, input, width, qtype);
     case YVEX_GGUF_QTYPE_BF16:
         return qtype_interval_dot_f64<YVEX_GGUF_QTYPE_BF16>(row, input, width, qtype);
+    case YVEX_GGUF_QTYPE_Q8_0:
+        return qtype_interval_dot_f64<YVEX_GGUF_QTYPE_Q8_0>(row, input, width, qtype);
     case YVEX_GGUF_QTYPE_IQ2_XXS:
         return qtype_interval_dot_f64<YVEX_GGUF_QTYPE_IQ2_XXS>(row, input, width, qtype);
     case YVEX_GGUF_QTYPE_Q2_K:

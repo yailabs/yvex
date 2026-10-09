@@ -113,6 +113,23 @@ oracles and the bounded complete-model generation/lifecycle gate pass at the
 Current broader qualification state belongs to the selected competitive Task
 and its independent Evaluation planes.
 
+### Storage decoding equivalence
+
+Constant Q8_0 storage dispatch does not admit a different dot or accumulation
+order. Both certified and literal realizations use the canonical decoded F32
+weights and preserve intermediate F32, optional additive and BF16 publication.
+Independent CPU block decoding followed by literal F64 controls includes
+rounding ties, cancellation, signed zero, subnormals and partial populations.
+
+Finite binary16 values are exactly representable in F32. CUDA may use native
+conversion for those encodings, without flushing subnormals or changing signed
+zero. Infinity/NaN encodings retain the explicit original sign/exponent/payload
+mapping; this is not permission to admit a nonfinite model operand. The
+production gather control checks all finite encodings bitwise against the
+independent CPU decoder, plus exceptional/prior-status refusal, output canaries
+and immutable input. Complete-model characterization does not replace
+independent checkpoint or representation-quality evidence.
+
 ## Internal Activation-Prefill Boundary
 
 `include/yvex/internal/runtime_prefill.h` owns the non-installed production

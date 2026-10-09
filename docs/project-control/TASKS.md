@@ -33,6 +33,13 @@ compares automatic single-sequence CUDA chunks on the exact model and immutable
 engine results. Bounded cancellation/recovery changes neither caller deadlines
 nor the 20/700 exit; installed baseline and candidate remain separately identified.
 
+The same Task's
+[native decoder qualification](../evaluation/retained-observations.md#native-decoder-realizations-2026-10-09)
+compares explicit Q8_0 storage dispatch, exact finite F16 conversion and their
+composition against fresh same-day Rust/native controls. The numerical class,
+artifact and target verification are unchanged. Complete-model gains remain
+bounded characterization, not installed-Host rollout or the 20/700 exit.
+
 The independently authorized YVEX repair
 `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` has a qualified bounded producer and
 component repair, but its full mandatory QA gate is BLOCKED by the unavailable
