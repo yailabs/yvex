@@ -20,6 +20,19 @@ publication: {html: true, pdf: true, index: true}
 | 35 | 48 | 55 | 14 | 152 |
 <!-- maturity-counts:end -->
 
+## Active computational architecture reconstruction
+
+`V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` is the sole newly
+selected DeepSeek execution implementation, starting from published/installed
+`337e7e73`. The predecessor `.4` is stopped at its retained checkpoint with
+unearned performance and independent-quality exits, not COMPLETE. New work
+must establish an executed-graph causal model and an independently qualified
+physical correction on the complete model. The 20 target-only decode / 700
+uncached prefill gates remain requirements, not capabilities. Existing warm
+residency negatives, numerical classes and rejected candidates are retained.
+Selection changes no maturity count and starts neither A03 nor the deferred
+documentation atlas; REPLAI flow integration remains a retained consumer result.
+
 ## Compute product refoundation
 
 The separately selected `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` reconciles

@@ -15,13 +15,20 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **DeepSeek GB10 competitive execution/residency IN PROGRESS; Rust shell and initial macOS/Metal integration COMPLETE; A03 remains READY and unstarted**.
+Current phase: **DeepSeek GB10 computational architecture reconstruction IN PROGRESS; predecessor competitive wave stopped with unearned exits; A03 remains READY and unstarted**.
 The operator independently selected
-`V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4`.
+`V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` on 2026-10-09.
 Earlier repairs retain their exact evidence and external gates. This selection
 does not start A03, Metal, training or cross-repository consumer work.
 
-The same active Task owns the
+The predecessor `.4` implementation is stopped at published `337e7e73`, not
+COMPLETE. Its controlled row is BLOCKED because its exit remains unearned and
+implementation authority has moved to `.5`; this does not assert a hardware
+ceiling or erase pending numerical, quality, lifecycle or performance gates.
+There is one active implementation of this execution problem: `.5`.
+The historical paragraphs below retain the `.4` observations and ownership.
+
+The predecessor `.4` owns the retained
 [cancelled-prefill decode-clock repair](../evaluation/retained-observations.md#cancelled-prefill-decode-clock-repair-2026-10-08):
 missing first-commit timing stays unavailable rather than reporting process
 uptime as decode. Its software evidence does not close the 20/700 performance
@@ -95,10 +102,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 52 | 39 | 4 | 1 | 8 |
+| 53 | 39 | 4 | 1 | 9 |
 <!-- task-counts:end -->
 
-**39/52 selected Tasks complete.** This denominator includes the significant
+**39/53 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -109,9 +116,37 @@ candidates are not selected Tasks.
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
 | `V010.RUNTIME.DEEPSEEK.GB10.THROUGHPUT.3` | Complete GB10 inference throughput, reasoning and representation qualification | P1 | ⛔ BLOCKED | Operator closed the previous bounded investigation at its earned handoff; 20 committed decode token/s and 700 uncached prefill token/s remain unearned, not a hardware-ceiling claim. Preserve its candidate, missing independent quality gates and retained observations; successor selection does not promote them. |
-| `V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4` | Decompose same-machine YVEX/DwarfStar checkpoint, representation, residency and execution effects; retain qualified generic improvements | P1 | 🔵 IN PROGRESS | Published `a444bcdd` remains the retained installed baseline; the approved idle Host replacement now installs `7fc562d5` with the same DeepSeek and a separately qualified faster finite CPU producer. The 20/700 exit is not earned; Rust/native product, finite reference/refusal and HTTP recovery evidence retain their bounded scope. Source-stable controlled geometry candidates improve prefill, not sustained coding decode. Already-resident scoped page warming is neutral; wider decoded and five-digit candidates are rejected on complete-model tradeoffs. Same-stream copies remove intermediate barriers but move observed waits to completion without a material complete-request gain. Program-owned reusable packing and four-stream warp-cell normalization have source-stable controlled characterization and bounded numerical/reuse/refusal evidence; neither earns the performance exit. Warp-row normalization, small-row attention, fixed expert geometry and certified MXFP4 matrix alternatives are rejected on complete-model tradeoffs. Separate identity-bound receipts and generated views retain those outcomes, not a common performance claim. Operator cancellation exposed a generic attention begin/abort invalidation defect; target/draft first-layer and between-layer regressions pass after repair, included in the current installed Host without changing model/configuration identities. The operator service and finite generation are preserved; new operator sessions are never retired for experiments. [Longer-bound native coding/high turns](../evaluation/retained-observations.md#native-long-turn-reasoning-completion-2026-10-08) reach natural EOS in the retained sample set, separately from short controls and unexecuted reasoning/strategy cells; independent quality, complete high/maximum characterization, remaining execution costs, comparative closure and the 20/700 gates remain unearned. The published single-sequence CUDA prefill policy retains native coding/2K/8K characterization and cancellation/recovery; it is not yet the installed Host. [Certified projection candidates and device/API attribution](../evaluation/retained-observations.md#certified-projection-candidates-and-device-activity-attribution-2026-10-08) reject component-correct candidates without material complete-model benefit and keep profiled diagnosis separate from timing. DwarfStar uses a different checkpoint, so its results are not an exact engine A/B. [Installed matrix](../evaluation/retained-observations.md#installed-native-coding-and-multi-turn-matrix-2026-10-07); [controlled experiments](../evaluation/retained-observations.md#controlled-physical-geometry-and-page-warming-experiments-2026-10-07); [submission and rejected candidates](../evaluation/retained-observations.md#submission-lifetime-and-rejected-decoded-candidates-2026-10-07). |
+| `V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4` | Decompose same-machine YVEX/DwarfStar checkpoint, representation, residency and execution effects; retain qualified generic improvements | P1 | ⛔ BLOCKED | Implementation stopped by the operator at published checkpoint `337e7e73057abd8a784a67eea58ad8a6f079869d` (tree `14b7fea18275a542739d4d2afaa38f6fd720d407`); original performance and independent-quality exits remain unearned. Successor `.5` alone owns new computational implementation. The following predecessor observations remain historical, not current installed-state assertions. Published `a444bcdd` remains the retained installed baseline; the approved idle Host replacement now installs `7fc562d5` with the same DeepSeek and a separately qualified faster finite CPU producer. The 20/700 exit is not earned; Rust/native product, finite reference/refusal and HTTP recovery evidence retain their bounded scope. Source-stable controlled geometry candidates improve prefill, not sustained coding decode. Already-resident scoped page warming is neutral; wider decoded and five-digit candidates are rejected on complete-model tradeoffs. Same-stream copies remove intermediate barriers but move observed waits to completion without a material complete-request gain. Program-owned reusable packing and four-stream warp-cell normalization have source-stable controlled characterization and bounded numerical/reuse/refusal evidence; neither earns the performance exit. Warp-row normalization, small-row attention, fixed expert geometry and certified MXFP4 matrix alternatives are rejected on complete-model tradeoffs. Separate identity-bound receipts and generated views retain those outcomes, not a common performance claim. Operator cancellation exposed a generic attention begin/abort invalidation defect; target/draft first-layer and between-layer regressions pass after repair, included in the current installed Host without changing model/configuration identities. The operator service and finite generation are preserved; new operator sessions are never retired for experiments. [Longer-bound native coding/high turns](../evaluation/retained-observations.md#native-long-turn-reasoning-completion-2026-10-08) reach natural EOS in the retained sample set, separately from short controls and unexecuted reasoning/strategy cells; independent quality, complete high/maximum characterization, remaining execution costs, comparative closure and the 20/700 gates remain unearned. The published single-sequence CUDA prefill policy retains native coding/2K/8K characterization and cancellation/recovery; it is not yet the installed Host. [Certified projection candidates and device/API attribution](../evaluation/retained-observations.md#certified-projection-candidates-and-device-activity-attribution-2026-10-08) reject component-correct candidates without material complete-model benefit and keep profiled diagnosis separate from timing. DwarfStar uses a different checkpoint, so its results are not an exact engine A/B. [Installed matrix](../evaluation/retained-observations.md#installed-native-coding-and-multi-turn-matrix-2026-10-07); [controlled experiments](../evaluation/retained-observations.md#controlled-physical-geometry-and-page-warming-experiments-2026-10-07); [submission and rejected candidates](../evaluation/retained-observations.md#submission-lifetime-and-rejected-decoded-candidates-2026-10-07). |
+| `V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` | Reconstruct the executed computational graph and retain a coherent physical/numerical execution correction on GB10 | P1 | 🔵 IN PROGRESS | Inherits `.4` checkpoint `337e7e73`, independent-reference gaps and rejected experiments without promoting them. Measure target-only decode and uncached 2K/8K critical paths; separate checkpoint/representation, layout, numerical realization, device work, control and overlapping waits. Implement the dominant causal correction through canonical compiler/representation/runtime/backend owners. Exit requires independent numerical/lifecycle qualification, complete-model before/after, resource/preparation costs and native-product confirmation: at least 20 sustained target-only committed token/s and 700 uncached prefill token/s (preferred 24/800). Missing gates leave this milestone incomplete. Protect installed DeepSeek/finite, operator sessions and concurrent edits; no implicit rollout, numerical relaxation, terminal redesign, atlas, YAI/Studio/REPLAI changes or A03. |
 
-The successor is authorized on 2026-10-05. Qualification target identity,
+### Computational architecture reconstruction selection — 2026-10-09
+
+`.5` starts from the installed/published `337e7e73` source; the retained `.4`
+measured candidates keep their original source/delta/executable identities.
+The operator-authorized reinstall reconciled the native client, Host and HTTPS
+executable, without making a throughput claim. The shared primary checkout is
+still an independently dirty integration line and must not be reset or stashed.
+
+The first implementation gate is an actual executed-graph cost model, not a
+nominal Transformer diagram: exact kernel populations and dependencies, real
+phase widths, host/device interval unions, qtype and expert layouts, state and
+publication costs. Existing warm-residency negatives are inherited; a new
+residency experiment requires a distinct causal mechanism. DwarfStar's faster
+different-checkpoint operating point is a competitive control, never an exact
+same-weight oracle.
+
+A changed arithmetic realization requires an explicitly admitted numerical
+class and independent obligations; an equivalence claim preserves the current
+ordered-F64 contract. Prepared layouts require non-overlapping accounting and
+safe resource/lifetime admission, not an unbudgeted duplicate model. Once the
+target path is understood, speculative verification/commit and native delivery
+remain within the same complete-generation accounting. Reasoning none/high/
+maximum, controlled/native/HTTP, cold/warm and fresh/reused axes stay separate.
+No `.5` performance or architectural capability has yet been earned by selection.
+
+### Retained predecessor `.4` scope and checkpoints
+
+The `.4` successor was authorized on 2026-10-05. Qualification target identity,
 independent evidence planes, manifest-driven reasoning/strategy axes and generated
 public views belong to this delivery; no second benchmark database or Task is
 selected. Current operator service and finite producer are protected. Explicit
