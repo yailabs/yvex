@@ -145,10 +145,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 54 | 39 | 4 | 1 | 10 |
+| 55 | 40 | 4 | 1 | 10 |
 <!-- task-counts:end -->
 
-**39/54 selected Tasks complete.** This denominator includes the significant
+**40/55 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -521,6 +521,32 @@ Metal, unsupported Mac leak instrumentation and external live/release gates
 retain their separate limits. `progression_decision=proceed`,
 `downstream_safe=true` for the bounded integration, native CPU, Qwen CPU and
 Metal primitive claims only. No successor implementation Task is selected.
+
+## README product presentation
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `DOCS.PRODUCT.README.PRESENTATION.0` | Refresh the public README with concise product copy and generated visual architecture | Closed | ✅ COMPLETE | Branded entry point, two accessible JSON-derived SVGs, scannable capability tables, verified foreground quickstart and canonical evidence links. Documentation/drift checks, 26 publication tests and four Chromium desktop/mobile light/dark views pass. No runtime, model admission, performance promotion or documentation-atlas selection. |
+
+Selected by the operator on 2026-10-10. This bounded presentation delivery does
+not change Program P ownership, DeepSeek performance gates or A03 readiness.
+
+`make docs-check docs-site` validates 392 canonical owners, nine generated
+figures and the public reader. The seven existing technical figures are
+unchanged; the new product projection preserves the same typed graph in
+Mermaid. Refusal tests cover invalid presentation, overflow and stale assets;
+publication tests also cover escaping and accessible, self-contained SVGs.
+Chromium renders at 1280 and 390 CSS pixels in both color schemes retain all
+three local images and no page-level horizontal overflow (tables scroll inside
+their existing containers). Local screenshots and the observation receipt are
+under `build/docs/readme-{width}-{theme}.png` and
+`build/docs/readme-visual-receipt.json`, not committed benchmark evidence.
+CLI help was inspected without starting a host or loading a model. Only
+README, documentation projection tooling/tests, diagram sources/assets and this
+bounded Task record change. No ABI, architectural ownership, Status capability,
+ADR, runtime evidence or sibling repository changes.
+`progression_decision=proceed`, `downstream_safe=true` for README publication
+only; Program P and DeepSeek qualification remain independent and open.
 
 ## macOS and Metal documentation alignment
 

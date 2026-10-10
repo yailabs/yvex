@@ -103,7 +103,10 @@ YVEX retains one editable JSON source for each system diagram. Typed nodes,
 explicit relationship endpoints and ownership groups generate native Mermaid
 blocks in canonical Markdown and deterministic SVG for offline HTML/PDF.
 The Markdown blocks are checked projections, not independent diagrams to edit.
-GitHub renders Mermaid; static links remain available for terminal viewers.
+Architecture owners expose native Mermaid; product landing pages may embed the
+generated SVG directly and link its editable JSON. The optional `product`
+presentation changes only typography, spacing and palette, not graph semantics.
+GitHub renders either projection; static links remain available for terminal viewers.
 
 The same graph preserves source, logical, physical, runtime, state, device and
 external boundaries across layouts. Text labels carry semantic roles; violet

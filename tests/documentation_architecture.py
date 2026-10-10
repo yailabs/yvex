@@ -138,7 +138,7 @@ def check_figure_generation() -> None:
         owner = (ROOT / data["owner"]).read_text(encoding="utf-8")
         if path.name not in owner or path.with_suffix(".svg").name not in owner:
             fail(f"figure has no consuming owner: {path.name}")
-        for mutation in ("overflow", "overlap", "diagonal", "crossing", "authority", "class", "unknown"):
+        for mutation in ("overflow", "overlap", "diagonal", "crossing", "authority", "class", "presentation", "unknown"):
             bad = copy.deepcopy(data)
             if mutation == "overflow":
                 bad["nodes"][0]["lines"][0] = "overflow " * 100
@@ -153,6 +153,8 @@ def check_figure_generation() -> None:
                 bad["authority"] = ["/outside-repository"]
             elif mutation == "class":
                 bad["nodes"][0]["kind"] = "invented"
+            elif mutation == "presentation":
+                bad["presentation"] = "invented"
             else:
                 bad["unsupported"] = True
             try:
@@ -172,15 +174,18 @@ def check_figure_generation() -> None:
                     fail("stale-output check mutated the projection")
             else:
                 fail("stale SVG was accepted")
-    if len(numbers) != 7:
-        fail(f"unexpected canonical figure set: {len(numbers)}")
+    if numbers != set(range(1, 10)):
+        fail(f"unexpected canonical figure set: {sorted(numbers)}")
     result = subprocess.run([sys.executable, str(ROOT / "tools/render_diagrams.py"), "--check"],
                             cwd=ROOT, check=False)
     if result.returncode:
         fail("figure source and SVG are not synchronized")
-    for path in (ROOT / "README.md", ROOT / "docs/architecture/README.md"):
-        if "```mermaid" not in path.read_text(encoding="utf-8"):
-            fail(f"missing native Mermaid architecture figure: {path.name}")
+    if "```mermaid" not in (ROOT / "docs/architecture/README.md").read_text(encoding="utf-8"):
+        fail("missing native Mermaid architecture figure")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for name in ("product_pipeline", "product_runtime"):
+        if f'](docs/assets/diagrams/{name}.svg)' not in readme or f'{name}.json' not in readme:
+            fail(f"missing product SVG / editable source: {name}")
 
 
 def maturity(text, check_counts=True):

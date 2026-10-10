@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "number": 8,
+  "presentation": "product",
+  "title": "From open weights to live execution.",
+  "description": "Read the top row from left to right: authenticated source, compiler, artifact and binding. Deployment on the lower right admits the backend and resources, creating an engine generation in the center. The session on the lower left owns independent mutable state. This is a lifecycle overview, not a claim that every source or backend is admitted.",
+  "size": [1200, 760],
+  "owner": "README.md",
+  "authority": ["docs/architecture/compiler-ir.md", "docs/architecture/representation-artifacts.md", "docs/architecture/deployment-specialization.md", "docs/architecture/runtime-lifecycle.md"],
+  "panels": [],
+  "nodes": [
+    {"id": "source", "box": [40, 160, 340, 154], "kind": "external", "title": "Authenticated source", "lines": ["Checkpoint + tokenizer", "Exact parameter lineage"]},
+    {"id": "compiler", "box": [430, 160, 340, 154], "kind": "semantic", "title": "Native compiler", "lines": ["Model semantics → program", "Transforms + physical plan"]},
+    {"id": "artifact", "box": [820, 160, 340, 154], "kind": "physical", "title": "Artifact + binding", "lines": ["Weights in a chosen layout", "Verified executable plan"]},
+    {"id": "deployment", "box": [820, 418, 340, 154], "kind": "runtime", "title": "Deployment", "lines": ["Backend + numerical class", "Device + resource admission"]},
+    {"id": "engine", "box": [430, 418, 340, 154], "kind": "runtime", "title": "Engine generation", "lines": ["Executable resources", "Load / unload lifetime"]},
+    {"id": "session", "box": [40, 418, 340, 154], "kind": "mutable", "title": "Live session", "lines": ["Independent mutable state", "Committed generation"]}
+  ],
+  "edges": [
+    {"kind": "flow", "source": "source", "target": "compiler", "points": [[380, 237], [430, 237]]},
+    {"kind": "flow", "source": "compiler", "target": "artifact", "points": [[770, 237], [820, 237]]},
+    {"kind": "lifecycle", "source": "artifact", "target": "deployment", "points": [[990, 314], [990, 418]]},
+    {"kind": "lifecycle", "source": "deployment", "target": "engine", "points": [[820, 495], [770, 495]]},
+    {"kind": "lifecycle", "source": "engine", "target": "session", "points": [[430, 495], [380, 495]]}
+  ],
+  "labels": [
+    {"at": [40, 137], "text": "PREPARE · COMPILE · BIND", "style": "note"},
+    {"at": [40, 392], "text": "EXECUTE ← LOAD ← ADMIT", "style": "note"},
+    {"at": [40, 638], "text": "One lineage. Separate source, artifact, deployment and runtime identities.", "style": "note"}
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "number": 9,
+  "presentation": "product",
+  "title": "One host. Explicit lifetimes.",
+  "description": "Native clients and the bounded OpenAI HTTP adapter submit requests to a persistent host. The host routes by model and generation to admitted engines. Sessions A and B have independent mutable computational state. Loading or unloading an engine does not require restarting the transport. The host can stay available with zero engines.",
+  "size": [1200, 800],
+  "owner": "README.md",
+  "authority": ["docs/architecture/interfaces-protocols.md", "docs/architecture/runtime-lifecycle.md", "docs/architecture/computational-state.md"],
+  "panels": [],
+  "nodes": [
+    {"id": "clients", "box": [40, 170, 320, 158], "kind": "interface", "title": "Native + HTTP", "lines": ["Local operator / app", "Separate contracts"]},
+    {"id": "host", "box": [440, 170, 320, 158], "kind": "runtime", "title": "Persistent host", "lines": ["Route model + generation", "Ready with zero engines"]},
+    {"id": "engine", "box": [840, 170, 320, 158], "kind": "runtime", "title": "Engine generation", "lines": ["Binding + device resources", "Explicit load / unload"]},
+    {"id": "session_a", "box": [440, 470, 320, 158], "kind": "mutable", "title": "Session A", "lines": ["Its context, its state", "Commit or abort"]},
+    {"id": "session_b", "box": [840, 470, 320, 158], "kind": "mutable", "title": "Session B", "lines": ["Its context, its state", "Commit or abort"]}
+  ],
+  "edges": [
+    {"kind": "control", "source": "clients", "target": "host", "points": [[360, 249], [440, 249]]},
+    {"kind": "control", "source": "host", "target": "engine", "points": [[760, 249], [840, 249]]},
+    {"kind": "lifecycle", "source": "engine", "target": "session_a", "points": [[1000, 328], [1000, 396], [600, 396], [600, 470]]},
+    {"kind": "lifecycle", "source": "engine", "target": "session_b", "points": [[1000, 328], [1000, 470]]}
+  ],
+  "labels": [
+    {"at": [40, 138], "text": "TRANSPORT ≠ ENGINE ≠ SESSION", "style": "note"},
+    {"at": [40, 506], "text": "SHARED EXECUTION.", "style": "panel-title"},
+    {"at": [40, 541], "text": "INDEPENDENT STATE.", "style": "panel-title"},
+    {"at": [40, 588], "text": "Isolation is not a claim of", "style": "note"},
+    {"at": [40, 614], "text": "continuous batching support.", "style": "note"},
+    {"at": [40, 681], "text": "Retire an engine, not the service. Stale generations are refused explicitly.", "style": "note"}
+  ]
+}

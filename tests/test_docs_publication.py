@@ -16,6 +16,8 @@ import benchmarks
 import importlib.util
 spec=importlib.util.spec_from_file_location('docs_site',ROOT/'tools/docs/site.py')
 site=importlib.util.module_from_spec(spec);spec.loader.exec_module(site)
+figure_spec=importlib.util.spec_from_file_location('docs_figures',ROOT/'tools/render_diagrams.py')
+figures=importlib.util.module_from_spec(figure_spec);figure_spec.loader.exec_module(figures)
 
 class PublicationTests(unittest.TestCase):
     def setUp(self):
@@ -46,6 +48,42 @@ class PublicationTests(unittest.TestCase):
         visible=self.text.replace('<!-- docs:metadata','---',1).replace('-->','---',1)
         with self.assertRaisesRegex(ValueError,'visible YAML'):metadata.parse(visible)
         self.assertEqual(metadata.parse(visible,allow_visible=True),metadata.parse(self.text))
+
+    def test_product_figures_keep_graph_and_accessible_source(self):
+        for name in ('product_pipeline', 'product_runtime'):
+            with self.subTest(figure=name):
+                data=json.loads((ROOT/'docs/assets/diagrams'/f'{name}.json').read_text())
+                svg=figures.render(data)
+                self.assertIn('role="img" aria-labelledby="title desc"',svg)
+                self.assertIn('source SHA-256',svg)
+                self.assertIn('viewBox="0 0 1200',svg)
+                self.assertNotIn('<script',svg)
+                self.assertNotIn('<image',svg)
+                self.assertNotIn('href=',svg)
+                technical=copy.deepcopy(data);technical.pop('presentation')
+                self.assertEqual(figures.mermaid(data),figures.mermaid(technical))
+                for node in data['nodes']:
+                    self.assertIn(f'id="{node["id"]}"',svg)
+                self.assertEqual(svg,figures.render(copy.deepcopy(data)))
+
+    def test_product_figures_refuse_editorial_overflow(self):
+        source=json.loads((ROOT/'docs/assets/diagrams/product_pipeline.json').read_text())
+        for field in ('title','node-title','node-height'):
+            data=copy.deepcopy(source)
+            if field=='title':data['title']='Overflow '*60
+            elif field=='node-title':data['nodes'][0]['title']='Overflow '*20
+            else:data['nodes'][0]['box'][3]=110
+            with self.subTest(field=field),self.assertRaisesRegex(ValueError,'overflow'):
+                figures.render(data)
+
+    def test_product_figures_escape_editorial_content(self):
+        data=json.loads((ROOT/'docs/assets/diagrams/product_pipeline.json').read_text())
+        data['title']='Weights < execution & evidence'
+        data['nodes'][0]['title']='<Source & weights>'
+        svg=figures.render(data)
+        self.assertIn('Weights &lt; execution &amp; evidence',svg)
+        self.assertIn('&lt;Source &amp; weights&gt;',svg)
+        self.assertNotIn('<Source & weights>',svg)
 
     def test_metadata_refusals(self):
         invalid=[self.text.replace('owner: runtime','owner: runtime\nowner: compiler',1),
