@@ -807,6 +807,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-0731-program-p-native-mxfp4-publication-coding-hash-table-20261010",
+          "target_identity": "faae6ec9a68b5658c585d3453a2feb884e8a748bc01f2fbd919f23632e4c094a",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-0731-program-p-native-mxfp4-specialized-row-coding-hash-table-20261010",
           "target_identity": "d7e7413742246c12b6de36d4707ba3ef56856fba768375fb18784b5ed67c031f",
           "path": "product-native-v25",
@@ -833,6 +841,14 @@
       "state": "UNQUALIFIED",
       "workload_class": "representative",
       "targets": [
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-publication-speculative-coding-hash-table-20261010",
+          "target_identity": "6a768a1d2b306c2d47f788e7d54394d27bff4c1e18d035a0c9c81268fafbaac6",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
         {
           "id": "deepseek-0731-program-p-native-mxfp4-speculative-coding-hash-table-20261010",
           "target_identity": "304177388665cb2b7d655c36f1d638667e481029dd475d0185d07ac97644ee5e",
@@ -996,6 +1012,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-2048-20261010",
+          "target_identity": "47ca329370b0b5bfedd9144ecc4a701fcbb39b5c9431cb529c559e7d237c5891",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-0731-program-p-native-mxfp4-specialized-row-prefill-promessi-2048-20261010",
           "target_identity": "b6e4741d1a5449c7c09d93423b0f1f9ce0d82a3b4e160814cdf9e6eb9534ec0c",
           "path": "product-native-v25",
@@ -1091,6 +1115,14 @@
         {
           "id": "deepseek-0731-program-p-native-mxfp4-prefill-promessi-8192-20261010",
           "target_identity": "c354964ce679decb7172dfd6086c450d79a916f6fdbb207f6749850e8128a473",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-8192-20261010",
+          "target_identity": "47ca329370b0b5bfedd9144ecc4a701fcbb39b5c9431cb529c559e7d237c5891",
           "path": "product-native-v25",
           "plane": "product-path",
           "state": "CHARACTERIZED",

@@ -217,6 +217,30 @@ with the two durable outcomes distinguished. Structural reader acceptance is
 not model-quality evidence. This Linux AArch64 consumer result does not qualify
 the new build dependency on Darwin or establish inference throughput.
 
+The clean publication source `b8130fd5`, excluding the six inherited unaccepted
+CUDA edits, separately confirms native
+[coding](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-coding-hash-table-20261010.md),
+[2K](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-2048-20261010.md)
+and [8K](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-8192-20261010.md),
+with [DSpark coding](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-speculative-coding-hash-table-20261010.md)
+measured separately after the target-only host was retired.
+Each cell retains three unprofiled fresh-session samples and the exact native
+client/server executable. Ordered fragment channels, lengths and hashes match
+the same-artifact development candidate; this is a publication regression
+control, not a new speedup or independent quality result. The later documentation
+merge does not become the measured executable identity.
+
+Publication software controls retain 93 C runner entries and 17 CUDA entries,
+103 Rust unit tests, five structural tests, separate cancellation, PTY/CLI
+contracts, seven independent-reader build/integrity controls, ABI and document
+checks. The first aggregate C run exposed an existing filesystem-test environment
+leak: its intentionally oversized home path contaminated the subsequent catalog
+test. Restoring all six changed environment values on test exit repairs the
+aggregate; isolated catalog success alone was not used to waive that failure.
+Logs are retained as `publication-*` under the Program P evidence directory.
+Neither these controls nor independent GGUF structural parsing qualify full-model
+quantization quality. No second prepared weight copy is retained.
+
 Installed Host/listeners remain unchanged with no engines loaded. Program P and
 the inherited competitive performance requirements remain incomplete.
 

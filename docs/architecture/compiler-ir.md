@@ -198,6 +198,19 @@ selection; changing a sealed policy invalidates the corresponding physical plan.
 The engineering command currently requires source inputs; guided catalog/model
 selection and measured goal-specific ranking remain part of the open Task.
 
+Consumer handoff: the native optimization schema is version 1, with public types
+in `<yvex/optimization.h>`; the Rust operator projection is
+`yvex.optimization.search.v1`. Opt-in complete production returns
+`yvex.physical-production.result.v2`, preserving emission-only v1. These are
+offline source/policy/variant/artifact/binding operations, not Host/Engine/Session
+admission and not a new remote management endpoint. No independent SDK or Studio
+consumer is updated or qualified by this delivery. A future consumer uses the
+typed native contract, not parsed human CLI output, and retains missing quality
+and unmeasured performance. After a partial production result, inspect the
+artifact and binding outcomes separately; a lost acknowledgement or absent
+binding does not authorize blind re-emission or overwrite. Installed clients
+must advertise the operation/schema before it is offered as available.
+
 <!-- docs:diagram physical_compilation -->
 ```mermaid
 %% yvex-figure: physical_compilation

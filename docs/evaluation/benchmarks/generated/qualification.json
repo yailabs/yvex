@@ -8565,6 +8565,2856 @@
         "blockers": [],
         "evidence": {
           "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/events.jsonl",
+            "result": "PASS",
+            "sha256": "5ef9721a6917b051005fc5e83141aed004282fabfa22a46e4ec3e7184473a40a"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+            "result": "PASS",
+            "sha256": "2955ce13babb2bba31a90e6b3bd8c3c95455babe13c8c68ce7410c4815583bee"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "fccad97fa445dbcb9851eee8ea64218e8fb1c3b5e2a1487e342b09d7f7d30fc2"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "checkpoint-reference": {
+        "blockers": [
+          "Independent checkpoint-matched quality evidence missing"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "BLOCKED"
+      },
+      "deployment-performance": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/events.jsonl",
+            "result": "PASS",
+            "sha256": "5ef9721a6917b051005fc5e83141aed004282fabfa22a46e4ec3e7184473a40a"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+            "result": "PASS",
+            "sha256": "2955ce13babb2bba31a90e6b3bd8c3c95455babe13c8c68ce7410c4815583bee"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "fccad97fa445dbcb9851eee8ea64218e8fb1c3b5e2a1487e342b09d7f7d30fc2"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "family-conformance": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "UNQUALIFIED"
+      },
+      "product-path": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/events.jsonl",
+            "result": "PASS",
+            "sha256": "5ef9721a6917b051005fc5e83141aed004282fabfa22a46e4ec3e7184473a40a"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+            "result": "PASS",
+            "sha256": "2955ce13babb2bba31a90e6b3bd8c3c95455babe13c8c68ce7410c4815583bee"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "fccad97fa445dbcb9851eee8ea64218e8fb1c3b5e2a1487e342b09d7f7d30fc2"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "representation-quality": {
+        "blockers": [
+          "Independent checkpoint-matched quality evidence missing"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "BLOCKED"
+      }
+    },
+    "id": "deepseek-0731-program-p-native-mxfp4-publication-coding-hash-table-20261010",
+    "limitations": [
+      "Three samples characterize this exact configuration; no confidence interval or global performance claim.",
+      "Source/build/hardware facts joined from directly observed owned daemon and frozen capture; client and server identities remain separate.",
+      "No independent 0731 representation-quality reference; no high/maximum reasoning or installed-service qualification in this record. Strategy is exact and not mixed with another lane.",
+      "CPU admission, visible-client timing and server generation phases have separate clocks/denominators.",
+      "Resource observations are sampled; locks do not prove uninterrupted exclusive hardware ownership.",
+      "Clock and thermal state were not sampled throughout the baseline; candidate partial device-state sampling is separate, not proof of clock equivalence.",
+      "Physical quantization differs from Q2 control; no bitwise continuation equivalence or quality superiority is asserted.",
+      "Kernel bundle digest is not projected in this native receipt; source/build/executable and specialization are retained independently.",
+      "Confirms the clean publication build against the same-artifact earlier development candidate; no new speedup or independent quality claim."
+    ],
+    "measurements": [
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "admission.client",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.565317312,
+          0.527227998,
+          0.52654502
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.565317312,
+          "median": 0.527227998,
+          "median_absolute_deviation": 0.0006829779999999452,
+          "minimum": 0.52654502
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "client dispatch including connect through terminal response",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "request.client-complete",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          27.937416252,
+          27.846291314,
+          27.885446244
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 27.937416252,
+          "median": 27.885446244,
+          "median_absolute_deviation": 0.03915493000000225,
+          "minimum": 27.846291314
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "client dispatch including connect to first nonempty final/reasoning content",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "ttft.client-visible",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          1.533453276,
+          1.460694044,
+          1.422735209
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 1.533453276,
+          "median": 1.460694044,
+          "median_absolute_deviation": 0.03795883499999997,
+          "minimum": 1.422735209
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "delivery.client-gap.maximum",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.11789056900000006,
+          0.11837498600000096,
+          0.11828065000000088
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.11837498600000096,
+          "median": 0.11828065000000088,
+          "median_absolute_deviation": 9.433600000008369e-05,
+          "minimum": 0.11789056900000006
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "delivery.client-gap.mean",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.10354370289803923,
+          0.10347172174901961,
+          0.10377417666666668
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.10377417666666668,
+          "median": 0.10354370289803923,
+          "median_absolute_deviation": 7.198114901961483e-05,
+          "minimum": 0.10347172174901961
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "turn start to first committed model-token callback",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "ttft.server",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.968097884,
+          0.933425934,
+          0.896174493
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.968097884,
+          "median": 0.933425934,
+          "median_absolute_deviation": 0.03467195000000001,
+          "minimum": 0.896174493
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "server turn start to first source-classified final token",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "final.first.server",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.968097884,
+          0.933425934,
+          0.896174493
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.968097884,
+          "median": 0.933425934,
+          "median_absolute_deviation": 0.03467195000000001,
+          "minimum": 0.896174493
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "client dispatch including connect to first nonempty final fragment",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "final.first.client",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          1.533453276,
+          1.460694044,
+          1.422735209
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 1.533453276,
+          "median": 1.460694044,
+          "median_absolute_deviation": 0.03795883499999997,
+          "minimum": 1.422735209
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "final.phase-rate",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          9.644744857220868,
+          9.66054812672388,
+          9.632510420786346
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 9.66054812672388,
+          "median": 9.644744857220868,
+          "median_absolute_deviation": 0.012234436434521712,
+          "minimum": 9.632510420786346
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "committed tokens after first / elapsed decode wall after first",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "decode.post-first.committed",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          9.657739452223192,
+          9.664459789231953,
+          9.636300680559609
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 9.664459789231953,
+          "median": 9.657739452223192,
+          "median_absolute_deviation": 0.006720337008761845,
+          "minimum": 9.636300680559609
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "newly committed uncached input positions / complete prefill wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "prefill.uncached",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          37.40654586895996,
+          37.845385811330736,
+          39.65018889445917
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 39.65018889445917,
+          "median": 37.845385811330736,
+          "median_absolute_deviation": 0.4388399423707767,
+          "minimum": 37.40654586895996
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "server-authored complete newly executed prefill wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/receipt.json",
+        "metric": "prefill.wall",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.828731958,
+          0.819122314,
+          0.781837385
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.828731958,
+          "median": 0.819122314,
+          "median_absolute_deviation": 0.009609643999999973,
+          "minimum": 0.781837385
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      }
+    ],
+    "origin": "yvex-published",
+    "provenance": {
+      "checkpoint_relationship": {
+        "claims_inherited": false,
+        "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+        "source": "explicit-local-record",
+        "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+      },
+      "client_build": {
+        "build_commit": "b8130fd51f9b77f00c6f0d45b465049cae9ac3b5",
+        "build_identity": "a10eb195caac7852064db59482583beb8aaa0390e6e106f8c035f0d3fded95b0",
+        "local_protocol_version": 25,
+        "registry_identity": "ceee9b8c8aa699471bf17a1afb2dabc645b17676f579272e63aa3f080a715cb6",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "74400cbd6ba5d9b02a99bc251057ea449ebb501e9675ecbac6d0dabccb6c386b",
+        "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_state": "clean",
+        "source_tree": "2e194bed0e17fdeb7f20fca9d57c19cbf67d38f3",
+        "version": "0.1.0"
+      },
+      "client_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/publication-source-v2",
+      "client_sha256": "52c50ce4c2ba2f81a0b35f20c133ac52da8fe90d11bf6d16f5a1e8a929c1089e",
+      "diagnostics": [
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-4096.json",
+          "id": "post-load.rss",
+          "unit": "byte",
+          "value": 104062406656
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-4096.json",
+          "id": "post-load.pss",
+          "unit": "byte",
+          "value": 104059398144
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-4096.json",
+          "id": "post-load.pss_file",
+          "unit": "byte",
+          "value": 103823718400
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-4096.json",
+          "id": "post-load.pss_anon",
+          "unit": "byte",
+          "value": 191442944
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-4096.json",
+          "id": "post-load.locked",
+          "unit": "byte",
+          "value": 0
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "One observed server load-request to ready interval; file pages already read by artifact authentication, not cold storage",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/host.jsonl",
+          "id": "load.server",
+          "unit": "s",
+          "value": 7.617911359
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/events.jsonl",
+          "id": "native.prompt_tokens",
+          "unit": "count",
+          "value": 31
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/events.jsonl",
+          "id": "native.reused_tokens",
+          "unit": "count",
+          "value": 0
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/events.jsonl",
+          "id": "native.prefill_tokens",
+          "unit": "count",
+          "value": 31
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table/events.jsonl",
+          "id": "native.generated_tokens",
+          "unit": "count",
+          "value": 256
+        }
+      ],
+      "installed_product": false,
+      "profiled": false,
+      "publication_control": {
+        "installed_service_modified": false,
+        "ordered_fragment_sequence_equal": true,
+        "previous_candidate": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-native-target-catalog/4096-coding.hash-table/events.jsonl",
+          "result": "PASS",
+          "sha256": "f636f5e05c69bad87b09022bf2edf1eac57c1e656c59475d309f5188bb53f7c4"
+        },
+        "source": "clean commit excluding six inherited unaccepted CUDA changes"
+      },
+      "resource_observation": {
+        "adapter": "cuda-process-list-v1",
+        "allowed_pids": [
+          591441
+        ],
+        "cancellation_requested": false,
+        "devices": [],
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/4096-coding.hash-table-resources.jsonl",
+        "interval_seconds": 1,
+        "observations": 84,
+        "owned_child_pid": 591857,
+        "owned_child_returncode": 0,
+        "probe_seconds": 1.9820515060018806,
+        "schema": "yvex.qualification.resource-observation.v1",
+        "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+        "state": "OBSERVED_CLEAR"
+      },
+      "source_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/publication-source-v2",
+      "source_stability": "frozen",
+      "token_identities": [
+        "92a2f479c43045383da09c05b5bae24a1ebe2ef9532262091f84386050e13c1e",
+        "92a2f479c43045383da09c05b5bae24a1ebe2ef9532262091f84386050e13c1e",
+        "92a2f479c43045383da09c05b5bae24a1ebe2ef9532262091f84386050e13c1e"
+      ]
+    },
+    "schema": "yvex.qualification.receipt.v1",
+    "target": {
+      "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+      "backend": "cuda",
+      "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted candidate",
+      "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+      "build": "a10eb195caac7852064db59482583beb8aaa0390e6e106f8c035f0d3fded95b0",
+      "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+      "concurrency": 1,
+      "context": 4096,
+      "device_count": 1,
+      "driver": "580.159.03",
+      "executable": "52c50ce4c2ba2f81a0b35f20c133ac52da8fe90d11bf6d16f5a1e8a929c1089e",
+      "family_contract": "deepseek-v4-flash-dspark",
+      "hardware_model": "NVIDIA DGX Spark GB10",
+      "kernel_bundle": null,
+      "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+      "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+      "prefill_geometry": "chunk=512",
+      "product_path": "product-native-v25",
+      "reasoning": "none",
+      "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+      "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+      "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+      "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+      "schema": "yvex.qualification.target.v1",
+      "sequence_geometry": "width=1",
+      "source_commit": "b8130fd51f9b77f00c6f0d45b465049cae9ac3b5",
+      "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_tree": "2e194bed0e17fdeb7f20fca9d57c19cbf67d38f3",
+      "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+      "strategy": "target-only",
+      "suite": "d5d9eb417abe63fc2d2c242317479cfc785ce46688e25cc7e936501111393f9d",
+      "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+      "topology": "single GB10 coherent unified memory",
+      "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+      "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+    },
+    "target_identity": "faae6ec9a68b5658c585d3453a2feb884e8a748bc01f2fbd919f23632e4c094a",
+    "title": "0731 MXFP4 / routed Q2_K native protocol: mxfp4-publication / coding.hash-table / three post-warmup fresh sessions"
+  },
+  {
+    "claims": {
+      "backend-execution": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/events.jsonl",
+            "result": "PASS",
+            "sha256": "e14009e8284bdd0b90927e994411ff78f41716e40a679675ca0b8d47cbddf79e"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+            "result": "PASS",
+            "sha256": "62202fb11fe87f42271a42394340f55c7512a7d967c3234dabe10488e0411a36"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "3dae086b05903483058e359e396140a39368855e1203a6681dfd4e21d84818a0"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "checkpoint-reference": {
+        "blockers": [
+          "Independent checkpoint-matched quality evidence missing"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "BLOCKED"
+      },
+      "deployment-performance": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/events.jsonl",
+            "result": "PASS",
+            "sha256": "e14009e8284bdd0b90927e994411ff78f41716e40a679675ca0b8d47cbddf79e"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+            "result": "PASS",
+            "sha256": "62202fb11fe87f42271a42394340f55c7512a7d967c3234dabe10488e0411a36"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "3dae086b05903483058e359e396140a39368855e1203a6681dfd4e21d84818a0"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "family-conformance": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "UNQUALIFIED"
+      },
+      "product-path": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/events.jsonl",
+            "result": "PASS",
+            "sha256": "e14009e8284bdd0b90927e994411ff78f41716e40a679675ca0b8d47cbddf79e"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+            "result": "PASS",
+            "sha256": "62202fb11fe87f42271a42394340f55c7512a7d967c3234dabe10488e0411a36"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "3dae086b05903483058e359e396140a39368855e1203a6681dfd4e21d84818a0"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "representation-quality": {
+        "blockers": [
+          "Independent checkpoint-matched quality evidence missing"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "BLOCKED"
+      }
+    },
+    "id": "deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-2048-20261010",
+    "limitations": [
+      "Three samples characterize this exact configuration; no confidence interval or global performance claim.",
+      "Source/build/hardware facts joined from directly observed owned daemon and frozen capture; client and server identities remain separate.",
+      "No independent 0731 representation-quality reference; no high/maximum reasoning or installed-service qualification in this record. Strategy is exact and not mixed with another lane.",
+      "CPU admission, visible-client timing and server generation phases have separate clocks/denominators.",
+      "Resource observations are sampled; locks do not prove uninterrupted exclusive hardware ownership.",
+      "Clock and thermal state were not sampled throughout the baseline; candidate partial device-state sampling is separate, not proof of clock equivalence.",
+      "Physical quantization differs from Q2 control; no bitwise continuation equivalence or quality superiority is asserted.",
+      "Kernel bundle digest is not projected in this native receipt; source/build/executable and specialization are retained independently.",
+      "Confirms the clean publication build against the same-artifact earlier development candidate; no new speedup or independent quality claim."
+    ],
+    "measurements": [
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "admission.client",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          0.558821589,
+          0.569685972,
+          0.548816905
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.569685972,
+          "median": 0.558821589,
+          "median_absolute_deviation": 0.010004683999999986,
+          "minimum": 0.548816905
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "client dispatch including connect through terminal response",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "request.client-complete",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          22.268384604,
+          22.585409022,
+          22.242188919
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 22.585409022,
+          "median": 22.268384604,
+          "median_absolute_deviation": 0.026195685000001134,
+          "minimum": 22.242188919
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "client dispatch including connect to first nonempty final/reasoning content",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "ttft.client-visible",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          20.520207678,
+          20.792964327,
+          20.49334425
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 20.792964327,
+          "median": 20.520207678,
+          "median_absolute_deviation": 0.026863427999998635,
+          "minimum": 20.49334425
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "delivery.client-gap.maximum",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          0.12520102699999924,
+          0.1360120000000009,
+          0.12475017699999924
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.1360120000000009,
+          "median": 0.12520102699999924,
+          "median_absolute_deviation": 0.00045085000000000264,
+          "minimum": 0.12475017699999924
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "delivery.client-gap.mean",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          0.11654036893333336,
+          0.1194915215333334,
+          0.11658191446666659
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.1194915215333334,
+          "median": 0.11658191446666659,
+          "median_absolute_deviation": 4.1545533333228746e-05,
+          "minimum": 0.11654036893333336
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "turn start to first committed model-token callback",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "ttft.server",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          19.96137956,
+          20.22325562,
+          19.944372912
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 20.22325562,
+          "median": 19.96137956,
+          "median_absolute_deviation": 0.0170066480000024,
+          "minimum": 19.944372912
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "server turn start to first source-classified final token",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "final.first.server",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          19.96137956,
+          20.22325562,
+          19.944372912
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 20.22325562,
+          "median": 19.96137956,
+          "median_absolute_deviation": 0.0170066480000024,
+          "minimum": 19.944372912
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "client dispatch including connect to first nonempty final fragment",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "final.first.client",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          20.520207678,
+          20.792964327,
+          20.49334425
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 20.792964327,
+          "median": 20.520207678,
+          "median_absolute_deviation": 0.026863427999998635,
+          "minimum": 20.49334425
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "final.phase-rate",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          8.549854191508011,
+          8.304364983401468,
+          8.565444274840559
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 8.565444274840559,
+          "median": 8.549854191508011,
+          "median_absolute_deviation": 0.015590083332547522,
+          "minimum": 8.304364983401468
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "newly committed uncached input positions / complete prefill wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "prefill.uncached",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          103.23982996418756,
+          101.95078508286275,
+          103.30705492491208
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 103.30705492491208,
+          "median": 103.23982996418756,
+          "median_absolute_deviation": 0.06722496072451634,
+          "minimum": 101.95078508286275
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-2048/turn-0",
+        "definition": "server-authored complete newly executed prefill wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/receipt.json",
+        "metric": "prefill.wall",
+        "output_bound": 16,
+        "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+        "reference_identity": null,
+        "samples": [
+          19.837305047,
+          20.088123876,
+          19.824396325
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 20.088123876,
+          "median": 19.837305047,
+          "median_absolute_deviation": 0.01290872200000237,
+          "minimum": 19.824396325
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      }
+    ],
+    "origin": "yvex-published",
+    "provenance": {
+      "checkpoint_relationship": {
+        "claims_inherited": false,
+        "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+        "source": "explicit-local-record",
+        "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+      },
+      "client_build": {
+        "build_commit": "b8130fd51f9b77f00c6f0d45b465049cae9ac3b5",
+        "build_identity": "a10eb195caac7852064db59482583beb8aaa0390e6e106f8c035f0d3fded95b0",
+        "local_protocol_version": 25,
+        "registry_identity": "ceee9b8c8aa699471bf17a1afb2dabc645b17676f579272e63aa3f080a715cb6",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "74400cbd6ba5d9b02a99bc251057ea449ebb501e9675ecbac6d0dabccb6c386b",
+        "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_state": "clean",
+        "source_tree": "2e194bed0e17fdeb7f20fca9d57c19cbf67d38f3",
+        "version": "0.1.0"
+      },
+      "client_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/publication-source-v2",
+      "client_sha256": "52c50ce4c2ba2f81a0b35f20c133ac52da8fe90d11bf6d16f5a1e8a929c1089e",
+      "diagnostics": [
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.rss",
+          "unit": "byte",
+          "value": 104405925888
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.pss",
+          "unit": "byte",
+          "value": 104402917376
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.pss_file",
+          "unit": "byte",
+          "value": 103846516736
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.pss_anon",
+          "unit": "byte",
+          "value": 512163840
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.locked",
+          "unit": "byte",
+          "value": 0
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "One observed server load-request to ready interval; file pages already read by artifact authentication, not cold storage",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/host.jsonl",
+          "id": "load.server",
+          "unit": "s",
+          "value": 5.927735206
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/events.jsonl",
+          "id": "native.prompt_tokens",
+          "unit": "count",
+          "value": 2048
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/events.jsonl",
+          "id": "native.reused_tokens",
+          "unit": "count",
+          "value": 0
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/events.jsonl",
+          "id": "native.prefill_tokens",
+          "unit": "count",
+          "value": 2048
+        },
+        {
+          "case": "prefill.promessi-2048",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048/events.jsonl",
+          "id": "native.generated_tokens",
+          "unit": "count",
+          "value": 16
+        }
+      ],
+      "installed_product": false,
+      "profiled": false,
+      "publication_control": {
+        "installed_service_modified": false,
+        "ordered_fragment_sequence_equal": true,
+        "previous_candidate": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-native-target-catalog/16384-prefill.promessi-2048/events.jsonl",
+          "result": "PASS",
+          "sha256": "abd4d879c5a5e973177ae5f29b99d33c15d9dfa057c2a02542abcfad3db0f643"
+        },
+        "source": "clean commit excluding six inherited unaccepted CUDA changes"
+      },
+      "resource_observation": {
+        "adapter": "cuda-process-list-v1",
+        "allowed_pids": [
+          591441
+        ],
+        "cancellation_requested": false,
+        "devices": [],
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-2048-resources.jsonl",
+        "interval_seconds": 1,
+        "observations": 68,
+        "owned_child_pid": 593170,
+        "owned_child_returncode": 0,
+        "probe_seconds": 1.5344872089954151,
+        "schema": "yvex.qualification.resource-observation.v1",
+        "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+        "state": "OBSERVED_CLEAR"
+      },
+      "source_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/publication-source-v2",
+      "source_stability": "frozen",
+      "token_identities": [
+        "dc849d91ef9fcb5258cebbd5f231c431e278937b8d9f95a2b05c00de50c5d91b",
+        "dc849d91ef9fcb5258cebbd5f231c431e278937b8d9f95a2b05c00de50c5d91b",
+        "dc849d91ef9fcb5258cebbd5f231c431e278937b8d9f95a2b05c00de50c5d91b"
+      ]
+    },
+    "schema": "yvex.qualification.receipt.v1",
+    "target": {
+      "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+      "backend": "cuda",
+      "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted candidate",
+      "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+      "build": "a10eb195caac7852064db59482583beb8aaa0390e6e106f8c035f0d3fded95b0",
+      "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+      "concurrency": 1,
+      "context": 16384,
+      "device_count": 1,
+      "driver": "580.159.03",
+      "executable": "52c50ce4c2ba2f81a0b35f20c133ac52da8fe90d11bf6d16f5a1e8a929c1089e",
+      "family_contract": "deepseek-v4-flash-dspark",
+      "hardware_model": "NVIDIA DGX Spark GB10",
+      "kernel_bundle": null,
+      "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+      "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+      "prefill_geometry": "chunk=512",
+      "product_path": "product-native-v25",
+      "reasoning": "none",
+      "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+      "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+      "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+      "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+      "schema": "yvex.qualification.target.v1",
+      "sequence_geometry": "width=1",
+      "source_commit": "b8130fd51f9b77f00c6f0d45b465049cae9ac3b5",
+      "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_tree": "2e194bed0e17fdeb7f20fca9d57c19cbf67d38f3",
+      "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+      "strategy": "target-only",
+      "suite": "ba06670744e623b715778ff9f208f54da79ac0d9899184436ca4b7b229c04c1e",
+      "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+      "topology": "single GB10 coherent unified memory",
+      "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+      "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+    },
+    "target_identity": "47ca329370b0b5bfedd9144ecc4a701fcbb39b5c9431cb529c559e7d237c5891",
+    "title": "0731 MXFP4 / routed Q2_K native protocol: mxfp4-publication / prefill.promessi-2048 / three post-warmup fresh sessions"
+  },
+  {
+    "claims": {
+      "backend-execution": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/events.jsonl",
+            "result": "PASS",
+            "sha256": "b5230f6c2572ba19c41c39ced36642725f5404fd0596faf2183173bccc50ac84"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+            "result": "PASS",
+            "sha256": "e478b36c60fe52cb1f20695d6bd6771d46d7d4c76d61f4a7f2d22b1141cd1f1f"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "c20cab845147aab07943a9834149a01508dfc7082517fc4b757399dcd6d5a473"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "checkpoint-reference": {
+        "blockers": [
+          "Independent checkpoint-matched quality evidence missing"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "BLOCKED"
+      },
+      "deployment-performance": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/events.jsonl",
+            "result": "PASS",
+            "sha256": "b5230f6c2572ba19c41c39ced36642725f5404fd0596faf2183173bccc50ac84"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+            "result": "PASS",
+            "sha256": "e478b36c60fe52cb1f20695d6bd6771d46d7d4c76d61f4a7f2d22b1141cd1f1f"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "c20cab845147aab07943a9834149a01508dfc7082517fc4b757399dcd6d5a473"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "family-conformance": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "UNQUALIFIED"
+      },
+      "product-path": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/closed.json",
+            "result": "PASS",
+            "sha256": "3cc4147589aeea051773cfaa68fd1e8e4cb57de2266a13be54ca8853693f3423"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/events.jsonl",
+            "result": "PASS",
+            "sha256": "b5230f6c2572ba19c41c39ced36642725f5404fd0596faf2183173bccc50ac84"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+            "result": "PASS",
+            "sha256": "e478b36c60fe52cb1f20695d6bd6771d46d7d4c76d61f4a7f2d22b1141cd1f1f"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "c20cab845147aab07943a9834149a01508dfc7082517fc4b757399dcd6d5a473"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/identity.json",
+            "result": "PASS",
+            "sha256": "4a4239c2dbbe5e61846da936fddb8b2a7e7bd2ec397e83670d15052a1b9556f7"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "representation-quality": {
+        "blockers": [
+          "Independent checkpoint-matched quality evidence missing"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "BLOCKED"
+      }
+    },
+    "id": "deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-8192-20261010",
+    "limitations": [
+      "Three samples characterize this exact configuration; no confidence interval or global performance claim.",
+      "Source/build/hardware facts joined from directly observed owned daemon and frozen capture; client and server identities remain separate.",
+      "No independent 0731 representation-quality reference; no high/maximum reasoning or installed-service qualification in this record. Strategy is exact and not mixed with another lane.",
+      "CPU admission, visible-client timing and server generation phases have separate clocks/denominators.",
+      "Resource observations are sampled; locks do not prove uninterrupted exclusive hardware ownership.",
+      "Clock and thermal state were not sampled throughout the baseline; candidate partial device-state sampling is separate, not proof of clock equivalence.",
+      "Physical quantization differs from Q2 control; no bitwise continuation equivalence or quality superiority is asserted.",
+      "Kernel bundle digest is not projected in this native receipt; source/build/executable and specialization are retained independently.",
+      "Confirms the clean publication build against the same-artifact earlier development candidate; no new speedup or independent quality claim."
+    ],
+    "measurements": [
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "admission.client",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          0.540598094,
+          0.545311891,
+          0.551710076
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.551710076,
+          "median": 0.545311891,
+          "median_absolute_deviation": 0.004713796999999964,
+          "minimum": 0.540598094
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "client dispatch including connect through terminal response",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "request.client-complete",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          93.975814035,
+          93.741272558,
+          93.836933784
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 93.975814035,
+          "median": 93.836933784,
+          "median_absolute_deviation": 0.09566122599999005,
+          "minimum": 93.741272558
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "client dispatch including connect to first nonempty final/reasoning content",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "ttft.client-visible",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          92.106885708,
+          91.887145445,
+          91.981575686
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 92.106885708,
+          "median": 91.981575686,
+          "median_absolute_deviation": 0.09443024099999775,
+          "minimum": 91.887145445
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "delivery.client-gap.maximum",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          0.132289003000011,
+          0.13107120100001168,
+          0.13160856100000728
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.132289003000011,
+          "median": 0.13160856100000728,
+          "median_absolute_deviation": 0.0005373599999956014,
+          "minimum": 0.13107120100001168
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "delivery.client-gap.mean",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          0.12459033746666724,
+          0.12360014359999999,
+          0.12368586260000049
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.12459033746666724,
+          "median": 0.12368586260000049,
+          "median_absolute_deviation": 8.571900000049759e-05,
+          "minimum": 0.12360014359999999
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "turn start to first committed model-token callback",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "ttft.server",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          91.566237438,
+          91.341947778,
+          91.429722283
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 91.566237438,
+          "median": 91.429722283,
+          "median_absolute_deviation": 0.08777450499999873,
+          "minimum": 91.341947778
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "server turn start to first source-classified final token",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "final.first.server",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          91.566237438,
+          91.341947778,
+          91.429722283
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 91.566237438,
+          "median": 91.429722283,
+          "median_absolute_deviation": 0.08777450499999873,
+          "minimum": 91.341947778
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "client dispatch including connect to first nonempty final fragment",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "final.first.client",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          92.106885708,
+          91.887145445,
+          91.981575686
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 92.106885708,
+          "median": 91.981575686,
+          "median_absolute_deviation": 0.09443024099999775,
+          "minimum": 91.887145445
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "final.phase-rate",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          7.962683948674187,
+          8.075215467983979,
+          8.07534211012725
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 8.07534211012725,
+          "median": 8.075215467983979,
+          "median_absolute_deviation": 0.00012664214327173795,
+          "minimum": 7.962683948674187
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "newly committed uncached input positions / complete prefill wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "prefill.uncached",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          89.60507384880451,
+          89.81251703091644,
+          89.7251436785563
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 89.81251703091644,
+          "median": 89.7251436785563,
+          "median_absolute_deviation": 0.08737335236014587,
+          "minimum": 89.60507384880451
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "prefill.promessi-8192/turn-0",
+        "definition": "server-authored complete newly executed prefill wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/receipt.json",
+        "metric": "prefill.wall",
+        "output_bound": 16,
+        "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+        "reference_identity": null,
+        "samples": [
+          91.423394325,
+          91.212230442,
+          91.301051903
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 91.423394325,
+          "median": 91.301051903,
+          "median_absolute_deviation": 0.08882146099999488,
+          "minimum": 91.212230442
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      }
+    ],
+    "origin": "yvex-published",
+    "provenance": {
+      "checkpoint_relationship": {
+        "claims_inherited": false,
+        "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+        "source": "explicit-local-record",
+        "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+      },
+      "client_build": {
+        "build_commit": "b8130fd51f9b77f00c6f0d45b465049cae9ac3b5",
+        "build_identity": "a10eb195caac7852064db59482583beb8aaa0390e6e106f8c035f0d3fded95b0",
+        "local_protocol_version": 25,
+        "registry_identity": "ceee9b8c8aa699471bf17a1afb2dabc645b17676f579272e63aa3f080a715cb6",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "74400cbd6ba5d9b02a99bc251057ea449ebb501e9675ecbac6d0dabccb6c386b",
+        "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_state": "clean",
+        "source_tree": "2e194bed0e17fdeb7f20fca9d57c19cbf67d38f3",
+        "version": "0.1.0"
+      },
+      "client_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/publication-source-v2",
+      "client_sha256": "52c50ce4c2ba2f81a0b35f20c133ac52da8fe90d11bf6d16f5a1e8a929c1089e",
+      "diagnostics": [
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.rss",
+          "unit": "byte",
+          "value": 104405925888
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.pss",
+          "unit": "byte",
+          "value": 104402917376
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.pss_file",
+          "unit": "byte",
+          "value": 103846516736
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.pss_anon",
+          "unit": "byte",
+          "value": 512163840
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/memory-16384.json",
+          "id": "post-load.locked",
+          "unit": "byte",
+          "value": 0
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "One observed server load-request to ready interval; file pages already read by artifact authentication, not cold storage",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/host.jsonl",
+          "id": "load.server",
+          "unit": "s",
+          "value": 5.927735206
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/events.jsonl",
+          "id": "native.prompt_tokens",
+          "unit": "count",
+          "value": 8192
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/events.jsonl",
+          "id": "native.reused_tokens",
+          "unit": "count",
+          "value": 0
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/events.jsonl",
+          "id": "native.prefill_tokens",
+          "unit": "count",
+          "value": 8192
+        },
+        {
+          "case": "prefill.promessi-8192",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192/events.jsonl",
+          "id": "native.generated_tokens",
+          "unit": "count",
+          "value": 16
+        }
+      ],
+      "installed_product": false,
+      "profiled": false,
+      "publication_control": {
+        "installed_service_modified": false,
+        "ordered_fragment_sequence_equal": true,
+        "previous_candidate": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-native-target-catalog/16384-prefill.promessi-8192/events.jsonl",
+          "result": "PASS",
+          "sha256": "d41a3a8cff037d738394eeb756214fc9459268a6352df2ebf3bd11219b4b5d34"
+        },
+        "source": "clean commit excluding six inherited unaccepted CUDA changes"
+      },
+      "resource_observation": {
+        "adapter": "cuda-process-list-v1",
+        "allowed_pids": [
+          591441
+        ],
+        "cancellation_requested": false,
+        "devices": [],
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native/16384-prefill.promessi-8192-resources.jsonl",
+        "interval_seconds": 1,
+        "observations": 278,
+        "owned_child_pid": 629527,
+        "owned_child_returncode": 0,
+        "probe_seconds": 6.232120250981097,
+        "schema": "yvex.qualification.resource-observation.v1",
+        "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+        "state": "OBSERVED_CLEAR"
+      },
+      "source_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/publication-source-v2",
+      "source_stability": "frozen",
+      "token_identities": [
+        "394b6be581bd0b45c1b9782c3537f9a2f841311e6bce25137774bcc10c5d600b",
+        "394b6be581bd0b45c1b9782c3537f9a2f841311e6bce25137774bcc10c5d600b",
+        "394b6be581bd0b45c1b9782c3537f9a2f841311e6bce25137774bcc10c5d600b"
+      ]
+    },
+    "schema": "yvex.qualification.receipt.v1",
+    "target": {
+      "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+      "backend": "cuda",
+      "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted candidate",
+      "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+      "build": "a10eb195caac7852064db59482583beb8aaa0390e6e106f8c035f0d3fded95b0",
+      "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+      "concurrency": 1,
+      "context": 16384,
+      "device_count": 1,
+      "driver": "580.159.03",
+      "executable": "52c50ce4c2ba2f81a0b35f20c133ac52da8fe90d11bf6d16f5a1e8a929c1089e",
+      "family_contract": "deepseek-v4-flash-dspark",
+      "hardware_model": "NVIDIA DGX Spark GB10",
+      "kernel_bundle": null,
+      "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+      "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+      "prefill_geometry": "chunk=512",
+      "product_path": "product-native-v25",
+      "reasoning": "none",
+      "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+      "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+      "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+      "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+      "schema": "yvex.qualification.target.v1",
+      "sequence_geometry": "width=1",
+      "source_commit": "b8130fd51f9b77f00c6f0d45b465049cae9ac3b5",
+      "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_tree": "2e194bed0e17fdeb7f20fca9d57c19cbf67d38f3",
+      "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+      "strategy": "target-only",
+      "suite": "ba06670744e623b715778ff9f208f54da79ac0d9899184436ca4b7b229c04c1e",
+      "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+      "topology": "single GB10 coherent unified memory",
+      "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+      "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+    },
+    "target_identity": "47ca329370b0b5bfedd9144ecc4a701fcbb39b5c9431cb529c559e7d237c5891",
+    "title": "0731 MXFP4 / routed Q2_K native protocol: mxfp4-publication / prefill.promessi-8192 / three post-warmup fresh sessions"
+  },
+  {
+    "claims": {
+      "backend-execution": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/closed.json",
+            "result": "PASS",
+            "sha256": "83ed294505ab4cb7a6602d23aec5b6e3575bd4a1d4ca3d6b5c816cb054184f95"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+            "result": "PASS",
+            "sha256": "a3858ba87f7b9912be017e33dd594e4634faeb862aa52b7cdc0df74438eb8296"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+            "result": "PASS",
+            "sha256": "e49375b8285f187da6d49f721de726442dcd71666da40280a5c3d13944578a3e"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "f0391aa12835bd9d3f715416e68a3c308380562f2617d583735668d2d1f21f17"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/identity.json",
+            "result": "PASS",
+            "sha256": "8ebb830605471e7720e44873b6cad3154170103fc7082c58a4af8c1966fd4833"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "checkpoint-reference": {
+        "blockers": [
+          "Independent checkpoint-matched quality evidence missing"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "BLOCKED"
+      },
+      "deployment-performance": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/closed.json",
+            "result": "PASS",
+            "sha256": "83ed294505ab4cb7a6602d23aec5b6e3575bd4a1d4ca3d6b5c816cb054184f95"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+            "result": "PASS",
+            "sha256": "a3858ba87f7b9912be017e33dd594e4634faeb862aa52b7cdc0df74438eb8296"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+            "result": "PASS",
+            "sha256": "e49375b8285f187da6d49f721de726442dcd71666da40280a5c3d13944578a3e"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "f0391aa12835bd9d3f715416e68a3c308380562f2617d583735668d2d1f21f17"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/identity.json",
+            "result": "PASS",
+            "sha256": "8ebb830605471e7720e44873b6cad3154170103fc7082c58a4af8c1966fd4833"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "family-conformance": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "UNQUALIFIED"
+      },
+      "product-path": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/closed.json",
+            "result": "PASS",
+            "sha256": "83ed294505ab4cb7a6602d23aec5b6e3575bd4a1d4ca3d6b5c816cb054184f95"
+          },
+          "events": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+            "result": "PASS",
+            "sha256": "a3858ba87f7b9912be017e33dd594e4634faeb862aa52b7cdc0df74438eb8296"
+          },
+          "receipt": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+            "result": "PASS",
+            "sha256": "e49375b8285f187da6d49f721de726442dcd71666da40280a5c3d13944578a3e"
+          },
+          "resources": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+            "result": "PASS",
+            "sha256": "f0391aa12835bd9d3f715416e68a3c308380562f2617d583735668d2d1f21f17"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/identity.json",
+            "result": "PASS",
+            "sha256": "8ebb830605471e7720e44873b6cad3154170103fc7082c58a4af8c1966fd4833"
+          }
+        },
+        "required_evidence": [
+          "receipt",
+          "events",
+          "source",
+          "closure",
+          "resources"
+        ],
+        "scope": "Exact isolated native-v25 target; three completed deterministic requests, not installed-service defaults or independent model quality",
+        "state": "CHARACTERIZED"
+      },
+      "representation-quality": {
+        "blockers": [
+          "Independent checkpoint-matched quality evidence missing"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "No model inference or quality claim from artifact admission and load",
+        "state": "BLOCKED"
+      }
+    },
+    "id": "deepseek-0731-program-p-native-mxfp4-publication-speculative-coding-hash-table-20261010",
+    "limitations": [
+      "Three samples characterize this exact configuration; no confidence interval or global performance claim.",
+      "Source/build/hardware facts joined from directly observed owned daemon and frozen capture; client and server identities remain separate.",
+      "No independent 0731 representation-quality reference; no high/maximum reasoning or installed-service qualification in this record. Strategy is exact and not mixed with another lane.",
+      "CPU admission, visible-client timing and server generation phases have separate clocks/denominators.",
+      "Resource observations are sampled; locks do not prove uninterrupted exclusive hardware ownership.",
+      "Clock and thermal state were not sampled throughout the baseline; candidate partial device-state sampling is separate, not proof of clock equivalence.",
+      "Physical quantization differs from Q2 control; no bitwise continuation equivalence or quality superiority is asserted.",
+      "Kernel bundle digest is not projected in this native receipt; source/build/executable and specialization are retained independently.",
+      "Confirms the clean publication build against the same-artifact earlier development candidate; no new speedup or independent quality claim."
+    ],
+    "measurements": [
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "admission.client",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.624183046,
+          0.600239548,
+          0.601724317
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.624183046,
+          "median": 0.601724317,
+          "median_absolute_deviation": 0.0014847689999999414,
+          "minimum": 0.600239548
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "client dispatch including connect through terminal response",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "request.client-complete",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          19.528799474,
+          19.577950937,
+          19.573578193
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 19.577950937,
+          "median": 19.573578193,
+          "median_absolute_deviation": 0.004372744000001205,
+          "minimum": 19.528799474
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "client dispatch including connect to first nonempty final/reasoning content",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "ttft.client-visible",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          1.851757996,
+          1.8483390690000001,
+          1.833133021
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 1.851757996,
+          "median": 1.8483390690000001,
+          "median_absolute_deviation": 0.003418926999999794,
+          "minimum": 1.833133021
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "delivery.client-gap.maximum",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.45195557199999925,
+          0.44989924499999745,
+          0.45272622599999934
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.45272622599999934,
+          "median": 0.45195557199999925,
+          "median_absolute_deviation": 0.0007706540000000928,
+          "minimum": 0.44989924499999745
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "delivery.client-gap.mean",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.06931944103529411,
+          0.06952578967058823,
+          0.06956703218431373
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.06956703218431373,
+          "median": 0.06952578967058823,
+          "median_absolute_deviation": 4.124251372550347e-05,
+          "minimum": 0.06931944103529411
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "turn start to first committed model-token callback",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "ttft.server",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          1.227486181,
+          1.248090114,
+          1.231416545
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 1.248090114,
+          "median": 1.231416545,
+          "median_absolute_deviation": 0.0039303640000001305,
+          "minimum": 1.227486181
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "server turn start to first source-classified final token",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "final.first.server",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          1.227486181,
+          1.248090114,
+          1.231416545
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 1.248090114,
+          "median": 1.231416545,
+          "median_absolute_deviation": 0.0039303640000001305,
+          "minimum": 1.227486181
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "client dispatch including connect to first nonempty final fragment",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "final.first.client",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          1.851757996,
+          1.8483390690000001,
+          1.833133021
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 1.851757996,
+          "median": 1.8483390690000001,
+          "median_absolute_deviation": 0.003418926999999794,
+          "minimum": 1.833133021
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "final.phase-rate",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          14.124578165886756,
+          14.083277867925068,
+          14.079076353811047
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 14.124578165886756,
+          "median": 14.083277867925068,
+          "median_absolute_deviation": 0.00420151411402081,
+          "minimum": 14.079076353811047
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "committed tokens after first / elapsed decode wall after first",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "decode.post-first.committed",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          14.426026313549356,
+          14.383201483602663,
+          14.374671337725927
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 14.426026313549356,
+          "median": 14.383201483602663,
+          "median_absolute_deviation": 0.008530145876736839,
+          "minimum": 14.374671337725927
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "newly committed uncached input positions / complete prefill wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "prefill.uncached",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          39.777956725260616,
+          38.77858054095707,
+          39.34855377195782
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 39.777956725260616,
+          "median": 39.34855377195782,
+          "median_absolute_deviation": 0.4294029533027981,
+          "minimum": 38.77858054095707
+        },
+        "unit": "token/s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      },
+      {
+        "case": "coding.hash-table/turn-0",
+        "definition": "server-authored complete newly executed prefill wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/receipt.json",
+        "metric": "prefill.wall",
+        "output_bound": 256,
+        "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "reference_identity": null,
+        "samples": [
+          0.779326103,
+          0.799410385,
+          0.787830734
+        ],
+        "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+        "session_state": "fresh",
+        "statistics": {
+          "count": 3,
+          "maximum": 0.799410385,
+          "median": 0.787830734,
+          "median_absolute_deviation": 0.008504630999999985,
+          "minimum": 0.779326103
+        },
+        "unit": "s",
+        "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+      }
+    ],
+    "origin": "yvex-published",
+    "provenance": {
+      "checkpoint_relationship": {
+        "claims_inherited": false,
+        "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+        "source": "explicit-local-record",
+        "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+      },
+      "client_build": {
+        "build_commit": "b8130fd51f9b77f00c6f0d45b465049cae9ac3b5",
+        "build_identity": "a10eb195caac7852064db59482583beb8aaa0390e6e106f8c035f0d3fded95b0",
+        "local_protocol_version": 25,
+        "registry_identity": "ceee9b8c8aa699471bf17a1afb2dabc645b17676f579272e63aa3f080a715cb6",
+        "schema": "yvex.version.v1",
+        "shell_build_identity": "74400cbd6ba5d9b02a99bc251057ea449ebb501e9675ecbac6d0dabccb6c386b",
+        "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "source_state": "clean",
+        "source_tree": "2e194bed0e17fdeb7f20fca9d57c19cbf67d38f3",
+        "version": "0.1.0"
+      },
+      "client_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/publication-source-v2",
+      "client_sha256": "52c50ce4c2ba2f81a0b35f20c133ac52da8fe90d11bf6d16f5a1e8a929c1089e",
+      "diagnostics": [
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/memory-4096.json",
+          "id": "post-load.rss",
+          "unit": "byte",
+          "value": 104086106112
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/memory-4096.json",
+          "id": "post-load.pss",
+          "unit": "byte",
+          "value": 104083113984
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/memory-4096.json",
+          "id": "post-load.pss_file",
+          "unit": "byte",
+          "value": 103846647808
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/memory-4096.json",
+          "id": "post-load.pss_anon",
+          "unit": "byte",
+          "value": 192229376
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "OS smaps_rollup immediately post-load; overlapping accounting classes, not additive CUDA/device allocations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/memory-4096.json",
+          "id": "post-load.locked",
+          "unit": "byte",
+          "value": 0
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "One observed server load-request to ready interval; file pages already read by artifact authentication, not cold storage",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/host.jsonl",
+          "id": "load.server",
+          "unit": "s",
+          "value": 6.251040536
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "native.prompt_tokens",
+          "unit": "count",
+          "value": 31
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "native.reused_tokens",
+          "unit": "count",
+          "value": 0
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "native.prefill_tokens",
+          "unit": "count",
+          "value": 31
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored count per completed request; identical in all three samples",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "native.generated_tokens",
+          "unit": "count",
+          "value": 256
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_cycles.sample-0",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_cycles.sample-1",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_cycles.sample-2",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_forwards.sample-0",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_forwards.sample-1",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_forwards.sample-2",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.proposed_tokens.sample-0",
+          "unit": "count",
+          "value": 215
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.proposed_tokens.sample-1",
+          "unit": "count",
+          "value": 215
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.proposed_tokens.sample-2",
+          "unit": "count",
+          "value": 215
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.selected_verification_tokens.sample-0",
+          "unit": "count",
+          "value": 211
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.selected_verification_tokens.sample-1",
+          "unit": "count",
+          "value": 211
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.selected_verification_tokens.sample-2",
+          "unit": "count",
+          "value": 211
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.target_verifications.sample-0",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.target_verifications.sample-1",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.target_verifications.sample-2",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.accepted_tokens.sample-0",
+          "unit": "count",
+          "value": 170
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.accepted_tokens.sample-1",
+          "unit": "count",
+          "value": 170
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.accepted_tokens.sample-2",
+          "unit": "count",
+          "value": 170
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.rejected_tokens.sample-0",
+          "unit": "count",
+          "value": 41
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.rejected_tokens.sample-1",
+          "unit": "count",
+          "value": 41
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.rejected_tokens.sample-2",
+          "unit": "count",
+          "value": 41
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.discarded_tokens.sample-0",
+          "unit": "count",
+          "value": 4
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.discarded_tokens.sample-1",
+          "unit": "count",
+          "value": 4
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.discarded_tokens.sample-2",
+          "unit": "count",
+          "value": 4
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.correction_or_bonus_tokens.sample-0",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.correction_or_bonus_tokens.sample-1",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.correction_or_bonus_tokens.sample-2",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.mean_accepted_prefix.sample-0",
+          "unit": "count",
+          "value": 3.953488372093023
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.mean_accepted_prefix.sample-1",
+          "unit": "count",
+          "value": 3.953488372093023
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.mean_accepted_prefix.sample-2",
+          "unit": "count",
+          "value": 3.953488372093023
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.maximum_accepted_prefix.sample-0",
+          "unit": "count",
+          "value": 5
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.maximum_accepted_prefix.sample-1",
+          "unit": "count",
+          "value": 5
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.maximum_accepted_prefix.sample-2",
+          "unit": "count",
+          "value": 5
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_seconds.sample-0",
+          "unit": "s",
+          "value": 1.23119294
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_seconds.sample-1",
+          "unit": "s",
+          "value": 1.240457292
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.draft_seconds.sample-2",
+          "unit": "s",
+          "value": 1.236047279
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.verification_seconds.sample-0",
+          "unit": "s",
+          "value": 11.550630351
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.verification_seconds.sample-1",
+          "unit": "s",
+          "value": 11.575970307
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.verification_seconds.sample-2",
+          "unit": "s",
+          "value": 11.591463424
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.commit_seconds.sample-0",
+          "unit": "s",
+          "value": 5.018218491
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.commit_seconds.sample-1",
+          "unit": "s",
+          "value": 5.034398279
+        },
+        {
+          "case": "coding.hash-table",
+          "definition": "Server-authored speculative cycle observation; phase intervals are not an additive complete-turn partition",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table/events.jsonl",
+          "id": "speculation.commit_seconds.sample-2",
+          "unit": "s",
+          "value": 5.030395842
+        }
+      ],
+      "installed_product": false,
+      "profiled": false,
+      "publication_control": {
+        "installed_service_modified": false,
+        "ordered_fragment_sequence_equal": true,
+        "previous_candidate": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-native-speculative/4096-coding.hash-table/events.jsonl",
+          "result": "PASS",
+          "sha256": "b7356ef8f61385483166ebac11c6f6c98f717f4c54428263a851f61931542615"
+        },
+        "source": "clean commit excluding six inherited unaccepted CUDA changes"
+      },
+      "resource_observation": {
+        "adapter": "cuda-process-list-v1",
+        "allowed_pids": [
+          634193
+        ],
+        "cancellation_requested": false,
+        "devices": [],
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-publication-native-speculative/4096-coding.hash-table-resources.jsonl",
+        "interval_seconds": 1,
+        "observations": 60,
+        "owned_child_pid": 634591,
+        "owned_child_returncode": 0,
+        "probe_seconds": 1.3494752370061178,
+        "schema": "yvex.qualification.resource-observation.v1",
+        "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+        "state": "OBSERVED_CLEAR"
+      },
+      "source_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/publication-source-v2",
+      "source_stability": "frozen",
+      "token_identities": [
+        "695ce097ab6e7349ffbe97181eef2374eec4b60d16517bb9465ffe6ef51a1037",
+        "695ce097ab6e7349ffbe97181eef2374eec4b60d16517bb9465ffe6ef51a1037",
+        "695ce097ab6e7349ffbe97181eef2374eec4b60d16517bb9465ffe6ef51a1037"
+      ]
+    },
+    "schema": "yvex.qualification.receipt.v1",
+    "target": {
+      "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+      "backend": "cuda",
+      "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted candidate",
+      "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+      "build": "a10eb195caac7852064db59482583beb8aaa0390e6e106f8c035f0d3fded95b0",
+      "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+      "concurrency": 1,
+      "context": 4096,
+      "device_count": 1,
+      "driver": "580.159.03",
+      "executable": "52c50ce4c2ba2f81a0b35f20c133ac52da8fe90d11bf6d16f5a1e8a929c1089e",
+      "family_contract": "deepseek-v4-flash-dspark",
+      "hardware_model": "NVIDIA DGX Spark GB10",
+      "kernel_bundle": null,
+      "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+      "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+      "prefill_geometry": "chunk=512",
+      "product_path": "product-native-v25",
+      "reasoning": "none",
+      "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+      "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; speculative; no prefix reuse",
+      "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+      "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+      "schema": "yvex.qualification.target.v1",
+      "sequence_geometry": "width=1",
+      "source_commit": "b8130fd51f9b77f00c6f0d45b465049cae9ac3b5",
+      "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_tree": "2e194bed0e17fdeb7f20fca9d57c19cbf67d38f3",
+      "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+      "strategy": "speculative",
+      "suite": "d5d9eb417abe63fc2d2c242317479cfc785ce46688e25cc7e936501111393f9d",
+      "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+      "topology": "single GB10 coherent unified memory",
+      "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+      "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+    },
+    "target_identity": "6a768a1d2b306c2d47f788e7d54394d27bff4c1e18d035a0c9c81268fafbaac6",
+    "title": "0731 MXFP4 / routed Q2_K native protocol: mxfp4-publication-speculative / coding.hash-table / three post-warmup fresh sessions"
+  },
+  {
+    "claims": {
+      "backend-execution": {
+        "blockers": [],
+        "evidence": {
+          "closure": {
             "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-native-specialized-row-v2/closed.json",
             "result": "PASS",
             "sha256": "1b9a85b31b5aa43a9fa3dc235eca88655720b982d3ce715416642f5e7d8ec603"
