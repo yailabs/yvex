@@ -457,36 +457,111 @@ impl Workbench {
             )?);
         }
         match self.view {
-            View::Home => blocks.push(paragraph("Write a message to the selected engine, or /chat to continue. Tab opens actions; arrows select, Enter accepts, Enter submits. /quit in chat returns to this workbench.", Role::Default)?),
+            View::Home => blocks.push(paragraph(
+                concat!(
+                    "Write a message to the selected engine, or /chat to continue. ",
+                    "Tab opens actions; arrows select, Enter accepts, Enter submits. ",
+                    "/quit in chat returns to this workbench."
+                ),
+                Role::Default,
+            )?),
             View::Models => {
-                let rows = self.engines.iter().enumerate().map(|(i, e)| vec![
-                    format!("/engine/{}", i + 1), ffi::text(&e.alias),
-                    format!("generation {} · ready={} · {}", e.generation, e.execution_ready != 0, client::strategy(e.execution_strategy)),
-                ]).chain(self.models.iter().enumerate().map(|(i, m)| vec![
-                    format!("/model/{}", i + 1), catalog::selector(m),
-                    format!("{} artifacts · {} profiles · launchable={} (not residency)", m.entry.artifact_count, m.entry.profile_count, m.entry.profile_launchable != 0),
-                ])).collect();
-                blocks.push(table(&["Select", "Model / engine", "Observed facts"], rows)?);
-                if let Some(error) = &self.catalog_error { blocks.push(paragraph(error, Role::Warning)?); }
-                blocks.push(paragraph("/details inspects a catalog model. /load and /unload require explicit confirmation. Nothing is automatically loaded.", Role::Dim)?);
+                let rows = self
+                    .engines
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| {
+                        vec![
+                            format!("/engine/{}", i + 1),
+                            ffi::text(&e.alias),
+                            format!(
+                                "generation {} · ready={} · {}",
+                                e.generation,
+                                e.execution_ready != 0,
+                                client::strategy(e.execution_strategy)
+                            ),
+                        ]
+                    })
+                    .chain(self.models.iter().enumerate().map(|(i, m)| {
+                        vec![
+                            format!("/model/{}", i + 1),
+                            catalog::selector(m),
+                            format!(
+                                "{} artifacts · {} profiles · launchable={} (not residency)",
+                                m.entry.artifact_count,
+                                m.entry.profile_count,
+                                m.entry.profile_launchable != 0
+                            ),
+                        ]
+                    }))
+                    .collect();
+                blocks.push(table(
+                    &["Select", "Model / engine", "Observed facts"],
+                    rows,
+                )?);
+                if let Some(error) = &self.catalog_error {
+                    blocks.push(paragraph(error, Role::Warning)?);
+                }
+                blocks.push(paragraph(concat!(
+                    "/details inspects a catalog model. /load and /unload require explicit confirmation. ",
+                    "Nothing is automatically loaded."
+                ), Role::Dim)?);
             }
             View::Compile => {
-                blocks.push(table(&["Action", "Native operation"], vec![
-                    vec!["/guided".into(), "compile optimize --guided (model → hardware → goal → candidates)".into()],
-                    vec!["/request".into(), "compile optimize --request FILE (reproducible typed request)".into()],
-                    vec!["/techniques".into(), "compile optimize --list-techniques".into()],
-                ])?);
-                blocks.push(paragraph("Estimated, measured and qualified candidates are distinct. Program P owns the evidence; the workbench does not create recommendations.", Role::Warning)?);
+                blocks.push(table(
+                    &["Action", "Native operation"],
+                    vec![
+                        vec![
+                            "/guided".into(),
+                            "compile optimize --guided (model → hardware → goal → candidates)"
+                                .into(),
+                        ],
+                        vec![
+                            "/request".into(),
+                            "compile optimize --request FILE (reproducible typed request)".into(),
+                        ],
+                        vec![
+                            "/techniques".into(),
+                            "compile optimize --list-techniques".into(),
+                        ],
+                    ],
+                )?);
+                blocks.push(paragraph(concat!(
+                    "Estimated, measured and qualified candidates are distinct. ",
+                    "Program P owns the evidence; the workbench does not create recommendations."
+                ), Role::Warning)?);
             }
             View::Activity => {
-                blocks.push(paragraph("SERVER TRACE · newest 32 retained events; /refresh samples again", Role::Dim)?);
-                blocks.push(table(&["Select", "Sequence / event", "Session / phase"], self.events.iter().enumerate().map(|(i, e)| vec![
-                    format!("/event/{}", i + 1), format!("#{} {}", e.sequence, ffi::event_name(e.kind)),
-                    format!("{} {}", ffi::text(&e.session_id), ffi::text(&e.phase)),
-                ]).collect())?);
-                if let Some(error) = &self.trace_error { blocks.push(paragraph(error, Role::Warning)?); }
-                blocks.push(paragraph("LOCAL ACTION RESULTS · UI outcomes, not runtime telemetry", Role::Dim)?);
-                for notice in &self.notices { blocks.push(paragraph(notice, Role::Default)?); }
+                blocks.push(paragraph(
+                    "SERVER TRACE · newest 32 retained events; /refresh samples again",
+                    Role::Dim,
+                )?);
+                let rows = self
+                    .events
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| {
+                        vec![
+                            format!("/event/{}", i + 1),
+                            format!("#{} {}", e.sequence, ffi::event_name(e.kind)),
+                            format!("{} {}", ffi::text(&e.session_id), ffi::text(&e.phase)),
+                        ]
+                    })
+                    .collect();
+                blocks.push(table(
+                    &["Select", "Sequence / event", "Session / phase"],
+                    rows,
+                )?);
+                if let Some(error) = &self.trace_error {
+                    blocks.push(paragraph(error, Role::Warning)?);
+                }
+                blocks.push(paragraph(
+                    "LOCAL ACTION RESULTS · UI outcomes, not runtime telemetry",
+                    Role::Dim,
+                )?);
+                for notice in &self.notices {
+                    blocks.push(paragraph(notice, Role::Default)?);
+                }
             }
         }
         if self.inspector {
@@ -732,7 +807,11 @@ fn act(
             if confirm(
                 editor,
                 &format!(
-                    "Load {model} through the native model/profile selector? This allocates runtime resources; no existing engine will be automatically retired."
+                    concat!(
+                        "Load {} through the native model/profile selector? This allocates runtime resources; ",
+                        "no existing engine will be automatically retired."
+                    ),
+                    model
                 ),
                 styled,
             )? {
@@ -748,7 +827,10 @@ fn act(
             if confirm(
                 editor,
                 &format!(
-                    "Unload {} generation {}? Native lifecycle may refuse active work or sessions. No automatic cancellation.",
+                    concat!(
+                        "Unload {} generation {}? Native lifecycle may refuse active work or sessions. ",
+                        "No automatic cancellation."
+                    ),
                     ffi::text(&e.alias),
                     e.generation
                 ),

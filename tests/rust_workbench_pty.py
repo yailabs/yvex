@@ -5,6 +5,7 @@ No GPU, operator socket, catalog, session or resident engine is changed.
 """
 import argparse
 import fcntl
+import json
 import os
 from pathlib import Path
 import re
@@ -40,6 +41,8 @@ def exercise(binary, output, columns, real=False):
         action(chat, '/compile', b'Compile')
         technique = action(chat, '/techniques', b'source-retention-allocation-v1')
         assert b'REFUSED' not in chat.data[technique:]
+        if not real:
+            action(chat, '/guided', b'no catalog source')
         action(chat, '/request', b'optimization request file')
         action(chat, '/missing/界-request.json', b'REFUSED')
         action(chat, '/activity', b'LOCAL ACTION RESULTS')
@@ -177,16 +180,43 @@ def retirement(binary, output, refusal):
         chat.dispose()
 
 
+def load_cycle(binary, output):
+    """Confirmed product load/retire on an otherwise empty real fixture host."""
+    models = json.loads(subprocess.check_output([binary, 'model', 'list', '--json']))['models']
+    index, = [i for i, model in enumerate(models) if model['selector'] == 'tiny-executable']
+    chat = Chat(binary, 'workbench-load-cycle', output, plain=True, arguments=['workbench'])
+    try:
+        action(chat, '/models', b'Models')
+        action(chat, f'/model/{index + 1}', b'Catalog selection')
+        action(chat, '/details', b'tiny-executable')
+        action(chat, '/load', b'type confirm')
+        action(chat, '', b'Load cancelled before dispatch')
+        action(chat, '/load', b'type confirm')
+        action(chat, 'confirm', b'Load returned successfully')
+        engines = json.loads(subprocess.check_output([binary, 'engine', 'list', '--json']))['engines']
+        loaded, = [i for i, engine in enumerate(engines) if engine['execution_ready']]
+        action(chat, f'/engine/{loaded + 1}', b'generation')
+        action(chat, '/unload', b'type confirm')
+        action(chat, 'confirm', b'Selected engine retirement returned successfully')
+        assert not json.loads(subprocess.check_output([binary, 'host', 'status', '--json']))['loaded_engine_count']
+        chat.finish(b'/quit\r')
+    finally:
+        chat.dispose()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--binary', required=True, type=Path)
     parser.add_argument('--fixture', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--tiny-runtime', action='store_true')
+    parser.add_argument('--load-cycle', action='store_true')
     parser.add_argument('--retire-runtime', choices=['refuse', 'allow'])
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    if args.retire_runtime:
+    if args.load_cycle:
+        load_cycle(args.binary.resolve(), args.output)
+    elif args.retire_runtime:
         retirement(args.binary.resolve(), args.output, args.retire_runtime == 'refuse')
     elif args.tiny_runtime:
         exercise(args.binary.resolve(), args.output, 100, real=True)

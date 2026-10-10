@@ -825,6 +825,10 @@ value = json.loads(path.read_text())
 value["models"][0]["path"] = sys.argv[2]
 path.write_text(json.dumps(value))
 PY
+# Positive Models journey, still on the private CPU host: inspect, cancel,
+# confirm load, select its observed generation, and retire without a session.
+HOME="$home" XDG_RUNTIME_DIR="$runtime" python3 tests/rust_workbench_pty.py \
+    --binary "$YVEX_BIN" --load-cycle --output "$root/workbench"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model load tiny-executable \
     --ctx 4 >"$root/load.shutdown.out"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" engine list --json \
