@@ -419,8 +419,9 @@ JSON v3 exposes each program's alternative through existing
 `compile optimize --runtime-binding`; the human projection summarizes counts.
 No new parser, graph IR, hardware policy, engine installation or remote operation
 is introduced.
-
-
+The [bounded execution evidence](../evaluation/retained-observations.md#program-p-graph-derived-input-views-2026-10-10)
+separates compiler/component acceptance, live capacity refusal and the still
+unmeasured complete-model performance effect.
 
 ## Logical projection and transformation
 

@@ -98,6 +98,10 @@ Program P inspects existing compiled programs and their real layer/scope through
 CLI JSON v3; no duplicate topology is inferred. Numerical/state/lifetime,
 resource and complete-model qualification remain separate. This does not select
 a new weight recipe, qualify model quality or replace the resident engine.
+The [clean `37f11033` checkpoint](../evaluation/retained-observations.md#program-p-graph-derived-input-views-2026-10-10)
+passes 22 registered software/component checks and five sanitizer controls.
+Actual stage allocation reductions are retained; 0731 full-model acceptance is
+unearned, with protected resident service and a live 32K capacity refusal.
 
 ## Retained computational architecture reconstruction
 

@@ -19,6 +19,113 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Program P graph-derived input views (2026-10-10)
+
+`V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` retains implementation
+`37f11033002f48396303414188c63b6728068f91`, tree
+`8666d7594527a7ca6126af5ad67ecf15ecb0630f`. This is a **compiler/component
+qualification**, not a new DeepSeek throughput result or an earned 20/700 exit.
+The [compiler contract](../architecture/compiler-ir.md#computational-alternatives-immutable-input-views)
+owns legality and selection; the numerical contract retains exact stored bits,
+original arithmetic and transactional publication.
+
+The compiler derives read-only internal reshape/exact-widening alternatives from
+sealed SSA definitions and invocation-input lifetimes. Computed temporaries,
+state, parameters and caller-owned results cannot acquire aliases through this
+pass. No encoded weight, checkpoint, artifact or authenticated binding is changed.
+MoE stage preparation consumes the alternative after existing activation
+specialization; other program consumers only expose inspection. No family-name
+policy, duplicate layer catalog or new topology authority is introduced.
+
+| Evidence plane | Control and observed result | Claim / limit |
+| --- | --- | --- |
+| Compiler | Legalization, idempotence, authenticated roundtrip, invalid population and computed/returned-alias refusals | Physical identity changes; semantic/execution/parameter lineage is preserved. |
+| CPU/CUDA execution | Changing 8→4→2 populations and shared FFN execute copying and view variants against independent scalar/long-double controls; exact outputs, signed-zero input preservation, cancellation and zero allocation residue | Bounded operation equivalence, not checkpoint-specific model quality. |
+| Resources | Population fixture stage ledger: CPU 7,000→5,840 bytes; CUDA F32 7,004→5,844 and BF16 7,932→6,772. Shared CUDA stage: 8,284→7,764 bytes | Observed stage-owned host/device allocations, including metadata; not OS RSS, model working memory or a throughput metric. |
+| Generality | Imported whole-forward programs retain original identities and no fabricated layer coordinate; actual Mamba binding exposes forward/output, with no eligible input copy or MoE selector | Existing Qwen/Mamba and transactional-state software controls pass; no new full-model backend claim. |
+| Product | `compile optimize --runtime-binding` projects alternatives through JSON `yvex.optimization.search.v3` and a compact human summary | Static legality, live capacity and missing measurement remain distinct. No installation. |
+
+All **22 registered checks pass** on the clean implementation commit: 11 unit
+checks, two CUDA checks, the Rust shell integration (including PTY controls), and
+eight structural checks. Five selected unit controls additionally pass combined
+ASan/LeakSanitizer/UBSan. The documentation reader builds 395 pages. The earlier
+missing Rust fixture field and oversized C function were repaired; ten inherited
+Rust line-width violations in the affected optimizer/evidence projection were
+formatted without changing emitted strings. No performance claim follows from
+test counts. REPLAI, TUI and installed services are unchanged.
+
+### Authenticated 0731 inspection and protected execution boundary
+
+The inspected official source remains
+`deepseek-ai/DeepSeek-V4-Flash-0731@7872f01b1d1fe23eabc4c98b48bffcef5a386062`.
+Existing MXFP4/Q2 artifact
+`25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041`
+and binding
+`091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632`
+are reused without emission or payload rewriting. The sealed projection contains
+90 target and nine draft programs: 43 target and three draft MoE layers.
+Eighty-six target and six draft input-copy alternatives are legal. These are
+program alternatives, not 92 independent model candidates or qualified recipes.
+At width 512, one ingress alternative removes a 33,554,432-byte copy and one
+shared-expert alternative an 8,388,608-byte copy per invocation; slot reuse means
+these extents must **not** be summed into a claimed model memory saving.
+
+One GB10, CUDA, target-only, context 32768, prefill 512, concurrency one:
+pre-residency peak required **124,574,865,448 bytes**, available
+**122,814,812,160 bytes** at inspection. The canonical preflight refused; its
+16,332,895,744-byte system reserve was not lowered. Available memory is a mutable
+observation, not a recipe identity or a reservation. No 0731 engine, new 2K/8K
+timing, sustained decode, DSpark result, TTFT or model-quality claim was produced.
+The separately resident old-checkpoint operator engine remains generation 1 on
+the unchanged `337e7e73` Host, with zero requests/sessions/clients/leases at the
+observed boundaries. Its complete active-engine snapshot is unchanged before and
+after component qualification; no unload/restart or cache eviction occurred.
+
+The retained historical 2K CUPTI profile's **all-copy aggregate device duration**
+is 408,715,923 ns (about 0.409 seconds, summed using integer timestamps).
+That includes copies outside this pass and is not disjoint
+end-to-end latency saved. This negative attribution rules out presenting input
+views as the dominant prefill correction. Expert matrix execution, encoded
+projections and attention remain material in the
+[earlier complete-model profiles](#program-p-static-search-and-post-boot-admission-2026-10-10).
+The new compiler mechanism is qualified only at the scopes above. Complete-model
+resource/performance acceptance and independent model quality remain open,
+requiring an authorized exclusive window and successful admission.
+
+### Reproduction and evidence identities
+
+Use the existing authenticated request and binding, not a re-created prompt or
+unbound tensor inventory:
+
+```sh
+./yvex compile optimize --request request.json --runtime-binding model.yvex-runtime-binding --json
+python3 tools/qa.py run unit.program
+python3 tools/qa.py run unit.model_descriptor
+python3 tools/qa.py run cuda.program
+python3 tools/qa.py run cuda.program_sequence
+```
+
+CUDA checks require an idle admitted hardware window and the QA resource lock;
+they do not load a model. Raw receipts, exact inspection outputs, logs and the
+inspected executable are retained outside Git under
+`/home/dgmothx/lab/models/evidence/program-p-graph-20261010.YoIp1XTU/`.
+The 22 canonical receipts are under `qa/`, each binding source stability and its
+oracle. Representative receipt identities: CPU program
+`d08517cb8adeb00100503fb5c39459fe4287ede4d10ee19a566e2d940ea3bd63`,
+CUDA program `3901faffdba4ffa578beeaa08ed7772ff0af8079ce93a3bfe1ac50db9fe57655`,
+Rust/PTY `61912015baf61ff48aa504860857555ff6e6780656e3ad5686adc353125cd386`.
+The 32K inspection JSON SHA-256 is
+`2f6ed8230fcb4fe5f515111cbb61f49d6a934621eace818414233b5ca16d1f08`;
+Mamba inspection SHA-256
+`9ff46dca20f86d4197f3743adce5df3362a6c032548c53ceeed9817c70519fdf`.
+Native build identity:
+`6b443b1fa6efe3ea9952d2699f7acb0fdf6c93c6a950504c53eb27a1730c7319`;
+inspected executable SHA-256:
+`8411f8d52118560605589ac39b562d46b3b37e0973f67facba7f31bca580b46a`.
+The six inherited experimental CUDA edits remain byte-for-byte preserved in
+their separate worktree, unaccepted by this checkpoint. Neither Program P nor
+the predecessor `.5` is promoted.
+
 ## Terminal workbench consumer (2026-10-10)
 
 `V010.TERMINAL.WORKBENCH.INTEGRATION.0` qualifies a Linux **inline** workbench,
