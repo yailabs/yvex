@@ -145,10 +145,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 56 | 40 | 5 | 1 | 10 |
+| 56 | 41 | 4 | 1 | 10 |
 <!-- task-counts:end -->
 
-**40/56 selected Tasks complete.** This denominator includes the significant
+**41/56 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -526,7 +526,7 @@ Metal primitive claims only. No successor implementation Task is selected.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `DOCS.VISUAL.GRAMMAR.CONVERGENCE.0` | Unify the public README, architecture figures and documentation reading paths | P1 | 🔵 IN PROGRESS | Transparent, theme-aware generated diagrams; concise guided landings and technical README; benchmark tables projected from exact qualification receipts; semantic preservation, drift/refusal tests and desktop/mobile light/dark publication checks. No runtime or capability promotion. |
+| `DOCS.VISUAL.GRAMMAR.CONVERGENCE.0` | Unify the public README, architecture figures and documentation reading paths | Closed | ✅ COMPLETE | Nine transparent, theme-aware diagrams and six observation charts; guided landings, technical README and receipt-derived benchmark tables; 32 publication tests, 40 page views and 18 SVG views pass. Canonical graph relationships, benchmark records and capability states preserved. [Evidence and limits](../evaluation/documentation-migration.md#visual-grammar-and-receipt-bound-readme-2026-10-10). No runtime or capability promotion. |
 
 Explicitly selected by the operator after the bounded README delivery below.
 This replaces the presentation of existing diagrams, not their architectural

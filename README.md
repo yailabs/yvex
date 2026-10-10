@@ -225,7 +225,7 @@ execution.** YVEX makes that join explicit before the first request runs.
 | Boundary | What becomes explicit | Canonical owner |
 | --- | --- | --- |
 | **Computation** | Family semantics → typed programs → execution dependencies, state and effects | [Compiler IR](docs/architecture/compiler-ir.md) |
-| **Parameters** | Source ranges → transformations → quantization/layout → authenticated package terminals | [Representations](docs/architecture/representation-artifacts.md) |
+| **Parameters** | Source ranges → transformations → quantization/layout → authenticated package terminals | [Weight layouts](docs/architecture/representation-artifacts.md) |
 | **Parameter join** | Symbolic operands resolve to exact terminal lineage; physical operations and the compiled plan enter the runtime binding | [Artifact admission](docs/architecture/artifacts-admission.md) |
 | **Deployment** | Numerical implementation, backend compatibility, workspace and resource envelope are admitted for the target | [Specialization](docs/architecture/deployment-specialization.md) |
 

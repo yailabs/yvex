@@ -50,6 +50,8 @@ def benchmark_excerpt(records, consumer):
         selected.append((r, label, measurements[0]))
     t = selected[0][0]['target']
     shared = ('checkpoint', 'upstream_repository', 'representation', 'backend',
+              'artifact_set', 'binding', 'specialization', 'physical_policy',
+              'transformation_ir', 'tokenizer_conversation', 'backend_implementation',
               'hardware_model', 'device_count', 'topology', 'source_commit', 'source_tree',
               'build', 'executable', 'prefill_geometry', 'reasoning', 'sampling',
               'product_path', 'sequence_geometry', 'concurrency', 'driver', 'runtime_toolkit')

@@ -330,11 +330,12 @@ class PublicationTests(unittest.TestCase):
     def test_benchmark_excerpt_refuses_missing_and_incompatible_context(self):
         records=self.showcase_records()
         with self.assertRaisesRegex(ValueError,'missing benchmark'):benchmarks.benchmark_excerpt(records[1:],ROOT/'README.md')
-        changed=copy.deepcopy(records)
-        changed[1]['target']['checkpoint']='a'*40
-        changed[1]['target_identity']=benchmarks.qualification.identity(changed[1]['target'])
-        with self.assertRaisesRegex(ValueError,'incompatible showcase'):
-            benchmarks.benchmark_excerpt(changed,ROOT/'README.md')
+        for field,width in (('checkpoint',40),('artifact_set',64),('binding',64),('physical_policy',64)):
+            changed=copy.deepcopy(records)
+            changed[1]['target'][field]='a'*width
+            changed[1]['target_identity']=benchmarks.qualification.identity(changed[1]['target'])
+            with self.subTest(field=field),self.assertRaisesRegex(ValueError,'incompatible showcase'):
+                benchmarks.benchmark_excerpt(changed,ROOT/'README.md')
 
     def test_benchmark_excerpt_does_not_invent_unavailable_latency(self):
         records=self.showcase_records()

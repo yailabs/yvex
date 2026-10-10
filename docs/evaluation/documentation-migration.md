@@ -145,3 +145,56 @@ by `make docs-check` and publication generation after the full structural run.
 No production source, ABI, runtime benchmark producer or model behavior was
 changed by the documentation commits. Concurrent README presentation and
 version/release edits remain their owners' work, outside these commits.
+
+## Visual grammar and receipt-bound README — 2026-10-10
+
+`DOCS.VISUAL.GRAMMAR.CONVERGENCE.0` extends the bounded README presentation
+checkpoint `f0ef1846c54064092d847c7ee495bbe4651896f6`. This is a documentation
+and publication change, not computational qualification.
+
+The shared renderer now projects all nine typed graphs as transparent,
+theme-aware SVG, replacing the tall native-Mermaid layouts in public Markdown.
+Compiler and terminal annotations were rerouted away from connectors; node
+identities, relationship types and ownership remain unchanged. The compiler
+overview preserves the fork/join and links its full dossier instead of
+duplicating the complete graph. Conceptual ASCII in the compiler, generation,
+runtime and model-lifecycle routes is replaced by semantic tables or owner links;
+literal commands, protocol syntax and historical records remain intact.
+
+The README proceeds from purpose and operation to exact benchmark tables,
+compiler lanes, physical weights, numerical classes and transactional state.
+The benchmark excerpt selects four immutable 0731 publication receipts; all
+values, sample populations and claim states come from those records. Missing
+latency stays unavailable; incompatible checkpoint/artifact/binding/policy
+context refuses the shared display. The catalog groups exact records by
+checkpoint without hiding aggregate missing-quality states. Six historical
+observation charts adopt the same transparent palette. No measurement or
+qualification JSON changed.
+
+| Lane | Authority | Fixture | Expected | Observed | Metric / tolerance | Result | Claim |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Documentation | Registry, metadata and owner links | Complete repository | No drift/orphans | 392 owners; 13 planes | Exact link/metadata closure | PASS | Publication structure |
+| Projection/refusal | Native publication tests | Graphs, receipts, malformed context | Preserve facts; refuse invalid inputs | 32 tests | No invented metrics; deterministic output | PASS | Shared renderer and benchmark slots |
+| Reader | Chromium 149 / CDP | 10 pages × 2 widths × 2 themes | Loaded figures, bounded page width | 40 views | 390 / 1280 CSS px; no page overflow | PASS | Responsive reader, not every browser |
+| Vector geometry | Chromium SVG bounds | 9 figures × 2 themes | Node text contained; theme-aware text | 18 views | No node text overflow | PASS | Rendered figure geometry |
+| Print | Existing publication pipeline | Complete pre-closure book | Readable PDF container | 1,374 A4 pages | Tagged PDF; no embedded JavaScript | PASS | PDF generation, not every printed page |
+| Preservation | Git source comparison | Graph semantics, receipts, Status | No claim promotion | 152 capability rows unchanged | No runtime/evidence-value edits | PASS | Editorial-only boundary |
+
+The final visual run binds source `925822fbc5edffb6868308909029ee576efaf3a0`,
+tree `44c786d73226d12bdae3b66626bbab98f16f0de6`, plus stable binary-diff hash
+`2fcb1a90872c99e02c2cdf03193ce74ea5ba5b726451c80744e382b0b6863439`.
+Its local receipt is `build/docs/visual-grammar-receipt.json`, SHA-256
+`7342d4ff1072a62056f233c2927b3dfc82c6d1b2b23f6a5a10496f8a290d97a5`.
+Screenshots and PDF remain ignored build output. The final closure rechecks
+documentation, benchmark drift, tests and controlled counts after recording
+this evidence; it does not regenerate performance observations.
+
+The shared checkout's six CUDA edits were preserved byte-for-byte and excluded
+from publication. No model was loaded, no Host restarted, and no sibling
+repository changed. Program P and the DeepSeek performance/quality gates remain
+open. The SVGs were reviewed in the local reader; this does not claim a visual
+inspection of the final GitHub blob, physical phone testing or human acceptance.
+The unavailable second screenshot was not used as an invented visual oracle.
+
+`progression_decision=proceed`; `downstream_safe=true` for the documentation
+grammar and generated publication only.
