@@ -10,7 +10,7 @@ publication: {html: true, pdf: true, index: true}
 
 # Model acquisition, storage, and runtime
 
-**Current procedure or lookup, linked to its technical owners.**
+**Acquire bytes, prepare an executable binding, then load a model generation.**
 
 [Up](README.md)
 
@@ -33,15 +33,11 @@ this guide teaches the command workflow.
 | `model storage` | Inspect local placement and allocated disk space |
 | `model push` | Export a representation; native Hugging Face write transport is currently unavailable |
 
-```text
-REMOTE --pull--> LOCAL SOURCE --prepare--> READY --load--> LOADED
-                   |                       ^                |
-                   |                       +----unload------+
-                   |                       |
-                   +-- already admitted ---+--evict--> REMOTE
-```
+The operation sequence is **pull → prepare → load → chat**. An already admitted
+representation can skip source preparation. Unload releases execution resources;
+eviction removes eligible managed disk bytes, not remote source identity.
 
-This diagram describes operations, not one combined status enum. Origin,
+These operations do not form one combined status enum. Origin,
 availability, preparation, and residency are independent. A published derived
 GGUF can be available both locally and remotely, ready for execution, and
 currently unloaded. A source directory can exist locally without an executable

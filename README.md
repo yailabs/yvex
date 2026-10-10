@@ -27,7 +27,8 @@ publication: {html: true, pdf: true, index: true}
   <a href="#quick-start">Quick start</a> ·
   <a href="#source-to-execution">How it works</a> ·
   <a href="#available-execution">Models &amp; backends</a> ·
-  <a href="docs/evaluation/benchmarks/generated/qualification-index.md">Qualification</a> ·
+  <a href="#measured-performance">Benchmarks</a> ·
+  <a href="#inside-the-computational-core">Under the hood</a> ·
   <a href="docs/README.md">Documentation</a>
 </p>
 
@@ -39,10 +40,9 @@ publication: {html: true, pdf: true, index: true}
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8D5CF5?style=flat&amp;labelColor=211a2d" alt="MIT license"></a>
 </p>
 
-YVEX connects the entire computational lifecycle: authenticated open-weight
-sources, compiled programs, physical weight representations and live model
-execution. One native product takes a model from **source to session**, keeping
-its identity, resource requirements and qualification evidence attached.
+YVEX is a native compiler and runtime for open-weight models. It turns exact
+checkpoints into authenticated executable artifacts, admits them against real
+hardware constraints, and runs isolated, stateful sessions through one host.
 
 **Built for people who want control below the API.** Inspect what you acquired,
 what you compiled, what is actually loaded, and what the evidence proves.
@@ -70,18 +70,6 @@ what you compiled, what is actually loaded, and what the evidence proves.
 The compiler preserves **what the model means**. Deployment decides **which
 implementation can run here**. The engine owns executable resources; a session
 owns mutable state. Backends execute admitted operations and numerical classes.
-
-### The next step: goal-driven compilation
-
-**Program P is in progress.** Its bounded native planner already checks physical
-recipe candidates against declared constraints and executable consumers. The
-larger goal is to build and justify a hardware-appropriate representation from
-workload, quality and memory requirements.
-
-Static feasibility is not a measured recommendation. The complete optimization
-and independent qualification exit remains open.
-[Current implementation](docs/architecture/compiler-ir.md#goal-constrained-physical-search-partial-implementation)
-· [Selected delivery](docs/project-control/TASKS.md)
 
 ## One host. Your models. Independent sessions.
 
@@ -176,6 +164,123 @@ backend works under the same model name.
 · [Complete capability matrix](docs/project-control/STATUS.md)
 
 <a id="evidence-and-current-limits"></a>
+
+## Measured performance
+
+The tables below are generated from immutable qualification receipts, not
+manually maintained numbers. They expose the current engineering gap as well
+as the demonstrated execution. **Characterization is not quality qualification.**
+
+<!-- docs:benchmark showcase -->
+
+**DeepSeek-V4-Flash-0731 · NVIDIA DGX Spark GB10 × 1 · CUDA.**
+
+One retained publication checkpoint, not a hardware-independent speed claim.
+Native protocol measurements use an isolated resident host, a separate warmup
+and fresh sessions without prefix reuse; they do not describe whichever engine is installed today.
+File-cache state was uncontrolled. Full build, artifact, binding and specialization identities are linked per row.
+
+| Configuration | Exact measured scope |
+| --- | --- |
+| Checkpoint / build source | `7872f01b1d1f` / `b8130fd51f9b`; full identities in each receipt |
+| Physical representation | goal-v1-mxfp4-routed-q2_k |
+| Input / execution | chunk=512; width=1; concurrency 1; reasoning `none` |
+| Sampling / transport | Temperature 0, deterministic; `product-native-v25` |
+| Driver / toolkit | 580.159.03; CUDA 13.0; nvcc 13.0.88 |
+
+| Workload / metric | Strategy · context | Input / output | Median (tok/s) | Min–max | N |
+| --- | --- | ---: | ---: | ---: | ---: |
+| [C hash table](docs/evaluation/benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-coding-hash-table-20261010.md) · committed decode | target-only · 4096 | 31 / 256 | 9.66 | 9.64–9.66 | 3 |
+| [C hash table](docs/evaluation/benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-speculative-coding-hash-table-20261010.md) · committed decode | speculative · 4096 | 31 / 256 | 14.38 | 14.37–14.43 | 3 |
+| [Long text · 2K](docs/evaluation/benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-2048-20261010.md) · new prefill | target-only · 16384 | 2048 / 16 | 103.24 | 101.95–103.31 | 3 |
+| [Long text · 8K](docs/evaluation/benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-8192-20261010.md) · new prefill | target-only · 16384 | 8192 / 16 | 89.73 | 89.61–89.81 | 3 |
+
+Decode excludes the first committed token and its latency. Input/output counts are server-authored;
+prefill counts newly executed input positions, not reused context.
+Different strategies and context bands remain separate rows, not an averaged score.
+
+| Coding request | Server TTFT | First visible content | Complete client request |
+| --- | ---: | ---: | ---: |
+| [target-only](docs/evaluation/benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-coding-hash-table-20261010.md) | 0.933 s | 1.461 s | 27.885 s |
+| [speculative](docs/evaluation/benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-publication-speculative-coding-hash-table-20261010.md) | 1.231 s | 1.848 s | 19.574 s |
+
+Performance: **CHARACTERIZED**. Independent representation quality: **BLOCKED**.
+Latency cells are medians; their ranges, MAD, raw sample identities and memory/preparation
+observations are in the linked receipts. No quality metric or confidence interval is invented.
+These records do not establish high/maximum reasoning, other models, HTTP latency or release readiness.
+
+<!-- /docs:benchmark -->
+
+[All targets and experiments](docs/evaluation/benchmarks/generated/qualification-index.md)
+· [Workload / reasoning matrix](docs/evaluation/benchmarks/generated/qualification-workloads.md)
+· [Measurement definitions](docs/evaluation/benchmarks/methodology.md)
+
+## Inside the computational core
+
+**The hard part is the join between model meaning, physical weights and legal
+execution.** YVEX makes that join explicit before the first request runs.
+
+### Two compilation lanes. One authenticated binding.
+
+| Boundary | What becomes explicit | Canonical owner |
+| --- | --- | --- |
+| **Computation** | Family semantics → typed programs → execution dependencies, state and effects | [Compiler IR](docs/architecture/compiler-ir.md) |
+| **Parameters** | Source ranges → transformations → quantization/layout → authenticated package terminals | [Representations](docs/architecture/representation-artifacts.md) |
+| **Parameter join** | Symbolic operands resolve to exact terminal lineage; physical operations and the compiled plan enter the runtime binding | [Artifact admission](docs/architecture/artifacts-admission.md) |
+| **Deployment** | Numerical implementation, backend compatibility, workspace and resource envelope are admitted for the target | [Specialization](docs/architecture/deployment-specialization.md) |
+
+A storage format is not an execution algorithm. A qtype the artifact reader can
+decode is not automatically legal for every fused kernel. Physical Execution IR
+describes package terminals; the physical computational program describes work
+over those terminals. Neither is a resident engine.
+
+### State has geometry. Publication has a transaction.
+
+Attention caches, recurrent state, speculative drafts, RNG and token ledgers do
+not share one storage layout. They share coordinated **commit or abort**.
+Each session owns its mutable state; engine generations fence stale references.
+A captured prefix is tied to execution identity, not interchangeable memory.
+
+The scheduler selects actual ready work. Execution batches and expert worklists
+describe selected rows and routed populations; they do not invent useful batch
+width. Backends own buffers, submission, synchronization and launch geometry.
+DSpark output is counted only after target verification and committed publication.
+
+[Computational state](docs/architecture/computational-state.md)
+· [Scheduling](docs/architecture/scheduling-resources.md)
+· [Generation](docs/architecture/generation-decode.md)
+· [Speculation](docs/architecture/advanced-generation.md)
+
+### Numerical behavior is part of the implementation contract
+
+Quantized storage, decoded operands, reduction order, accumulation precision
+and publication dtype are separate decisions. An optimization claiming the
+same numerical class must preserve its obligations. A different arithmetic
+realization needs explicit admission and independent evidence—not a looser test.
+
+[Numerical ABI](docs/contracts/numerical-abi.md)
+· [Backend execution](docs/architecture/backend-execution.md)
+· [Independent references](docs/evaluation/benchmarks/generated/qualification-references.md)
+
+### Active frontier: goal-driven physical compilation
+
+**Program P is in progress.** `compile optimize` exposes bounded, deterministic
+candidate planning through the native compiler. Goals constrain hardware,
+workload, memory and quality; recipes must have an executable consumer.
+
+| Established distinction | Still to earn |
+| --- | --- |
+| Static feasibility versus runtime admission | Complete resource and lifecycle qualification for each selected realization |
+| Candidate ordering versus measured ranking | An independently qualified, workload-specific recommendation |
+| Produced artifact versus installed engine | Explicit deployment and complete-model evidence, never automatic rollout |
+
+This is the research and engineering surface: representation economics,
+quantized operators, MoE execution, state lifetimes and reproducible evaluation.
+The planner coordinates existing owners; it does not replace them.
+
+[Current Program P implementation](docs/architecture/compiler-ir.md#goal-constrained-physical-search-partial-implementation)
+· [Research target](docs/research/physical-model-compiler.md)
+· [Selected delivery](docs/project-control/TASKS.md)
 
 ## Evidence you can inspect
 

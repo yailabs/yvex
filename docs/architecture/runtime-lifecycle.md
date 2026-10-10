@@ -21,59 +21,10 @@ opening a session borrows that generation and creates isolated state. A client
 connection is not a session, and a disconnected client does not own the host.
 
 <!-- docs:diagram runtime_lifetimes -->
-```mermaid
-%% yvex-figure: runtime_lifetimes
-%%{init: {"themeVariables": {"background": "transparent"}}}%%
-flowchart TB
-  subgraph n_panel_0["a  Persistent host — listeners, engine manager and routing"]
-    direction TB
-  n_session_a["MUTABLE<br/>Session A → g<br/>conversation / token ledger"]:::mutable
-  n_session_b["MUTABLE<br/>Session B → g<br/>independent state and workspace"]:::mutable
-  subgraph n_panel_1["Engine generation g — one admitted deployment"]
-    direction TB
-  n_resources["RUNTIME<br/>Executable resources<br/>mappings · plans · caches"]:::runtime
-  n_scheduler["RUNTIME<br/>Engine scheduler<br/>independent runnable work"]:::runtime
-  n_backend["PHYSICAL<br/>Backend resources<br/>admitted implementation class"]:::physical
-  n_leases["RUNTIME<br/>Model leases<br/>explicit acquire / release"]:::runtime
-  n_resources ~~~ n_scheduler ~~~ n_backend ~~~ n_leases
-  end
-  n_session_a ~~~ n_session_b
-  end
-  subgraph n_panel_2["b  Execution quantum — real work, not another state owner"]
-    direction TB
-  n_ready_work["RUNTIME<br/>Ready work<br/>session-bound quantum"]:::runtime
-  n_batch["RUNTIME<br/>Execution batch<br/>real selected rows"]:::runtime
-  n_graph["SEMANTIC<br/>Admitted graph<br/>operations / ordering"]:::semantic
-  n_execute["PHYSICAL<br/>CPU / CUDA<br/>physical width is admitted"]:::physical
-  end
-  subgraph n_panel_3["c  Schematic lifetimes — horizontal extent is not measured time"]
-    direction TB
-  band_0["host: zero engines → loaded generations → zero engines"]:::runtime
-  band_1["generation g: load / specialize → usable → unload"]:::runtime
-  band_2["session: open → close"]:::runtime
-  band_3["lease held"]:::runtime
-  band_0 ~~~ band_1 ~~~ band_2 ~~~ band_3
-  end
-  n_panel_1 ---|identity| n_session_a
-  n_panel_1 ---|identity| n_session_b
-  n_ready_work -. request .-> n_batch
-  n_batch --> n_graph
-  n_graph --> n_execute
-  n_panel_0 ~~~ n_panel_2 ~~~ n_panel_3
-  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
-  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
-  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
-  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
-  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
-  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
-  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
-  style n_panel_0 fill:transparent,stroke:#b8a5d0
-  style n_panel_1 fill:transparent,stroke:#b8a5d0
-  style n_panel_2 fill:transparent,stroke:#b8a5d0
-  style n_panel_3 fill:transparent,stroke:#b8a5d0
-```
 
-[Static figure](../assets/diagrams/runtime_lifetimes.svg) · [Editable source](../assets/diagrams/runtime_lifetimes.json)
+![Runtime lifetimes, state and physical work](../assets/diagrams/runtime_lifetimes.svg)
+
+[Full-size diagram](../assets/diagrams/runtime_lifetimes.svg) · [Editable source](../assets/diagrams/runtime_lifetimes.json)
 <!-- /docs:diagram -->
 
 [Editable lifetime source](../assets/diagrams/runtime_lifetimes.json).

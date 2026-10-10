@@ -34,6 +34,21 @@ implementation and resource envelope.
 
 ## Pipeline
 
+<!-- docs:diagram physical_compilation -->
+
+![Coordinated compilation lanes and runtime join](../assets/diagrams/physical_compilation.svg)
+
+[Full-size diagram](../assets/diagrams/physical_compilation.svg) · [Editable source](../assets/diagrams/physical_compilation.json)
+<!-- /docs:diagram -->
+
+*Figure 2 — Coordinated compilation lanes and source-to-engine promotion.
+Computation meaning and parameter/package derivation remain distinct until the
+identity-preserving parameter join. Package truth, runtime binding, deployment
+specialization and engine resources are also distinct identities/lifetimes.
+Missing semantics or resources refuse at their owner, never imply the next
+stage.*
+[Editable source](../assets/diagrams/physical_compilation.json).
+
 ### Goal-constrained physical search (partial implementation)
 
 `compile optimize` is the native Program P entrypoint. Its C owner is
@@ -164,7 +179,7 @@ automatic finalist execution or new executable-layout preparation. Goals guide
 bounded exploration, not measured claims of optimality. Program P remains
 IN PROGRESS. No candidate becomes a resident engine through this command.
 
-The reproducible engineering workflow is:
+### Reproducible engineering workflow
 
 The same request may be retained in a bounded (64 KiB), strict
 `yvex.optimization.request.v1` JSON file and invoked as
@@ -211,77 +226,6 @@ artifact and binding outcomes separately; a lost acknowledgement or absent
 binding does not authorize blind re-emission or overwrite. Installed clients
 must advertise the operation/schema before it is offered as available.
 
-<!-- docs:diagram physical_compilation -->
-```mermaid
-%% yvex-figure: physical_compilation
-%%{init: {"themeVariables": {"background": "transparent"}}}%%
-flowchart TB
-  subgraph n_panel_0["a  Verified source and family interpretation"]
-    direction TB
-  n_source["EXTERNAL<br/>Verified source<br/>inventory · ranges · trust"]:::external
-  n_family["SEMANTIC<br/>Family interpretation<br/>irreducible source semantics"]:::semantic
-  n_semantic["SEMANTIC<br/>Semantic Model IR<br/>sealed model aggregate"]:::semantic
-  end
-  subgraph n_panel_1["b  Coordinated compilation — computation and parameter/package lanes"]
-    direction TB
-  n_typed["SEMANTIC<br/>Native typed program<br/>functions · values · state"]:::semantic
-  n_execution["SEMANTIC<br/>Program Execution IR<br/>entry slots · dependencies"]:::semantic
-  n_transform["SEMANTIC<br/>Transformation IR<br/>source → terminal"]:::semantic
-  n_transform_binding["SEMANTIC<br/>Transform binding<br/>verified ranges + IDs"]:::semantic
-  n_variant["PHYSICAL<br/>Variant / artifact<br/>qtype · rows · layout"]:::physical
-  n_peir["PHYSICAL<br/>PEIR package truth<br/>authenticated terminals"]:::physical
-  end
-  subgraph n_panel_2["c  Identity-preserving join and immutable binding"]
-    direction TB
-  n_join["SEMANTIC<br/>Parameter join<br/>symbol ↔ lineage"]:::semantic
-  n_physical_program["PHYSICAL<br/>Physical program<br/>admitted impls"]:::physical
-  n_compiled["SEMANTIC<br/>Compiled plan<br/>programs + schedule"]:::semantic
-  n_binding["INTERFACE<br/>Runtime binding<br/>authenticated truth"]:::interface
-  end
-  subgraph n_panel_3["d  Deployment and executable resources"]
-    direction TB
-  n_deployment["RUNTIME<br/>Deployment specialization<br/>real backend · device · resources"]:::runtime
-  n_engine["RUNTIME<br/>Engine generation<br/>executable resource ownership"]:::runtime
-  end
-  n_source --> n_family
-  n_family --> n_semantic
-  n_semantic --> n_typed
-  n_typed --> n_execution
-  n_family --> n_transform
-  n_transform --> n_transform_binding
-  n_transform_binding --> n_variant
-  n_variant --> n_peir
-  n_execution ---|identity| n_join
-  n_peir ---|identity| n_join
-  n_join --> n_physical_program
-  n_physical_program --> n_compiled
-  n_compiled --> n_binding
-  n_binding -->|gate| n_deployment
-  n_deployment --> n_engine
-  n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2 ~~~ n_panel_3
-  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
-  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
-  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
-  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
-  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
-  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
-  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
-  style n_panel_0 fill:transparent,stroke:#b8a5d0
-  style n_panel_1 fill:transparent,stroke:#b8a5d0
-  style n_panel_2 fill:transparent,stroke:#b8a5d0
-  style n_panel_3 fill:transparent,stroke:#b8a5d0
-```
-
-[Static figure](../assets/diagrams/physical_compilation.svg) · [Editable source](../assets/diagrams/physical_compilation.json)
-<!-- /docs:diagram -->
-
-*Figure 2 — Coordinated compilation lanes and source-to-engine promotion.
-Computation meaning and parameter/package derivation remain distinct until the
-identity-preserving parameter join. Package truth, runtime binding, deployment
-specialization and engine resources are also distinct identities/lifetimes.
-Missing semantics or resources refuse at their owner, never imply the next
-stage.*
-[Editable source](../assets/diagrams/physical_compilation.json).
 
 
 ## Logical projection and transformation
@@ -419,32 +363,9 @@ The following is the implemented ownership pipeline at the currently admitted
 scope. Individual model architectures and operations still require their own
 qualification; the pipeline does not claim universal family support.
 
-```text
-verified source -> family interpretation
-                        |                 |
-                        v                 v
-             sealed Semantic Model IR    Transformation IR
-                        |                 -> transform binding / artifact lowering
-             retained native typed       -> representation plan / writer
-             program when present        -> artifact admission / materialization
-                        |                 -> PEIR package terminal truth
-             execution lowering                    |
-                        +------------+--------------+
-                                     v
-                      exact program-parameter join
-                                     |
-                      physical computational program
-                                     |
-                          compiled model plan
-                                     |
-                            runtime binding
-                                     |
-                 deployment specialization / engine
-                                     |
-                      state providers + backends
-                                     |
-                       typed results + evidence
-```
+The [pipeline diagram](#pipeline) shows the fork and join. The table below
+maps each boundary to its current implementation and evidence; it is not a
+second, flattened compiler pipeline.
 
 | Boundary | Required unique authority | Current cutover evidence |
 | --- | --- | --- |

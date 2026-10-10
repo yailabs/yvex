@@ -180,8 +180,9 @@ def check_figure_generation() -> None:
                             cwd=ROOT, check=False)
     if result.returncode:
         fail("figure source and SVG are not synchronized")
-    if "```mermaid" not in (ROOT / "docs/architecture/README.md").read_text(encoding="utf-8"):
-        fail("missing native Mermaid architecture figure")
+    architecture = (ROOT / "docs/architecture/README.md").read_text(encoding="utf-8")
+    if '](../assets/diagrams/system_overview.svg)' not in architecture or '```mermaid' in architecture:
+        fail("architecture must expose the canonical fixed-layout SVG")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for name in ("product_pipeline", "product_runtime"):
         if f'](docs/assets/diagrams/{name}.svg)' not in readme or f'{name}.json' not in readme:

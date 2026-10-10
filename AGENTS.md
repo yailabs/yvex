@@ -227,6 +227,12 @@ prove an uninterrupted reservation; never retire an operator's work for a test.
 
 ## Documentation and Task closure
 
+Follow the [documentation visual grammar](docs/reference/DOCUMENTATION-PROTOCOL.md#visual-and-editorial-grammar)
+for public copy, tables and figures. Use the shared transparent SVG projection;
+do not reintroduce conceptual ASCII or independent Mermaid diagrams. Benchmark
+tables are generated from exact receipts, never manually maintained speed claims.
+Preserve literal code, protocol grammar, stable anchors and historical evidence.
+
 Native model adaptation/post-training is an adopted future YVEX computational
 product target, not a current capability or selected delivery. Follow the
 [canonical research doctrine](docs/research/model-adaptation.md#native-adaptation-and-post-training-horizon):

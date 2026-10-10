@@ -100,13 +100,31 @@ evidence is BLOCKED/SKIP, never PASS. A complete Task does not select its succes
 ## Diagrams and publication
 
 YVEX retains one editable JSON source for each system diagram. Typed nodes,
-explicit relationship endpoints and ownership groups generate native Mermaid
-blocks in canonical Markdown and deterministic SVG for offline HTML/PDF.
-The Markdown blocks are checked projections, not independent diagrams to edit.
-Architecture owners expose native Mermaid; product landing pages may embed the
-generated SVG directly and link its editable JSON. The optional `product`
-presentation changes only typography, spacing and palette, not graph semantics.
-GitHub renders either projection; static links remain available for terminal viewers.
+explicit relationship endpoints and ownership groups generate deterministic SVG
+embedded in Markdown, GitHub and the offline reader. The checked Markdown blocks
+link the full-size figure and editable source; do not hand-edit a projection.
+Mermaid remains an optional semantic export, not a second hand-maintained graph
+or the default public layout. The `product` presentation changes typography and
+spacing, not graph semantics.
+
+### Visual and editorial grammar
+
+| Element | Rule |
+| --- | --- |
+| Canvas | Transparent. No full-page card, gradient, glow or decorative background. |
+| Color | Violet accents; neutral text and fine rules adapt to light/dark. Status is written, never inferred from color. |
+| Nodes | Short titles, bounded annotations, restrained outlines. Group by actual ownership, not decorative symmetry. |
+| Edges | Explicit direction and typed line styles; no crossing node interiors. Preserve compiler forks, joins and lifetime boundaries. |
+| Density | One question per figure; overview first, exact owner next. A large dependency graph belongs in its dossier, not every landing page. |
+| Copy | State what the system does and why the boundary matters. Avoid generic taglines repeated on every reference page. |
+| Tables | Compare decisions, contracts, configurations or measured outcomes. Keep prose for reasoning; do not turn narrative into a wall of cells. |
+| Technical depth | A product README progresses from purpose and operation to compiler, numerical and state contracts with precise owner links. |
+| Benchmark display | Generate values from selected immutable receipts, including configuration, samples, dispersion and missing gates. Never transcribe headline speeds by hand. |
+
+Conceptual ASCII flows are replaced by a small table or an owned diagram when
+that improves comprehension. Actual commands, protocol grammars, code and
+historical evidence remain literal. Cleanup must not remove failure conditions,
+numerical obligations, open work or provenance. Stable anchors remain usable.
 
 The same graph preserves source, logical, physical, runtime, state, device and
 external boundaries across layouts. Text labels carry semantic roles; violet

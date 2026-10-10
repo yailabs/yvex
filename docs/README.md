@@ -10,7 +10,7 @@ publication: {html: true, pdf: true, index: true}
 
 # YVEX Documentation
 
-**From product thesis to system planes, exact contracts and earned evidence.**
+**Run a model. Understand its execution. Follow the evidence.**
 
 [YVEX](../README.md)
 
@@ -25,22 +25,17 @@ publication: {html: true, pdf: true, index: true}
 | Evaluate performance | [Benchmarks](evaluation/benchmarks/README.md) | Methodology → exact observation → limitations |
 | Operate YVEX | [Quick Start](guides/quickstart.md) | [Model lifecycle](guides/model-lifecycle.md) → [Runbook](guides/operator-runbook.md) |
 | Develop on macOS / Apple Silicon | [Native build](guides/build.md#macos-native-cpu-build) | [Early Metal backend](architecture/backend-execution.md#apple-silicon-metal-foundation) → [Integrated evidence](evaluation/macos-main-integration.md) |
-| Integrate an application | [Contracts](contracts/README.md) | C / local protocol / OpenAI / remote bootstrap |
+| Integrate an application | [Contracts](contracts/README.md) | C / local protocol / OpenAI / authenticated network management |
 | Work as an agent | [AGENTS](../AGENTS.md) | [Selected Tasks](project-control/TASKS.md) → affected plane → evidence |
 
 ## Documentation map
 
-- [Product](product/README.md)
-- [System Architecture](architecture/README.md)
-- [Project Control](project-control/README.md)
-- [Contracts](contracts/README.md)
-- [Model Families](model-families/README.md)
-- [Guides](guides/README.md)
-- [Evaluation](evaluation/README.md)
-- [Research](research/README.md)
-- [Architecture Decisions](decisions/README.md)
-- [Reference](reference/README.md)
-- [Releases](releases/README.md)
+| Understand the system | Use or extend it | Verify its boundaries |
+| --- | --- | --- |
+| [Product purpose](product/README.md) | [Practical guides](guides/README.md) | [Evaluation and benchmarks](evaluation/README.md) |
+| [Architecture and ownership](architecture/README.md) | [Integration contracts](contracts/README.md) | [Status and selected Tasks](project-control/README.md) |
+| [Structural decisions](decisions/README.md) | [Model-family semantics](model-families/README.md) | [Release evidence](releases/README.md) |
+| [Research horizons](research/README.md) | [Commands and terminology](reference/README.md) | [Documentation rules](reference/DOCUMENTATION-PROTOCOL.md) |
 
 ## Authority at a glance
 

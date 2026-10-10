@@ -10,7 +10,7 @@ publication: {html: true, pdf: true, index: true}
 
 # Hosted Runtime Contract
 
-**Exact producer/consumer requirements at this boundary.**
+**Engine generations fence execution; session transactions fence publication.**
 
 [Up](README.md)
 
@@ -34,10 +34,10 @@ evaluation, benchmark policy, or release state.
 
 The server host lifecycle is independent from every model:
 
-```text
-configured -> starting -> ready -> stopping -> stopped
-                         \-> failed
-```
+| Path | States |
+| --- | --- |
+| Normal lifetime | `configured` → `starting` → `ready` → `stopping` → `stopped` |
+| Failure | `failed`; never presented as a healthy, ready host |
 
 A ready host owns its private Unix listener, optional loopback OpenAI listener,
 telemetry, engine manager, and bounded external request capacity. It is valid
@@ -59,10 +59,10 @@ stop the host.
 
 Each engine slot follows:
 
-```text
-unloaded -> loading -> loaded -> draining -> unloading -> unloaded
-                \-> failed               \-> failed
-```
+| Phase | State progression | Failure boundary |
+| --- | --- | --- |
+| Open | `unloaded` → `loading` → `loaded` | Opening failure publishes `failed`, not a routable engine |
+| Retire | `loaded` → `draining` → `unloading` → `unloaded` | Cleanup failure remains observable as `failed` |
 
 A load request names one complete local registry profile. The host reserves the
 alias, assigns a new nonzero process-local generation, and opens the profile
@@ -181,11 +181,12 @@ automatic eviction policy currently exists.
 Every server session binds to one alias and exact engine generation. Alias
 equality never migrates a session to a reloaded engine.
 
-```text
-absent -> created -> ready/detached -> running -> retained/partial
-                                        \-> reset -> ready
-                                        \-> closing -> closed
-```
+| Operation | Session progression |
+| --- | --- |
+| Create / run | `absent` → `created` → `ready` / `detached` → `running` |
+| Retain | Completed or partial turn retains its committed state |
+| Reset | Clear committed semantic state; return to `ready` with compatible allocation |
+| Close | `closing` → `closed`; release session-owned resources |
 
 A session owns one mutable runtime execution session plus token ledger,
 conversation transcript, incremental decoder, RNG/sampling state, turn state,
@@ -214,11 +215,11 @@ not decode, and a selected token is fed through stateful decode exactly once.
 
 Generation uses a three-part lifecycle:
 
-```text
-begin prompt/prefill transaction
--> advance one target step or one speculative cycle per work budget unit
--> finish, validate, publish terminal result, release turn state
-```
+| Phase | Obligation |
+| --- | --- |
+| Begin | Open the prompt/prefill transaction |
+| Advance | One target step or one speculative cycle per work-budget unit |
+| Finish | Validate, publish the terminal result and release turn state |
 
 Fragments publish only after model state, token ledger, incremental decoder,
 and internal text ledger agree. A sink failure after committed output returns a
@@ -232,11 +233,12 @@ The transaction coordinator owns a bounded participant collection. Each
 participant may stage, prepare commit, publish commit, abort, reset, and close
 its own representation.
 
-```text
-validate -> begin candidate -> execute/stage -> validate/cancel check
-         -> prepare every participant -> publish every participant
-         -> commit visible output
-```
+| Order | Transaction boundary |
+| ---: | --- |
+| 1 | Validate and begin a candidate |
+| 2 | Execute/stage; validate and check cancellation |
+| 3 | Prepare **every** participant before publishing any participant |
+| 4 | Publish every participant, then commit visible output |
 
 Failure before publication aborts every participant and preserves prior
 committed state. A prepare failure cannot leave one participant visible.

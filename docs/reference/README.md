@@ -10,14 +10,17 @@ publication: {html: true, pdf: true, index: true}
 
 # Reference
 
-**Bounded lookup and the repository documentation grammar.**
+**Find a command, resolve a term, or locate the rule that owns a document.**
 
 [Documentation](../README.md)
 
-Use the [Glossary](GLOSSARY.md) for orientation, [commands](commands.md) for exact operator lookup and [Documentation Protocol](DOCUMENTATION-PROTOCOL.md) for document roles. Normative integration records remain in [Contracts](../contracts/README.md).
+For a step-by-step operation, use [Guides](../guides/README.md). For normative
+producer/consumer requirements, use [Contracts](../contracts/README.md).
 
 ## Owners and reading paths
 
-- [DOCUMENTATION-PROTOCOL](DOCUMENTATION-PROTOCOL.md)
-- [YVEX Glossary](GLOSSARY.md)
-- [Command and operation architecture](commands.md)
+| Lookup | Owner |
+| --- | --- |
+| Command grammar and operation routing | [Commands](commands.md) |
+| Source, representation, engine and state terminology | [Glossary](GLOSSARY.md) |
+| Canonical ownership, visual grammar and publication | [Documentation protocol](DOCUMENTATION-PROTOCOL.md) |

@@ -33,11 +33,19 @@ make docs-benchmarks
 make docs-check
 ```
 
-Diagram JSON owns typed nodes, relationships, labels and static layout. The renderer
-projects Mermaid into Markdown and SVG into offline HTML/PDF. Run `make docs-diagrams`
-after changing that source; do not edit generated Mermaid blocks. Benchmark
-JSON owns observed values; generated Markdown/SVG must match it. Do not hand-edit
-those projections. Runtime benchmark schema v5 remains a separate producer contract.
+Diagram JSON owns typed nodes, relationships, labels and static layout. The
+renderer embeds the same transparent SVG in Markdown, GitHub and offline
+HTML/PDF; Mermaid is an optional graph export. Run `make docs-diagrams` after
+changing the source, not after editing a generated block. Follow the
+[visual grammar](../reference/DOCUMENTATION-PROTOCOL.md#visual-and-editorial-grammar).
+
+Benchmark JSON owns observed values. `make docs-benchmarks` also refreshes the
+bounded benchmark slots in the root README and benchmark landing. The selection
+in `tools/docs/benchmarks.py` names exact receipts, never copied values or a
+fastest-run heuristic. Incompatible shared configuration refuses publication;
+unknown latency remains NOT MEASURED. Update the selected IDs deliberately when
+a new publication checkpoint earns evidence. Runtime benchmark schema v5 remains
+a separate producer contract.
 
 ## Read HTML
 

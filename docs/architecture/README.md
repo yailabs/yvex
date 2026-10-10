@@ -29,145 +29,31 @@ owns their mechanisms and current model-runtime limits.
 ## System context
 
 <!-- docs:diagram system_overview -->
-```mermaid
-%% yvex-figure: system_overview
-%%{init: {"themeVariables": {"background": "transparent"}}}%%
-flowchart TB
-  n_providers["EXTERNAL<br/>Provider sources<br/>weights · config · tokenizer"]:::external
-  n_applications["EXTERNAL<br/>SDKs / applications<br/>local compatibility clients"]:::external
-  n_cli["INTERFACE<br/>yvex CLI<br/>chat + host / model / session"]:::interface
-  n_reports["EVIDENCE<br/>Observation clients<br/>host logs · status · evidence"]:::evidence
-  subgraph n_panel_0["a  Offline lane"]
-    direction TB
-  n_source["SEMANTIC<br/>Source acquisition<br/>inventory · provenance · trust"]:::semantic
-  n_compiler["SEMANTIC<br/>Compiler / package<br/>family lowering · physical plan"]:::semantic
-  n_package["SEMANTIC<br/>Artifact + binding<br/>authenticated package facts"]:::semantic
-  end
-  subgraph n_panel_1["b  Persistent yvex serve"]
-    direction TB
-  n_http["INTERFACE<br/>HTTP adapter<br/>bounded OpenAI compatibility"]:::interface
-  n_protocol["INTERFACE<br/>Typed local protocol<br/>native UDS · exact generation"]:::interface
-  n_engines["RUNTIME<br/>Engine generations<br/>admitted plans and resources"]:::runtime
-  n_sessions["MUTABLE<br/>Sessions / state<br/>generation-bound continuity"]:::mutable
-  n_work["RUNTIME<br/>Execution scheduling<br/>ready work · real rows"]:::runtime
-  n_events["EVIDENCE<br/>Typed events<br/>progress · results · resources"]:::evidence
-  end
-  subgraph n_panel_2["c  Backend"]
-    direction TB
-  n_backend["PHYSICAL<br/>CPU / CUDA / Metal (early)<br/>CPU/CUDA model work · Metal: storage + F32 embedding only"]:::physical
-  end
-  n_providers --> n_source
-  n_source --> n_compiler
-  n_compiler --> n_package
-  n_applications -. request .-> n_http
-  n_cli -. request .-> n_protocol
-  n_http -. request .-> n_protocol
-  n_protocol -. request .-> n_engines
-  n_package --> n_engines
-  n_engines ---|identity| n_sessions
-  n_engines -. request .-> n_work
-  n_work --> n_backend
-  n_work -. observation .-> n_events
-  n_events -. observation .-> n_reports
-  n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2
-  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
-  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
-  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
-  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
-  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
-  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
-  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
-  style n_panel_0 fill:transparent,stroke:#b8a5d0
-  style n_panel_1 fill:transparent,stroke:#b8a5d0
-  style n_panel_2 fill:transparent,stroke:#b8a5d0
-```
 
-[Static figure](../assets/diagrams/system_overview.svg) · [Editable source](../assets/diagrams/system_overview.json)
+![System context and execution ownership](../assets/diagrams/system_overview.svg)
+
+[Full-size diagram](../assets/diagrams/system_overview.svg) · [Editable source](../assets/diagrams/system_overview.json)
 <!-- /docs:diagram -->
 
-[Editable context source](../assets/diagrams/system_overview.json).
 Operators, C consumers and application providers enter through typed interfaces.
 YAI owns semantic work outside this boundary. Hardware executes the admitted
 computation; a transport adapter does not confer additional model capability.
 
 ## Source to verified execution
 
-<!-- docs:diagram physical_compilation -->
-```mermaid
-%% yvex-figure: physical_compilation
-%%{init: {"themeVariables": {"background": "transparent"}}}%%
-flowchart TB
-  subgraph n_panel_0["a  Verified source and family interpretation"]
-    direction TB
-  n_source["EXTERNAL<br/>Verified source<br/>inventory · ranges · trust"]:::external
-  n_family["SEMANTIC<br/>Family interpretation<br/>irreducible source semantics"]:::semantic
-  n_semantic["SEMANTIC<br/>Semantic Model IR<br/>sealed model aggregate"]:::semantic
-  end
-  subgraph n_panel_1["b  Coordinated compilation — computation and parameter/package lanes"]
-    direction TB
-  n_typed["SEMANTIC<br/>Native typed program<br/>functions · values · state"]:::semantic
-  n_execution["SEMANTIC<br/>Program Execution IR<br/>entry slots · dependencies"]:::semantic
-  n_transform["SEMANTIC<br/>Transformation IR<br/>source → terminal"]:::semantic
-  n_transform_binding["SEMANTIC<br/>Transform binding<br/>verified ranges + IDs"]:::semantic
-  n_variant["PHYSICAL<br/>Variant / artifact<br/>qtype · rows · layout"]:::physical
-  n_peir["PHYSICAL<br/>PEIR package truth<br/>authenticated terminals"]:::physical
-  end
-  subgraph n_panel_2["c  Identity-preserving join and immutable binding"]
-    direction TB
-  n_join["SEMANTIC<br/>Parameter join<br/>symbol ↔ lineage"]:::semantic
-  n_physical_program["PHYSICAL<br/>Physical program<br/>admitted impls"]:::physical
-  n_compiled["SEMANTIC<br/>Compiled plan<br/>programs + schedule"]:::semantic
-  n_binding["INTERFACE<br/>Runtime binding<br/>authenticated truth"]:::interface
-  end
-  subgraph n_panel_3["d  Deployment and executable resources"]
-    direction TB
-  n_deployment["RUNTIME<br/>Deployment specialization<br/>real backend · device · resources"]:::runtime
-  n_engine["RUNTIME<br/>Engine generation<br/>executable resource ownership"]:::runtime
-  end
-  n_source --> n_family
-  n_family --> n_semantic
-  n_semantic --> n_typed
-  n_typed --> n_execution
-  n_family --> n_transform
-  n_transform --> n_transform_binding
-  n_transform_binding --> n_variant
-  n_variant --> n_peir
-  n_execution ---|identity| n_join
-  n_peir ---|identity| n_join
-  n_join --> n_physical_program
-  n_physical_program --> n_compiled
-  n_compiled --> n_binding
-  n_binding -->|gate| n_deployment
-  n_deployment --> n_engine
-  n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2 ~~~ n_panel_3
-  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
-  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
-  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
-  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
-  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
-  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
-  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
-  style n_panel_0 fill:transparent,stroke:#b8a5d0
-  style n_panel_1 fill:transparent,stroke:#b8a5d0
-  style n_panel_2 fill:transparent,stroke:#b8a5d0
-  style n_panel_3 fill:transparent,stroke:#b8a5d0
-```
-
-[Static figure](../assets/diagrams/physical_compilation.svg) · [Editable source](../assets/diagrams/physical_compilation.json)
-<!-- /docs:diagram -->
-
-[Editable compiler source](../assets/diagrams/physical_compilation.json).
+The [compiler dossier](compiler-ir.md) contains the complete
+[fork-and-join diagram](../assets/diagrams/physical_compilation.svg).
 
 The signature lifecycle is a **fork and join**, not a linear IR-to-GGUF conversion:
 
-1. **Source and family interpretation** authenticate provenance and interpret model meaning.
-2. **Computation lane** seals semantic/program IR and lowers legal operations.
-3. **Parameter lane** derives transformations, quantization, layout and an admitted artifact.
-4. **Parameter join** binds symbolic computation to exact package terminal truth.
-5. **Deployment** admits numerical/implementation classes and resource requirements.
-6. **Engine generation** owns immutable executable resources; **sessions** own state.
-7. **Scheduler and backend** select real ready work and execute admitted operations.
-8. **Result and evidence** publish only after the required identity/lifecycle checks.
+| Step | Boundary that must remain intact |
+| --- | --- |
+| Interpret | Source authentication precedes family-specific model meaning. |
+| Fork | Computation seals legal operations; parameter derivation chooses transformations and exact representation. |
+| Join | Symbolic operands resolve to authenticated package terminals. |
+| Admit | Deployment verifies the numerical implementation and resource envelope. |
+| Execute | Engine generations own executable resources; sessions own mutable state; scheduler/backend execute real ready work. |
+| Publish | Result publication obeys identity and lifetime checks; evidence observes it. |
 
 ## Logical planes
 

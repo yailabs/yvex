@@ -283,18 +283,78 @@ class PublicationTests(unittest.TestCase):
         diagrams=importlib.util.module_from_spec(spec);spec.loader.exec_module(diagrams)
         path=ROOT/'docs/assets/diagrams/physical_compilation.json'
         data=json.loads(path.read_text());block=diagrams.diagram_block(path.stem,data,ROOT/'README.md')
-        self.assertIn('```mermaid',block)
-        self.assertIn('"background": "transparent"',block)
-        self.assertIn('style n_panel_0 fill:transparent,stroke:#b8a5d0',block)
-        self.assertNotIn('fill:#faf8fe',block)
+        self.assertNotIn('```mermaid',block)
+        self.assertIn('![Coordinated compilation lanes and runtime join]',block)
+        self.assertIn('Editable source',block)
         svg=diagrams.render(data)
         self.assertIn('.panel{fill:none;',svg)
         self.assertNotIn(f'<rect width="{data["size"][0]}" height="{data["size"][1]}" fill="#fff"/>',svg)
-        self.assertIn('n_execution ---|identity| n_join',block)
-        self.assertIn('n_peir ---|identity| n_join',block)
+        self.assertIn('n_execution ---|identity| n_join',diagrams.mermaid(data))
+        self.assertIn('n_peir ---|identity| n_join',diagrams.mermaid(data))
         self.assertIn('physical_compilation.svg',site.render(block))
         data['edges'][0]['target']='invented'
         with self.assertRaisesRegex(ValueError,'endpoint'):diagrams.mermaid(data)
+
+    def test_all_figures_share_transparent_theme_grammar(self):
+        import xml.etree.ElementTree as ET
+        for path in (ROOT/'docs/assets/diagrams').glob('*.json'):
+            with self.subTest(figure=path.name):
+                data=json.loads(path.read_text());svg=figures.render(data)
+                root=ET.fromstring(svg)
+                self.assertIn('@media(prefers-color-scheme:dark)',svg)
+                self.assertNotIn('Gradient',svg)
+                for element in root.iter():
+                    if element.tag.endswith('rect'):
+                        self.assertNotEqual(element.get('width'),str(data['size'][0]))
+                self.assertEqual(len(root.findall('.//{http://www.w3.org/2000/svg}polyline')),len(data['edges']))
+                self.assertEqual({g.get('id') for g in root.findall('./{http://www.w3.org/2000/svg}g')},
+                                 {n['id'] for n in data['nodes']})
+
+    def showcase_records(self):
+        return [json.loads((ROOT/'docs/evaluation/benchmarks/qualification'/(identifier+'.json')).read_text())
+                for identifier,_,_ in benchmarks.SHOWCASE]
+
+    def test_benchmark_excerpt_uses_exact_receipts_and_limits(self):
+        records=self.showcase_records()
+        output=benchmarks.benchmark_excerpt(records,ROOT/'README.md')
+        for record,(_,_,metric) in zip(records,benchmarks.SHOWCASE):
+            m=next(m for m in record['measurements'] if m['metric']==metric)
+            self.assertIn(f'{m["statistics"]["median"]:.2f}',output)
+            self.assertIn(record['id']+'.md',output)
+        self.assertIn('**BLOCKED**',output)
+        self.assertIn('**CHARACTERIZED**',output)
+        self.assertIn('Min–max',output)
+        self.assertIn('not describe whichever engine is installed today',output)
+        self.assertEqual(benchmarks.synchronize_excerpt(records,ROOT/'README.md'),(ROOT/'README.md').read_text())
+
+    def test_benchmark_excerpt_refuses_missing_and_incompatible_context(self):
+        records=self.showcase_records()
+        with self.assertRaisesRegex(ValueError,'missing benchmark'):benchmarks.benchmark_excerpt(records[1:],ROOT/'README.md')
+        changed=copy.deepcopy(records)
+        changed[1]['target']['checkpoint']='a'*40
+        changed[1]['target_identity']=benchmarks.qualification.identity(changed[1]['target'])
+        with self.assertRaisesRegex(ValueError,'incompatible showcase'):
+            benchmarks.benchmark_excerpt(changed,ROOT/'README.md')
+
+    def test_benchmark_excerpt_does_not_invent_unavailable_latency(self):
+        records=self.showcase_records()
+        records[0]['measurements']=[m for m in records[0]['measurements'] if m['metric']!='ttft.client-visible']
+        output=benchmarks.benchmark_excerpt(records,ROOT/'README.md')
+        self.assertIn('NOT MEASURED',output)
+
+    def test_benchmark_excerpt_refuses_reused_input(self):
+        records=self.showcase_records()
+        for fact in records[0]['provenance']['diagnostics']:
+            if fact['id']=='native.reused_tokens':fact['value']=1
+        with self.assertRaisesRegex(ValueError,'uncached fresh sessions'):
+            benchmarks.benchmark_excerpt(records,ROOT/'README.md')
+
+    def test_diagram_markdown_cannot_introduce_inline_markup(self):
+        data=json.loads((ROOT/'docs/assets/diagrams/product_pipeline.json').read_text())
+        data['title']='Source [x] <script>'
+        block=figures.diagram_block('product_pipeline',data,ROOT/'README.md')
+        self.assertIn('Source \\[x\\] &lt;script&gt;',block)
+        self.assertNotIn('<script>',site.render(block))
 
     def test_branded_root_does_not_weaken_document_headers(self):
         text=(ROOT/'README.md').read_text()

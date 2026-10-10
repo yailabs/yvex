@@ -8,6 +8,8 @@ import argparse
 import html
 import json
 import math
+import os
+import re
 from pathlib import Path
 import sys
 from metadata import ROOT, require
@@ -20,6 +22,93 @@ CONTEXT={'source_commit','source_tree','source_stability','date','run_id','model
          'model_revision','artifact_identity','binding_identity','representation',
          'backend','device','runtime_configuration','workload','warm_state',
          'concurrency','sequence_lengths','memory','limitations','recorded_from'}
+
+# Editorial selection of an accepted publication checkpoint, not a leaderboard
+# or a second measurement database. Values and claim states come only from receipts.
+SHOWCASE = (
+    ('deepseek-0731-program-p-native-mxfp4-publication-coding-hash-table-20261010',
+     'C hash table', 'decode.post-first.committed'),
+    ('deepseek-0731-program-p-native-mxfp4-publication-speculative-coding-hash-table-20261010',
+     'C hash table', 'decode.post-first.committed'),
+    ('deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-2048-20261010',
+     'Long text · 2K', 'prefill.uncached'),
+    ('deepseek-0731-program-p-native-mxfp4-publication-prefill-promessi-8192-20261010',
+     'Long text · 8K', 'prefill.uncached'),
+)
+
+
+def benchmark_excerpt(records, consumer):
+    """Bounded public view of exact targets; never select the fastest sample."""
+    by_id = {r['id']: r for r in records}
+    selected = []
+    for identifier, label, metric in SHOWCASE:
+        require(identifier in by_id, 'missing benchmark showcase receipt: '+identifier)
+        r = qualification.validate(by_id[identifier])
+        measurements = [m for m in r['measurements'] if m['metric'] == metric]
+        require(len(measurements) == 1, 'ambiguous showcase measurement')
+        require(r['origin'] == 'yvex-published', 'showcase requires published receipt')
+        selected.append((r, label, measurements[0]))
+    t = selected[0][0]['target']
+    shared = ('checkpoint', 'upstream_repository', 'representation', 'backend',
+              'hardware_model', 'device_count', 'topology', 'source_commit', 'source_tree',
+              'build', 'executable', 'prefill_geometry', 'reasoning', 'sampling',
+              'product_path', 'sequence_geometry', 'concurrency', 'driver', 'runtime_toolkit')
+    require(all(all(r['target'][k] == t[k] for k in shared) for r, _, _ in selected),
+            'incompatible showcase context; publish separate groups')
+    def link(r):
+        return os.path.relpath(AREA/'generated'/('qualification-'+r['id']+'.md'), consumer.parent)
+    def value(m):
+        s = m['statistics']
+        return f'{s["median"]:.2f}', f'{s["minimum"]:.2f}–{s["maximum"]:.2f}'
+    lines = [f'**{t["upstream_repository"].split("/")[-1]} · {t["hardware_model"]} × {t["device_count"]} · {t["backend"].upper()}.**', '',
+             'One retained publication checkpoint, not a hardware-independent speed claim.',
+             'Native protocol measurements use an isolated resident host, a separate warmup',
+             'and fresh sessions without prefix reuse; they do not describe whichever engine is installed today.',
+             'File-cache state was uncontrolled. Full build, artifact, binding and specialization identities are linked per row.', '',
+             '| Configuration | Exact measured scope |', '| --- | --- |',
+             f'| Checkpoint / build source | `{t["checkpoint"][:12]}` / `{t["source_commit"][:12]}`; full identities in each receipt |',
+             f'| Physical representation | {t["representation"].split(";")[0]} |',
+             f'| Input / execution | {t["prefill_geometry"]}; {t["sequence_geometry"]}; concurrency {t["concurrency"]}; reasoning `{t["reasoning"]}` |',
+             f'| Sampling / transport | Temperature {json.loads(t["sampling"])["temperature"]:g}, deterministic; `{t["product_path"]}` |',
+             f'| Driver / toolkit | {t["driver"]}; {t["runtime_toolkit"]} |', '',
+             '| Workload / metric | Strategy · context | Input / output | Median (tok/s) | Min–max | N |',
+             '| --- | --- | ---: | ---: | ---: | ---: |']
+    for r, label, m in selected:
+        median, span = value(m)
+        metric = 'committed decode' if m['metric'].startswith('decode.') else 'new prefill'
+        facts = {d['id']: d['value'] for d in r['provenance'].get('diagnostics', [])}
+        require(facts.get('native.reused_tokens') == 0 and m['session_state'] == 'fresh',
+                'showcase requires measured uncached fresh sessions')
+        counts = [facts.get('native.prefill_tokens'), facts.get('native.generated_tokens')]
+        population = ' / '.join(str(v) if v is not None else 'UNKNOWN' for v in counts)
+        lines.append(f'| [{label}]({link(r)}) · {metric} | {r["target"]["strategy"]} · {r["target"]["context"]} | {population} | {median} | {span} | {m["statistics"]["count"]} |')
+    lines += ['', 'Decode excludes the first committed token and its latency. Input/output counts are server-authored;',
+              'prefill counts newly executed input positions, not reused context.',
+              'Different strategies and context bands remain separate rows, not an averaged score.', '',
+              '| Coding request | Server TTFT | First visible content | Complete client request |',
+              '| --- | ---: | ---: | ---: |']
+    for r, _, _ in selected[:2]:
+        metrics = {m['metric']: m for m in r['measurements']}
+        cells = []
+        for key in ('ttft.server', 'ttft.client-visible', 'request.client-complete'):
+            m = metrics.get(key)
+            cells.append(f'{m["statistics"]["median"]:.3f} s' if m else 'NOT MEASURED')
+        lines.append(f'| [{r["target"]["strategy"]}]({link(r)}) | '+ ' | '.join(cells)+' |')
+    states = sorted({r['claims']['deployment-performance']['state'] for r, _, _ in selected})
+    quality = sorted({r['claims']['representation-quality']['state'] for r, _, _ in selected})
+    lines += ['', f'Performance: **{" / ".join(states)}**. Independent representation quality: **{" / ".join(quality)}**.',
+              'Latency cells are medians; their ranges, MAD, raw sample identities and memory/preparation',
+              'observations are in the linked receipts. No quality metric or confidence interval is invented.',
+              'These records do not establish high/maximum reasoning, other models, HTTP latency or release readiness.', '']
+    return '\n'.join(lines)
+
+
+def synchronize_excerpt(records, path):
+    text = path.read_text()
+    pattern = r'<!-- docs:benchmark showcase -->.*?<!-- /docs:benchmark -->'
+    require(len(re.findall(pattern, text, re.S)) == 1, 'missing/duplicate benchmark publication slot')
+    block = '<!-- docs:benchmark showcase -->\n\n'+benchmark_excerpt(records, path)+'\n<!-- /docs:benchmark -->'
+    return re.sub(pattern, lambda _: block, text, flags=re.S)
 
 def load_observation(text):
     def unique_pairs(pairs):
@@ -80,14 +169,14 @@ def figure(r):
     out=[f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 {height}" role="img" aria-labelledby="title desc">',
          f'<title id="title">{esc(r["title"])}</title>',
          f'<desc id="desc">{esc(r["kind"])}; {esc(r["context"]["limitations"][0])}. Values are printed beside each bar.</desc>',
-         f'<rect width="1000" height="{height}" rx="12" fill="#faf8ff"/>',
-         '<g font-family="Arial, sans-serif" fill="#231735">',
+         '<style>text{fill:#292434}.bar{fill:#7541ba}@media(prefers-color-scheme:dark){text{fill:#ede8f5}.bar{fill:#ba97f2}}</style>',
+         '<g font-family="Arial, sans-serif">',
          f'<text x="30" y="38" font-size="23" font-weight="700">{esc(r["title"])}</text>',
          f'<text x="30" y="67" font-size="16">{esc(r["kind"].upper())} · {esc(rows[0]["unit"])} · not an automatic capability promotion</text>']
     for i,m in enumerate(rows):
         y=110+i*58;w=470*m['value']/maximum
         out += [f'<text x="30" y="{y+19}" font-size="18">{esc(m["label"])}</text>',
-                f'<rect x="330" y="{y}" width="{w:.3f}" height="27" rx="4" fill="#7541ba"/>',
+                f'<rect class="bar" x="330" y="{y}" width="{w:.3f}" height="27" rx="4"/>',
                 f'<text x="{350+w:.3f}" y="{y+19}" font-size="17">{m["value"]:g}</text>']
     out+=['</g></svg>'];return '\n'.join(out)+'\n'
 
@@ -174,7 +263,7 @@ def qualification_populations(record):
     return lines
 
 
-def qualification_views():
+def qualification_views(include_landings=False):
     """Same publication owner; receipts refer to producer evidence, not another database."""
     paths = sorted((AREA/'qualification').glob('*.json'))
     records = [qualification.validate(load_observation(p.read_text())) for p in paths]
@@ -189,13 +278,33 @@ def qualification_views():
                 '[Benchmarks](../README.md) · [Methodology](../methodology.md)', '']
     result = {}
     overview = header('Qualification targets', 'index', '../methodology.md')
-    overview += ['A sparse evidence matrix, not a list of everything that can execute.', '',
+    overview += ['A sparse evidence catalog, not a leaderboard or a list of everything that can execute.', '',
+                 'Start with the [benchmark snapshot](../README.md#measured-snapshot), then select an exact receipt below.',
                  'LOCAL receipts are not YVEX-published qualification. Each plane stands alone; missing quality is not zero error.', '',
-                 '| Target | Representation | Backend / devices | Path / strategy | Quality | Performance | Origin |',
-                 '| --- | --- | --- | --- | --- | --- | --- |']
+                 '## Checkpoint directory', '',
+                 '| Source / checkpoint | Exact targets | Representation quality | Performance |',
+                 '| --- | ---: | --- | --- |']
+    groups = {}
+    for r in records:
+        key = (r['target']['upstream_repository'], r['target']['checkpoint'])
+        groups.setdefault(key, []).append(r)
+    def counts(group, plane):
+        states = [r['claims'][plane]['state'] for r in group]
+        return '; '.join(f'{s}: {states.count(s)}' for s in sorted(set(states)))
+    for index, ((repository, checkpoint), group) in enumerate(groups.items(), 1):
+        overview.append(f'| [{cell(repository)} · `{cell(checkpoint)[:12]}`](#checkpoint-{index}) | {len(group)} | {counts(group, "representation-quality")} | {counts(group, "deployment-performance")} |')
+    for index, ((repository, checkpoint), group) in enumerate(groups.items(), 1):
+        overview += ['', f'## Checkpoint {index}', '', f'**{cell(repository)}** · `{cell(checkpoint)}`', '',
+                     'Counts describe independent records, not a percentage of model support.', '',
+                     '<details>', f'<summary>Inspect {len(group)} exact targets, variants and experiments</summary>', '',
+                     '| Target / full context | Execution | Quality | Performance | Origin |',
+                     '| --- | --- | --- | --- | --- |']
+        for r in group:
+            t = r['target']
+            overview.append(f'| [{cell(r["title"])}](qualification-{r["id"]}.md) | {cell(t["backend"])} × {cell(t["device_count"])}; {cell(t["product_path"])}; {cell(t["strategy"])} | {r["claims"]["representation-quality"]["state"]} | {r["claims"]["deployment-performance"]["state"]} | {r["origin"]} |')
+        overview += ['', '</details>']
     for path, r in zip(paths, records):
         t = r['target']; name = 'qualification-'+r['id']
-        overview.append(f'| [{cell(r["title"])}]({name}.md) | {cell(t["representation"])} | {cell(t["backend"])} / {cell(t["device_count"])} | {cell(t["product_path"])} / {cell(t["strategy"])} | {r["claims"]["representation-quality"]["state"]} | {r["claims"]["deployment-performance"]["state"]} | {r["origin"]} |')
         lines = header(r['title'], r['id'], '../qualification/'+path.name)
         lines += ['[All targets](qualification-index.md) · [Machine receipt](../qualification/'+path.name+')', '',
                   f'Target identity: `{r["target_identity"]}`. Origin: **{r["origin"]}**.', '',
@@ -342,6 +451,9 @@ def qualification_views():
     result[AREA/'generated/qualification-references.md'] = '\n'.join(references).rstrip()+'\n'
     result[AREA/'generated/qualification-references.json'] = json.dumps(machine_references, indent=2, allow_nan=False)+'\n'
     result[AREA/'generated/qualification-index.md'] += '\n[Independent reference captures](qualification-references.md)\n'
+    if include_landings:
+        for consumer in (ROOT/'README.md', AREA/'README.md'):
+            result[consumer] = synchronize_excerpt(records, consumer)
     return result
 
 
@@ -354,7 +466,7 @@ def generate(check=False):
             dest=out/(r['id']+suffix);expected.add(dest)
             if check:require(dest.is_file() and dest.read_text()==text,f'stale benchmark projection: {dest.name}')
             else:dest.write_text(text)
-    for dest, text in qualification_views().items():
+    for dest, text in qualification_views(include_landings=True).items():
         if dest.parent == out: expected.add(dest)
         if check: require(dest.is_file() and dest.read_text()==text, f'stale qualification projection: {dest.name}')
         else: dest.write_text(text)

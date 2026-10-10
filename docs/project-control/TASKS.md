@@ -145,10 +145,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 55 | 40 | 4 | 1 | 10 |
+| 56 | 40 | 5 | 1 | 10 |
 <!-- task-counts:end -->
 
-**40/55 selected Tasks complete.** This denominator includes the significant
+**40/56 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -522,6 +522,18 @@ retain their separate limits. `progression_decision=proceed`,
 `downstream_safe=true` for the bounded integration, native CPU, Qwen CPU and
 Metal primitive claims only. No successor implementation Task is selected.
 
+## Documentation visual grammar — 2026-10-10
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `DOCS.VISUAL.GRAMMAR.CONVERGENCE.0` | Unify the public README, architecture figures and documentation reading paths | P1 | 🔵 IN PROGRESS | Transparent, theme-aware generated diagrams; concise guided landings and technical README; benchmark tables projected from exact qualification receipts; semantic preservation, drift/refusal tests and desktop/mobile light/dark publication checks. No runtime or capability promotion. |
+
+Explicitly selected by the operator after the bounded README delivery below.
+This replaces the presentation of existing diagrams, not their architectural
+ownership. Historical receipts and exact reference contracts remain intact.
+Program P retains computational implementation authority; its independent
+quality and 20/700 gates remain unearned. No model or service work is selected.
+
 ## README product presentation
 
 | ID | Task | Priority | Status | Dependency / Exit |
@@ -580,7 +592,7 @@ alignment only.
 2. Pure-SSM and acquisition — exact Mamba execution; supervised immutable intake.
 3. Readout and runtime — recurrent/hybrid scoring, state identity and capacity.
 4. Native finite decision — Laya computation and local text-frontier producer.
-5. Current selected continuation — A03; documentation qualification is complete.
+5. Current computational implementation — Program P; A03 remains READY and unstarted.
 
 Task states: ✅ COMPLETE · 🔵 IN PROGRESS · ⬜ READY · ⛔ BLOCKED.
 Historical identifiers retain their original spelling, including former Wave

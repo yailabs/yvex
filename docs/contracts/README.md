@@ -14,28 +14,25 @@ publication: {html: true, pdf: true, index: true}
 
 [Documentation](../README.md)
 
-Public ABI and wire contracts are not interchangeable with internal transient schemas. Start with [C API](c-api.md), [local protocol](local-protocol.md), [OpenAI compatibility](openai-compatibility.md) or [remote management](remote-management.md). For the system model, read [Architecture](../architecture/README.md).
+Choose the boundary your code actually crosses. Public APIs, local wire
+protocols and internal computational records have distinct compatibility
+rules. For the system model, read [Architecture](../architecture/README.md).
 
 ## Owners and reading paths
 
-- [Artifact and Admission Contract](artifacts.md)
-- [Runtime Benchmark Publication Contract](benchmark-publication.md)
-- [C API Contract](c-api.md)
-- [Component Program Contract](component-programs.md)
-- [Computational Program Contract](computational-programs.md)
-- [Events and Telemetry Contract](events-telemetry.md)
-- [Computed Index Contract](index-programs.md)
-- [Local Protocol v25](local-protocol.md)
-- [Model release evidence](model-release.md)
-- [Model storage contract](model-storage.md)
-- [Internal Numerical Execution ABI](numerical-abi.md)
-- [YVEX OpenAI Compatibility Profile v3](openai-compatibility.md)
-- [Remote management bootstrap v1](remote-management.md)
-- [Remote finite-decision producer v1](finite-decision-remote.md)
-- [Internal Runtime ABI](runtime-abi.md)
-- [Hosted Runtime Contract](runtime.md)
+| Integrate a client | Contract | What it owns |
+| --- | --- | --- |
+| Embed the core | [C API](c-api.md) | Public native entrypoints and lifetime obligations |
+| Use the local host | [Local protocol v25](local-protocol.md) | Private same-user transport and typed requests |
+| Connect an inference application | [OpenAI profile v3](openai-compatibility.md) | Bounded compatibility, streaming and refusals |
+| Manage a server | [Network management](network-management.md) | HTTPS, pairing, discovery and local public socket |
+| Operate models and sessions | [Product management v2](product-management.md) · [Lifecycle map](product-management-lifecycle-map.md) | Grants, Jobs, recovery and operation classification |
+| Request a finite decision | [Remote producer v1](finite-decision-remote.md) | Exact producer, candidate and result identity |
+| Use the technical SSH carrier | [Remote bootstrap v1](remote-management.md) | Separate compatibility transport; not the ordinary HTTPS product path |
 
-- [Product management v2](product-management.md): explicit lifecycle grant, exact Jobs and Session lifetime fences.
-- [Product lifecycle operation classification](product-management-lifecycle-map.md): ordinary product parity, host provisioning and bounded local filesystem interactions.
-
-- [Native network management](network-management.md): standalone HTTPS, local same-user socket, explicit pairing and optional LAN discovery.
+| Extend the computational core | Exact owner |
+| --- | --- |
+| Programs, components and computed indices | [Programs](computational-programs.md) · [Components](component-programs.md) · [Indices](index-programs.md) |
+| Stored bytes and authenticated admission | [Artifacts](artifacts.md) · [Model storage](model-storage.md) |
+| Execution lifetimes and arithmetic | [Hosted runtime](runtime.md) · [Internal runtime ABI](runtime-abi.md) · [Numerical ABI](numerical-abi.md) |
+| Observable facts and qualification | [Events](events-telemetry.md) · [Benchmark publication](benchmark-publication.md) · [Model release](model-release.md) |

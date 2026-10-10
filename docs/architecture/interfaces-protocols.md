@@ -131,50 +131,10 @@ This correction does not qualify long-request latency or complete YAI workloads.
 ## Interactive terminal path
 
 <!-- docs:diagram interactive_boundary -->
-```mermaid
-%% yvex-figure: interactive_boundary
-%%{init: {"themeVariables": {"background": "transparent"}}}%%
-flowchart TB
-  n_terminal["EXTERNAL<br/>Terminal / user<br/>input and displayed results"]:::external
-  subgraph n_panel_0["a  REPLAI terminal substrate"]
-    direction TB
-  n_editor["EXTERNAL<br/>REPLAI · native Rust<br/>editing / paste / history"]:::external
-  end
-  subgraph n_panel_1["b  Client"]
-    direction TB
-  n_client["INTERFACE<br/>YVEX Rust client shell<br/>grammar / history admission"]:::interface
-  n_protocol["INTERFACE<br/>Typed local protocol<br/>bounded UDS requests"]:::interface
-  n_render["INTERFACE<br/>YVEX display intent<br/>typed facts / channels"]:::interface
-  end
-  subgraph n_panel_2["c  Persistent yvex serve"]
-    direction TB
-  n_runtime["RUNTIME<br/>Hosted execution<br/>engine admission / routing"]:::runtime
-  n_events["EVIDENCE<br/>Typed results / events<br/>committed channels / progress"]:::evidence
-  end
-  n_terminal --> n_editor
-  n_editor --> n_client
-  n_client -. request .-> n_editor
-  n_client --> n_protocol
-  n_protocol -. request .-> n_runtime
-  n_runtime --> n_events
-  n_events --> n_render
-  n_client --> n_render
-  n_render --> n_editor
-  n_editor --> n_terminal
-  n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2
-  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
-  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
-  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
-  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
-  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
-  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
-  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
-  style n_panel_0 fill:transparent,stroke:#b8a5d0
-  style n_panel_1 fill:transparent,stroke:#b8a5d0
-  style n_panel_2 fill:transparent,stroke:#b8a5d0
-```
 
-[Static figure](../assets/diagrams/interactive_boundary.svg) · [Editable source](../assets/diagrams/interactive_boundary.json)
+![Interactive editing is not runtime ownership](../assets/diagrams/interactive_boundary.svg)
+
+[Full-size diagram](../assets/diagrams/interactive_boundary.svg) · [Editable source](../assets/diagrams/interactive_boundary.json)
 <!-- /docs:diagram -->
 
 *Figure 5 — Interactive ownership. Submission returns UTF-8 after editor

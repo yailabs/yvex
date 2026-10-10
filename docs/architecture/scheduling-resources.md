@@ -34,45 +34,10 @@ device residency are different observations. On coherent unified memory,
 device-addressable storage does not prove the physical GPU working set.
 
 <!-- docs:diagram storage_residency -->
-```mermaid
-%% yvex-figure: storage_residency
-%%{init: {"themeVariables": {"background": "transparent"}}}%%
-flowchart TB
-  subgraph n_panel_0["a  Durable source and representation facts"]
-    direction TB
-  n_remote["EXTERNAL<br/>Remote record<br/>provider + revision"]:::external
-  n_source["SEMANTIC<br/>Retained source<br/>immutable bytes"]:::semantic
-  n_artifact["SEMANTIC<br/>Representation / artifact<br/>source-derived bytes + authenticated derivation"]:::semantic
-  n_library["INTERFACE<br/>Logical model library<br/>joins source, artifact and deployment facts"]:::interface
-  end
-  subgraph n_panel_1["b  Deployment and live runtime facts"]
-    direction TB
-  n_ready["SEMANTIC<br/>READY deployment<br/>artifact + binding + current compatibility"]:::semantic
-  n_engine["RUNTIME<br/>Loaded engine generation<br/>mappings / prepared resources / backend placement"]:::runtime
-  n_work["MUTABLE<br/>Active execution work<br/>explicit request on an admitted generation"]:::mutable
-  end
-  subgraph n_panel_2["c  Orthogonal location classes — not promotion stages"]
-    direction TB
-  end
-  n_remote -. request .-> n_source
-  n_source --> n_artifact
-  n_artifact -->|gate| n_ready
-  n_ready -. request .-> n_engine
-  n_engine -. request .-> n_work
-  n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2
-  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
-  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
-  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
-  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
-  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
-  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
-  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
-  style n_panel_0 fill:transparent,stroke:#b8a5d0
-  style n_panel_1 fill:transparent,stroke:#b8a5d0
-  style n_panel_2 fill:transparent,stroke:#b8a5d0
-```
 
-[Static figure](../assets/diagrams/storage_residency.svg) · [Editable source](../assets/diagrams/storage_residency.json)
+![Storage, working set and residency are independent facts](../assets/diagrams/storage_residency.svg)
+
+[Full-size diagram](../assets/diagrams/storage_residency.svg) · [Editable source](../assets/diagrams/storage_residency.json)
 <!-- /docs:diagram -->
 
 [Editable storage source](../assets/diagrams/storage_residency.json).

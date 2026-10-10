@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 334" role="img" aria-labelledby="title desc">
 <title id="title">Qwen bounded readout allocations</title>
 <desc id="desc">characterization; Bounded allocation observations, not continuous process/device peaks.. Values are printed beside each bar.</desc>
-<rect width="1000" height="334" rx="12" fill="#faf8ff"/>
-<g font-family="Arial, sans-serif" fill="#231735">
+<style>text{fill:#292434}.bar{fill:#7541ba}@media(prefers-color-scheme:dark){text{fill:#ede8f5}.bar{fill:#ba97f2}}</style>
+<g font-family="Arial, sans-serif">
 <text x="30" y="38" font-size="23" font-weight="700">Qwen bounded readout allocations</text>
 <text x="30" y="67" font-size="16">CHARACTERIZATION · bytes · not an automatic capability promotion</text>
 <text x="30" y="129" font-size="18">Shared prefix</text>
-<rect x="330" y="110" width="468.726" height="27" rx="4" fill="#7541ba"/>
+<rect class="bar" x="330" y="110" width="468.726" height="27" rx="4"/>
 <text x="818.726" y="129" font-size="17">3.14114e+08</text>
 <text x="30" y="187" font-size="18">Branch maximum</text>
-<rect x="330" y="168" width="470.000" height="27" rx="4" fill="#7541ba"/>
+<rect class="bar" x="330" y="168" width="470.000" height="27" rx="4"/>
 <text x="820.000" y="187" font-size="17">3.14968e+08</text>
 <text x="30" y="245" font-size="18">Workspace</text>
-<rect x="330" y="226" width="300.423" height="27" rx="4" fill="#7541ba"/>
+<rect class="bar" x="330" y="226" width="300.423" height="27" rx="4"/>
 <text x="650.423" y="245" font-size="17">2.01327e+08</text>
 </g></svg>

@@ -14,19 +14,18 @@ publication: {html: true, pdf: true, index: true}
 
 [Documentation](../README.md)
 
-Start with [Quick Start](quickstart.md). Developers use [source ownership](source-ownership.md), [task delivery](agentic-engineering.md) and [QA](../evaluation/qa.md). Operators use the [runbook](operator-runbook.md), [recovery](recovery.md) and [model lifecycle](model-lifecycle.md).
+Start with the operation you need. A prepared artifact, a loaded engine and an
+open session are different states; the guides preserve that distinction.
 
 ## Owners and reading paths
 
-- [Agentic Engineering Method](agentic-engineering.md)
-- [Build YVEX](build.md)
-- [Use the Interactive Client](interactive-client.md)
-- [Model acquisition, storage, and runtime](model-lifecycle.md)
-- [Run the MiniMax Media Path](multimodal.md)
-- [Operator Runbook](operator-runbook.md)
-- [Quick Start](quickstart.md)
-- [Recover Local Operations](recovery.md)
-- [Source and Module Ownership](source-ownership.md)
-- [Acquire and Prepare Models](source-preparation.md)
-
-- [Build and Review Documentation](documentation-build.md)
+| I want to… | Procedure | Next boundary |
+| --- | --- | --- |
+| Run my first session | [Quick start](quickstart.md) | [Interactive client](interactive-client.md) |
+| Build a native executable | [Build YVEX](build.md) | Platform-specific toolchain and validation |
+| Acquire and prepare weights | [Source preparation](source-preparation.md) | [Model lifecycle](model-lifecycle.md) |
+| Inspect the host or loaded models | [Operator runbook](operator-runbook.md) | Typed status, logs and lifecycle |
+| Recover after interruption | [Recovery](recovery.md) | Reconcile before retrying uncertain work |
+| Exercise the admitted media path | [MiniMax media](multimodal.md) | Exact component and composite limits |
+| Change the implementation | [Source ownership](source-ownership.md) | [Task delivery](agentic-engineering.md) and [QA](../evaluation/qa.md) |
+| Improve these documents | [Documentation build](documentation-build.md) | Source, generated views and visual review |

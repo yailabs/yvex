@@ -22,8 +22,13 @@ policy, and only committed state produces a published result.
 
 ## Ordinary generation loop
 
-Prompt → tokenizer IDs → capacity/prefix admission → suffix prefill → model
-step → logits → selection → state/token/RNG/decoder commit → channel fragment.
+| Stage | Work | Publication rule |
+| --- | --- | --- |
+| Prepare | Source-authored rendering and exact tokenization | No model progress yet |
+| Admit | Capacity and identity-bound prefix reuse | Only admitted suffix positions execute |
+| Compute | Prefill, target/draft/verification, normalized hidden and output head | Draft proposals are not final output |
+| Select | Logits and sampling under the declared numerical/RNG policy | Selection is staged with state |
+| Commit | State, token ledger, RNG and decoder transaction | Only committed channel fragments reach clients |
 
 The tokenizer owns source-authored conversation grammar and channels. HTTP and
 terminal adapters project typed results; they do not infer model grammar from
@@ -56,12 +61,6 @@ new numerical class or wider admitted execution. The runtime still clamps every
 real suffix to the authenticated phase envelope. Finite and media engines do not
 acquire a text-prefill policy. Native and HTTP clients use the same loaded engine
 geometry; changing a default does not alter an already-loaded generation.
-
-```text
-rendered prompt -> exact tokenizer IDs -> prefix admission -> suffix prefill
-  -> target/draft/verify work -> normalized hidden -> output head -> selection
-  -> state and decoder transaction -> committed channel fragment
-```
 
 Target-only remains the semantic reference. DSpark consumes source-authored
 feature taps, proposes a bounded block, and asks the complete target to verify

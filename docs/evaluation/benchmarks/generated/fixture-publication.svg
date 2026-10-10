@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 276" role="img" aria-labelledby="title desc">
 <title id="title">Synthetic publication fixture</title>
 <desc id="desc">fixture; Synthetic data validates publication only; it demonstrates no YVEX performance.. Values are printed beside each bar.</desc>
-<rect width="1000" height="276" rx="12" fill="#faf8ff"/>
-<g font-family="Arial, sans-serif" fill="#231735">
+<style>text{fill:#292434}.bar{fill:#7541ba}@media(prefers-color-scheme:dark){text{fill:#ede8f5}.bar{fill:#ba97f2}}</style>
+<g font-family="Arial, sans-serif">
 <text x="30" y="38" font-size="23" font-weight="700">Synthetic publication fixture</text>
 <text x="30" y="67" font-size="16">FIXTURE · ms · not an automatic capability promotion</text>
 <text x="30" y="129" font-size="18">Fixture A</text>
-<rect x="330" y="110" width="313.333" height="27" rx="4" fill="#7541ba"/>
+<rect class="bar" x="330" y="110" width="313.333" height="27" rx="4"/>
 <text x="663.333" y="129" font-size="17">12</text>
 <text x="30" y="187" font-size="18">Fixture B</text>
-<rect x="330" y="168" width="470.000" height="27" rx="4" fill="#7541ba"/>
+<rect class="bar" x="330" y="168" width="470.000" height="27" rx="4"/>
 <text x="820.000" y="187" font-size="17">18</text>
 </g></svg>

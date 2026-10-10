@@ -357,15 +357,15 @@
   "labels": [
     {
       "at": [
-        440,
-        372
+        800,
+        302
       ],
       "text": "Submitted UTF-8; editing closes"
     },
     {
       "at": [
-        440,
-        395
+        800,
+        326
       ],
       "text": "before semantic dispatch"
     },
@@ -378,10 +378,17 @@
     },
     {
       "at": [
-        442,
-        645
+        440,
+        630
       ],
-      "text": "Typed content is formed here"
+      "text": "Typed content"
+    },
+    {
+      "at": [
+        440,
+        650
+      ],
+      "text": "formed here"
     },
     {
       "at": [

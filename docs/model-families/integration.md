@@ -44,43 +44,10 @@ and media publication have different terminal semantics.
 ## Promotion path
 
 <!-- docs:diagram family_boundary -->
-```mermaid
-%% yvex-figure: family_boundary
-%%{init: {"themeVariables": {"background": "transparent"}}}%%
-flowchart TB
-  n_sealed["SEMANTIC<br/>Sealed plan boundary<br/>common compiler validates"]:::semantic
-  subgraph n_panel_0["a  Family-specific meaning"]
-    direction TB
-  n_family["SEMANTIC<br/>Interpret and lower<br/>source / config / tokenizer"]:::semantic
-  end
-  subgraph n_panel_1["b  Common execution owners"]
-    direction TB
-  n_generic["RUNTIME<br/>Reuse mechanisms<br/>artifact / materialization"]:::runtime
-  end
-  subgraph n_panel_2["c  Existing architectural pressure — examples, not a support matrix"]
-    direction TB
-  n_deepseek["SEMANTIC<br/>DeepSeek<br/>sparse expert work"]:::semantic
-  n_qwen["SEMANTIC<br/>Qwen hybrid<br/>attention + recurrence"]:::semantic
-  n_minimax["SEMANTIC<br/>MiniMax composite<br/>multiple components"]:::semantic
-  n_mamba["EVIDENCE<br/>Mamba2: PARTIAL<br/>token / norm authority"]:::evidence
-  n_deepseek ~~~ n_qwen ~~~ n_minimax ~~~ n_mamba
-  end
-  n_family --> n_sealed
-  n_sealed --> n_generic
-  n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2
-  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
-  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
-  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
-  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
-  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
-  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
-  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
-  style n_panel_0 fill:transparent,stroke:#b8a5d0
-  style n_panel_1 fill:transparent,stroke:#b8a5d0
-  style n_panel_2 fill:transparent,stroke:#b8a5d0
-```
 
-[Static figure](../assets/diagrams/family_boundary.svg) · [Editable source](../assets/diagrams/family_boundary.json)
+![Family semantics terminate at admitted plans](../assets/diagrams/family_boundary.svg)
+
+[Full-size diagram](../assets/diagrams/family_boundary.svg) · [Editable source](../assets/diagrams/family_boundary.json)
 <!-- /docs:diagram -->
 
 *Figure 4 — Family integration boundary. Families supply irreducible semantics;
