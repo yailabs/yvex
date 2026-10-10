@@ -12,6 +12,10 @@ extern "C" {
 
 #define YVEX_OPTIMIZATION_SCHEMA_V1 1u
 #define YVEX_OPTIMIZATION_MAX_CANDIDATES 32u
+#define YVEX_OPTIMIZATION_CONTEXT_SCHEMA_V1 1u
+#define YVEX_OPTIMIZATION_ALLOCATION_SCHEMA_V1 1u
+#define YVEX_OPTIMIZATION_MAX_GROUPS 64u
+#define YVEX_OPTIMIZATION_TECHNIQUE_SCHEMA_V1 1u
 
 typedef enum {
     YVEX_OPTIMIZATION_BALANCED = 0,
@@ -74,12 +78,75 @@ typedef struct {
 } yvex_optimization_candidate;
 
 typedef struct yvex_optimization_search yvex_optimization_search;
+/* Implemented techniques only; static process-lifetime descriptors. Research
+ * methods and unsupported numerical producers are not registered capabilities. */
+typedef struct {
+    unsigned int schema_version;
+    const char *identity, *name, *inputs, *objective, *unearned_evidence;
+} yvex_optimization_technique;
+unsigned int yvex_optimization_technique_count(void);
+const yvex_optimization_technique *yvex_optimization_technique_at(unsigned int index);
+/* Technique identity is versioned. Optional weight/state bounds apply only to
+ * the allocating technique; unused inputs refuse. No service operation occurs. */
+int yvex_optimization_search_run(yvex_optimization_search **out,
+    const yvex_optimization_request *request, const char *technique_identity,
+    unsigned long long weight_budget, unsigned int maximum_states, yvex_error *err);
+/* Derived projection of canonical source/semantic and request owners. No new
+ * persisted profile store and no engine-scoped execution profile. Available
+ * memory stays in the observation, deliberately outside identity. */
+typedef struct {
+    unsigned int schema_version;
+    char identity[65], semantic_identity[65], source_identity[65];
+    char model_execution_identity[65], family[64];
+    unsigned long long maximum_context, layers, attention_layers, sequence_mixer_layers;
+    unsigned long long routed_experts, experts_per_row, draft_layers;
+    unsigned long long context_tokens, prefill_tokens, concurrent_sequences;
+    yvex_backend_kind backend;
+    unsigned int compute_major, compute_minor, device_count;
+    unsigned long long system_memory_bytes, available_memory_bytes, reserve_bytes;
+    unsigned int missing_evidence;
+} yvex_optimization_context;
+
+int yvex_optimization_context_resolve(const yvex_optimization_request *request,
+    yvex_optimization_context *out, yvex_error *err);
+const yvex_optimization_context *yvex_optimization_search_context(
+    const yvex_optimization_search *search);
+
+/* Binary group allocation maximizes source-retained elements under encoded-byte
+ * constraints. This exact objective is NOT a quality metric or a speed model.
+ * Groups come from compiler plans; coupled operands must share one group.
+ * Dominance pruning is exact while the frontier fits the explicit state budget;
+ * exhaustion refuses rather than silently dropping potentially better states. */
+typedef struct {
+    unsigned long long encoded_bytes[2], source_elements[2];
+} yvex_optimization_allocation_group;
+typedef struct {
+    unsigned int schema_version, group_count, maximum_states;
+    unsigned long long fixed_bytes, maximum_encoded_bytes;
+    const yvex_optimization_allocation_group *groups;
+} yvex_optimization_allocation_request;
+typedef struct {
+    unsigned long long choices, encoded_bytes, source_elements;
+} yvex_optimization_allocation;
+/* count receives the actual population on success; output is unchanged on refusal. Rows are
+ * the exact cost/retention frontier, sorted by bytes. Equal objectives choose
+ * the smaller canonical bit mask. No payload or backend work occurs here. */
+int yvex_optimization_allocate(const yvex_optimization_allocation_request *request,
+    yvex_optimization_allocation *out, unsigned int capacity, unsigned int *count,
+    yvex_error *err);
 /* Builds immutable candidate plans sequentially using registered exact-target
  * recipes. No payload transformation/emission, backend opening or service mutation.
  * out remains NULL on malformed requests/integrity failures. */
 int yvex_optimization_search_open(yvex_optimization_search **out,
                                  const yvex_optimization_request *request,
                                  yvex_error *err);
+/* Opt-in profile-driven source-retention allocation. Group geometry/costs come
+ * from complete canonical source/Q2 plans, never caller-authored tensor sizes.
+ * weight_budget excludes workspace/state/reserve; resulting candidates still
+ * receive ordinary admission screening and remain unqualified. */
+int yvex_optimization_search_allocate(yvex_optimization_search **out,
+    const yvex_optimization_request *request, unsigned long long weight_budget,
+    unsigned int maximum_states, yvex_error *err);
 void yvex_optimization_search_close(yvex_optimization_search **search);
 unsigned int yvex_optimization_search_count(const yvex_optimization_search *search);
 const yvex_optimization_candidate *yvex_optimization_search_at(

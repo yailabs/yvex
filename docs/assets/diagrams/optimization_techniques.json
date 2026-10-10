@@ -1,0 +1,196 @@
+{
+  "schema": 1,
+  "number": 12,
+  "title": "Technique contracts constrain candidate synthesis",
+  "description": "Technique contracts constrain candidate synthesis. Selected Program P architecture; boxes do not assert implementation or qualification. See the canonical owner for current status and refusals.",
+  "size": [
+    1200,
+    730
+  ],
+  "owner": "docs/architecture/compiler-ir.md",
+  "authority": [
+    "docs/architecture/compiler-ir.md",
+    "docs/architecture/representation-artifacts.md",
+    "docs/project-control/STATUS.md"
+  ],
+  "panels": [],
+  "nodes": [
+    {
+      "id": "inputs",
+      "box": [
+        40,
+        160,
+        340,
+        130
+      ],
+      "kind": "semantic",
+      "title": "Resolved inputs",
+      "lines": [
+        "Exact roles + codec geometry",
+        "Calibration coverage / budget"
+      ]
+    },
+    {
+      "id": "method",
+      "box": [
+        430,
+        160,
+        340,
+        130
+      ],
+      "kind": "semantic",
+      "title": "Versioned method",
+      "lines": [
+        "Required inputs / output class",
+        "Native implementation only"
+      ]
+    },
+    {
+      "id": "producer",
+      "box": [
+        820,
+        160,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Producer checks",
+      "lines": [
+        "Encoding / numerical contract",
+        "No technique-name admission"
+      ]
+    },
+    {
+      "id": "screen",
+      "box": [
+        820,
+        420,
+        340,
+        130
+      ],
+      "kind": "runtime",
+      "title": "Coupled feasibility",
+      "lines": [
+        "Gate/up + backend constraints",
+        "Capacity unknowns stay visible"
+      ]
+    },
+    {
+      "id": "policy",
+      "box": [
+        430,
+        420,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Candidate policy",
+      "lines": [
+        "Deterministic bounded population",
+        "Same canonical quant planner"
+      ]
+    },
+    {
+      "id": "refusal",
+      "box": [
+        40,
+        420,
+        340,
+        130
+      ],
+      "kind": "evidence",
+      "title": "Experiment priority",
+      "lines": [
+        "Byte cost is not quality loss",
+        "Not a measured recommendation"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "inputs",
+      "target": "method",
+      "points": [
+        [
+          380,
+          225
+        ],
+        [
+          430,
+          225
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "method",
+      "target": "producer",
+      "points": [
+        [
+          770,
+          225
+        ],
+        [
+          820,
+          225
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "producer",
+      "target": "screen",
+      "points": [
+        [
+          990,
+          290
+        ],
+        [
+          990,
+          420
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "screen",
+      "target": "policy",
+      "points": [
+        [
+          820,
+          485
+        ],
+        [
+          770,
+          485
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "policy",
+      "target": "refusal",
+      "points": [
+        [
+          430,
+          485
+        ],
+        [
+          380,
+          485
+        ]
+      ],
+      "kind": "observe"
+    }
+  ],
+  "labels": [
+    {
+      "at": [
+        40,
+        598
+      ],
+      "text": "SELECTED ARCHITECTURE · Implementation and earned evidence remain distinct.",
+      "style": "note"
+    }
+  ]
+}

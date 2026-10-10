@@ -1104,6 +1104,83 @@ def physical_variants(binary: Path, reference: Path | None) -> int:
         return len(controls) + len(grammar)
 
 
+def guided_transcript(binary: Path, words: list[str], environment: dict, answers: bytes) -> tuple[int, bytes]:
+    """Bounded real terminal interaction, including cleanup on an early refusal."""
+    master, slave = pty.openpty()
+    process = None
+    try:
+        process = subprocess.Popen([str(binary), *words], cwd=ROOT, env=environment,
+                                   stdin=slave, stdout=slave, stderr=slave)
+        os.close(slave)
+        slave = -1
+        os.write(master, answers)
+        transcript = bytearray()
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            if select.select([master], [], [], 0.1)[0]:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError as error:
+                    if error.errno == errno.EIO:
+                        break
+                    raise
+                if not chunk:
+                    break
+                transcript.extend(chunk)
+            elif process.poll() is not None:
+                break
+        process.wait(timeout=2)
+        return process.returncode, bytes(transcript)
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        if slave >= 0:
+            os.close(slave)
+        os.close(master)
+
+
+def optimization_guided(binary: Path) -> int:
+    """Real PTY parsing/cancellation, without a model, host or invented inference evidence."""
+    with tempfile.TemporaryDirectory(prefix="yvex-optimization-guided-") as temporary:
+        directory = Path(temporary)
+        request = directory / "input.json"
+        request.write_text(json.dumps({"schema": "yvex.optimization.request.v2",
+            "target": "unavailable-test-target", "source": str(directory),
+            "models_root": str(directory), "source_manifest": str(directory / "manifest.json")}))
+        output = directory / "replay.json"
+        words = ["compile", "optimize", "--guided", "--request", str(request), "--out-request", str(output)]
+        environment = {**os.environ, "NO_COLOR": "1"}
+        pipe = invoke(binary, words, environment)
+        assert pipe.returncode and "requires a terminal" in pipe.stderr and not output.exists(), pipe
+        methods = invoke(binary, ["compile", "optimize", "--list-techniques", "--json"], environment)
+        assert methods.returncode == 0, methods
+        assert [m["name"] for m in json.loads(methods.stdout)["techniques"]] == ["presets", "source-retention"]
+        for answers, saved in ((b"q\n", False), (b"1\n2\n1\n2\n", True)):
+            status, transcript = guided_transcript(binary, words, environment, answers)
+            assert status != 0, "unavailable source must not compile"
+            assert b"Target backend" in transcript and b"\x1b" not in transcript, transcript
+            assert output.exists() == saved, transcript
+            if saved:
+                replay = json.loads(output.read_text())
+                assert (replay["backend"], replay["goal"], replay["context"], replay["prefill"]) == ("cpu", "throughput", 4096, 512)
+                assert replay["allow_approximation"] and b"Request saved" in transcript
+                repeated = invoke(binary, ["compile", "optimize", "--request", str(output), "--json"], environment)
+                assert repeated.returncode and not repeated.stdout, repeated
+            else:
+                assert b"cancelled; no state changed" in transcript, transcript
+        # Guided editing may produce v2 but cannot silently reinterpret an
+        # unsupported input schema before asking questions or touching state.
+        stale = json.loads(request.read_text())
+        stale["schema"] = "yvex.optimization.request.v99"
+        request.write_text(json.dumps(stale))
+        previous = output.read_bytes()
+        refused = invoke(binary, words, environment)
+        assert refused.returncode and "unsupported optimization request schema" in refused.stderr, refused
+        assert output.read_bytes() == previous
+        return 5
+
+
 def provider_catalog(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-discovery-") as temporary:
@@ -2129,6 +2206,49 @@ def model_preparation(binary: Path, reference: Path | None) -> int:
             previous = invoke(reference, words, environment)
             assert previous.returncode == 0 and value == json.loads(previous.stdout), previous
         count += 1
+        # Guided compilation resolves the real catalog, but never treats the
+        # acquired-record metadata as authenticated tensor evidence. Cancellation
+        # and failed verification cannot publish the saved request or an artifact.
+        catalog_result = invoke(binary, ["model", "list", "--models-root", str(models), "--json"], environment)
+        assert catalog_result.returncode == 0, catalog_result
+        sources = [m for m in json.loads(catalog_result.stdout)["models"] if m["sources"]]
+        selected = next(i + 1 for i, m in enumerate(sources)
+                        if any(s["path"] == str(source) for s in m["sources"]))
+        replay_path = directory / "guided-replay.json"
+        guided_words = ["compile", "optimize", "--guided", "--models-root", str(models),
+                        "--out-request", str(replay_path)]
+        for verify_choice in (2, 1):
+            status, transcript = guided_transcript(binary, guided_words, environment,
+                f"{selected}\n1\n1\n1\n2\n{verify_choice}\n".encode())
+            assert status and b"Authenticated source manifest is missing" in transcript, transcript
+            assert not replay_path.exists() and record.read_bytes() == before, transcript
+            assert not list(models.rglob("*.source-manifest.json")), transcript
+            if verify_choice == 2:
+                assert b"cancelled; no state changed" in transcript, transcript
+            else:
+                assert b"Verifying source payload" in transcript and b"Source manifest retained" not in transcript, transcript
+            count += 1
+        # A metadata-only acquisition of the same pinned revision is not a
+        # competing weight source. Two tensor-container acquisitions still are.
+        metadata = json.loads(record.read_text())
+        metadata_path = source.parent / "metadata-only"
+        metadata_path.mkdir()
+        metadata.update(name="dspark-metadata", source_path=str(metadata_path), format="source")
+        metadata_record = records / "dspark-metadata.source.json"
+        metadata_record.write_text(json.dumps(metadata))
+        coexist = invoke(binary, words, environment)
+        assert coexist.returncode == 0, coexist
+        coexist_plan = json.loads(coexist.stdout)
+        # Catalog aggregate naming/selection identity can change; the exact
+        # selected source and computational recipe must not.
+        for key in ("source", "revision", "target", "backend", "quant", "artifact", "profile", "changed"):
+            assert coexist_plan[key] == value[key], (key, coexist_plan, value)
+        metadata["format"] = "safetensors"
+        metadata_record.write_text(json.dumps(metadata))
+        ambiguous = invoke(binary, words, environment)
+        assert ambiguous.returncode != 0, "two exact payload sources require disambiguation"
+        metadata_record.unlink()  # Owned temporary fixture only.
+        count += 2
         for extra in [["--quant", "not-a-preset"], ["--quant", "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1"]]:
             result = invoke(binary, ["model", "prepare", "dspark", *common, *extra,
                                      "--dry-run", "--json"], environment)
@@ -3055,6 +3175,8 @@ def main() -> None:
     mapping_count = tensor_mapping(binary, reference)
     document_count = quant_documents(binary, reference)
     variant_count = physical_variants(binary, reference)
+    guided_count = optimization_guided(binary)
+    print(f"PASS profile-driven compiler: {guided_count} technique/pipe/PTY/replay controls; no engine mutation")
     discovery_count = provider_catalog(binary, reference)
     distribution_count = model_distribution(binary, reference)
     acquisition_count = local_acquisition(binary, reference)

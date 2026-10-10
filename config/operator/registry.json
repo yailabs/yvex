@@ -3956,6 +3956,33 @@
     ],
     "cli_offline_optimize": [
       {
+        "description": "Inspect implemented native techniques and proof obligations; research names are not capabilities.",
+        "name": "--list-techniques", "takes_value": false, "value_type": "boolean"
+      },
+      {
+        "description": "Guide model, backend, goal and workload selection in the native terminal; no installation.",
+        "name": "--guided", "takes_value": false, "value_type": "boolean"
+      },
+      {
+        "description": "Save the guided request for reproducible non-interactive replay; refuses overwrite.",
+        "name": "--out-request", "takes_value": true, "value_type": "path"
+      },
+      {
+        "description": "Native candidate synthesis technique; source-retention allocates real model roles under a weight-byte budget, not a quality score.",
+        "name": "--technique", "takes_value": true, "value_type": "enum",
+        "enum_values": ["presets", "source-retention"]
+      },
+      {
+        "description": "Encoded weight-byte ceiling for source-retention allocation; excludes workspace, state and reserve.",
+        "name": "--weight-budget", "takes_value": true, "value_type": "u64",
+        "range": "1..18446744073709551615"
+      },
+      {
+        "description": "Maximum exact allocation frontier states; exhaustion refuses rather than silently truncating.",
+        "name": "--search-states", "takes_value": true, "value_type": "u64",
+        "range": "1..65536"
+      },
+      {
         "description": "Read a bounded versioned optimization request; do not mix with individual planning flags.",
         "name": "--request",
         "takes_value": true,

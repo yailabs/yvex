@@ -64,7 +64,65 @@ pub(crate) fn optimization_evidence(
     if let Some(deployment) = deployment {
         bind_optimization_evidence(&mut projected, deployment)?;
     }
+    compare_optimization_evidence(&mut projected)?;
     Ok(projected)
+}
+
+/// Only published records admitted by the embedded authority enter automatic
+/// comparison. Changed representation is an explicit experimental axis, never
+/// permission to change checkpoint, workload, hardware, build or sampling.
+/// Comparison is characterization; this does not grant recipe/quality selection.
+fn compare_optimization_evidence(projected: &mut Value) -> Result<()> {
+    let snapshot = projected
+        .as_array()
+        .ok_or("invalid evidence projection")?
+        .clone();
+    let rows = projected
+        .as_array_mut()
+        .ok_or("invalid evidence projection")?;
+    for (index, row) in rows.iter_mut().enumerate() {
+        let mut comparisons = Vec::new();
+        if row["authentication"] == "embedded-publication-match" {
+            let record = &snapshot[index]["receipt"];
+            for other in snapshot
+                .iter()
+                .take(index)
+                .filter(|p| p["authentication"] == "embedded-publication-match")
+            {
+                let peer = &other["receipt"];
+                for metric in record["measurements"]
+                    .as_array()
+                    .ok_or("missing measurements")?
+                {
+                    if !peer["measurements"].as_array().is_some_and(|ms| {
+                        ms.iter()
+                            .any(|m| m["metric"] == metric["metric"] && m["case"] == metric["case"])
+                    }) {
+                        continue;
+                    }
+                    let result = compare(
+                        peer,
+                        record,
+                        metric["metric"].as_str().ok_or("missing metric")?,
+                        metric["case"].as_str().ok_or("missing case")?,
+                        "physical_policy,representation,artifact_set,binding,specialization",
+                    );
+                    comparisons.push(match result {
+                        Ok(value) => {
+                            json!({"status":"comparable-characterization", "comparison":value})
+                        }
+                        Err(error) => {
+                            json!({"status":"incompatible", "left":peer["target_identity"],
+                            "right":record["target_identity"], "metric":metric["metric"],
+                            "case":metric["case"], "reason":error.to_string()})
+                        }
+                    });
+                }
+            }
+        }
+        row["authenticated_comparisons"] = json!(comparisons);
+    }
+    Ok(())
 }
 
 /// The native binding reader already matched its sealed physical variant and
@@ -107,6 +165,10 @@ fn project_optimization_evidence(
         "1..32 qualification receipts required",
     )?;
     let mut seen = BTreeSet::new();
+    // This catalog is embedded in the exact producer build from the canonical
+    // publication authority. An input hash alone is not a trust root. Equality
+    // covers every target, metric, sample, claim, provenance and limitation.
+    let catalog: Vec<Value> = serde_json::from_str(CATALOG)?;
     let mut projected = Vec::new();
     for record in records {
         validate(record)?;
@@ -131,6 +193,9 @@ fn project_optimization_evidence(
         )?;
         projected.push(json!({
             "receipt_identity": digest,
+            "authentication": if catalog.iter().any(|trusted| trusted == record) {
+                "embedded-publication-match"
+            } else { "untrusted-inspection-only" },
             "related_candidate_identities": matches,
             "receipt": record,
             "association": "policy-and-transformation-only",
@@ -761,6 +826,110 @@ mod tests {
         for receipt in receipts {
             validate(&receipt).unwrap();
         }
+    }
+
+    #[test]
+    fn optimizer_receipt_identity_is_not_measurement_authentication() {
+        let catalog: Vec<Value> = serde_json::from_str(CATALOG).unwrap();
+        let record = catalog
+            .iter()
+            .find(|r| {
+                r["target"]["physical_policy"]
+                    .as_str()
+                    .is_some_and(|s| s.len() == 64)
+                    && r["target"]["transformation_ir"]
+                        .as_str()
+                        .is_some_and(|s| s.len() == 64)
+            })
+            .unwrap();
+        let mut candidate = ffi::raw::yvex_optimization_candidate::default();
+        for (target, bytes) in [
+            ("physical_policy", &mut candidate.policy_identity),
+            ("transformation_ir", &mut candidate.transform_identity),
+        ] {
+            for (out, byte) in bytes
+                .iter_mut()
+                .zip(record["target"][target].as_str().unwrap().bytes())
+            {
+                *out = byte as _;
+            }
+        }
+        let matched =
+            project_optimization_evidence(std::slice::from_ref(record), &[candidate]).unwrap();
+        assert_eq!(matched[0]["authentication"], "embedded-publication-match");
+        assert_eq!(matched[0]["selection_eligible"], false);
+        // A plausible, schema-valid edited record is still not published evidence.
+        let mut edited = record.clone();
+        edited["title"] = json!("Caller edited evidence");
+        let inspected = project_optimization_evidence(&[edited], &[candidate]).unwrap();
+        assert_eq!(inspected[0]["authentication"], "untrusted-inspection-only");
+        assert_eq!(inspected[0]["selection_eligible"], false);
+    }
+
+    #[test]
+    fn optimizer_comparison_does_not_admit_untrusted_numbers_or_changed_modes() {
+        let records: Vec<Value> = serde_json::from_str(CATALOG).unwrap();
+        let left = records
+            .iter()
+            .find(|r| {
+                r["id"] == "deepseek-0731-program-p-native-baseline-coding-hash-table-20261010"
+            })
+            .unwrap();
+        // Identity with itself is a plumbing control, not a second measurement.
+        let trusted = json!({"authentication":"embedded-publication-match", "receipt":left});
+        let mut pairs = json!([trusted.clone(), trusted.clone()]);
+        compare_optimization_evidence(&mut pairs).unwrap();
+        assert!(
+            pairs[1]["authenticated_comparisons"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c["status"] == "comparable-characterization")
+        );
+        assert!(
+            !pairs[1]["authenticated_comparisons"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        let right = records.iter().find(|r| r["id"] ==
+            "deepseek-0731-program-p-native-mxfp4-publication-speculative-coding-hash-table-20261010").unwrap();
+        let mut modes = json!([trusted.clone(), {"authentication":"embedded-publication-match", "receipt":right}]);
+        compare_optimization_evidence(&mut modes).unwrap();
+        assert!(
+            modes[1]["authenticated_comparisons"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c["status"] == "incompatible")
+        );
+        let incomplete = records
+            .iter()
+            .find(|r| {
+                r["id"]
+                    == "deepseek-0731-program-p-native-mxfp4-publication-coding-hash-table-20261010"
+            })
+            .unwrap();
+        let mut missing = json!([{"authentication":"embedded-publication-match", "receipt":incomplete},
+            {"authentication":"embedded-publication-match", "receipt":incomplete}]);
+        compare_optimization_evidence(&mut missing).unwrap();
+        assert!(
+            missing[1]["authenticated_comparisons"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c["status"] == "incompatible"
+                    && c["reason"].as_str().unwrap().contains("kernel_bundle"))
+        );
+        let mut untrusted =
+            json!([trusted, {"authentication":"untrusted-inspection-only", "receipt":left}]);
+        compare_optimization_evidence(&mut untrusted).unwrap();
+        assert!(
+            untrusted[1]["authenticated_comparisons"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
     #[test]
     fn optimizer_related_receipts_do_not_establish_exact_recipe_or_qualification() {

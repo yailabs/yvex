@@ -1,0 +1,196 @@
+{
+  "schema": 1,
+  "number": 14,
+  "title": "One recipe, distinct physical lifetimes",
+  "description": "One recipe, distinct physical lifetimes. Selected Program P architecture; boxes do not assert implementation or qualification. See the canonical owner for current status and refusals.",
+  "size": [
+    1200,
+    740
+  ],
+  "owner": "docs/architecture/compiler-ir.md",
+  "authority": [
+    "docs/architecture/compiler-ir.md",
+    "docs/architecture/representation-artifacts.md",
+    "docs/project-control/STATUS.md"
+  ],
+  "panels": [],
+  "nodes": [
+    {
+      "id": "source",
+      "box": [
+        40,
+        160,
+        340,
+        130
+      ],
+      "kind": "external",
+      "title": "Authenticated source",
+      "lines": [
+        "Immutable checkpoint + tokenizer",
+        "Family semantics retained"
+      ]
+    },
+    {
+      "id": "recipe",
+      "box": [
+        430,
+        160,
+        340,
+        130
+      ],
+      "kind": "semantic",
+      "title": "Sealed physical recipe",
+      "lines": [
+        "Transformation + quant policy",
+        "Exact source-to-terminal lineage"
+      ]
+    },
+    {
+      "id": "artifact",
+      "box": [
+        820,
+        160,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Artifact + binding",
+      "lines": [
+        "Canonical writer / verification",
+        "New bytes require new identity"
+      ]
+    },
+    {
+      "id": "layout",
+      "box": [
+        820,
+        425,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Executable preparation",
+      "lines": [
+        "Compatible derived layout",
+        "Charge construction peak"
+      ]
+    },
+    {
+      "id": "deploy",
+      "box": [
+        430,
+        425,
+        340,
+        130
+      ],
+      "kind": "runtime",
+      "title": "Deployment admission",
+      "lines": [
+        "Kernel / numerics / capacity",
+        "Same immutable package"
+      ]
+    },
+    {
+      "id": "engine",
+      "box": [
+        40,
+        425,
+        340,
+        130
+      ],
+      "kind": "mutable",
+      "title": "Engine generation",
+      "lines": [
+        "Backend resources + sessions",
+        "No automatic installation"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "source",
+      "target": "recipe",
+      "points": [
+        [
+          380,
+          225
+        ],
+        [
+          430,
+          225
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "recipe",
+      "target": "artifact",
+      "points": [
+        [
+          770,
+          225
+        ],
+        [
+          820,
+          225
+        ]
+      ],
+      "kind": "bind"
+    },
+    {
+      "source": "artifact",
+      "target": "layout",
+      "points": [
+        [
+          990,
+          290
+        ],
+        [
+          990,
+          425
+        ]
+      ],
+      "kind": "lifecycle"
+    },
+    {
+      "source": "layout",
+      "target": "deploy",
+      "points": [
+        [
+          820,
+          490
+        ],
+        [
+          770,
+          490
+        ]
+      ],
+      "kind": "bind"
+    },
+    {
+      "source": "deploy",
+      "target": "engine",
+      "points": [
+        [
+          430,
+          490
+        ],
+        [
+          380,
+          490
+        ]
+      ],
+      "kind": "lifecycle"
+    }
+  ],
+  "labels": [
+    {
+      "at": [
+        40,
+        608
+      ],
+      "text": "SELECTED ARCHITECTURE · Implementation and earned evidence remain distinct.",
+      "style": "note"
+    }
+  ]
+}

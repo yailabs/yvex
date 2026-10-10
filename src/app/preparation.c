@@ -105,6 +105,10 @@ static const yvex_local_source_record *prepare_exact_source(
 
         if (!source || !identity || strcmp(source->revision, identity->upstream_revision) ||
             strcmp(source->provider, "huggingface") ||
+            /* This producer consumes the checkpoint tensor container, not a
+             * metadata-only acquisition of the same revision. Format selects
+             * a candidate only; later payload verification still authenticates it. */
+            strcmp(source->format, "safetensors") ||
             strcmp(source->acquisition_state, "source-acquired") || !source->path[0] ||
             access(source->path, R_OK | X_OK) != 0)
             continue;

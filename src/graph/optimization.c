@@ -7,12 +7,67 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/deployment.h>
 #include <yvex/internal/graph.h>
+#include <yvex/internal/family_catalog.h>
 #include <yvex/internal/gguf_writer.h>
 #include <yvex/internal/quant_numeric.h>
 
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
+
+typedef int (*optimization_method)(yvex_optimization_search **,
+    const yvex_optimization_request *, unsigned long long, unsigned int, yvex_error *);
+
+static int preset_search(yvex_optimization_search **out, const yvex_optimization_request *request,
+    unsigned long long budget, unsigned int states, yvex_error *err)
+{
+    if (budget || states) {
+        if (out) *out = NULL;
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "compiler.optimization",
+            "fixed recipes do not consume allocation budgets");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    return yvex_optimization_search_open(out, request, err);
+}
+
+static const struct {
+    yvex_optimization_technique descriptor;
+    optimization_method search;
+} techniques[] = {
+    {{YVEX_OPTIMIZATION_TECHNIQUE_SCHEMA_V1, "fixed-recipes-v1", "presets",
+      "authenticated source, canonical quant producers, optional expert policy/calibration",
+      "bounded fixed recipe experiments; no predicted rates",
+      "full capacity, execution, independent quality, performance, lifecycle"}, preset_search},
+    {{YVEX_OPTIMIZATION_TECHNIQUE_SCHEMA_V1, "source-retention-allocation-v1", "source-retention",
+      "canonical source/Q2 plans, coupled roles, explicit approximation, encoded-byte/state budgets",
+      "exact byte/source-retention frontier; retention is not a quality or speed metric",
+      "full capacity, execution, independent quality, performance, lifecycle"}, yvex_optimization_search_allocate}
+};
+
+unsigned int yvex_optimization_technique_count(void)
+{
+    return (unsigned int)(sizeof(techniques) / sizeof(techniques[0]));
+}
+
+const yvex_optimization_technique *yvex_optimization_technique_at(unsigned int index)
+{
+    return index < yvex_optimization_technique_count() ? &techniques[index].descriptor : NULL;
+}
+
+int yvex_optimization_search_run(yvex_optimization_search **out,
+    const yvex_optimization_request *request, const char *identity,
+    unsigned long long budget, unsigned int states, yvex_error *err)
+{
+    if (out) *out = NULL;
+    if (out && identity) for (unsigned int i = 0u; i < yvex_optimization_technique_count(); ++i) {
+        if (!strcmp(identity, techniques[i].descriptor.identity))
+            return techniques[i].search(out, request, budget, states, err);
+    }
+    yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "compiler.optimization",
+        "no implemented technique with this exact versioned identity");
+    return YVEX_ERR_UNSUPPORTED;
+}
 
 /* Bounded initial exploration grammar. Every codec is checked against its
  * canonical producer; family precision/shape constraints are still enforced
@@ -32,6 +87,7 @@ static const struct {
 
 struct yvex_optimization_search {
     unsigned int count;
+    yvex_optimization_context context;
     yvex_optimization_candidate candidates[YVEX_OPTIMIZATION_MAX_CANDIDATES];
     yvex_quant_policy *policies[YVEX_OPTIMIZATION_MAX_CANDIDATES];
 };
@@ -152,6 +208,81 @@ static int request_validate(const yvex_optimization_request *r, yvex_error *err)
         yvex_execution_system_reserve(r->system_memory_bytes))
         return refuse(err, YVEX_ERR_INVALID_ARG, "optimization cannot reduce the canonical system reserve");
     return YVEX_OK;
+}
+
+int yvex_optimization_context_resolve(const yvex_optimization_request *r,
+    yvex_optimization_context *out, yvex_error *err)
+{
+    yvex_family_source_products products = {0};
+    yvex_optimization_context context = {0};
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    int rc = request_validate(r, err);
+    if (rc != YVEX_OK) return rc;
+    if (!out || !r->target_id || !r->source_path || !r->models_root || !r->source_manifest_path)
+        return refuse(err, YVEX_ERR_INVALID_ARG, "complete profile source inputs required");
+    const yvex_graph_execution_binding *execution = yvex_graph_execution_find(0ull, 0ull, r->target_id);
+    if (!execution || !execution->compiler ||
+        execution->compiler->schema_version != YVEX_FAMILY_COMPILER_SCHEMA_V3)
+        return refuse(err, YVEX_ERR_UNSUPPORTED, "target has no canonical model profile producer");
+    const yvex_compilation_runtime_binding_request source = {
+        .source_path = r->source_path, .models_root = r->models_root,
+        .source_manifest_path = r->source_manifest_path,
+        .family_adapter_id = execution->compiler->adapter_id,
+        .family_adapter_version = execution->compiler->adapter_version,
+        .source_stream_count = 1u
+    };
+    rc = yvex_family_source_compile(r->target_id, &source, &products, err);
+    const yvex_semantic_model_ir_summary *s = rc == YVEX_OK ?
+        yvex_semantic_model_ir_summary_get(products.semantic_model) : NULL;
+    if (rc == YVEX_OK && !s) rc = refuse(err, YVEX_ERR_UNSUPPORTED, "semantic model profile unavailable");
+    if (rc == YVEX_OK && (!s->execution_descriptor.maximum_context ||
+        r->context_tokens > s->execution_descriptor.maximum_context))
+        rc = refuse(err, YVEX_ERR_BOUNDS, "requested context exceeds or lacks the verified semantic envelope");
+    if (rc == YVEX_OK) {
+        const yvex_model_execution_descriptor *d = &s->execution_descriptor;
+        context.schema_version = YVEX_OPTIMIZATION_CONTEXT_SCHEMA_V1;
+        yvex_core_text_copy(context.semantic_identity, sizeof(context.semantic_identity), s->identity);
+        yvex_core_text_copy(context.source_identity, sizeof(context.source_identity), s->source_model_identity);
+        yvex_core_text_copy(context.model_execution_identity, sizeof(context.model_execution_identity), d->identity);
+        yvex_core_text_copy(context.family, sizeof(context.family), execution->compiler->family);
+        context.maximum_context = d->maximum_context;
+        context.layers = d->layer_count;
+        context.attention_layers = s->attention_layer_count;
+        context.sequence_mixer_layers = d->sequence_mixer_layers;
+        context.routed_experts = d->routed_experts;
+        context.experts_per_row = d->experts_per_row;
+        context.draft_layers = d->draft_layer_count;
+        context.context_tokens = r->context_tokens;
+        context.prefill_tokens = r->prefill_tokens;
+        context.concurrent_sequences = r->concurrent_sequences;
+        context.backend = r->backend;
+        context.compute_major = r->compute_major;
+        context.compute_minor = r->compute_minor;
+        context.device_count = r->device_count;
+        context.system_memory_bytes = r->system_memory_bytes;
+        context.available_memory_bytes = r->available_memory_bytes;
+        context.reserve_bytes = r->system_reserve_bytes ? r->system_reserve_bytes :
+            yvex_execution_system_reserve(r->system_memory_bytes);
+        context.missing_evidence = 63u;
+        /* Use canonical typed field encoding, as for candidate identities;
+         * no path, timestamp or live free-memory observation enters it. */
+        yvex_sha256_init(&hash);
+        int hashed = yvex_sha256_update_text(&hash, "yvex.optimization-context.v1") &&
+            yvex_sha256_update_text(&hash, context.semantic_identity);
+        const unsigned long long fields[] = {r->goal, r->backend, r->compute_major, r->compute_minor,
+            r->device_count, r->context_tokens, r->prefill_tokens, r->concurrent_sequences,
+            r->system_memory_bytes, r->memory_limit_bytes, context.reserve_bytes,
+            (unsigned int)r->allow_approximation, (unsigned int)r->require_routed_matrix};
+        for (unsigned int i = 0u; i < sizeof(fields) / sizeof(fields[0]); ++i)
+            hashed = hashed && yvex_sha256_update_u64(&hash, fields[i]);
+        if (!hashed || !yvex_sha256_final(&hash, digest))
+            rc = refuse(err, YVEX_ERR_STATE, "resolved context identity failed");
+        else yvex_sha256_hex(digest, context.identity);
+    }
+    yvex_family_source_products_release(&products);
+    if (rc == YVEX_OK) { *out = context; yvex_error_clear(err); }
+    return rc;
 }
 
 const char *yvex_optimization_state_name(yvex_optimization_state state)
@@ -472,6 +603,8 @@ int yvex_optimization_search_open(yvex_optimization_search **out,
         return refuse(err, YVEX_ERR_BOUNDS, "recipe population is empty or exceeds explicit search budget");
     search = calloc(1u, sizeof(*search));
     if (!search) return refuse(err, YVEX_ERR_NOMEM, "bounded search allocation failed");
+    rc = yvex_optimization_context_resolve(r, &search->context, err);
+    if (rc != YVEX_OK) { free(search); return rc; }
     for (unsigned int i = 0u; i < count; ++i) {
         yvex_physical_variant_session *session = NULL;
         yvex_quant_policy *policy = NULL;
@@ -520,6 +653,161 @@ int yvex_optimization_search_open(yvex_optimization_search **out,
     return YVEX_OK;
 }
 
+typedef struct {
+    yvex_optimization_allocation_group groups[YVEX_OPTIMIZATION_MAX_GROUPS];
+    unsigned int role_group[YVEX_TENSOR_ROLE_COUNT], count;
+    unsigned long long fixed_bytes;
+} role_allocation;
+
+static yvex_tensor_role coupled_role(yvex_tensor_role role)
+{
+    return role == YVEX_TENSOR_ROLE_MOE_EXPERT_UP ? YVEX_TENSOR_ROLE_MOE_EXPERT_GATE : role;
+}
+
+static int allocation_collect(const yvex_quant_plan *low, const yvex_quant_plan *high,
+    const yvex_optimization_request *r, role_allocation *allocation, yvex_error *err)
+{
+    const yvex_quant_plan_summary *a = yvex_quant_plan_summary_get(low);
+    const yvex_quant_plan_summary *b = yvex_quant_plan_summary_get(high);
+    if (!a || !b || !a->complete || !b->complete || a->decision_count != b->decision_count ||
+        strcmp(a->transform_identity, b->transform_identity) ||
+        strcmp(a->required_payload_identity, b->required_payload_identity))
+        return refuse(err, YVEX_ERR_STATE, "allocation plans must share exact terminal lineage");
+    memset(allocation, 0, sizeof(*allocation));
+    for (unsigned int i = 0u; i < YVEX_TENSOR_ROLE_COUNT; ++i)
+        allocation->role_group[i] = YVEX_OPTIMIZATION_MAX_GROUPS;
+    for (unsigned long long i = 0ull; i < a->decision_count; ++i) {
+        const yvex_quant_decision *lo = yvex_quant_plan_decision_at(low, i);
+        const yvex_quant_decision *hi = yvex_quant_plan_decision_at(high, i);
+        if (!lo || !hi || lo->role != hi->role || lo->terminal_value_id != hi->terminal_value_id ||
+            lo->element_count != hi->element_count || (unsigned int)lo->role >= YVEX_TENSOR_ROLE_COUNT)
+            return refuse(err, YVEX_ERR_STATE, "allocation terminal geometry changed");
+        int routed = lo->role == YVEX_TENSOR_ROLE_MOE_EXPERT_GATE ||
+            lo->role == YVEX_TENSOR_ROLE_MOE_EXPERT_UP || lo->role == YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN;
+        /* A required matrix class cannot acquire incompatible source operands.
+         * Keep those groups fixed at the lower plan; final collect independently
+         * validates the complete consumer, including homogeneous paired codecs. */
+        if (!lo->approximation || hi->approximation || lo->qtype == hi->qtype ||
+            (r->require_routed_matrix && routed)) {
+            if (!yvex_core_u64_add(allocation->fixed_bytes, lo->encoded_bytes, &allocation->fixed_bytes))
+                return refuse(err, YVEX_ERR_BOUNDS, "fixed terminal bytes overflow");
+            continue;
+        }
+        yvex_tensor_role role = coupled_role(lo->role);
+        unsigned int group = allocation->role_group[role];
+        if (group == YVEX_OPTIMIZATION_MAX_GROUPS) {
+            if (allocation->count == YVEX_OPTIMIZATION_MAX_GROUPS)
+                return refuse(err, YVEX_ERR_BOUNDS, "model role population exceeds allocation group budget");
+            group = allocation->count++;
+            allocation->role_group[role] = group;
+        }
+        allocation->role_group[lo->role] = group;
+        yvex_optimization_allocation_group *g = &allocation->groups[group];
+        if (!yvex_core_u64_add(g->encoded_bytes[0], lo->encoded_bytes, &g->encoded_bytes[0]) ||
+            !yvex_core_u64_add(g->encoded_bytes[1], hi->encoded_bytes, &g->encoded_bytes[1]) ||
+            !yvex_core_u64_add(g->source_elements[1], hi->element_count, &g->source_elements[1]))
+            return refuse(err, YVEX_ERR_BOUNDS, "role allocation geometry overflow");
+    }
+    return allocation->count ? YVEX_OK :
+        refuse(err, YVEX_ERR_UNSUPPORTED, "no legal source-retention allocation groups in this model");
+}
+
+static int allocation_policy(const yvex_optimization_request *r, const role_allocation *a,
+    unsigned long long choices, yvex_quant_policy **out, yvex_error *err)
+{
+    yvex_quant_policy_rule rules[YVEX_TENSOR_ROLE_COUNT + 1u] = {{0}};
+    unsigned int count = 1u;
+    char name[64];
+    rules[0].schema_version = YVEX_QUANT_POLICY_SCHEMA_VERSION;
+    rules[0].match_mask = YVEX_QUANT_MATCH_PHYSICAL_CLASS;
+    rules[0].physical_class = YVEX_QUANT_POLICY_PHYSICAL_QUANTIZABLE;
+    rules[0].qtype = YVEX_QUANT_QTYPE_Q2_K;
+    rules[0].priority = 10u;
+    rules[0].label = "source-retention-allocation-v1";
+    for (unsigned int role = 0u; role < YVEX_TENSOR_ROLE_COUNT; ++role) {
+        unsigned int group = a->role_group[role];
+        if (group >= a->count || !(choices & (1ull << group))) continue;
+        rules[count] = rules[0];
+        rules[count].match_mask |= YVEX_QUANT_MATCH_ROLE;
+        rules[count].role = (yvex_tensor_role)role;
+        rules[count].qtype = YVEX_QUANT_QTYPE_SOURCE;
+        rules[count++].priority = 20u;
+    }
+    snprintf(name, sizeof(name), "source-retention-v1-%016llx", choices);
+    yvex_quant_policy_definition definition = {name, r->target_id,
+        "source-retention-allocation-v1", rules, count};
+    return yvex_quant_policy_create_definition(out, &definition, err);
+}
+
+int yvex_optimization_search_allocate(yvex_optimization_search **out,
+    const yvex_optimization_request *r, unsigned long long weight_budget,
+    unsigned int maximum_states, yvex_error *err)
+{
+    yvex_optimization_search *search = NULL;
+    yvex_physical_variant_session *sessions[2] = {NULL, NULL};
+    yvex_quant_policy *policies[2] = {NULL, NULL};
+    role_allocation allocation;
+    yvex_optimization_allocation frontier[YVEX_OPTIMIZATION_MAX_CANDIDATES];
+    unsigned int count = 0u;
+    int rc = request_validate(r, err);
+    if (out) *out = NULL;
+    if (rc != YVEX_OK) return rc;
+    if (!out || !r->target_id || !r->source_path || !r->models_root ||
+        !r->source_manifest_path || !weight_budget || !maximum_states || maximum_states > 65536u ||
+        r->policy_path || !r->allow_approximation)
+        return refuse(err, YVEX_ERR_INVALID_ARG,
+            "allocation requires weight/state budgets, explicit approximation and no conflicting policy");
+    const yvex_graph_execution_binding *execution = yvex_graph_execution_find(0ull, 0ull, r->target_id);
+    const yvex_family_compiler_adapter *adapter = execution ? execution->compiler : NULL;
+    const yvex_physical_variant_api *api = adapter && adapter->schema_version == YVEX_FAMILY_COMPILER_SCHEMA_V3 &&
+        adapter->physical_variant ? adapter->physical_variant() : NULL;
+    if (!api || api->schema_version != YVEX_PHYSICAL_VARIANT_API_SCHEMA_V2 ||
+        !api->open || !api->view || !api->close)
+        return refuse(err, YVEX_ERR_UNSUPPORTED, "target has no admitted allocation producer");
+    search = calloc(1u, sizeof(*search));
+    if (!search) return refuse(err, YVEX_ERR_NOMEM, "allocation search storage unavailable");
+    rc = yvex_optimization_context_resolve(r, &search->context, err);
+    yvex_physical_variant_request variant = {.target_id = r->target_id, .source_path = r->source_path,
+        .models_root = r->models_root, .source_manifest_path = r->source_manifest_path,
+        .imatrix_path = r->imatrix_path, .worker_count = 1u};
+    for (unsigned int i = 0u; i < 2u && rc == YVEX_OK; ++i) {
+        rc = synthesize_policy(r, i ? 0u : 2u, &policies[i], err);
+        variant.quant_policy = policies[i];
+        if (rc == YVEX_OK) rc = api->open(&sessions[i], &variant, err);
+    }
+    if (rc == YVEX_OK) rc = allocation_collect(api->view(sessions[0])->plan,
+        api->view(sessions[1])->plan, r, &allocation, err);
+    if (rc == YVEX_OK) {
+        yvex_optimization_allocation_request allocation_request = {
+            YVEX_OPTIMIZATION_ALLOCATION_SCHEMA_V1, allocation.count, maximum_states,
+            allocation.fixed_bytes, weight_budget, allocation.groups};
+        rc = yvex_optimization_allocate(&allocation_request, frontier, r->maximum_candidates, &count, err);
+    }
+    for (unsigned int i = 0u; i < 2u; ++i) {
+        api->close(&sessions[i]);
+        yvex_quant_policy_close(policies[i]);
+    }
+    for (unsigned int i = 0u; i < count && rc == YVEX_OK; ++i) {
+        yvex_physical_variant_session *session = NULL;
+        yvex_optimization_candidate *c = &search->candidates[i];
+        c->schema_version = YVEX_OPTIMIZATION_SCHEMA_V1;
+        rc = allocation_policy(r, &allocation, frontier[i].choices, &search->policies[i], err);
+        variant.quant_policy = search->policies[i];
+        if (rc == YVEX_OK) rc = api->open(&session, &variant, err);
+        if (rc == YVEX_OK) rc = collect(api->view(session), r, adapter, c, err);
+        api->close(&session);
+        if (rc == YVEX_OK && c->encoded_bytes != frontier[i].encoded_bytes)
+            rc = refuse(err, YVEX_ERR_STATE, "allocated cost disagrees with canonical compiled bytes");
+        snprintf(c->recipe, sizeof(c->recipe), "source-retention-v1-%016llx", frontier[i].choices);
+        search->count++;
+    }
+    if (rc != YVEX_OK) { yvex_optimization_search_close(&search); return rc; }
+    prioritize(search, r->goal);
+    *out = search;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 void yvex_optimization_search_close(yvex_optimization_search **search)
 {
     if (search && *search) {
@@ -550,6 +838,12 @@ int yvex_optimization_search_policy(const yvex_optimization_search *search,
 unsigned int yvex_optimization_search_count(const yvex_optimization_search *search)
 {
     return search ? search->count : 0u;
+}
+
+const yvex_optimization_context *yvex_optimization_search_context(
+    const yvex_optimization_search *search)
+{
+    return search ? &search->context : NULL;
 }
 
 const yvex_optimization_candidate *yvex_optimization_search_at(

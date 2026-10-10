@@ -174,7 +174,7 @@ def check_figure_generation() -> None:
                     fail("stale-output check mutated the projection")
             else:
                 fail("stale SVG was accepted")
-    if numbers != set(range(1, 10)):
+    if numbers != set(range(1, 16)):
         fail(f"unexpected canonical figure set: {sorted(numbers)}")
     result = subprocess.run([sys.executable, str(ROOT / "tools/render_diagrams.py"), "--check"],
                             cwd=ROOT, check=False)

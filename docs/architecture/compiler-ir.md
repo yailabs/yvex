@@ -143,8 +143,15 @@ projection keeps `exact_recipe_match` unknown and does not infer calibration or
 artifact equivalence. Unrelated, duplicate or malformed records
 refuse. Full targets, origins, limitations and measurement definitions remain
 in the JSON projection; measurements from different deployments are not merged.
-This inspection neither authenticates external raw payloads nor transfers a
-published/local claim to the current machine, executable or recipe. Selection
+Exact whole-record equality against the build's embedded canonical publication
+now distinguishes `embedded-publication-match` from `untrusted-inspection-only`.
+Only matched records enter automatic metric comparability checks; changed
+physical representation is an explicit axis, while source, workload, hardware,
+build and sampling must still match. Incompatible pairs expose their first
+refusal, not an average. These are authenticated *characterizations*, not a
+measured quality/performance recommendation. This inspection neither authenticates
+external raw payloads nor transfers a published/local claim to the current
+machine, executable or recipe. Selection
 eligibility stays false. Inspecting evidence and exporting a policy are separate
 invocations, so refused evidence cannot leave a newly exported policy behind.
 
@@ -179,15 +186,167 @@ automatic finalist execution or new executable-layout preparation. Goals guide
 bounded exploration, not measured claims of optimality. Program P remains
 IN PROGRESS. No candidate becomes a resident engine through this command.
 
+### Profile-driven compilation context
+
+**Selected extension; qualification follows implementation.** Program P resolves
+an optimization context, not nine independent profile databases. A profile is a
+view over an existing authority or a bounded request. It cannot make an absent
+kernel, reference or resource budget available. The current six recipes remain
+reproduction controls, not the definition of the search language.
+
+| Profile | Authority and lifetime | Identity / resolution rule |
+| --- | --- | --- |
+| Model | Verified family source, Semantic Model IR and transformation terminals | Reuse checkpoint, semantic and transformation identities. Resolve real roles and geometry; no Transformer-shaped default for SSM/composite programs. |
+| Hardware | Backend capability report and deployment implementation catalog; live device observation | Bind backend, instruction class and topology in experiment context. Distinguish theoretical support from measured rates; free memory is not artifact identity. |
+| Workload | Request and existing execution workload/capacity profiles | Context, prompt/verification widths, concurrency, strategy and output bounds are constraints, not mutable model properties. |
+| Calibration | Existing source-bound imatrix and calibration producer | Retain exact checkpoint, dataset, producer/version, coverage and payload digest. A path or another checkpoint's statistics do not establish applicability. |
+| Numerical / quality | Family numerical contract, request restrictions and qualification references | Exact versus approximate representation is not a quality score. Preserve ordered arithmetic classes; held-out degradation requires a named independent reference and metric. |
+| Technique | Versioned native algorithm descriptor and its producer/consumer requirements | Executable methods only in the implementation registry. Research names belong to the [method taxonomy](../research/physical-model-compiler.md#technique-taxonomy), not an advertised capability list. |
+| Optimization | Request-scoped goal, hard limits, technique selection and deterministic search budget | Resolve expert restrictions through the same physical-policy owner. Identity includes legal search inputs, not paths, timestamps or current free memory. |
+| Execution | Compiled physical program, binding and deployment specialization | Reuse the existing execution profile; a codec alone does not admit a fused operator. Workspace/state accounting belongs to runtime capacity. |
+| Qualification | Existing exact targets, immutable suites and evaluation receipts | Validate provenance, exact recipe association, comparison keys and independent evidence planes before measured selection. No second benchmark store. |
+
+<!-- docs:diagram optimization_profiles -->
+
+![Profile resolution: one context, existing owners](../assets/diagrams/optimization_profiles.svg)
+
+[Full-size diagram](../assets/diagrams/optimization_profiles.svg) · [Editable source](../assets/diagrams/optimization_profiles.json)
+<!-- /docs:diagram -->
+
+Resolution has three different failure boundaries. Malformed or contradictory
+inputs refuse the request. A legal candidate with an unavailable producer,
+consumer or mandatory calibration receives an explicit applicability refusal.
+Missing model-quality or performance evidence leaves a physically feasible
+candidate unqualified; it does not become a zero-error or infinitely fast row.
+An unavailable hardware observation is unknown, never an affirmative capability.
+
+Model-derived population and context checks happen before candidate synthesis.
+Terminal role grouping is not an operator graph: coupled gate/up operands still
+need the deployment compatibility check, and an SSM state operator still needs
+its own admitted backend. No role count proves full-model execution. CPU, CUDA
+and Metal retain separate implementation claims. Multiple devices do not create
+distributed execution merely because their memory sums to a sufficient number.
+
+<!-- docs:diagram optimization_intersection -->
+
+![Applicability is an intersection, not a model label](../assets/diagrams/optimization_intersection.svg)
+
+[Full-size diagram](../assets/diagrams/optimization_intersection.svg) · [Editable source](../assets/diagrams/optimization_intersection.json)
+<!-- /docs:diagram -->
+
+### Technique composition and bounded allocation
+
+The compiler coordinates methods with distinct inputs and outputs:
+
+| Method boundary | Consumes | Produces | Proof still required |
+| --- | --- | --- | --- |
+| Calibration / sensitivity | Exact source, named corpus, activation/routing observations | Authenticated statistics with coverage | Dataset separation and representativeness; no final quality claim |
+| Allocation / search | Legal per-group alternatives, constraints, costs and explicit search budget | Deterministic candidate policies and exclusion reasons | Full compilation, resource admission and experimental comparison |
+| Quantization / reconstruction | Source values, sealed policy, mandatory calibration | Encoded tensor bytes through canonical codecs | Independent decoding/numerics and checkpoint-matched held-out quality |
+| Layout transformation | Authenticated terminal geometry and admitted numerical class | Kernel-consumable derived layout | Compatibility, construction peak, release, equivalent numerical publication |
+| Backend realization | Physical program, operands, admitted implementation class | Actual execution | Correctness, cancellation/state semantics and complete-model performance |
+| Experimental selection | Authenticated comparable qualification receipts | Nondominated qualified population and reasons | No extrapolation beyond tested workload, hardware, representation or sample population |
+
+The implemented first extension is **model-derived role allocation**, not a new
+quantizer: compare legal high/low encodings for roles actually present in the
+sealed physical plan; couple routed gate/up choices; enumerate a bounded,
+deterministic population under explicit byte constraints; then reconstruct each
+policy through the unchanged quant planner. Estimates never bypass the final
+writer or resource owner. No sensitivity score is fabricated from role names,
+tensor size, nominal bit width or a source-preserving tensor count.
+The allocator uses exact dominance pruning over independent binary group choices,
+with canonical tie breaking and checked arithmetic. It refuses state/output
+budget exhaustion instead of truncating the frontier. Qualification compares the
+algorithm with independent exhaustive enumeration, then checks every synthesized
+policy's compiled encoded-byte total against the allocated cost. This is an exact
+frontier only within the admitted groups/options and declared weight budget,
+not a universal recipe optimum or a measured hardware frontier.
+
+<!-- docs:diagram optimization_techniques -->
+
+![Technique contracts constrain candidate synthesis](../assets/diagrams/optimization_techniques.svg)
+
+[Full-size diagram](../assets/diagrams/optimization_techniques.svg) · [Editable source](../assets/diagrams/optimization_techniques.json)
+<!-- /docs:diagram -->
+
+A method descriptor identifies algorithm/version, input obligations, applicable
+operations, output kind and resource/proof requirements. Registration without an
+implementation is forbidden. A codec producer, a layout producer and a kernel
+consumer are not interchangeable methods. Calibration and reconstruction that
+need differentiable execution remain unavailable until an admitted producer
+exists; a familiar paper title does not authorize a Python training side path.
+
+### Experimental selection and production
+
+Canonical evaluation owns evidence admission. A digest computed over arbitrary
+caller JSON proves content identity, not measurement authenticity. Imported
+results must resolve to a trusted retained record or independently verified raw
+capture through the existing qualification owner, match artifact/binding and
+recipe lineage, and pass metric-specific comparison keys. A locally supplied
+`QUALIFIED` string cannot upgrade a claim. Local receipts and published records
+remain distinguishable even after successful integrity checks.
+
+Calibration measurements may guide experiment order but cannot also be the
+independent held-out quality evidence authorizing recommendation. Missing
+reference logits, quality metrics, lifecycle, workspace or state evidence must
+remain visible. Performance across 2K and 8K, native and HTTP, target-only and
+DSpark remains separate; no mixed-configuration average enters a frontier.
+
+<!-- docs:diagram optimization_feedback -->
+
+![Experiment feedback cannot qualify itself](../assets/diagrams/optimization_feedback.svg)
+
+[Full-size diagram](../assets/diagrams/optimization_feedback.svg) · [Editable source](../assets/diagrams/optimization_feedback.json)
+<!-- /docs:diagram -->
+
+| State | What has been established | What has not |
+| --- | --- | --- |
+| Statically screened | Known codec, coupling and initial constraints | Full resource fit, artifact bytes or execution |
+| Emitted / structurally verified | Deterministic artifact and independent structural reading | Model quality or speed |
+| Executable / admitted | Binding, exact consumer and capacity accepted | Independent numerical/quality qualification |
+| Numerically qualified | Declared computation under its specific oracle | A different quantization's quality |
+| Quality-qualified | Exact checkpoint and held-out reference gate | Performance on another machine |
+| Performance-characterized | Exact target/workload/sample measurements | All required quality and lifecycle gates |
+| Recommendation-eligible | Required independent gates and comparable admitted evidence | Global optimality or automatic installation |
+
+Recommendation means best qualified within the examined population and declared
+constraints. Pareto ties remain ties; goal priorities do not justify a hidden
+scalar quality/speed exchange. Production exports the selected identity-bound
+policy to the existing quant plan/emit/binding pipeline. A changed immutable
+encoding needs a new artifact; an equivalent kernel or engine-local layout
+reuses the existing artifact and qualifies a distinct execution realization.
+
+<!-- docs:diagram optimization_production -->
+
+![One recipe, distinct physical lifetimes](../assets/diagrams/optimization_production.svg)
+
+[Full-size diagram](../assets/diagrams/optimization_production.svg) · [Editable source](../assets/diagrams/optimization_production.json)
+<!-- /docs:diagram -->
+
+The CLI projects these native decisions through the operator registry. Guided
+and file requests share one parser and native compiler. Cancellation, uncertain
+publication and partial artifact/binding results retain the existing operation
+owners; compilation never installs an engine. Produced-binding capacity inspection
+is authoritative for complete geometry. Before a binding exists, omitted
+workspace or session-state costs make fit **incomplete**, not admissible. The
+Q8/Q2 0731 pre-residency refusal remains a regression for this distinction.
+
 ### Reproducible engineering workflow
 
 The same request may be retained in a bounded (64 KiB), strict
-`yvex.optimization.request.v1` JSON file and invoked as
+`yvex.optimization.request.v2` JSON file (v1 remains accepted without the new
+technique fields) and invoked as
 `./yvex compile optimize --request goals.json --json`. Required fields are
 `schema`, `target`, `source`, `models_root` and `source_manifest`. Optional
 fields map to the same registered inputs: `backend`, `goal`, `policy`,
 `imatrix_manifest`, `context`, `prefill`, `concurrency`, `memory_limit`,
 `reserve`, `max_candidates`, `allow_approximation` and `require_routed_matrix`.
+V2 adds `technique`, `weight_budget` and `search_states`. `source-retention`
+requires an explicit encoded-weight byte ceiling and approximation permission;
+the default exact-frontier state limit is 4096. Exhaustion refuses rather than
+claiming optimality after discarding candidates. `presets` accepts neither
+allocation budget. `--list-techniques` projects only the native implemented
+registry, with inputs, objective and remaining proof obligations.
 Memory fields are bytes; omitted values use the existing command defaults.
 Relative paths resolve from the invocation directory, not the JSON directory.
 Unknown/duplicate fields, stale schemas, ambiguous values and mixed individual
@@ -210,12 +369,21 @@ Use the same checkpoint-matched `--imatrix-manifest` at every applicable stage.
 Policy/plan output paths are explicit writer destinations; use new paths to
 preserve prior candidates. Changing the request invalidates its candidate
 selection; changing a sealed policy invalidates the corresponding physical plan.
-The engineering command currently requires source inputs; guided catalog/model
-selection and measured goal-specific ranking remain part of the open Task.
+`./yvex compile optimize --guided --out-request goals.json` selects a catalog
+source through the existing native preparation owner, backend, goal, workload
+and approximation permission. It can instead start from `--request` when expert
+source selection is necessary. Ambiguous/missing acquired sources refuse; the
+guide never silently chooses another checkpoint. It requires a real terminal,
+allows cancellation without compilation, and refuses overwriting a saved request.
+Saved intent is not a successful compilation receipt. Replay with
+`./yvex compile optimize --request goals.json --json` uses the identical parser
+and native planner. Source discovery does not load an engine or replace a service.
+Measured goal-specific ranking and independent qualified recommendation remain
+open; source retention alone cannot establish either.
 
 Consumer handoff: the native optimization schema is version 1, with public types
 in `<yvex/optimization.h>`; the Rust operator projection is
-`yvex.optimization.search.v1`. Opt-in complete production returns
+`yvex.optimization.search.v2`. Opt-in complete production returns
 `yvex.physical-production.result.v2`, preserving emission-only v1. These are
 offline source/policy/variant/artifact/binding operations, not Host/Engine/Session
 admission and not a new remote management endpoint. No independent SDK or Studio

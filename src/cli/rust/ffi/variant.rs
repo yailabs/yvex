@@ -518,6 +518,8 @@ pub(crate) struct OptimizationInput<'a> {
     pub select: Option<&'a str>,
     pub out_policy: Option<&'a str>,
     pub request: raw::yvex_optimization_request,
+    pub weight_budget: Option<u64>,
+    pub search_states: u32,
 }
 
 pub(crate) struct OptimizationReport {
@@ -527,6 +529,7 @@ pub(crate) struct OptimizationReport {
     pub compute_major: u32,
     pub compute_minor: u32,
     pub rows: Vec<raw::yvex_optimization_candidate>,
+    pub context: raw::yvex_optimization_context,
 }
 
 struct Optimization(*mut raw::yvex_optimization_search);
@@ -595,9 +598,28 @@ pub(crate) fn optimize(input: OptimizationInput<'_>) -> Result<OptimizationRepor
     let mut search = Optimization(std::ptr::null_mut());
     let mut failure = raw::yvex_error::default();
     checked(
-        unsafe { raw::yvex_optimization_search_open(&mut search.0, &request, &mut failure) },
+        unsafe {
+            raw::yvex_optimization_search_run(
+                &mut search.0,
+                &request,
+                if input.weight_budget.is_some() {
+                    c"source-retention-allocation-v1".as_ptr()
+                } else {
+                    c"fixed-recipes-v1".as_ptr()
+                },
+                input.weight_budget.unwrap_or(0),
+                if input.weight_budget.is_some() {
+                    input.search_states
+                } else {
+                    0
+                },
+                &mut failure,
+            )
+        },
         &failure,
     )?;
+    let context = *unsafe { raw::yvex_optimization_search_context(search.0).as_ref() }
+        .ok_or_else(extent_error)?;
     let mut rows = Vec::new();
     for i in 0..unsafe { raw::yvex_optimization_search_count(search.0) } {
         rows.push(
@@ -634,7 +656,27 @@ pub(crate) fn optimize(input: OptimizationInput<'_>) -> Result<OptimizationRepor
         compute_major: request.compute_major,
         compute_minor: request.compute_minor,
         rows,
+        context,
     })
+}
+
+pub(crate) fn optimization_techniques() -> Result<Vec<serde_json::Value>, Error> {
+    let mut rows = Vec::new();
+    for index in 0..unsafe { raw::yvex_optimization_technique_count() } {
+        let method = unsafe { raw::yvex_optimization_technique_at(index).as_ref() }
+            .ok_or_else(extent_error)?;
+        if method.schema_version != raw::YVEX_OPTIMIZATION_TECHNIQUE_SCHEMA_V1 {
+            return Err(extent_error());
+        }
+        rows.push(serde_json::json!({
+            "identity": unsafe { super::borrowed_text(method.identity)? },
+            "name": unsafe { super::borrowed_text(method.name)? },
+            "inputs": unsafe { super::borrowed_text(method.inputs)? },
+            "objective": unsafe { super::borrowed_text(method.objective)? },
+            "unearned_evidence": unsafe { super::borrowed_text(method.unearned_evidence)? },
+        }));
+    }
+    Ok(rows)
 }
 
 pub(crate) fn optimization_state(state: raw::yvex_optimization_state) -> String {

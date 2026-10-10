@@ -83,6 +83,13 @@ identity, and can be reopened without a second full payload pass. Transformation
 planning still consumes zero payload bytes; execution admits ranges only from
 that trusted identity.
 
+The native model-preparation selector consumes a Safetensors checkpoint
+acquisition, not a metadata-only acquisition of the same revision. Coexisting
+metadata therefore does not make a single payload source ambiguous. Multiple
+matching payload acquisitions still refuse automatic selection. The catalog's
+format is a selection filter, not authentication: the ordinary exact-revision,
+source-manifest and payload admission gates remain mandatory before compilation.
+
 
 ## Exact identity computation
 

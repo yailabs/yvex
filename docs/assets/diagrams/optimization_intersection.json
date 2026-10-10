@@ -1,0 +1,220 @@
+{
+  "schema": 1,
+  "number": 11,
+  "title": "Applicability is an intersection, not a model label",
+  "description": "Applicability is an intersection, not a model label. Selected Program P architecture; boxes do not assert implementation or qualification. See the canonical owner for current status and refusals.",
+  "size": [
+    1200,
+    890
+  ],
+  "owner": "docs/architecture/compiler-ir.md",
+  "authority": [
+    "docs/architecture/compiler-ir.md",
+    "docs/architecture/representation-artifacts.md",
+    "docs/project-control/STATUS.md"
+  ],
+  "panels": [],
+  "nodes": [
+    {
+      "id": "model",
+      "box": [
+        40,
+        140,
+        340,
+        130
+      ],
+      "kind": "semantic",
+      "title": "Model operations",
+      "lines": [
+        "Real roles, topology and state",
+        "SSM is not attention"
+      ]
+    },
+    {
+      "id": "hardware",
+      "box": [
+        430,
+        140,
+        340,
+        130
+      ],
+      "kind": "runtime",
+      "title": "Backend capabilities",
+      "lines": [
+        "Admitted operations / codecs",
+        "Topology and numerical classes"
+      ]
+    },
+    {
+      "id": "work",
+      "box": [
+        820,
+        140,
+        340,
+        130
+      ],
+      "kind": "interface",
+      "title": "Workload constraints",
+      "lines": [
+        "Context / widths / concurrency",
+        "Quality floor + resource limits"
+      ]
+    },
+    {
+      "id": "check",
+      "box": [
+        430,
+        365,
+        340,
+        130
+      ],
+      "kind": "semantic",
+      "title": "Legal intersection",
+      "lines": [
+        "All mandatory inputs resolved",
+        "Missing input is not support"
+      ]
+    },
+    {
+      "id": "refuse",
+      "box": [
+        40,
+        580,
+        340,
+        130
+      ],
+      "kind": "evidence",
+      "title": "Explicit refusal",
+      "lines": [
+        "Unsupported operation or class",
+        "No silent CPU / numeric fallback"
+      ]
+    },
+    {
+      "id": "candidate",
+      "box": [
+        820,
+        580,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Candidate population",
+      "lines": [
+        "Only compatible alternatives",
+        "Fit still needs full capacity"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "model",
+      "target": "check",
+      "points": [
+        [
+          210,
+          270
+        ],
+        [
+          210,
+          315
+        ],
+        [
+          530,
+          315
+        ],
+        [
+          530,
+          365
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "hardware",
+      "target": "check",
+      "points": [
+        [
+          600,
+          270
+        ],
+        [
+          600,
+          365
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "work",
+      "target": "check",
+      "points": [
+        [
+          990,
+          270
+        ],
+        [
+          990,
+          315
+        ],
+        [
+          670,
+          315
+        ],
+        [
+          670,
+          365
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "check",
+      "target": "refuse",
+      "points": [
+        [
+          430,
+          430
+        ],
+        [
+          210,
+          430
+        ],
+        [
+          210,
+          580
+        ]
+      ],
+      "kind": "control"
+    },
+    {
+      "source": "check",
+      "target": "candidate",
+      "points": [
+        [
+          770,
+          430
+        ],
+        [
+          990,
+          430
+        ],
+        [
+          990,
+          580
+        ]
+      ],
+      "kind": "control"
+    }
+  ],
+  "labels": [
+    {
+      "at": [
+        40,
+        758
+      ],
+      "text": "SELECTED ARCHITECTURE · Implementation and earned evidence remain distinct.",
+      "style": "note"
+    }
+  ]
+}

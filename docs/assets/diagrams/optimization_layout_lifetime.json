@@ -1,0 +1,211 @@
+{
+  "schema": 1,
+  "number": 15,
+  "title": "Storage layout is not executable residency",
+  "description": "Storage layout is not executable residency. Selected Program P architecture; boxes do not assert implementation or qualification. See the canonical owner for current status and refusals.",
+  "size": [
+    1200,
+    750
+  ],
+  "owner": "docs/architecture/representation-artifacts.md",
+  "authority": [
+    "docs/architecture/compiler-ir.md",
+    "docs/architecture/representation-artifacts.md",
+    "docs/project-control/STATUS.md"
+  ],
+  "panels": [],
+  "nodes": [
+    {
+      "id": "artifact",
+      "box": [
+        40,
+        155,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Immutable artifact",
+      "lines": [
+        "Encoded weights + lineage",
+        "File extent is not physical RAM"
+      ]
+    },
+    {
+      "id": "prepare",
+      "box": [
+        430,
+        155,
+        340,
+        130
+      ],
+      "kind": "runtime",
+      "title": "Preparation interval",
+      "lines": [
+        "Read / repack / validate",
+        "Source + scratch + output peak"
+      ]
+    },
+    {
+      "id": "layout",
+      "box": [
+        820,
+        155,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Executable layout",
+      "lines": [
+        "Kernel-compatible encoding",
+        "Selective preparation preferred"
+      ]
+    },
+    {
+      "id": "mapped",
+      "box": [
+        40,
+        425,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Mapped / resident pages",
+      "lines": [
+        "Mapped is not resident",
+        "Observe OS / driver state"
+      ]
+    },
+    {
+      "id": "capacity",
+      "box": [
+        430,
+        425,
+        340,
+        130
+      ],
+      "kind": "evidence",
+      "title": "Resource accounting",
+      "lines": [
+        "Workspace + state + reserve",
+        "Do not add overlapping classes"
+      ]
+    },
+    {
+      "id": "release",
+      "box": [
+        820,
+        425,
+        340,
+        130
+      ],
+      "kind": "mutable",
+      "title": "Engine retirement",
+      "lines": [
+        "Release prepared allocations",
+        "Artifact remains intact"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "artifact",
+      "target": "prepare",
+      "points": [
+        [
+          380,
+          220
+        ],
+        [
+          430,
+          220
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "prepare",
+      "target": "layout",
+      "points": [
+        [
+          770,
+          220
+        ],
+        [
+          820,
+          220
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "artifact",
+      "target": "mapped",
+      "points": [
+        [
+          210,
+          285
+        ],
+        [
+          210,
+          425
+        ]
+      ],
+      "kind": "observe"
+    },
+    {
+      "source": "prepare",
+      "target": "capacity",
+      "points": [
+        [
+          600,
+          285
+        ],
+        [
+          600,
+          425
+        ]
+      ],
+      "kind": "observe"
+    },
+    {
+      "source": "layout",
+      "target": "release",
+      "points": [
+        [
+          990,
+          285
+        ],
+        [
+          990,
+          425
+        ]
+      ],
+      "kind": "lifecycle"
+    },
+    {
+      "source": "mapped",
+      "target": "capacity",
+      "points": [
+        [
+          380,
+          490
+        ],
+        [
+          430,
+          490
+        ]
+      ],
+      "kind": "observe"
+    }
+  ],
+  "labels": [
+    {
+      "at": [
+        40,
+        618
+      ],
+      "text": "SELECTED ARCHITECTURE · Implementation and earned evidence remain distinct.",
+      "style": "note"
+    }
+  ]
+}

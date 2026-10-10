@@ -10,7 +10,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 type Fields = Vec<(String, String)>;
 
 // Input syntax only. The native compiler owns feasibility, identities and search.
-#[derive(serde::Deserialize)]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct OptimizationFile {
     schema: String,
@@ -32,15 +32,35 @@ struct OptimizationFile {
     allow_approximation: bool,
     #[serde(default)]
     require_routed_matrix: bool,
+    technique: Option<String>,
+    weight_budget: Option<u64>,
+    search_states: Option<u64>,
+}
+
+fn optimization_file_schema(input: &OptimizationFile) -> Result<()> {
+    if !matches!(
+        input.schema.as_str(),
+        "yvex.optimization.request.v1" | "yvex.optimization.request.v2"
+    ) {
+        return Err(grammar("unsupported optimization request schema"));
+    }
+    if input.schema == "yvex.optimization.request.v1"
+        && (input.technique.is_some()
+            || input.weight_budget.is_some()
+            || input.search_states.is_some())
+    {
+        return Err(grammar(
+            "technique controls require optimization request v2",
+        ));
+    }
+    Ok(())
 }
 
 fn optimization_file_words(
     invocation: &Invocation<'_>,
     input: OptimizationFile,
 ) -> Result<Vec<String>> {
-    if input.schema != "yvex.optimization.request.v1" {
-        return Err(grammar("unsupported optimization request schema"));
-    }
+    optimization_file_schema(&input)?;
     let mut words = invocation.operation.command_path.clone();
     for (flag, value) in [
         ("--target", Some(input.target)),
@@ -49,6 +69,15 @@ fn optimization_file_words(
         ("--source-manifest", Some(input.source_manifest)),
         ("--backend", input.backend),
         ("--goal", input.goal),
+        ("--technique", input.technique),
+        (
+            "--weight-budget",
+            input.weight_budget.map(|n| n.to_string()),
+        ),
+        (
+            "--search-states",
+            input.search_states.map(|n| n.to_string()),
+        ),
         ("--policy", input.policy),
         ("--imatrix-manifest", input.imatrix_manifest),
         ("--context", input.context.map(|n| n.to_string())),
@@ -117,15 +146,336 @@ fn optimize_file(invocation: &Invocation<'_>, width: usize, styled: bool) -> Res
         return Err(grammar("optimization request exceeds 65536 bytes"));
     }
     let input: OptimizationFile = serde_json::from_slice(&bytes)?;
+    optimization_file_schema(&input)?;
+    if invocation.has("--guided") {
+        return optimize_guided(invocation, Some(input), width, styled);
+    }
     let words = optimization_file_words(invocation, input)?;
     let registry = crate::registry::Registry::embedded()?;
     // Reuse the canonical typed operator grammar and exactly the same native path.
     optimize(&registry.parse(&words)?, width, styled)
 }
 
+fn guided_model(
+    invocation: &Invocation<'_>,
+    width: usize,
+    styled: bool,
+) -> Result<OptimizationFile> {
+    let library = ffi::Library::open(invocation.value("--models-root"), None)?;
+    let mut indices = Vec::new();
+    let mut labels = Vec::new();
+    for index in 0..library.count() {
+        let model = library.snapshot(index)?;
+        if !model.sources.is_empty() {
+            labels.push(crate::catalog::selector(&model));
+            indices.push(index);
+        }
+    }
+    if indices.is_empty() {
+        return Err(grammar(
+            "no catalog source; acquire an exact source with model pull first",
+        ));
+    }
+    let selected =
+        crate::catalog::interactive_choice(&labels, "Select exact model source", width, styled)?;
+    // The native preparation owner resolves source lineage and canonical paths.
+    // Dry inspection neither produces weights nor installs a runtime profile.
+    let preparation = ffi::preparation::Preparation::open(
+        &library,
+        indices[selected],
+        ffi::preparation::Request {
+            root: invocation.value("--models-root"),
+            registry: None,
+            quant: None,
+            imatrix: None,
+            dry: true,
+        },
+    )?;
+    let view = preparation.view()?;
+    Ok(OptimizationFile {
+        schema: "yvex.optimization.request.v2".into(),
+        target: view.target,
+        source: view.source,
+        models_root: view.models_root,
+        source_manifest: view.manifest,
+        backend: None,
+        goal: None,
+        policy: None,
+        imatrix_manifest: None,
+        context: None,
+        prefill: None,
+        concurrency: Some(1),
+        memory_limit: None,
+        reserve: None,
+        max_candidates: Some(32),
+        allow_approximation: false,
+        require_routed_matrix: false,
+        technique: Some("presets".into()),
+        weight_budget: None,
+        search_states: None,
+    })
+}
+
+fn guided_source_verification(input: &OptimizationFile, width: usize, styled: bool) -> Result<()> {
+    use std::io::Write;
+    if std::path::Path::new(&input.source_manifest).is_file() {
+        return Ok(());
+    }
+    let choice = crate::catalog::interactive_choice(
+        &[
+            "Verify acquired checkpoint (may read all shards; verified manifest persists)".into(),
+            "Cancel without source verification".into(),
+        ],
+        "Authenticated source manifest is missing",
+        width,
+        styled,
+    )?;
+    if choice != 0 {
+        return Err(grammar("selection cancelled; no state changed"));
+    }
+    let _lease = ffi::preparation::lock(Some(&input.models_root), &input.target)?;
+    let library = ffi::Library::open(Some(&input.models_root), None)?;
+    // A compiler target ID is not necessarily a product catalog selector.
+    // Re-resolve the selected source, then let preparation recheck its target
+    // and manifest. Never guess an alias or verify a different acquisition.
+    let mut indices = Vec::new();
+    for i in 0..library.count() {
+        if library
+            .snapshot(i)?
+            .sources
+            .iter()
+            .any(|source| ffi::text(&source.path) == input.source)
+        {
+            indices.push(i);
+        }
+    }
+    if indices.len() != 1 {
+        return Err(grammar(
+            "catalog selection changed before source verification",
+        ));
+    }
+    let mut preparation = ffi::preparation::Preparation::open(
+        &library,
+        indices[0],
+        ffi::preparation::Request {
+            root: Some(&input.models_root),
+            registry: None,
+            quant: None,
+            imatrix: None,
+            dry: false,
+        },
+    )?;
+    let view = preparation.view()?;
+    if view.source != input.source
+        || view.manifest != input.source_manifest
+        || view.target != input.target
+    {
+        return Err(grammar(
+            "source selection changed before verification; restart planning",
+        ));
+    }
+    std::io::stdout().write_all(presentation::flow_lines(&[
+        "Verifying source payload through the native preparation owner; no artifact or engine is created.".into(),
+    ], styled)?.as_bytes())?;
+    preparation.verify()?;
+    std::io::stdout().write_all(
+        presentation::flow_lines(
+            &[format!(
+                "Source manifest retained: {}",
+                input.source_manifest
+            )],
+            styled,
+        )?
+        .as_bytes(),
+    )?;
+    Ok(())
+}
+
+fn optimize_guided(
+    invocation: &Invocation<'_>,
+    input: Option<OptimizationFile>,
+    width: usize,
+    styled: bool,
+) -> Result<Output> {
+    use std::io::{IsTerminal, Write};
+    if !std::io::stdin().is_terminal()
+        || !std::io::stdout().is_terminal()
+        || invocation.has("--json")
+    {
+        return Err(grammar(
+            "guided compilation requires a terminal; automation uses --request FILE --json",
+        ));
+    }
+    for flag in invocation.flags.keys() {
+        if !matches!(
+            flag.as_str(),
+            "--guided" | "--request" | "--out-request" | "--models-root"
+        ) {
+            return Err(grammar(
+                "guided compilation accepts only --request, --models-root and --out-request",
+            ));
+        }
+    }
+    if input.is_some() && invocation.has("--models-root") {
+        return Err(grammar(
+            "request owns models root; guided mode does not override it",
+        ));
+    }
+    let catalog_selected = input.is_none();
+    let mut input = match input {
+        Some(value) => value,
+        None => guided_model(invocation, width, styled)?,
+    };
+    let choose = |title: &str, choices: &[&str]| -> Result<usize> {
+        Ok(crate::catalog::interactive_choice(
+            &choices.iter().map(|s| (*s).into()).collect::<Vec<_>>(),
+            title,
+            width,
+            styled,
+        )?)
+    };
+    std::io::stdout().write_all(
+        presentation::flow_lines(
+            &[
+                format!("PHYSICAL COMPILER · {}", input.target),
+                "Planning only: no engine load, installation or quality promotion.".into(),
+                "Hardware availability and full-model compatibility are checked, not assumed."
+                    .into(),
+            ],
+            styled,
+        )?
+        .as_bytes(),
+    )?;
+    input.backend = Some(
+        ["cpu", "cuda", "metal"][choose(
+            "Target backend (verified during resolution)",
+            &["CPU", "CUDA", "Metal · full-model support must be admitted"],
+        )?]
+        .into(),
+    );
+    input.goal = Some(
+        ["balanced", "throughput", "memory", "quality"][choose(
+            "Optimization goal",
+            &["Balanced", "Throughput", "Memory", "Quality"],
+        )?]
+        .into(),
+    );
+    let retain = choose(
+        "Workload",
+        &[
+            "Keep request geometry (default: context 4096 / prefill 512)",
+            "Short: context 4096 / prefill 512",
+            "Long: context 32768 / prefill 512",
+        ],
+    )?;
+    input.context = Some(if retain == 0 {
+        input.context.unwrap_or(4096)
+    } else if retain == 1 {
+        4096
+    } else {
+        32768
+    });
+    input.prefill = Some(if retain == 0 {
+        input.prefill.unwrap_or(512)
+    } else {
+        512
+    });
+    input.allow_approximation = choose(
+        "Numerical search constraint",
+        &[
+            "Preserve exact source representation",
+            "Allow approximate candidates; independent quality remains mandatory",
+        ],
+    )? == 1;
+    input.schema = "yvex.optimization.request.v2".into();
+    // The request is the reproducible non-interactive product contract. Never overwrite one.
+    let mut flags = invocation.flags.clone();
+    flags.retain(|name, _| name == "--request");
+    let replay = Invocation {
+        operation: invocation.operation,
+        positionals: Vec::new(),
+        flags,
+        ordered_flags: Vec::new(),
+    };
+    let words = optimization_file_words(&replay, input.clone())?;
+    let registry = crate::registry::Registry::embedded()?;
+    let parsed = registry.parse(&words)?;
+    if catalog_selected {
+        guided_source_verification(&input, width, styled)?;
+    }
+    if let Some(path) = invocation.value("--out-request") {
+        let bytes = serde_json::to_vec_pretty(&input)?;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)?;
+        file.write_all(&bytes)?;
+        file.write_all(b"\n")?;
+        file.sync_all()?;
+        std::io::stdout().write_all(
+            presentation::flow_lines(
+                &[
+                    format!("Request saved: {path}"),
+                    "Replay with: yvex compile optimize --request <saved-file> --json".into(),
+                ],
+                styled,
+            )?
+            .as_bytes(),
+        )?;
+    }
+    optimize(&parsed, width, styled)
+}
+
 pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) -> Result<Output> {
+    if invocation.has("--list-techniques") {
+        if invocation
+            .flags
+            .keys()
+            .any(|f| !matches!(f.as_str(), "--list-techniques" | "--json"))
+        {
+            return Err(grammar(
+                "technique inspection cannot be mixed with compilation inputs",
+            ));
+        }
+        let methods = ffi::variant::optimization_techniques()?;
+        if invocation.has("--json") {
+            return Ok(Output::standard(
+                format!(
+                    "{}\n",
+                    serde_json::json!({
+                "schema": "yvex.optimization.techniques.v1", "techniques": methods})
+                ),
+                0,
+            ));
+        }
+        return Ok(Output::standard(
+            presentation::flow_lines(
+                &methods
+                    .iter()
+                    .map(|m| {
+                        format!(
+                            "{} · {}\n  Inputs: {}\n  Objective: {}\n  Still required: {}",
+                            m["name"].as_str().unwrap_or(""),
+                            m["identity"].as_str().unwrap_or(""),
+                            m["inputs"].as_str().unwrap_or(""),
+                            m["objective"].as_str().unwrap_or(""),
+                            m["unearned_evidence"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                styled,
+            )?,
+            0,
+        ));
+    }
     if invocation.has("--request") {
         return optimize_file(invocation, width, styled);
+    }
+    if invocation.has("--guided") {
+        return optimize_guided(invocation, None, width, styled);
+    }
+    if invocation.has("--out-request") {
+        return Err(grammar("--out-request requires --guided"));
     }
     if (invocation.has("--evidence") || invocation.has("--runtime-binding"))
         && invocation.has("--select")
@@ -165,6 +515,14 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
         _ => return Err(grammar("unknown optimization goal")),
     };
     let backend = invocation.value("--backend").unwrap_or("cpu");
+    let allocation = invocation.value("--technique") == Some("source-retention");
+    if allocation != invocation.has("--weight-budget")
+        || (!allocation && invocation.has("--search-states"))
+    {
+        return Err(grammar(
+            "source-retention requires --weight-budget; allocation controls cannot apply to presets",
+        ));
+    }
     let request = raw::yvex_optimization_request {
         schema_version: raw::YVEX_OPTIMIZATION_SCHEMA_V1,
         goal: goal_id,
@@ -190,6 +548,10 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
         select: invocation.value("--select"),
         out_policy: invocation.value("--out-policy"),
         request,
+        weight_budget: allocation
+            .then(|| number("--weight-budget", 0))
+            .transpose()?,
+        search_states: number("--search-states", 4096)?.try_into()?,
     })?;
     let deployment = invocation
         .value("--runtime-binding")
@@ -207,6 +569,37 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
         &report.rows,
         deployment.as_ref(),
     )?;
+    if invocation.has("--json") {
+        return Ok(Output::standard(
+            serde_json::to_string_pretty(&optimization_json(
+                &report,
+                &request,
+                invocation,
+                &evidence,
+                deployment.as_ref(),
+            )?)? + "\n",
+            0,
+        ));
+    }
+    optimization_human(
+        &report, &request, invocation, &evidence, deployment, width, styled,
+    )
+}
+
+fn optimization_json(
+    report: &ffi::variant::OptimizationReport,
+    request: &raw::yvex_optimization_request,
+    invocation: &Invocation<'_>,
+    evidence: &serde_json::Value,
+    deployment: Option<&ffi::variant::DeploymentAssessment>,
+) -> Result<serde_json::Value> {
+    let goal = invocation.value("--goal").unwrap_or("balanced");
+    let backend = invocation.value("--backend").unwrap_or("cpu");
+    let allocation = invocation.value("--technique") == Some("source-retention");
+    let weight_budget = invocation
+        .value("--weight-budget")
+        .map(str::parse::<u64>)
+        .transpose()?;
     let rows = report.rows.iter().map(|c| {
         let facts = c.failure_status == 0;
         serde_json::json!({
@@ -231,10 +624,28 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
         "workspace_bytes": null, "state_bytes": null, "prefill_tokens_per_second": null,
         "decode_tokens_per_second": null, "quality": null
     })}).collect::<Vec<_>>();
-    if invocation.has("--json") {
-        return Ok(Output::standard(
-            serde_json::to_string_pretty(&serde_json::json!({
-                "schema": "yvex.optimization.search.v1", "goal": goal, "backend": backend,
+    Ok(serde_json::json!({
+                "schema": "yvex.optimization.search.v2", "goal": goal, "backend": backend,
+                "technique": if allocation { "source-retention-allocation-v1" } else { "fixed-recipes-v1" },
+                "weight_budget_bytes": weight_budget,
+                "resolved_context": {
+                    "schema": "yvex.optimization.context.v1",
+                    "identity": ffi::text(&report.context.identity),
+                    "semantic_identity": ffi::text(&report.context.semantic_identity),
+                    "source_identity": ffi::text(&report.context.source_identity),
+                    "model_execution_identity": ffi::text(&report.context.model_execution_identity),
+                    "family": ffi::text(&report.context.family),
+                    "semantic_maximum_context": report.context.maximum_context,
+                    "layers": report.context.layers,
+                    "attention_layers": report.context.attention_layers,
+                    "sequence_mixer_layers": report.context.sequence_mixer_layers,
+                    "routed_experts": report.context.routed_experts,
+                    "experts_per_row": report.context.experts_per_row,
+                    "draft_layers": report.context.draft_layers,
+                    "capacity_scope": "semantic envelope only; full runtime capacity requires produced binding",
+                    "quality": null, "calibration": "candidate-bound; not held-out quality",
+                    "missing_evidence": report.context.missing_evidence
+                },
                 "target": invocation.value("--target"),
                 "source_commit": env!("YVEX_BUILD_COMMIT"),
                 "source_tree": env!("YVEX_BUILD_SOURCE_TREE"),
@@ -252,7 +663,7 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
                 "compute_capability": [report.compute_major, report.compute_minor], "device_count": 1,
                 "selected_candidate": invocation.value("--select"), "exported_policy": invocation.value("--out-policy"),
                 "experiment_priority": {"model":"static-feasibility-hints-v1",
-                    "basis": ffi::variant::optimization_priority(goal_id),
+                    "basis": ffi::variant::optimization_priority(request.goal),
                     "measured_ranking":false, "predicted_rates":null},
                 "qualified_recommendation": null, "candidates": rows,
                 "qualification_evidence": evidence,
@@ -276,13 +687,7 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
                         "scope": "runtime capacity plan only; no weight residency, engine creation or reservation"
                     })
                 })
-            }))? + "\n",
-            0,
-        ));
-    }
-    optimization_human(
-        &report, &request, invocation, &evidence, deployment, width, styled,
-    )
+    }))
 }
 
 fn optimization_human(
@@ -294,70 +699,53 @@ fn optimization_human(
     width: usize,
     styled: bool,
 ) -> Result<Output> {
-    let mut output = render(
-        "PHYSICAL COMPILER · candidate assessment",
-        &vec![
-            ("goal".into(), invocation.value("--goal").unwrap_or("balanced").into()),
-            ("backend".into(), invocation.value("--backend").unwrap_or("cpu").into()),
-            (
-                "experiment order".into(),
-                ffi::variant::optimization_priority(request.goal),
-            ),
-            (
-                "available".into(),
-                format!("{:.2} GiB", report.available_memory as f64 / 1073741824.0),
-            ),
-            (
-                "qualification".into(),
-                "No qualified recommendation; runtime fit requires binding inspection, quality and timing require evidence"
-                    .into(),
-            ),
-        ],
-        width,
-        styled,
-    )?;
+    let mut lines = vec![
+        "PHYSICAL COMPILER · candidate assessment".into(),
+        format!(
+            "{} · {} · goal {} · technique {}",
+            ffi::text(&report.context.family),
+            invocation.value("--backend").unwrap_or("cpu"),
+            invocation.value("--goal").unwrap_or("balanced"),
+            invocation.value("--technique").unwrap_or("presets")
+        ),
+        format!(
+            "Context {} / semantic maximum {} · prefill {} · sequences {}",
+            request.context_tokens,
+            report.context.maximum_context,
+            request.prefill_tokens,
+            request.concurrent_sequences
+        ),
+        format!(
+            "Available {:.2} GiB · reserve {:.2} GiB · full runtime fit requires produced binding",
+            report.available_memory as f64 / 1073741824.0,
+            report.context.reserve_bytes as f64 / 1073741824.0
+        ),
+        format!(
+            "Experiment order: {}",
+            ffi::variant::optimization_priority(request.goal)
+        ),
+        "No qualified recommendation. All quality and timing claims require independent evidence."
+            .into(),
+        "".into(),
+    ];
     for c in &report.rows {
-        output.push_str(&render(
-            &ffi::text(&c.recipe),
-            &vec![
-                ("state".into(), ffi::variant::optimization_state(c.state)),
-                (
-                    "candidate".into(),
-                    if c.failure_status == 0 {
-                        ffi::text(&c.candidate_identity)
-                    } else {
-                        "not computed".into()
-                    },
-                ),
-                (
-                    "physical variant".into(),
-                    if c.failure_status == 0 {
-                        ffi::text(&c.physical_variant_identity)
-                    } else {
-                        "not computed".into()
-                    },
-                ),
-                (
-                    "initial minimum".into(),
-                    if c.failure_status != 0 {
-                        "not computed".into()
-                    } else {
-                        format!(
-                            "{:.2} GiB (not full runtime fit)",
-                            c.initial_required_bytes as f64 / 1073741824.0
-                        )
-                    },
-                ),
-                (
-                    "matrix-incompatible operands".into(),
-                    format!("{}/{}", c.matrix_incompatible_tensors, c.routed_tensors),
-                ),
-                ("reason".into(), ffi::text(&c.reason)),
-            ],
-            width,
-            styled,
-        )?);
+        lines.push(format!(
+            "{} · {}",
+            ffi::text(&c.recipe),
+            ffi::variant::optimization_state(c.state)
+        ));
+        if c.failure_status == 0 {
+            lines.push(format!("  {}… · weights {:.2} GiB · initial minimum {:.2} GiB · approximate tensors {} · matrix refusals {}/{}",
+                ffi::text(&c.candidate_identity).chars().take(12).collect::<String>(),
+                c.encoded_bytes as f64 / 1073741824.0, c.initial_required_bytes as f64 / 1073741824.0,
+                c.approximate_tensors, c.matrix_incompatible_tensors, c.routed_tensors));
+        }
+        if c.state != raw::yvex_optimization_state_YVEX_OPTIMIZATION_NEEDS_QUALIFICATION {
+            lines.push(format!("  {}", ffi::text(&c.reason)));
+        }
     }
+    lines.push("Full identities and individual proof gaps: repeat the request with --json. Export requires the full candidate identity.".into());
+    let mut output = presentation::flow_lines(&lines, styled)?;
     for item in evidence.as_array().into_iter().flatten() {
         let receipt = &item["receipt"];
         output.push_str(&render(
@@ -1064,7 +1452,7 @@ mod tests {
             .parse(&["compile", "optimize", "--request", "goals.json"].map(String::from))
             .unwrap();
         for (field, value) in [
-            ("schema", serde_json::json!("yvex.optimization.request.v2")),
+            ("schema", serde_json::json!("yvex.optimization.request.v99")),
             ("source", serde_json::json!("--request")),
             ("source", serde_json::json!("")),
             ("source", serde_json::json!("bad\0path")),

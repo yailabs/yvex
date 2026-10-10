@@ -89,7 +89,7 @@ release function runs.
 
 ## Installed ABI Versioning
 
-### Physical optimization v1
+### Physical optimization contracts
 
 `yvex_optimization_request` and `yvex_optimization_candidate` use schema 1.
 Requests bind an exact compiler target, authenticated source, backend/geometry,
@@ -98,6 +98,30 @@ observation, excluded from candidate identity; declared capacity, reserve,
 geometry and physical/source identity are included. No path or pointer is hashed.
 Unknown workspace, state, model execution, quality, performance and lifecycle
 remain explicit missing-evidence bits, never successful admission.
+
+The additive `yvex_optimization_context` schema 1 is a derived source/semantic
+projection, not a replacement runtime execution profile. Resolution authenticates
+the source through the family compiler, retains actual attention/sequence-mixer
+geometry and refuses an unknown/exceeded semantic context envelope. It does not
+prove physical context fit. Paths, timestamps and currently available memory do
+not enter the context identity.
+
+`yvex_optimization_technique` schema 1 describes only implemented native methods.
+`yvex_optimization_search_run` dispatches their exact versioned identities;
+unknown methods and inappropriate method inputs refuse. The existing fixed
+recipes and `source-retention-allocation-v1` share canonical policy, quantization,
+writer and compatibility owners. Research references are not registered methods.
+
+The allocation schema 1 solves a bounded two-choice-per-group problem over
+canonical source/Q2 tensor plans. Coupled expert gate/up roles share one group;
+mandatory routed-matrix operands stay fixed. The independent algorithm returns
+the exact encoded-byte/source-retained-element frontier while its declared state
+budget holds. Neither quantity is a quality score or predicted throughput.
+Overflow, insufficient weight budget, unavailable alternatives, frontier or output
+capacity exhaustion refuse without publishing a partial frontier. Each selected
+policy is compiled again and its encoded byte total must exactly match the
+allocation. Workspace, state and reserve are deliberately outside the weight
+budget and remain mandatory deployment obligations.
 
 `yvex_optimization_select` consumes schema-1 constraints and observation
 projections, returning schema-1 selection rows. It calculates a bounded frontier
@@ -137,8 +161,14 @@ its output without all artifact-owner proofs. A match does not authenticate emit
 plan views call per-qtype execution facts `operand_compute_available`, not
 `runtime_executable`.
 Selection is an explicit experiment, not a qualified recommendation. The CLI's
-`yvex.optimization.search.v1` JSON projects missing metrics as `null` and keeps
+`yvex.optimization.search.v2` JSON adds the resolved context and method identity,
+projects missing metrics as `null` and keeps
 `qualified_recommendation` null until its independent evidence is implemented.
+Request JSON v1 remains accepted; allocation controls require request v2. The
+guided Rust surface writes that same v2 request and never installs a model.
+Receipt authentication is distinct from parsing: an exact whole-record match
+against the build's embedded canonical publication is identified explicitly;
+other files remain untrusted inspection. A digest alone is not a trust root.
 
 A versioned installed record is identified by its C type and schema value.
 One such pair names one field layout and semantic contract. A binary layout or

@@ -119,6 +119,20 @@ checkpoint-matched calibration and quality obligations. See the
 [dated admission boundary](../evaluation/retained-observations.md#0731-memory-audit-and-operator-reboot-boundary-2026-10-10).
 
 
+<!-- docs:diagram optimization_layout_lifetime -->
+
+![Storage layout is not executable residency](../assets/diagrams/optimization_layout_lifetime.svg)
+
+[Full-size diagram](../assets/diagrams/optimization_layout_lifetime.svg) · [Editable source](../assets/diagrams/optimization_layout_lifetime.json)
+<!-- /docs:diagram -->
+
+The profile-driven compiler searches these boundaries through
+[explicit technique contracts](compiler-ir.md#technique-composition-and-bounded-allocation).
+An allocation estimate, a file mapping, an addressable CUDA span and observed
+resident physical pages are different quantities. Candidate reports must not
+add them as independent copies. A derived layout's temporary construction peak
+is charged even if its source backing can later be released or reclaimed.
+
 ## Implementation and evidence
 
 [src/gguf](../../src/gguf) · [src/model/compilation](../../src/model/compilation) · [include/yvex/qtype.h](../../include/yvex/qtype.h) · [include/yvex/quant.h](../../include/yvex/quant.h)

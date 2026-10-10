@@ -1,0 +1,235 @@
+{
+  "schema": 1,
+  "number": 13,
+  "title": "Experiment feedback cannot qualify itself",
+  "description": "Experiment feedback cannot qualify itself. Selected Program P architecture; boxes do not assert implementation or qualification. See the canonical owner for current status and refusals.",
+  "size": [
+    1200,
+    800
+  ],
+  "owner": "docs/architecture/compiler-ir.md",
+  "authority": [
+    "docs/architecture/compiler-ir.md",
+    "docs/architecture/representation-artifacts.md",
+    "docs/project-control/STATUS.md"
+  ],
+  "panels": [],
+  "nodes": [
+    {
+      "id": "cal",
+      "box": [
+        40,
+        160,
+        340,
+        130
+      ],
+      "kind": "external",
+      "title": "Calibration / search",
+      "lines": [
+        "Checkpoint-matched data",
+        "Not the held-out quality oracle"
+      ]
+    },
+    {
+      "id": "candidate",
+      "box": [
+        430,
+        160,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Candidate experiment",
+      "lines": [
+        "Frozen recipe + build + workload",
+        "Selection data stays identified"
+      ]
+    },
+    {
+      "id": "observed",
+      "box": [
+        820,
+        160,
+        340,
+        130
+      ],
+      "kind": "evidence",
+      "title": "Canonical receipts",
+      "lines": [
+        "Raw provenance + target keys",
+        "Samples / statistics / resources"
+      ]
+    },
+    {
+      "id": "heldout",
+      "box": [
+        40,
+        425,
+        340,
+        130
+      ],
+      "kind": "external",
+      "title": "Independent evaluation",
+      "lines": [
+        "Reference / held-out corpus",
+        "Numerics and quality separately"
+      ]
+    },
+    {
+      "id": "admit",
+      "box": [
+        430,
+        425,
+        340,
+        130
+      ],
+      "kind": "evidence",
+      "title": "Evidence admission",
+      "lines": [
+        "Authenticate + compare keys",
+        "Unknown claim never becomes zero"
+      ]
+    },
+    {
+      "id": "pareto",
+      "box": [
+        820,
+        425,
+        340,
+        130
+      ],
+      "kind": "evidence",
+      "title": "Qualified frontier",
+      "lines": [
+        "Best within examined population",
+        "No global optimum / auto-install"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "cal",
+      "target": "candidate",
+      "points": [
+        [
+          380,
+          225
+        ],
+        [
+          430,
+          225
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "candidate",
+      "target": "observed",
+      "points": [
+        [
+          770,
+          225
+        ],
+        [
+          820,
+          225
+        ]
+      ],
+      "kind": "observe"
+    },
+    {
+      "source": "heldout",
+      "target": "admit",
+      "points": [
+        [
+          380,
+          490
+        ],
+        [
+          430,
+          490
+        ]
+      ],
+      "kind": "observe"
+    },
+    {
+      "source": "observed",
+      "target": "admit",
+      "points": [
+        [
+          990,
+          290
+        ],
+        [
+          990,
+          350
+        ],
+        [
+          600,
+          350
+        ],
+        [
+          600,
+          425
+        ]
+      ],
+      "kind": "observe"
+    },
+    {
+      "source": "admit",
+      "target": "pareto",
+      "points": [
+        [
+          770,
+          490
+        ],
+        [
+          820,
+          490
+        ]
+      ],
+      "kind": "control"
+    },
+    {
+      "source": "pareto",
+      "target": "candidate",
+      "points": [
+        [
+          990,
+          555
+        ],
+        [
+          990,
+          595
+        ],
+        [
+          400,
+          595
+        ],
+        [
+          400,
+          335
+        ],
+        [
+          600,
+          335
+        ],
+        [
+          600,
+          290
+        ]
+      ],
+      "kind": "control"
+    }
+  ],
+  "labels": [
+    {
+      "at": [
+        40,
+        668
+      ],
+      "text": "SELECTED ARCHITECTURE · Implementation and earned evidence remain distinct.",
+      "style": "note"
+    }
+  ]
+}

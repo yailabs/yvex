@@ -1,0 +1,182 @@
+{
+  "schema": 1,
+  "number": 10,
+  "title": "Profile resolution: one context, existing owners",
+  "description": "Profile resolution: one context, existing owners. Selected Program P architecture; boxes do not assert implementation or qualification. See the canonical owner for current status and refusals.",
+  "size": [
+    1200,
+    860
+  ],
+  "owner": "docs/architecture/compiler-ir.md",
+  "authority": [
+    "docs/architecture/compiler-ir.md",
+    "docs/architecture/representation-artifacts.md",
+    "docs/project-control/STATUS.md"
+  ],
+  "panels": [],
+  "nodes": [
+    {
+      "id": "source",
+      "box": [
+        40,
+        120,
+        340,
+        130
+      ],
+      "kind": "semantic",
+      "title": "Verified model",
+      "lines": [
+        "Family + semantic IR",
+        "Checkpoint / transformation"
+      ]
+    },
+    {
+      "id": "hardware",
+      "box": [
+        430,
+        120,
+        340,
+        130
+      ],
+      "kind": "runtime",
+      "title": "Observed hardware",
+      "lines": [
+        "Backend + topology",
+        "Memory is a live observation"
+      ]
+    },
+    {
+      "id": "workload",
+      "box": [
+        820,
+        120,
+        340,
+        130
+      ],
+      "kind": "interface",
+      "title": "Declared objectives",
+      "lines": [
+        "Workload / numeric constraints",
+        "Calibration / reference links"
+      ]
+    },
+    {
+      "id": "resolver",
+      "box": [
+        430,
+        345,
+        340,
+        130
+      ],
+      "kind": "semantic",
+      "title": "Compiler resolver",
+      "lines": [
+        "Check applicability and identity",
+        "Do not duplicate profile stores"
+      ]
+    },
+    {
+      "id": "context",
+      "box": [
+        430,
+        560,
+        340,
+        130
+      ],
+      "kind": "physical",
+      "title": "Resolved context",
+      "lines": [
+        "Known facts + explicit unknowns",
+        "No engine / resource reservation"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "source",
+      "target": "resolver",
+      "points": [
+        [
+          210,
+          250
+        ],
+        [
+          210,
+          300
+        ],
+        [
+          530,
+          300
+        ],
+        [
+          530,
+          345
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "hardware",
+      "target": "resolver",
+      "points": [
+        [
+          600,
+          250
+        ],
+        [
+          600,
+          345
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "workload",
+      "target": "resolver",
+      "points": [
+        [
+          990,
+          250
+        ],
+        [
+          990,
+          300
+        ],
+        [
+          670,
+          300
+        ],
+        [
+          670,
+          345
+        ]
+      ],
+      "kind": "flow"
+    },
+    {
+      "source": "resolver",
+      "target": "context",
+      "points": [
+        [
+          600,
+          475
+        ],
+        [
+          600,
+          560
+        ]
+      ],
+      "kind": "bind"
+    }
+  ],
+  "labels": [
+    {
+      "at": [
+        40,
+        728
+      ],
+      "text": "SELECTED ARCHITECTURE · Implementation and earned evidence remain distinct.",
+      "style": "note"
+    }
+  ]
+}

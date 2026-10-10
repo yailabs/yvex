@@ -106,8 +106,89 @@ static int measured_selection(void)
     return 0;
 }
 
+static int allocation_controls(void)
+{
+    yvex_optimization_allocation_group groups[5];
+    yvex_optimization_allocation rows[32], before[32];
+    yvex_optimization_allocation_request r = {
+        YVEX_OPTIMIZATION_ALLOCATION_SCHEMA_V1, 5u, 64u, 7ull, 90ull, groups};
+    yvex_error err;
+    unsigned int count = 0u;
+    /* Independent exhaustive oracle, varying costs/retention/ties and budget.
+     * The reference enumerates all complete assignments, not the DP recurrence. */
+    for (unsigned int seed = 0u; seed < 64u; ++seed) {
+        for (unsigned int i = 0u; i < 5u; ++i) {
+            groups[i].encoded_bytes[0] = 2ull + (seed + i) % 5u;
+            groups[i].encoded_bytes[1] = groups[i].encoded_bytes[0] + 1ull + (seed * 3u + i * 7u) % 11u;
+            groups[i].source_elements[0] = 0ull;
+            groups[i].source_elements[1] = 1ull + (seed + 13u * i) % 23u;
+        }
+        r.maximum_encoded_bytes = 30ull + seed;
+        YVEX_TEST_ASSERT(yvex_optimization_allocate(&r, rows, 32u, &count, &err) == YVEX_OK,
+            "exact role allocation must resolve a bounded feasible population");
+        unsigned int expected = 0u;
+        for (unsigned int mask = 0u; mask < 32u; ++mask) {
+            unsigned long long bytes = r.fixed_bytes, retained = 0ull;
+            for (unsigned int i = 0u; i < 5u; ++i) {
+                bytes += groups[i].encoded_bytes[(mask >> i) & 1u];
+                retained += groups[i].source_elements[(mask >> i) & 1u];
+            }
+            if (bytes > r.maximum_encoded_bytes) continue;
+            int dominated = 0;
+            for (unsigned int peer = 0u; peer < 32u; ++peer) {
+                unsigned long long cost = r.fixed_bytes, value = 0ull;
+                for (unsigned int i = 0u; i < 5u; ++i) {
+                    cost += groups[i].encoded_bytes[(peer >> i) & 1u];
+                    value += groups[i].source_elements[(peer >> i) & 1u];
+                }
+                if (cost <= bytes && value >= retained &&
+                    (cost < bytes || value > retained || peer < mask)) dominated = 1;
+            }
+            if (dominated) continue;
+            expected++;
+            unsigned int matched = 0u;
+            for (unsigned int i = 0u; i < count; ++i)
+                matched += rows[i].choices == mask && rows[i].encoded_bytes == bytes &&
+                    rows[i].source_elements == retained;
+            YVEX_TEST_ASSERT(matched == 1u, "native frontier must equal independent exhaustive assignments");
+        }
+        YVEX_TEST_ASSERT(count == expected, "no extra or missing source-retention alternatives");
+    }
+    memset(rows, 0x5a, sizeof(rows)); memcpy(before, rows, sizeof(rows)); count = 77u;
+    r.maximum_encoded_bytes = 1ull;
+    YVEX_TEST_ASSERT(yvex_optimization_allocate(&r, rows, 32u, &count, &err) == YVEX_ERR_NOMEM &&
+        count == 77u && !memcmp(rows, before, sizeof(rows)), "infeasible allocation is failure atomic");
+    r.maximum_encoded_bytes = 1000ull; r.maximum_states = 1u;
+    YVEX_TEST_ASSERT(yvex_optimization_allocate(&r, rows, 32u, &count, &err) == YVEX_ERR_BOUNDS &&
+        count == 77u && !memcmp(rows, before, sizeof(rows)), "frontier exhaustion cannot invent exact optimality");
+    r.maximum_states = 64u;
+    YVEX_TEST_ASSERT(yvex_optimization_allocate(&r, rows, 1u, &count, &err) == YVEX_ERR_BOUNDS &&
+        count == 77u && !memcmp(rows, before, sizeof(rows)), "small output never publishes a partial frontier");
+    r.fixed_bytes = ~0ull;
+    YVEX_TEST_ASSERT(yvex_optimization_allocate(&r, rows, 32u, &count, &err) == YVEX_ERR_BOUNDS,
+        "allocation byte arithmetic is checked");
+    r.schema_version++;
+    YVEX_TEST_ASSERT(yvex_optimization_allocate(&r, rows, 32u, &count, &err) == YVEX_ERR_INVALID_ARG,
+        "stale allocation schema refuses before group access");
+    return 0;
+}
+
 int yvex_test_optimization(void)
 {
+    YVEX_TEST_ASSERT(allocation_controls() == 0, "bounded allocation controls");
+    YVEX_TEST_ASSERT(yvex_optimization_technique_count() == 2u &&
+        yvex_optimization_technique_at(2u) == NULL, "only implemented techniques are registered");
+    for (unsigned int i = 0u; i < 2u; ++i) {
+        const yvex_optimization_technique *method = yvex_optimization_technique_at(i);
+        yvex_optimization_search *search = NULL;
+        yvex_error failure = {0};
+        YVEX_TEST_ASSERT(method && method->schema_version == 1u && method->identity &&
+            method->objective && method->unearned_evidence, "versioned executable technique contract");
+        YVEX_TEST_ASSERT(yvex_optimization_search_run(&search, NULL, method->identity, 0u, 0u,
+            &failure) == YVEX_ERR_INVALID_ARG && !search, "technique dispatch retains native refusal");
+        YVEX_TEST_ASSERT(yvex_optimization_search_run(&search, NULL, "future-unimplemented-v1", 0u, 0u,
+            &failure) == YVEX_ERR_UNSUPPORTED && !search, "research is not an executable capability");
+    }
     YVEX_TEST_ASSERT(measured_selection() == 0, "bounded measured-selection controls");
     yvex_optimization_request r = request();
     yvex_optimization_candidate c = candidate();

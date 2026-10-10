@@ -50,10 +50,20 @@ physical variant), retaining all original claim
 planes and deployment/workload context without automatic selection. An exact
 artifact/binding match against native produced-binding inspection additionally
 links the sealed physical variant; this does not authenticate a receipt's claims,
-inherit quality or erase capacity refusal. Authenticated
-measured receipt admission/selection,
+inherit quality or erase capacity refusal. Exact embedded-publication matches
+now authenticate retained receipt content for explicit comparability checks;
+external files remain untrusted inspection. Automatic qualified selection,
 pre-production workspace/state accounting, executable preparation, independent quality
 and competitive inference remain unearned. No model capability is promoted.
+The profile-driven continuation adds a canonical semantic-context projection,
+implemented-technique dispatch and exact bounded role allocation between source
+and Q2 encodings under an encoded-byte limit. The allocator preserves coupled
+operands and reconstructs every policy through the existing compiler; source
+retention is not a measured quality score. Native guided CLI and request v2 use
+the same planner and do not install an engine. Mamba retains its state-space
+geometry; its current source-faithful lowering offers no alternative allocation
+groups and refuses that technique explicitly. Full resource fit, held-out
+quality, recipe recommendation and new DeepSeek throughput remain separate gates.
 Produced-binding inspection now consumes the runtime's full capacity plan through
 the CLI, with exact variant matching and no engine load. The generic borrowed
 production-proof binding path passes real Mamba emission/reader/binding controls,
@@ -262,7 +272,7 @@ below describe desired breadth; they are not additional maturity claims.
 | Runtime binding | 🟢 ESTABLISHED | Authenticated package and execution truth, including the canonical operator schedule, is reopened without family import or runtime compiler reconstruction. | Preserve package meaning versus runtime specialization. | R / P | [Runtime contract][runtime-contract] |
 | Existing quantized representation import | 🟡 PARTIAL | Multiple GGUF qtypes and low-precision execution paths are admitted. | Broader format coverage without per-format runtime redesign. | P | [Compilation][compilation]; [DeepSeek][deepseek] |
 | Quantization synthesis | 🟡 PARTIAL | Mixed per-tensor policy and bounded calibration-informed recipes can be constructed. | Generic sensitivity/calibration-driven synthesis with reproducible decision provenance. | P | [GB10 targets][gb10]; [compilation][compilation] |
-| Physical Model Compiler search | 🟡 PARTIAL | Native bounded goal-driven policy synthesis, identity-bound export, operand/reserve refusal, produced-binding capacity inspection and a pure measured-frontier primitive exist. DeepSeek and Mamba exercise existing production owners; authenticated receipt selection and automatic qualified recommendation remain unearned. | Complete the measured optimization/production loop, executable-layout economics, independent quality and hardware/workload-specific recommendation. | P | [GB10 targets][gb10]; [compilation][compilation] |
+| Physical Model Compiler search | 🟡 PARTIAL | Resolved semantic/workload context, versioned implemented techniques, exact bounded role allocation, guided CLI, identity-bound policy export and produced-binding capacity inspection exist. Embedded published receipts support authenticated comparisons, not automatic qualified selection. DeepSeek and Mamba use existing owners; independent quality and recommendation remain unearned. | Complete the measured optimization/production loop, executable-layout economics, independent quality and hardware/workload-specific recommendation. | P | [GB10 targets][gb10]; [compilation][compilation] |
 | Resource/state-root effect dependencies | 🔴 OPEN | Current lowering retains a global serial effect chain; explicit SSA/state foundations do not qualify independent state-root scheduling. | Order real dependencies, conflicting roots and explicit ordered semantics; preserve legal DAG branches for Target/Schedule choice. | C / S | [B1 compiler target](../research/state-realization.md#compiler-execution-dag-and-admitted-backend-target); [current lowering][compilation] |
 | N-gram / token-derived addressing semantics | 🔴 OPEN | Exact tokenizer and source identities exist; generic n-gram window/key/address semantics are not admitted. | Seal tokenizer-bound addressing, compressed mappings, boundaries and hash/table rules; qualify positive and malformed-address vectors. | C / R | [Addressing target](../research/sparse-parameter-memory.md#conditional-sparse-parameter-memory); [source contract][storage] |
 | Conditional sparse parameter memory | 🔴 OPEN | Dense parameters and routed experts do not establish indexed execution over huge immutable parameter tables. | Compile dynamic sparse row populations, physical table representations and bounded storage/cache execution with reference and refusal evidence. | C / P / S | [Conditional-memory target](../research/sparse-parameter-memory.md#conditional-sparse-parameter-memory); [compilation][compilation] |

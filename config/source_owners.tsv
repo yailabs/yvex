@@ -308,6 +308,7 @@ src/model/compilation/ir_identity.c	model.compilation	model.compilation.ir_ident
 src/model/compilation/ir_validate.c	model.compilation	model.compilation.ir_validate	generic	private	reusable-algorithm	model.family,quant	implementation	none
 src/model/compilation/semantic.c	model.compilation	model.compilation.semantic_ir	generic	private	immutable-planning	model.family,graph,runtime,tests	implementation	none
 src/graph/optimization.c	graph	graph.optimization	generic	private	resource-lifecycle	cli,tests	implementation	none
+src/graph/optimization_allocation.c	graph	graph.optimization-allocation	generic	private	reusable-algorithm	graph,cli,tests	implementation	none
 src/model/compilation/private.h	model.compilation	model.compilation.ir	generic	private	private-interface	model.compilation	interface	none
 src/deployment/plan.c	deployment	deployment.plan	generic	private	reusable-algorithm	graph,runtime,tests	implementation	none
 src/model/deployment_compatibility.c	model.catalog	model.catalog.deployment-compatibility	generic	private	reusable-algorithm	model.catalog,cli,server,tests	implementation	none

@@ -162,6 +162,14 @@ candidates are not selected Tasks.
 | --- | --- | --- | --- | --- |
 | `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` | Operational goal-driven Physical Model Compiler | P1 | 🔵 IN PROGRESS | Typed hardware/workload/quality goals; bounded deterministic recipe search through existing compiler, artifact and deployment owners; coupled kernel compatibility and complete resource feasibility; reproducible production, independent qualification and explainable Pareto recommendation; Rust registry-driven CLI and second admitted model reuse. DeepSeek 0731 revision `7872f01b1d1fe23eabc4c98b48bffcef5a386062` requires native execution, independent numerics/quality and complete-model 20 target-only decode / 700 uncached prefill (preferred 24/800). Generic machinery and competitive exits are reported separately. No automatic installed-engine replacement, reserve weakening, A03, training or cross-product changes. |
 
+The profile-driven continuation stays inside this selected Task: resolve canonical
+model/hardware/workload and numerical/calibration context, add model-derived
+bounded allocation beyond the six initial recipes, authenticate measured selection
+through Evaluation, and qualify the native guided/file CLI and real 0731 execution.
+The existing Mamba proof remains the non-Transformer control. Technique references
+are not implemented capabilities; 20/700 and independent quality remain unearned.
+No second implementation Task or installed-engine replacement is selected.
+
 The authenticated Q8_0/Q2_K baseline remains a candidate, not a selected optimum.
 Initial-memory fit, qtype readability, coupled-kernel compatibility, full runtime
 admission, measured performance and independently qualified quality are distinct.
