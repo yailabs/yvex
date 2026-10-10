@@ -174,6 +174,32 @@ The client callback decides which generation to cancel; terminal capture never
 owns engine/session meaning. Output-state admission and restoration failures
 stop chat instead of continuing with uncertain terminal state.
 
+### Terminal workbench consumer
+
+`yvex workbench` is a Rust-owned **inline** operational workspace, not a second
+runtime, command language or full-screen editor. Local state contains the active
+Home/Models/Compile/Activity view, selected engine alias/generation, catalog
+selector, host incarnation, trace sequence and inspector visibility. Domain facts are copied typed
+snapshots, not mutable runtime replicas or a second telemetry source. Registry
+operation IDs resolve native actions; menu IDs are view-local selections and
+accept no shell arguments.
+
+| Boundary | Owner and behavior |
+| --- | --- |
+| Input/focus | REPLAI driven `Interaction`, editor, Unicode, history and completion menu; no application key decoder. |
+| Composition | Rust semantic documents/tables/records, destination-TTY geometry, default background. Resize republishes context through editor-safe output and preserves the draft. |
+| Refresh | On entry/action or explicit request; no idle polling or invented progress. Host/catalog/trace reads are separately sampled, not an atomic global snapshot. Failed reads invalidate displayed facts. |
+| Conversation | Retire the view interaction before existing `chat`/`chat_stream`; generation owns exclusive quiet output. Host-incarnation/generation mismatch refuses before session creation, without alias-following or prompt replay. Each chat operation and turn rechecks the host nonce. |
+| Models | Native catalog/lifecycle; confirmed retirement carries the generation inspected before confirmation. Stale/active-work refusal remains runtime-owned. |
+| Compilation | Existing `compile optimize` and Program P evidence; no UI compiler, inferred metrics or recommendation promotion. |
+| Activity | Finite server trace, newest 32 retained events, separate bounded local action outcomes. Unknown/unavailable observations stay explicit. |
+
+Signal workers are joined before handing off to another interaction. No view and
+nested chat/editor simultaneously capture the terminal. This consumer adds no
+wire/ABI schema and leaves linear CLI/JSON independently usable. See the
+[operator journey](../guides/operator-runbook.md#optional-terminal-workbench) and
+[decision](../decisions/0009-rust-product-shell.md#terminal-workbench-consumer).
+
 An interrupt before `TURN_STARTED` retains pending intent. Once admitted, one
 scoped cancellation worker uses the existing typed C client while the response
 reader continues draining progress. The reader never synchronously waits on

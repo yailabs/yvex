@@ -1,5 +1,6 @@
 // Runtime reads use the existing C client; the shell never reconstructs the private wire.
 pub(crate) mod cancellation;
+pub(crate) mod inspection;
 use crate::ffi::{self, Client, Error, raw};
 use crate::{catalog, presentation, registry::Invocation};
 use replai::Alignment;
@@ -907,17 +908,7 @@ pub struct HostStatus {
     snapshot: raw::yvex_server_summary,
 }
 
-pub(crate) fn management_status() -> Result<raw::yvex_server_summary, Error> {
-    let mut client = Client::connect(None)?;
-    client.timeout(2000)?;
-    let request = client.request(raw::yvex_client_operation_YVEX_CLIENT_OP_RUNTIME_STATUS);
-    client.send(&request)?;
-    let reply = response(&mut client, &request)?;
-    if reply.kind != raw::yvex_client_message_kind_YVEX_CLIENT_MESSAGE_STATUS {
-        return Err(invalid("management.status", "unexpected runtime response"));
-    }
-    Ok(reply.runtime)
-}
+pub(crate) use inspection::management_status;
 
 pub fn host_status(socket: Option<&str>) -> Result<HostStatus, Error> {
     let mut client = Client::connect(socket)?;
@@ -1105,32 +1096,7 @@ impl HostStatus {
     }
 }
 
-pub(crate) fn engines(socket: Option<&str>) -> Result<Vec<raw::yvex_server_engine_summary>, Error> {
-    let mut client = Client::connect(socket)?;
-    let request = client.request(raw::yvex_client_operation_YVEX_CLIENT_OP_ENGINE_LIST);
-    client.send(&request)?;
-    let mut engines = Vec::new();
-    loop {
-        let reply = response(&mut client, &request)?;
-        if reply.kind == raw::yvex_client_message_kind_YVEX_CLIENT_MESSAGE_ACK {
-            break;
-        }
-        if reply.kind != raw::yvex_client_message_kind_YVEX_CLIENT_MESSAGE_ENGINE {
-            return Err(invalid(
-                "client.engines",
-                "unexpected engine catalog response",
-            ));
-        }
-        if engines.len() >= raw::YVEX_SERVER_IMPLEMENTATION_MAXIMUM_ENGINES as usize {
-            return Err(invalid(
-                "client.engines",
-                "engine catalog exceeds the native host bound",
-            ));
-        }
-        engines.push(reply.engine);
-    }
-    Ok(engines)
-}
+pub(crate) use inspection::{engine_catalog, engines};
 
 fn generation(socket: Option<&str>, alias: &str) -> Result<u64, Error> {
     engines(socket)?

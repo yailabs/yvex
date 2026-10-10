@@ -56,6 +56,8 @@ src/cli/rust/presentation.rs	cli	cli.native_presentation	generic	private	reusabl
 src/cli/rust/registry.rs	cli	cli.native_grammar	generic	private	generated-abi	cli.rust	implementation	none
 src/cli/rust/interaction.rs	cli	cli.native_interaction	generic	private	resource-lifecycle	cli.rust	implementation	none
 src/cli/rust/chat.rs	cli	cli.native_chat	generic	private	resource-lifecycle	cli.rust	implementation	none
+src/cli/rust/workbench.rs	cli	cli.terminal_workbench	generic	private	resource-lifecycle	cli.rust	implementation	none
+src/cli/rust/client/inspection.rs	cli	cli.runtime_inspection	generic	private	stream-boundary	cli.rust	implementation	none
 src/cli/rust/chat_stream.rs	cli	cli.native_chat_stream	generic	private	stream-boundary	cli.rust	implementation	none
 include/yvex/api.h	abi	abi.api	generic	public	public-abi	repository	interface	none
 include/yvex/artifact.h	abi	abi.artifact	generic	public	public-abi	repository	interface	none

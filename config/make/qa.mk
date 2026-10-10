@@ -1270,6 +1270,12 @@ rust-ffi-index: rust-client
 		CARGO_TARGET_DIR='$(abspath $(RUST_CARGO_TARGET_DIR))' \
 		$(CARGO) test --locked --test rust_structure
 
+.PHONY: test-workbench
+test-workbench: rust-client $(OPENAI_FAKE_HOST) $(TERMIOS_PROBE)
+	YVEX_TEST_TERMIOS_PROBE='$(abspath $(TERMIOS_PROBE))' \
+		python3 tests/rust_workbench_pty.py --binary '$(RUST_SHELL_BIN)' \
+		--fixture '$(OPENAI_FAKE_HOST)' --output '$(TEST_DIR)/rust-workbench'
+
 test-rust-shell: rust-client $(OPENAI_FAKE_HOST) $(TERMIOS_PROBE) $(RUST_BENCHMARK_FIXTURE) $(TINY_VERTICAL_COMPILER)
 	+$(CARGO) fmt --check
 	+YVEX_NATIVE_BUILD_DIR='$(abspath $(BUILD_DIR))' \

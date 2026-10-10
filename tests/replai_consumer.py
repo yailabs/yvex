@@ -22,7 +22,7 @@ LABEL = b'deepseek4-v4-flash-dspark'
 
 
 class Chat:
-    def __init__(self, binary, name, output, *, plain=False, dumb=False, memcheck=None, model=None, columns=100):
+    def __init__(self, binary, name, output, *, plain=False, dumb=False, memcheck=None, model=None, columns=100, arguments=None):
         self.master, self.slave = pty.openpty()
         self.name, self.output = name, output
         fcntl.ioctl(self.slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, columns, 0, 0))
@@ -44,6 +44,7 @@ class Chat:
         if plain: env['NO_COLOR'] = ''
         command = [str(binary), 'chat', '--session', name]
         if model: command += ['--model', model, '--max-new-tokens', '3']
+        if arguments is not None: command = [str(binary), *arguments]
         self.memlog = output / (name + '.memcheck')
         if memcheck:
             command = [memcheck, '--leak-check=full', '--show-leak-kinds=definite,indirect',

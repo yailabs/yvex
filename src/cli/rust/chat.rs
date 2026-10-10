@@ -19,6 +19,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Clone)]
 struct Binding {
+    host: String,
     alias: String,
     generation: u64,
     session: String,
@@ -31,6 +32,9 @@ impl Binding {
         connection: &mut Client,
         operation: raw::yvex_client_operation,
     ) -> Result<raw::yvex_client_request> {
+        if connection.host_identity()? != self.host {
+            return Err("host lifetime changed; session operation not dispatched".into());
+        }
         let mut request = connection.request(operation);
         ffi::put_text(&mut request.model_alias, &self.alias)?;
         ffi::put_text(&mut request.session_name, &self.session)?;
@@ -782,8 +786,23 @@ pub(crate) fn run(
     width: usize,
     styled: bool,
 ) -> Result<()> {
+    run_selected(invocation, registry, width, styled, None, None)
+}
+
+pub(crate) fn run_selected(
+    invocation: &Invocation<'_>,
+    registry: &Registry,
+    width: usize,
+    styled: bool,
+    expected: Option<(&str, u64)>,
+    mut first_line: Option<String>,
+) -> Result<()> {
     use signal_hook::consts::signal::{SIGINT, SIGTERM};
-    let mut engines = client::engines(None)?
+    let (host, catalog) = client::engine_catalog(None, None)?;
+    if expected.is_some_and(|(identity, _)| identity != host) {
+        return Err("selected host lifetime changed; refresh and select again".into());
+    }
+    let mut engines = catalog
         .into_iter()
         .filter(|engine| {
             engine.state == raw::yvex_server_engine_state_YVEX_SERVER_ENGINE_LOADED
@@ -798,6 +817,9 @@ pub(crate) fn run(
             .iter()
             .position(|engine| ffi::text(&engine.alias) == alias)
     });
+    if expected.is_some() && exact.is_none() {
+        return Err("selected engine unavailable; refresh and select again".into());
+    }
     let selected = if let Some(index) = exact {
         index
     } else if engines.len() == 1 && requested.is_none() && !invocation.has("--variant") {
@@ -811,9 +833,13 @@ pub(crate) fn run(
             .ok_or("selected deployment is no longer loaded")?
     };
     let engine = engines.remove(selected);
+    if expected.is_some_and(|(_, generation)| generation != engine.generation) {
+        return Err("selected engine generation changed; refresh and select again".into());
+    }
     let mut options = Options::from_invocation(invocation, engine.engine_kind)?;
     let mut session = Session::open(
         Binding {
+            host,
             alias: ffi::text(&engine.alias),
             generation: engine.generation,
             session: invocation.value("--session").unwrap_or("main").into(),
@@ -850,32 +876,10 @@ pub(crate) fn run(
         if interrupts.terminate.load(Ordering::Acquire) {
             break;
         }
-        interaction::open(&mut input, "yvex", &session.binding.session)?;
-        let line = loop {
-            match notifications.advance(&mut input)? {
-                Some(Event::Submitted(line)) => break Some(line),
-                Some(Event::Interrupted) => break Some(String::new()),
-                Some(Event::EndOfInput) => break None,
-                Some(Event::CompletionRequested) => {
-                    if let Err(error) = complete(registry, &session.binding, &mut input) {
-                        input.output_flow(&replai::Document::new(vec![
-                            replai::Block::Paragraph(presentation::safe_text(
-                                &format!("completion unavailable: {error}"),
-                                Role::Warning,
-                            )?),
-                        ])?)?;
-                    }
-                }
-                Some(Event::Rejected(error)) => {
-                    input.output_flow(&replai::Document::new(vec![replai::Block::Paragraph(
-                        presentation::safe_text(&error.to_string(), Role::Warning)?,
-                    )])?)?
-                }
-                Some(Event::SubmissionRequested(_)) => {
-                    return Err("unexpected opt-in submission event".into());
-                }
-                None => {}
-            }
+        let line = if let Some(line) = first_line.take() {
+            Some(line)
+        } else {
+            read_line(&mut input, &mut notifications, registry, &session.binding)?
         };
         let Some(line) = line else { break };
         if line.is_empty() {
@@ -935,6 +939,7 @@ pub(crate) fn run(
         }
         interrupts.begin();
         let turn = crate::chat_stream::Turn {
+            host: &session.binding.host,
             alias: &session.binding.alias,
             generation: session.binding.generation,
             session: &session.binding.session,
@@ -959,6 +964,41 @@ pub(crate) fn run(
     }
     session.detach()?;
     Ok(())
+}
+
+fn read_line(
+    input: &mut Interaction,
+    notifications: &mut interaction::Notifications,
+    registry: &Registry,
+    binding: &Binding,
+) -> Result<Option<String>> {
+    interaction::open(input, "yvex", &binding.session)?;
+    loop {
+        match notifications.advance(input)? {
+            Some(Event::Submitted(line)) => return Ok(Some(line)),
+            Some(Event::Interrupted) => return Ok(Some(String::new())),
+            Some(Event::EndOfInput) => return Ok(None),
+            Some(Event::CompletionRequested) => {
+                if let Err(error) = complete(registry, binding, input) {
+                    input.output_flow(&replai::Document::new(vec![replai::Block::Paragraph(
+                        presentation::safe_text(
+                            &format!("completion unavailable: {error}"),
+                            Role::Warning,
+                        )?,
+                    )])?)?;
+                }
+            }
+            Some(Event::Rejected(error)) => {
+                input.output_flow(&replai::Document::new(vec![replai::Block::Paragraph(
+                    presentation::safe_text(&error.to_string(), Role::Warning)?,
+                )])?)?
+            }
+            Some(Event::SubmissionRequested(_)) => {
+                return Err("unexpected opt-in submission event".into());
+            }
+            None => {}
+        }
+    }
 }
 
 #[cfg(test)]

@@ -83,6 +83,11 @@ static int send_ack(int fd, const yvex_client_request *request,
 {
     yvex_client_message message;
     message_base(&message, YVEX_CLIENT_MESSAGE_ACK, request);
+    /* A process-stable test incarnation, inherited by all fixture responses.
+       Not a security identity; production uses its own native nonce owner. */
+    (void)snprintf(message.host_instance_identity,
+                   sizeof(message.host_instance_identity), "%064llx",
+                   (unsigned long long)getpid());
     (void)snprintf(message.reason, sizeof(message.reason), "protocol-v%u",
                    YVEX_LOCAL_PROTOCOL_VERSION);
     return yvex_server_protocol_send(fd, &message, err);
@@ -322,6 +327,8 @@ static int send_event_stream(int fd, const yvex_client_request *request,
         if (rc == YVEX_OK) rc = yvex_server_protocol_send(fd, &message, err);
     }
     yvex_server_telemetry_close(&telemetry);
+    if (rc == YVEX_OK && request->operation == YVEX_CLIENT_OP_RUNTIME_TRACE)
+        rc = send_ack(fd, request, err);
     return rc;
 }
 

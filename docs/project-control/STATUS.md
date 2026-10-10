@@ -612,6 +612,10 @@ tokenizer kind is explicitly weaker than executing its processor.
 
 ## Interfaces and portability
 
+The selected terminal workbench consumes the current Rust shell, registry and
+REPLAI pin. Its [inline state/ownership contract](../architecture/interfaces-protocols.md#terminal-workbench-consumer)
+does not change Program P qualification or installed model generations.
+
 The [native output-flow consumer](../evaluation/retained-observations.md#native-output-flow-consumer-2026-10-09)
 has separate Linux PTY and pinned-emulator evidence. Historical macOS interface
 qualification remains bound to its recorded source; the new flow consumer does

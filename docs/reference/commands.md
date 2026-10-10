@@ -48,6 +48,7 @@ yvex version [--json]
 
 yvex serve
 yvex chat [--model MODEL]
+yvex workbench
 
 yvex host status|logs|stop
 yvex inspect ...
@@ -85,7 +86,8 @@ with the installed provider CLI.
 
 Bare `yvex` prints the compact command map and exits successfully. It never
 starts, attaches to, or probes a host and never enters chat. Interactive human
-generation requires `yvex chat`. Programmatic generation uses the private
+generation uses `yvex chat` directly or the optional `yvex workbench` consumer.
+Programmatic generation uses the private
 typed protocol through native clients or the admitted loopback provider API;
 there is no public one-shot generation command.
 

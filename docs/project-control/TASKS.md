@@ -15,6 +15,14 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
+The operator independently selected `V010.TERMINAL.WORKBENCH.INTEGRATION.0`
+on 2026-10-10 for the Rust terminal consumer only. Program P retains sole
+compiler/performance implementation authority and all its unearned exits.
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `V010.TERMINAL.WORKBENCH.INTEGRATION.0` | Terminal-native operational workbench | P1 | 🔵 IN PROGRESS | Integrate Home/conversation, Models, Compile, contextual inspection and bounded Activity through the current registry/native owners; one REPLAI terminal owner, unchanged linear CLI and protocol. Qualify real PTY navigation, streaming, Unicode, resize, cancellation, disconnection, recovery and restoration plus isolated runtime operation. No operator engine/service mutation, new compiler authority or DeepSeek performance claim. |
+
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
 2026-10-10. This is the sole active implementation authority for physical
@@ -148,10 +156,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 56 | 41 | 4 | 1 | 10 |
+| 57 | 41 | 5 | 1 | 10 |
 <!-- task-counts:end -->
 
-**41/56 selected Tasks complete.** This denominator includes the significant
+**41/57 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research

@@ -14,6 +14,45 @@ publication: {html: true, pdf: true, index: true}
 
 [Up](README.md)
 
+## Optional terminal workbench
+
+```sh
+./yvex workbench
+```
+
+The workbench is an **inline terminal workspace**, not an alternate-screen
+dashboard. It leaves useful output in scrollback and uses the terminal's own
+background. Linear commands remain independent; bare `yvex` still prints help.
+A disconnected host does not prevent opening the workbench.
+
+| Surface | Actions and authoritative facts |
+| --- | --- |
+| Home | Select an engine with Tab → `/engine/N`, then write a message or choose `/chat`. The ordinary native chat owns generation and cancellation. `/quit` in chat returns here without deleting its dedicated `workbench` session. |
+| Models | `/models` separates observed resident generations from the local model/artifact/profile catalog. `/model/N` selects a catalog item; `/details` inspects it. `/load` and `/unload` require typing `confirm`; the runtime can still refuse. |
+| Compile | `/compile` offers `/guided`, `/request` and `/techniques`, all through `compile optimize`. Request paths are one input value, not shell text. Feasibility does not establish a qualified recommendation. |
+| Activity | `/activity` shows up to 32 retained server events and, separately, 16 local action results. `/event/N` selects exact event details. This is not a complete audit trail. |
+| Inspector | `/inspect` toggles contextual facts. Engine selection retains alias **and generation**, model/artifact/binding/specialization identities and observed geometry. |
+
+Tab opens matching actions; arrows move menu focus, Enter accepts the choice,
+and Enter submits it. Escape dismisses a menu without losing the draft.
+Ctrl-C cancels editing or enters the existing chat cancellation lifecycle;
+Ctrl-D leaves the current interaction. `/refresh` performs new reads, never
+replays a load, unload or uncertain generation. An unavailable generation must
+be explicitly reselected, even if its alias reappears. A new host incarnation
+also invalidates selection; matching generation numbers do not survive restart.
+
+Views update on entry, explicit refresh and action completion. Resizing reflows
+semantic context at the current destination width and restores draft/cursor;
+it does not poll inference or repeatedly paint unchanged output. Previously
+emitted scrollback remains terminal-owned. Committed model fragments are flushed
+as they arrive, not collected until the whole response completes.
+
+The workbench neither auto-starts the host nor installs a compiler result.
+Catalog scans are bounded to 256 entries; runtime inspection has a bounded read
+budget and reports unavailable observations instead of stale success. Use
+`model list`, `host logs` and JSON for larger or automated inspection. Terminal
+functionality does not qualify DeepSeek quality, residency or throughput.
+
 ## First verified startup
 
 First check whether this user already owns a ready server:

@@ -47,6 +47,7 @@
         "qualification"
       ],
       "runtime-client": [
+        "workbench",
         "chat",
         "completion",
         "console_status",
@@ -6297,6 +6298,19 @@
       "operation_id": "artifact.verify",
       "summary": "Verify one artifact with one explicit grammar.",
       "visibility": "product-advanced"
+    },
+    {
+      "adapter_id": "workbench",
+      "architectural_plane": "Run",
+      "command_path": ["workbench"],
+      "help_group": "Conversation",
+      "lane": "runtime-client",
+      "operation_id": "workbench.open",
+      "side_effects": "interactive consumer; mutations require explicit actions",
+      "summary": "Open the terminal workbench for chat, models, compilation and activity.",
+      "documentation_owner": "docs/guides/operator-runbook.md",
+      "test_owner": "tests/rust_workbench_pty.py",
+      "visibility": "product-default"
     },
     {
       "adapter_id": "chat",

@@ -51,6 +51,27 @@ tracked copy or required sibling checkout exists. Rust consumes semantic
 documents, composed prompts, driven interaction, completion and quiet output
 directly. YVEX retains candidate meaning, sessions, channels and cancellation.
 
+## Terminal workbench consumer
+
+Selected 2026-10-10 under `V010.TERMINAL.WORKBENCH.INTEGRATION.0`.
+The opt-in `workbench` entrypoint composes semantic inline views in the current
+Rust shell. The detached historical C TUI is a reference, not a production donor:
+importing it would reinstate retired terminal/input and command ownership. The
+pin remains `c8e8f07`; no producer change follows.
+
+The workbench does not acquire an alternate screen or add a second canvas/keymap
+library. REPLAI owns editing/menu interaction; YVEX owns contextual view state and
+routes explicit actions through registry/native owners. Actions run after the
+view editor and signal worker retire. Chat retains its stream/transaction
+lifecycle and returns after detach. This preserves scrollback and linear CLI
+independence, without claiming a continuously repainting dashboard or concurrent
+editing during generation. Those are not current producer capabilities.
+
+New PTY consumer tests and actual tiny-CPU-model composition qualify this
+selection; historical C TUI and producer CI do not qualify this consumer. The
+[interface contract](../architecture/interfaces-protocols.md#terminal-workbench-consumer)
+owns state, refresh and identity details.
+
 ## Consequences and qualification
 
 The superseded C shell leaves production membership. Its meaningful machine,

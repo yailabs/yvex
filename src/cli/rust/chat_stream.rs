@@ -120,6 +120,7 @@ impl Stream {
 }
 
 pub(crate) struct Turn<'a> {
+    pub host: &'a str,
     pub alias: &'a str,
     pub generation: u64,
     pub session: &'a str,
@@ -139,6 +140,11 @@ impl Turn<'_> {
             Ok(connection) => connection,
             Err(error) => return Ok(Delivery::NotDispatched(error.to_string())),
         };
+        if connection.host_identity()? != self.host {
+            return Ok(Delivery::NotDispatched(
+                "host lifetime changed; refresh and select again".into(),
+            ));
+        }
         let mut request =
             connection.request(raw::yvex_client_operation_YVEX_CLIENT_OP_GENERATION_TURN);
         ffi::put_text(&mut request.model_alias, self.alias)?;

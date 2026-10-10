@@ -300,6 +300,11 @@ PY
 
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model load tiny-executable \
     --json >"$root/load.first"
+# Same workbench as the product, now using the actual compiled CPU model path.
+HOME="$home" XDG_RUNTIME_DIR="$runtime" python3 tests/rust_workbench_pty.py \
+    --binary "$YVEX_BIN" --tiny-runtime --output "$root/workbench"
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session close workbench \
+    >"$root/workbench.session.closed"
 # Exercise the real session producer, tokenizer and compiled CPU decoder.
 python3 - "$http_port" <<'PY'
 import http.client, json, sys

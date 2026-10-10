@@ -44,6 +44,7 @@ mod source;
 mod target;
 mod tokenizer;
 mod variant;
+mod workbench;
 mod workflow;
 
 pub struct Output {
@@ -273,6 +274,10 @@ fn dispatch(
                 diagnostic: false,
             },
             Err(error) => refused_client(&error, width, styled),
+        },
+        "workbench.open" => match workbench::run(registry, width, styled) {
+            Ok(()) => Output::standard(String::new(), 0),
+            Err(error) => refused(&error.to_string(), None, width, styled, 2),
         },
         "generation.chat" => {
             use std::io::IsTerminal;

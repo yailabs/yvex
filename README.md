@@ -121,6 +121,10 @@ In another terminal, replace `MODEL` with its catalog identifier:
 ./yvex chat --model MODEL
 ```
 
+For an optional terminal workspace, run `./yvex workbench`: conversation,
+Models, Compile, Activity and exact runtime inspection share the same native
+owners. [Workbench controls](docs/guides/operator-runbook.md#optional-terminal-workbench).
+
 Weights are acquired separately; `model load` does not download them.
 [Acquisition and preparation](docs/guides/quickstart.md)
 · [Published representations](docs/guides/model-lifecycle.md#published-representations)
