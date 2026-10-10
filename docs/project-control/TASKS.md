@@ -22,8 +22,11 @@ configuration search and the associated DeepSeek representation/backend work.
 `.5` retains its source, admission, numerical and performance evidence and is
 BLOCKED on this successor, not COMPLETE. No duplicate implementation is selected.
 The six retained experimental CUDA edits remain unaccepted until reconciled and
-qualified. The post-reboot Host has no loaded engines; service availability is
-not model admission. Program P does not authorize replacement of operator engines.
+qualified. The post-reboot Host initially had no loaded engines; service
+availability is not model admission. The separately authorized
+[previous DSpark 32K activation](../evaluation/dspark-32k-runtime-activation.md)
+subsequently loaded generation 1 without restarting that Host. Program P does
+not authorize replacement of operator engines.
 
 The operator independently selected
 `V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` on 2026-10-09.
@@ -155,6 +158,20 @@ YVEX product completion. Research
 candidates are not selected Tasks.
 
 ## DeepSeek competitive execution and qualification authority
+
+### Operator-installed DSpark 32K activation — 2026-10-10
+
+The independently selected installed-profile repair/rollout/load at the
+existing deployment boundary earns its bounded activation exit: structural
+support comparison repaired, exact `337e7e73`-based verifier `c0ccd7f1` installed,
+only idle management replaced, original Host preserved, previous DSpark loaded
+at 32,768/chunk 512/one physical sequence and observed through Exon. Catalog and
+capacity-only tool/feedback/near-limit preflights pass, without inference.
+[Exact evidence and YAI handoff](../evaluation/dspark-32k-runtime-activation.md)
+retain identities, reserve and memory limits. This does not reopen predecessor
+implementation, close `.5`, qualify model-directed YAI Work, select a compiler
+successor or promote capability/Task totals. Program P remains the sole compiler
+implementation authority; its original WIP and unearned exits are preserved.
 
 ### Program P implementation selection — 2026-10-10
 

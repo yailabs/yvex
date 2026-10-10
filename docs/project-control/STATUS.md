@@ -84,6 +84,16 @@ Measured recommendation and the 20/700 exits remain open.
 
 ## Retained computational architecture reconstruction
 
+The separate operator-authorized
+[previous DSpark 32K activation](../evaluation/dspark-32k-runtime-activation.md)
+now has a real loaded CUDA generation 1 on the unchanged `337e7e73` Host.
+The exact verifier backport is installed only in the management/client boundary;
+full artifact audit, Exon catalog and tokenizer/capacity preflight pass. Total
+sequence capacity is 32,768, physical width one. Tool-call and feedback **input
+shapes** pass preflight, but actual native-function inference and a real YAI
+multi-step Work are not yet qualified on this generation. No inference was
+submitted; Program P, independent quality and 20/700 postures are unchanged.
+
 `V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` was selected as the
 DeepSeek execution implementation, starting from published/installed
 `337e7e73`. The predecessor `.4` is stopped at its retained checkpoint with
