@@ -150,9 +150,18 @@ static int programs_stage_open(yvex_runtime_moe_programs *c, unsigned long long 
     if (shared == 2) {
         int rc = programs_batch_target(c, p, &target, err);
         if (rc != YVEX_OK || !target) return rc;
-        c->targets[index] = target;
         p = target;
     }
+    /* The compiler proves immutable input backing from the physical SSA graph.
+     * No layer/qtype heuristic grants aliasing and no model weight is repacked. */
+    yvex_program_physical *views = NULL;
+    yvex_program_view_facts view_facts;
+    int view_rc = yvex_program_physical_views_compile(&views, p, c->capacity, &view_facts, err);
+    yvex_program_physical_close(&target);
+    if (view_rc != YVEX_OK) return view_rc;
+    c->targets[index] = views;
+    p = views;
+    s = yvex_program_physical_summary_get(p);
     yvex_program_kernel_parameter *parameters = calloc(s->value_count, sizeof(*parameters));
     if (!parameters) {
         return programs_refuse(err, YVEX_ERR_NOMEM, "parameter directory allocation failed");

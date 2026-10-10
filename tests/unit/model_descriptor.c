@@ -511,6 +511,23 @@ static int test_compiled_forward_import(const yvex_decoder_plan *decoder,
         yvex_compiled_model_plan_encode(plan, &again, &err) == YVEX_OK &&
         again.count == wire.count && !memcmp(wire.data, again.data, wire.count),
         "whole executable reopens against exact physical bindings and roundtrips without rebuilding computation");
+    yvex_optimization_program_report report = {0};
+    yvex_compiled_program_view view;
+    const yvex_program_physical_summary *ps = yvex_program_physical_summary_get(program);
+    int present = 0;
+    YVEX_TEST_ASSERT(yvex_compiled_model_program_at(plan, 0u, &view) &&
+        !strcmp(view.role, "forward") && !view.has_layer && !view.draft &&
+        view.program == yvex_compiled_model_plan_forward(plan) &&
+        yvex_optimization_program_inspect(plan, 0u, ps->minimum_rows, &report, &present, &err) == YVEX_OK &&
+        present && report.status == YVEX_OK && !report.has_layer && !report.runtime_consumer &&
+        !strcmp(report.baseline_identity, ps->identity) &&
+        !strcmp(report.semantic_identity, ps->semantic_identity) &&
+        !strcmp(report.parameter_identity, ps->parameter_identity),
+        "optimizer projects authenticated whole-forward facts without fabricating layers or a runtime selector");
+    YVEX_TEST_ASSERT(yvex_optimization_program_inspect(plan, SIZE_MAX, ps->minimum_rows,
+        &report, &present, &err) == YVEX_OK && !present && !report.baseline_identity[0] &&
+        yvex_optimization_program_inspect(plan, 0u, 0u, &report, &present, &err) == YVEX_ERR_INVALID_ARG &&
+        !present && !report.candidate_identity[0], "end and invalid population publish no stale candidate");
     YVEX_TEST_ASSERT(
         decoder_summary &&
             yvex_compiled_model_plan_context_envelope(

@@ -173,6 +173,14 @@ gate.
 
 ## Internal MoE Execution Boundary
 
+Equivalent physical input views preserve every stored F32 bit, including signed
+zero, and perform no arithmetic. BF16 semantic activations already carried in
+F32 storage may widen without another copy; F32-to-BF16 rounding is unchanged.
+Only internal results with proven immutable invocation-input backing qualify.
+Computed storage, state versions and public outputs retain independent ownership.
+Copy removal does not authorize moving an arithmetic operation, changing effects,
+relaxing exceptional-value handling or publishing before checked completion.
+
 `include/yvex/internal/moe.h` owns the non-installed MoE plan, typed input,
 generic graph/backend execution packets, inspect context, and operator result.
 The plan imports immutable runtime descriptor and materialization facts for all

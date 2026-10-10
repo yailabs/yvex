@@ -249,6 +249,7 @@ fn native_bindings(root: &std::path::Path) -> bindgen::Builder {
                 "#include <yvex/internal/model_lifecycle.h>\n",
                 "#include <yvex/internal/model_preparation.h>\n",
                 "#include <yvex/optimization.h>\n",
+                "#include <yvex/internal/program_physical.h>\n",
                 "#include <yvex/internal/runtime_capacity.h>\n",
                 "#include <yvex/internal/source_distribution.h>\n",
                 "#include <yvex/tokenizer.h>\n#include <yvex/internal/family_catalog.h>\n",
@@ -264,6 +265,7 @@ fn native_bindings(root: &std::path::Path) -> bindgen::Builder {
         .allowlist_function("yvex_model_library_.*")
         .allowlist_function("yvex_model_preparation_.*")
         .allowlist_function("yvex_optimization_.*")
+        .allowlist_function("yvex_runtime_binding_compiled_plan")
         .allowlist_function("yvex_runtime_private_memory_capacity")
         .allowlist_function("yvex_runtime_capacity_preflight")
         .allowlist_function("yvex_artifact_catalog_(open|close|count|at|next)")

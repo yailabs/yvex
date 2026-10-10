@@ -195,6 +195,15 @@ The existing Mamba proof remains the non-Transformer control. Technique referenc
 are not implemented capabilities; 20/700 and independent quality remain unearned.
 No second implementation Task or installed-engine replacement is selected.
 
+The computational-graph continuation uses sealed operator/program facts to
+select executable alternatives, not just weight policies. Its first bounded
+candidate is input-backed, read-only physical view lowering: eliminate redundant
+reshape/exact-widening materialization without changing parameter bytes,
+arithmetic, state effects or caller-owned publication. Numerical/lifetime,
+resource and complete-model gates remain independent; an eliminated copy is
+not a throughput certificate. The six inherited CUDA experiments remain
+unaccepted, separate work. Operator engines are protected during qualification.
+
 The authenticated Q8_0/Q2_K baseline remains a candidate, not a selected optimum.
 Initial-memory fit, qtype readability, coupled-kernel compatibility, full runtime
 admission, measured performance and independently qualified quality are distinct.

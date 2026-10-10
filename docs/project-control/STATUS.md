@@ -92,6 +92,13 @@ full-model continuation drift despite passing component controls.
 See the [identity-bound series](../evaluation/retained-observations.md#program-p-static-search-and-post-boot-admission-2026-10-10).
 Measured recommendation and the 20/700 exits remain open.
 
+The computational continuation adds an experimental graph-derived physical
+alternative: immutable input views for internal reshape/exact-widening work.
+Program P inspects existing compiled programs and their real layer/scope through
+CLI JSON v3; no duplicate topology is inferred. Numerical/state/lifetime,
+resource and complete-model qualification remain separate. This does not select
+a new weight recipe, qualify model quality or replace the resident engine.
+
 ## Retained computational architecture reconstruction
 
 The separate operator-authorized

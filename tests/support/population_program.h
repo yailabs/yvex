@@ -2,6 +2,7 @@
 #ifndef TESTS_SUPPORT_POPULATION_PROGRAM_H
 #define TESTS_SUPPORT_POPULATION_PROGRAM_H
 #include "tests/test.h"
+#include "tests/support/program_views.h"
 #include <yvex/internal/program_stage.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/qtype.h>
@@ -65,7 +66,8 @@ static int population_program(yvex_program_physical **out, int bf16, yvex_error 
     return rc;
 }
 
-static int test_program_populations(yvex_backend_kind kind, int bf16)
+static int test_program_populations_variant(yvex_backend_kind kind, int bf16, int views,
+    unsigned long long *allocated)
 {
     yvex_program_physical *p = NULL, *decoded = NULL;
     yvex_program_stage *stage = NULL;
@@ -87,6 +89,7 @@ static int test_program_populations(yvex_backend_kind kind, int bf16)
     }
     for (size_t i = 0u; i < 256u; ++i) input[i] = (float)i / 16.0f;
     int rc = population_program(&p, bf16, &err);
+    if (rc == YVEX_OK && views && test_program_input_views(&p, 8u, 1u, 1024u)) return 1;
     if (rc == YVEX_OK) rc = yvex_program_physical_encode(p, &wire, &err);
     if (rc == YVEX_OK) rc = yvex_program_physical_decode(&decoded, wire.data, wire.count, &err);
     if (rc != YVEX_OK) fprintf(stderr, "population compile/import: %s: %s\n",
@@ -130,6 +133,9 @@ static int test_program_populations(yvex_backend_kind kind, int bf16)
         }
         YVEX_TEST_ASSERT(maximum == 0.0f, "independent reshape/identity-projection oracle is exact");
     }
+    unsigned long long host_bytes, device_bytes;
+    yvex_program_stage_resources(stage, &host_bytes, &device_bytes);
+    *allocated = host_bytes + device_bytes;
     YVEX_TEST_ASSERT(yvex_program_stage_close(&stage, &err) == YVEX_OK, "release population stage");
     if (resident) YVEX_TEST_ASSERT(yvex_backend_resident_detach(backend, &err) == YVEX_OK &&
         yvex_backend_tensor_release(backend, &resident, &err) == YVEX_OK, "release population parameters");
@@ -143,6 +149,16 @@ static int test_program_populations(yvex_backend_kind kind, int bf16)
         "max_abs=%g tolerance=0; binary identity stable; allocation_delta=0\n",
         kind == YVEX_BACKEND_KIND_CUDA ? "CUDA" : "CPU", bf16 ? "BF16" : "F32",
         (double)output[0], (double)output[63], (double)maximum);
+    return 0;
+}
+
+static int test_program_populations(yvex_backend_kind kind, int bf16)
+{
+    unsigned long long before, after;
+    if (test_program_populations_variant(kind, bf16, 0, &before) ||
+        test_program_populations_variant(kind, bf16, 1, &after)) return 1;
+    YVEX_TEST_ASSERT(after < before, "input view removes an actual allocation from the stage");
+    printf("Population stage resources: host+device=%llu->%llu saved=%llu bytes\n", before, after, before - after);
     return 0;
 }
 static int index_program(yvex_program_physical **out, unsigned int negative, yvex_error *err)

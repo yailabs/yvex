@@ -10,6 +10,7 @@
 #include <yvex/internal/family_catalog.h>
 #include <yvex/internal/gguf_writer.h>
 #include <yvex/internal/quant_numeric.h>
+#include <yvex/internal/program_physical.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -53,6 +54,45 @@ unsigned int yvex_optimization_technique_count(void)
 const yvex_optimization_technique *yvex_optimization_technique_at(unsigned int index)
 {
     return index < yvex_optimization_technique_count() ? &techniques[index].descriptor : NULL;
+}
+
+int yvex_optimization_program_inspect(const yvex_compiled_model_plan *plan, size_t index,
+    unsigned long long rows, yvex_optimization_program_report *out, int *present, yvex_error *err)
+{
+    yvex_compiled_program_view view;
+    yvex_program_physical *candidate = NULL;
+    yvex_program_view_facts facts;
+    yvex_optimization_program_report r = {0};
+    if (out) memset(out, 0, sizeof(*out));
+    if (present) *present = 0;
+    if (!plan || !rows || !out || !present) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "compiler.optimization.program", "sealed model and rows required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!yvex_compiled_model_program_at(plan, index, &view)) { yvex_error_clear(err); return YVEX_OK; }
+    const yvex_program_physical_summary *s = yvex_program_physical_summary_get(view.program);
+    yvex_core_text_copy(r.role, sizeof(r.role), view.role);
+    yvex_core_text_copy(r.operator_graph_identity, sizeof(r.operator_graph_identity),
+        yvex_compiled_model_plan_operator_graph_identity(plan));
+    yvex_core_text_copy(r.baseline_identity, sizeof(r.baseline_identity), s->identity);
+    yvex_core_text_copy(r.semantic_identity, sizeof(r.semantic_identity), s->semantic_identity);
+    yvex_core_text_copy(r.parameter_identity, sizeof(r.parameter_identity), s->parameter_identity);
+    r.rows = rows; r.layer = view.layer; r.draft = view.draft; r.has_layer = view.has_layer;
+    r.operations = s->step_count; r.baseline_slots = s->storage_count;
+    r.runtime_consumer = !strcmp(view.role, "moe.ingress") || !strcmp(view.role, "moe.shared");
+    r.status = yvex_program_physical_views_compile(&candidate, view.program, rows, &facts, err);
+    if (r.status == YVEX_OK) {
+        const yvex_program_physical_summary *c = yvex_program_physical_summary_get(candidate);
+        yvex_core_text_copy(r.candidate_identity, sizeof(r.candidate_identity), c->identity);
+        r.views = facts.view_count; r.copy_bytes = facts.copy_bytes; r.candidate_slots = c->storage_count;
+        yvex_core_text_copy(r.reason, sizeof(r.reason), facts.view_count ?
+            "legal input-backed views; capacity, execution and quality require separate evidence" :
+            "no eligible input-backed copy; physical program unchanged");
+    } else yvex_core_text_copy(r.reason, sizeof(r.reason), yvex_error_message(err));
+    yvex_program_physical_close(&candidate);
+    *out = r; *present = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 int yvex_optimization_search_run(yvex_optimization_search **out,

@@ -698,6 +698,7 @@ pub(crate) struct DeploymentAssessment {
     pub required: u64,
     pub available: u64,
     pub plan: Option<raw::yvex_execution_capacity_plan>,
+    pub programs: Vec<raw::yvex_optimization_program_report>,
 }
 
 struct CapacityResources {
@@ -760,6 +761,35 @@ pub(crate) fn deployment_assessment(
                 "binding does not match an exact compiled physical variant and transformation",
             )
         })?;
+    let mut programs = Vec::new();
+    let compiled = unsafe { raw::yvex_runtime_binding_compiled_plan(resources.binding) };
+    for index in 0..262_144 {
+        let mut report = raw::yvex_optimization_program_report::default();
+        let mut present = 0;
+        checked(
+            unsafe {
+                raw::yvex_optimization_program_inspect(
+                    compiled,
+                    index,
+                    request.prefill_tokens,
+                    &mut report,
+                    &mut present,
+                    &mut failure,
+                )
+            },
+            &failure,
+        )?;
+        if present == 0 {
+            break;
+        }
+        programs.push(report);
+        if index == 262_143 {
+            return Err(refusal(
+                raw::yvex_status_YVEX_ERR_BOUNDS,
+                "compiled program inspection exceeds bound",
+            ));
+        }
+    }
     let backend_options = raw::yvex_backend_options {
         kind: request.backend,
         ..Default::default()
@@ -815,5 +845,6 @@ pub(crate) fn deployment_assessment(
         required,
         available,
         plan,
+        programs,
     })
 }

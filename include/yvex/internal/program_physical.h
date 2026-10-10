@@ -69,6 +69,43 @@ typedef struct {
  * is retained, physical identity changes; the source object is never mutated. */
 int yvex_program_physical_target_compile(yvex_program_physical **,
     const yvex_program_physical *, const yvex_program_target_choice *, size_t, yvex_error *);
+/* Equivalent, input-backed view legalization. Only internal reshape/exact F32
+ * widening results may borrow an immutable invocation input. Computed storage,
+ * state, parameters and caller-owned results never acquire aliases here.
+ * No artifact bytes or semantic/execution lineage change. An unchanged program
+ * keeps its identity. Counts/bytes describe eliminated copies at the declared rows,
+ * not full capacity, measured latency or a quality recommendation. */
+typedef struct {
+    size_t view_count;
+    unsigned long long copy_bytes;
+} yvex_program_view_facts;
+int yvex_program_physical_views_compile(yvex_program_physical **,
+    const yvex_program_physical *, unsigned long long rows, yvex_program_view_facts *, yvex_error *);
+struct yvex_compiled_model_plan;
+/* Borrowed projection of programs actually present in the sealed model plan.
+ * No absent attention, layer or typed program is synthesized for inspection. */
+typedef struct {
+    const yvex_program_physical *program;
+    const char *role;
+    int draft, has_layer;
+    unsigned long long layer;
+} yvex_compiled_program_view;
+int yvex_compiled_model_program_at(const struct yvex_compiled_model_plan *, size_t,
+    yvex_compiled_program_view *);
+typedef struct {
+    char role[32], operator_graph_identity[YVEX_SHA256_HEX_BYTES];
+    char baseline_identity[YVEX_SHA256_HEX_BYTES], candidate_identity[YVEX_SHA256_HEX_BYTES];
+    char semantic_identity[YVEX_SHA256_HEX_BYTES], parameter_identity[YVEX_SHA256_HEX_BYTES];
+    unsigned long long rows, layer, copy_bytes;
+    size_t operations, views, baseline_slots, candidate_slots;
+    int draft, has_layer, runtime_consumer;
+    int status;
+    char reason[192];
+} yvex_optimization_program_report;
+/* Program P inspects one exact compiled program and legalizes an equivalent
+ * alternative. This is static computation/resource evidence, never timing. */
+int yvex_optimization_program_inspect(const struct yvex_compiled_model_plan *, size_t,
+    unsigned long long rows, yvex_optimization_program_report *, int *present, yvex_error *);
 int yvex_program_physical_encode(const yvex_program_physical *, yvex_core_bytes *, yvex_error *);
 int yvex_program_physical_decode(yvex_program_physical **, const unsigned char *, size_t, yvex_error *);
 /* Cold admission joins the sealed work to its exact package physical records. */

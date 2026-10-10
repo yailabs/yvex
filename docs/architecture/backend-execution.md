@@ -243,6 +243,12 @@ likewise lets its completing consumer own the copied scratch. This does not
 weaken the synchronous tensor-copy API: non-scoped callers and backends without
 queued-copy support retain checked synchronous copying. The runner drains
 submitted copies before cancellation/refusal can release or publish storage.
+Compiler-selected immutable-input views need no copy or allocation. They borrow
+the admitted input only for the invocation, preserve logical shape/precision,
+and cannot alias caller-owned outputs or computed arena lifetimes. They do not
+clear completion status, perform arithmetic or weaken cancellation. The copying
+realization remains available as a control; backend support for this carrier is
+not model admission or proof of a complete-model speedup.
 Eligible encoded projections also accept an explicitly owned packing workspace.
 The backend declares its checked byte extent from the admitted encoding and
 actual row population. A prepared physical program retains one buffer for its

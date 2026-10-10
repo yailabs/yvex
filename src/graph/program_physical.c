@@ -111,7 +111,9 @@ static const physical_rule physical_rules[] = {
      YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x7eu},
     {"sequence.gated_delta", "gated_delta.bf16.f32state.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
     {"sequence.gated_delta", "gated_delta.mixed.f32state.v2", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
-    {"attention.gated_causal", "gated_causal.bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x18u}};
+    {"attention.gated_causal", "gated_causal.bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x18u},
+    {"tensor.reshape", "reshape.input_view.v1", 0u, 0u},
+    {"tensor.cast", "cast.input_view.f32.v1", 0u, 0u}};
 
 static int physical_refuse(yvex_error *err, yvex_status status, const char *reason)
 {
@@ -212,6 +214,34 @@ incompatible:
 }
 
 static int physical_seal(yvex_program_physical *, yvex_error *);
+static int physical_is_result(const yvex_program_physical *, size_t);
+
+static int physical_view(const yvex_program_physical_step *s)
+{
+    return !strcmp(s->implementation, "reshape.input_view.v1") ||
+        !strcmp(s->implementation, "cast.input_view.f32.v1");
+}
+
+/* Restrict borrowing to an invocation input. This deliberately excludes arena
+ * values: their last-use/reuse intervals would require a different legalization.
+ * Walk only earlier SSA definitions, so imported cycles cannot pass admission. */
+static int physical_input_backing(const yvex_program_physical *p, yvex_ir_id value)
+{
+    size_t bound = p->summary.step_count;
+    while (value < p->summary.value_count) {
+        const yvex_program_physical_value *v = p->values + value;
+        if (v->parameter || v->type.kind != YVEX_IR_TENSOR ||
+            (v->type.scalar != YVEX_IR_F32 && v->type.scalar != YVEX_IR_BF16)) return 0;
+        if (value < p->summary.input_count) return 1;
+        if (v->definition >= bound) return 0;
+        bound = v->definition;
+        const yvex_program_physical_step *s = p->steps + bound;
+        if (!physical_view(s) || s->effects || s->operand_count != 1u ||
+            s->result_count != 1u || s->results[0] != value) return 0;
+        value = s->operands[0];
+    }
+    return 0;
+}
 
 static const physical_rule *physical_rule_find(const char *name, int lowered)
 {
@@ -323,14 +353,19 @@ static int physical_numeric_verify(const yvex_program_physical *p,
         if (w->rank != 2u || w->shape[0].extent != out || w->shape[1].extent != 5376u)
             return physical_refuse(err, YVEX_ERR_UNSUPPORTED, "target affine implementation geometry is not admitted");
     }
-    if (!strcmp(s->implementation, "cast.rne.bf16.v1") || !strcmp(s->implementation, "cast.exact.f32.v1")) {
+    if (physical_view(s) && (s->effects || s->operand_count != 1u || s->result_count != 1u ||
+        physical_is_result(p, s->results[0]) || !physical_input_backing(p, s->operands[0])))
+        return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+            "view requires immutable input backing and an internal non-state result");
+    if (!strcmp(s->implementation, "cast.rne.bf16.v1") || !strcmp(s->implementation, "cast.exact.f32.v1") ||
+        !strcmp(s->implementation, "cast.input_view.f32.v1")) {
         yvex_ir_scalar input = p->values[s->operands[0]].type.scalar;
         yvex_ir_scalar output = p->values[s->results[0]].type.scalar;
         return (input == YVEX_IR_F32 || input == YVEX_IR_BF16) &&
             output == (f32 ? YVEX_IR_F32 : YVEX_IR_BF16) ? YVEX_OK :
             physical_refuse(err, YVEX_ERR_UNSUPPORTED, "conversion requires admitted F32/BF16 storage and precision");
     }
-    if (!strcmp(s->implementation, "reshape.f32-storage.v1") ||
+    if (!strcmp(s->implementation, "reshape.f32-storage.v1") || !strcmp(s->implementation, "reshape.input_view.v1") ||
         !strcmp(s->implementation, "observe.f32-storage.v1")) {
         yvex_ir_scalar scalar = p->values[s->operands[0]].type.scalar;
         return scalar == YVEX_IR_F32 || scalar == YVEX_IR_BF16 ? YVEX_OK :
@@ -592,7 +627,7 @@ static int physical_storage_plan(yvex_program_physical *p, int verify, yvex_erro
         yvex_program_physical_value *v = &p->values[i];
         yvex_ir_id slot = YVEX_IR_NONE;
         if (i >= p->summary.input_count && !v->parameter && v->type.kind == YVEX_IR_TENSOR &&
-            !physical_is_result(p, i)) {
+            !physical_is_result(p, i) && !physical_view(&p->steps[v->definition])) {
             size_t j;
             for (j = 0u; j < count; ++j) {
                 const yvex_program_physical_value *prior = &p->values[owners[j]];
@@ -946,9 +981,51 @@ int yvex_program_physical_target_compile(yvex_program_physical **out, const yvex
                 "target specialization cannot change computation or storage classes");
         if (rc == YVEX_OK) step->implementation = selected->implementation;
     }
+    if (rc == YVEX_OK) rc = physical_storage_plan(p, 0, err);
     if (rc == YVEX_OK) rc = physical_verify(p, err);
     if (rc == YVEX_OK) rc = physical_seal(p, err);
     if (rc == YVEX_OK) *out = p;
+    else yvex_program_physical_close(&p);
+    return rc;
+}
+
+int yvex_program_physical_views_compile(yvex_program_physical **out,
+    const yvex_program_physical *source, unsigned long long rows,
+    yvex_program_view_facts *facts, yvex_error *err)
+{
+    yvex_program_physical *p = NULL;
+    yvex_core_bytes wire = {.maximum = PHYSICAL_BYTES};
+    yvex_program_view_facts result = {0};
+    if (out) *out = NULL;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (!out || !source || !facts || rows < source->summary.minimum_rows ||
+        rows > source->summary.maximum_rows || rows % source->summary.row_multiple)
+        return physical_refuse(err, YVEX_ERR_INVALID_ARG, "verified program and admitted view population required");
+    int rc = yvex_program_physical_encode(source, &wire, err);
+    if (rc == YVEX_OK) rc = yvex_program_physical_decode(&p, wire.data, wire.count, err);
+    free(wire.data);
+    for (size_t i = 0u; rc == YVEX_OK && i < p->summary.step_count; ++i) {
+        yvex_program_physical_step *s = p->steps + i;
+        int reshape = !strcmp(s->implementation, "reshape.f32-storage.v1");
+        int widen = !strcmp(s->implementation, "cast.exact.f32.v1");
+        if ((!reshape && !widen && !physical_view(s)) || s->effects || s->operand_count != 1u ||
+            s->result_count != 1u || physical_is_result(p, s->results[0]) ||
+            !physical_input_backing(p, s->operands[0])) continue;
+        yvex_program_value_layout layout;
+        rc = yvex_program_physical_value_layout(p, s->results[0], rows, &layout, err);
+        if (rc != YVEX_OK) break;
+        if (!yvex_core_u64_add(result.copy_bytes, layout.bytes, &result.copy_bytes)) {
+            rc = physical_refuse(err, YVEX_ERR_BOUNDS, "view copy extent overflowed");
+            break;
+        }
+        result.view_count++;
+        if (reshape) s->implementation = "reshape.input_view.v1";
+        if (widen) s->implementation = "cast.input_view.f32.v1";
+    }
+    if (rc == YVEX_OK) rc = physical_storage_plan(p, 0, err);
+    if (rc == YVEX_OK) rc = physical_verify(p, err);
+    if (rc == YVEX_OK) rc = physical_seal(p, err);
+    if (rc == YVEX_OK) { *out = p; *facts = result; }
     else yvex_program_physical_close(&p);
     return rc;
 }

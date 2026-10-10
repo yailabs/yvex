@@ -51,12 +51,18 @@ fn checkpoint_relationship(
     binding: &str,
     local: bool,
 ) -> Result<Value> {
-    let record = records.iter().find(|r| {
-        r["target"]["artifact_set"] == artifact
-            && r["target"]["binding"] == binding
-            && r["target"]["upstream_repository"] == suite["applicability"]["repository"]
-            && r["target"]["checkpoint"] == suite["applicability"]["revision"]
-    }).ok_or("qualification: no exact artifact/binding/checkpoint relationship for this suite; family name is insufficient")?;
+    let record = records
+        .iter()
+        .find(|r| {
+            r["target"]["artifact_set"] == artifact
+                && r["target"]["binding"] == binding
+                && r["target"]["upstream_repository"] == suite["applicability"]["repository"]
+                && r["target"]["checkpoint"] == suite["applicability"]["revision"]
+        })
+        .ok_or(concat!(
+            "qualification: no exact artifact/binding/checkpoint relationship for this suite; ",
+            "family name is insufficient"
+        ))?;
     Ok(
         json!({"source": if local {"explicit-local-record"} else {"embedded-catalog"},
         "record_identity": ffi::digest(&serde_json::to_vec(record)?)?,

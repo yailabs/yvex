@@ -3,6 +3,7 @@
 #ifndef TESTS_SUPPORT_SHARED_EXPERT_PROGRAM_H
 #define TESTS_SUPPORT_SHARED_EXPERT_PROGRAM_H
 #include "tests/test.h"
+#include "tests/support/program_views.h"
 #include <yvex/internal/moe.h>
 #include <yvex/internal/program_stage.h>
 #include <yvex/internal/program_kernels.h>
@@ -24,7 +25,7 @@ static float test_shared_round(float x)
 
 static int test_shared_cancel(void *context) { (void)context; return 1; }
 
-static int test_shared_expert(yvex_backend_kind kind)
+static int test_shared_expert_variant(yvex_backend_kind kind, int views, unsigned long long *allocated)
 {
     enum { WIDTH = 32, ROWS = 3, COUNT = WIDTH * ROWS };
     const char *identity = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
@@ -54,6 +55,7 @@ static int test_shared_expert(yvex_backend_kind kind)
     if (imported != YVEX_OK) fprintf(stderr, "shared import: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
     YVEX_TEST_ASSERT(imported == YVEX_OK,
         "shared FFN imports as a typed function");
+    if (views && test_program_input_views(&program, ROWS, 1u, COUNT * sizeof(float))) return 1;
     const yvex_program_physical_summary *s = yvex_program_physical_summary_get(program);
     YVEX_TEST_ASSERT(s->input_count == 1u && s->result_count == 1u, "one normalized input and BF16 result");
     for (unsigned int invalid = 0u; invalid < 5u; ++invalid) {
@@ -106,6 +108,9 @@ static int test_shared_expert(yvex_backend_kind kind)
         if (error > maximum) maximum = error;
     }
     YVEX_TEST_ASSERT(maximum == 0.0, "shared compiled FFN equals independent long-double diagonal oracle exactly");
+    for (unsigned int i = 0u; i < COUNT; ++i)
+        YVEX_TEST_ASSERT(!memcmp(x + i, probes + i % (sizeof(probes) / sizeof(probes[0])), sizeof(float)),
+            "input-backed execution preserves immutable inputs including signed zero");
     for (unsigned int row = 0u; row < ROWS; ++row)
         YVEX_TEST_ASSERT(yvex_program_stage_host(stage, 1u, (const float *[]){x + row * WIDTH}, 1u,
             (float *[]){single + row * WIDTH}, 1u, NULL, NULL, &facts, &err) == YVEX_OK,
@@ -116,6 +121,9 @@ static int test_shared_expert(yvex_backend_kind kind)
         test_shared_cancel, NULL, &facts, &err) == YVEX_ERR_CANCELLED, "shared cancellation fails closed");
     for (unsigned int i = 0u; i < COUNT; ++i)
         YVEX_TEST_ASSERT(actual[i] == 123.0f, "shared cancellation publishes no partial result");
+    unsigned long long host_bytes, device_bytes;
+    yvex_program_stage_resources(stage, &host_bytes, &device_bytes);
+    *allocated = host_bytes + device_bytes;
     YVEX_TEST_ASSERT(yvex_program_stage_close(&stage, &err) == YVEX_OK, "shared stage closes");
     if (resident) YVEX_TEST_ASSERT(yvex_backend_resident_detach(backend, &err) == YVEX_OK &&
         yvex_backend_tensor_release(backend, &resident, &err) == YVEX_OK, "shared residency closes");
@@ -129,6 +137,16 @@ static int test_shared_expert(yvex_backend_kind kind)
     yvex_program_physical_close(&changed); free(bytes.data); free(again.data);
     return 0;
 }
+static int test_shared_expert(yvex_backend_kind kind)
+{
+    unsigned long long before, after;
+    if (test_shared_expert_variant(kind, 0, &before) || test_shared_expert_variant(kind, 1, &after)) return 1;
+    YVEX_TEST_ASSERT(after < before, "view realization actually allocates less prepared stage storage");
+    printf("Shared stage resources: host+device=%llu->%llu saved=%llu bytes; same independent output oracle\n",
+        before, after, before - after);
+    return 0;
+}
+
 static void test_shared_q8_reference(const float *x, float *out)
 {
     unsigned int maximum = 0u;

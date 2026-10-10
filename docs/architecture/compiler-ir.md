@@ -383,7 +383,7 @@ open; source retention alone cannot establish either.
 
 Consumer handoff: the native optimization schema is version 1, with public types
 in `<yvex/optimization.h>`; the Rust operator projection is
-`yvex.optimization.search.v2`. Opt-in complete production returns
+`yvex.optimization.search.v3`. Opt-in complete production returns
 `yvex.physical-production.result.v2`, preserving emission-only v1. These are
 offline source/policy/variant/artifact/binding operations, not Host/Engine/Session
 admission and not a new remote management endpoint. No independent SDK or Studio
@@ -393,6 +393,32 @@ and unmeasured performance. After a partial production result, inspect the
 artifact and binding outcomes separately; a lost acknowledgement or absent
 binding does not authorize blind re-emission or overwrite. Installed clients
 must advertise the operation/schema before it is offered as available.
+
+### Computational alternatives: immutable input views
+
+Program P now consumes the compiled model plan's existing physical programs,
+including target/draft MoE ingress and shared-expert programs. Enumeration is a
+borrowed projection, not a second layer catalog. Whole-forward SSA programs in
+other architectures remain whole-forward programs; absent attention or MoE is
+not inferred. This projection is partial: it does not claim that every canonical
+operator already has a physical SSA body.
+
+| Decision | Owner and obligation |
+| --- | --- |
+| Candidate | `yvex_program_physical_views_compile` derives input-backed reshape/exact-F32-widening alternatives from verified operands, definitions and result interfaces. |
+| Legality | Only internal results rooted in an immutable invocation input qualify. Computed arena values, parameters, state and caller-owned results cannot borrow storage. F32→BF16 rounding is never removed. |
+| Identity | Semantic/execution/parameter lineage is unchanged; selected physical-program identity changes. Artifact, encoded weights and authenticated binding bytes are not rewritten. |
+| Resources | Compiler omits those activation slots. Runtime uses typed borrowed views, charges remaining allocations and retains original completion/cancellation/publication boundaries. |
+| Selection | MoE preparation applies the cold compiler pass after admitted activation specialization. Other program consumers can inspect the alternative but do not automatically adopt it. |
+| Evidence | Copy counts/extents and slot counts are static facts. Actual allocation savings and complete-model timing require separate observations. Neither source retention nor copy elimination earns a quality/speed recommendation. |
+
+The copying implementation remains the explicit control. Imported view programs
+revalidate immutable backing and canonical slot assignments; a caller cannot
+select a view implementation to evade liveness or output isolation. Public CLI
+JSON v3 exposes each program's alternative through existing
+`compile optimize --runtime-binding`; the human projection summarizes counts.
+No new parser, graph IR, hardware policy, engine installation or remote operation
+is introduced.
 
 
 

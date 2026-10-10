@@ -161,7 +161,7 @@ its output without all artifact-owner proofs. A match does not authenticate emit
 plan views call per-qtype execution facts `operand_compute_available`, not
 `runtime_executable`.
 Selection is an explicit experiment, not a qualified recommendation. The CLI's
-`yvex.optimization.search.v2` JSON adds the resolved context and method identity,
+`yvex.optimization.search.v3` JSON retains the resolved context and method identity,
 projects missing metrics as `null` and keeps
 `qualified_recommendation` null until its independent evidence is implemented.
 Request JSON v1 remains accepted; allocation controls require request v2. The
@@ -169,6 +169,18 @@ guided Rust surface writes that same v2 request and never installs a model.
 Receipt authentication is distinct from parsing: an exact whole-record match
 against the build's embedded canonical publication is identified explicitly;
 other files remain untrusted inspection. A digest alone is not a trust root.
+
+With `--runtime-binding`, v3 additionally projects compiled-program alternatives
+from the authenticated model plan: graph/program/parameter identities, target or
+draft scope, actual layer coordinate where present, requested population,
+legality/refusal and eliminated copy extents. The initial technique is
+`immutable-input-views-v1`; no encoded parameter changes. Copy bytes per program
+invocation are not resident-memory savings or per-request traffic. Programs
+outside the requested population refuse individually. Absent typed programs are
+not synthesized. These static results keep measured speedup, capacity saving
+and recommendation unavailable. Native optimization request/C v1 and request
+JSON v2 remain unchanged; the new internal compiler reports are rebuilt with
+the shell and are not an independently published SDK ABI.
 
 A versioned installed record is identified by its C type and schema value.
 One such pair names one field layout and semantic contract. A binary layout or

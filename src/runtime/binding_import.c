@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+const yvex_compiled_model_plan *yvex_runtime_binding_compiled_plan(const yvex_runtime_binding *binding)
+{
+    return binding ? binding->plan : NULL;
+}
+
 static int binding_v14_hash_finish(yvex_sha256 *hash,
                                    char output[YVEX_SHA256_HEX_CAP])
 {

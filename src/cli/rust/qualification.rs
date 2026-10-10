@@ -149,9 +149,11 @@ fn bind_optimization_evidence(
         }
         row["association"] = json!("sealed-binding-physical-variant");
         row["exact_recipe_match"] = json!(deployment.candidate);
-        row["reason"] = json!(
-            "sealed binding links the compiled physical variant to this artifact identity; receipt claims, configuration comparability and independent quality still require qualification; capacity refusal is not erased"
-        );
+        row["reason"] = json!(concat!(
+            "sealed binding links the compiled physical variant to this artifact identity; ",
+            "receipt claims, configuration comparability and independent quality still require qualification; ",
+            "capacity refusal is not erased"
+        ));
     }
     Ok(())
 }
@@ -201,7 +203,8 @@ fn project_optimization_evidence(
             "association": "policy-and-transformation-only",
             "exact_recipe_match": null,
             "selection_eligible": false,
-            "reason": "calibration and physical variant are not authenticated by this association; no transfer of quality, lifecycle, working-set or performance evidence"
+            "reason": concat!("calibration and physical variant are not authenticated by this association; ",
+                "no transfer of quality, lifecycle, working-set or performance evidence")
         }));
     }
     Ok(Value::Array(projected))
@@ -1006,6 +1009,7 @@ mod tests {
             required: 200,
             available: 100,
             plan: None,
+            programs: Vec::new(),
         };
         let original = json!([{
             "related_candidate_identities": [assessment.candidate],

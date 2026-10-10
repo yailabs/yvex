@@ -3990,7 +3990,7 @@
         "value_type": "path"
       },
       {
-        "description": "Inspect canonical runtime capacity for a produced binding matching a candidate; does not load an engine.",
+        "description": "Inspect sealed computational alternatives and runtime capacity for a matching produced binding; no engine load.",
         "name": "--runtime-binding",
         "takes_value": true,
         "value_type": "path"

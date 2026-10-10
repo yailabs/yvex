@@ -275,6 +275,8 @@ static int kernel_f32_bind(yvex_program_kernels *c, const yvex_program_physical_
     int *handled, yvex_error *err)
 {
     *handled = 1;
+    if (!strcmp(s->implementation, "reshape.input_view.v1") ||
+        !strcmp(s->implementation, "cast.input_view.f32.v1")) return YVEX_OK;
     if (!strncmp(s->implementation, "linear_bias.cuda.", 17u)) {
         if (!c->ops || !c->ops->linear_bias_target) goto unavailable;
         return YVEX_OK;
@@ -1480,6 +1482,27 @@ static int kernel_index_linearize(const yvex_program_device_invocation *r, yvex_
     return YVEX_OK;
 }
 
+static int kernel_input_view(yvex_program_kernels *c, const yvex_program_device_invocation *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    const yvex_device_tensor *input = &r->values[s->operands[0]];
+    yvex_device_tensor *output = &r->values[s->results[0]];
+    yvex_program_value_layout layout;
+    const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->results[0])->type;
+    unsigned long long rows = type->shape[0].symbol == YVEX_IR_NONE ? c->summary->minimum_rows : r->rows;
+    int rc = yvex_program_physical_value_layout(c->program, s->results[0], rows, &layout, err);
+    if (rc != YVEX_OK) return rc;
+    if (!input->is_written || input->bytes != layout.bytes || layout.rank > YVEX_TENSOR_MAX_DIMS)
+        return kernel_refuse(err, YVEX_ERR_STATE, "input view does not fit its verified backing");
+    *output = *input;
+    output->rank = layout.rank;
+    memset(output->dims, 0, sizeof(output->dims));
+    memcpy(output->dims, layout.dims, layout.rank * sizeof(*layout.dims));
+    facts->compulsory_memory_facts_available = 1;
+    return YVEX_OK;
+}
+
 int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_device_invocation *r,
                                 yvex_backend_operation_facts *facts, yvex_error *err)
 {
@@ -1508,6 +1531,8 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
     if (!s->operand_count)
         return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "operation requires materialized operands");
     input = &r->values[s->operands[0]];
+    if (!strcmp(s->implementation, "reshape.input_view.v1") ||
+        !strcmp(s->implementation, "cast.input_view.f32.v1")) return kernel_input_view(c, r, facts, err);
     if (!strcmp(s->implementation, "indexed_modulate.bf16.v1") ||
         !strcmp(s->implementation, "indexed_gated_residual.bf16.v1")) {
         const yvex_device_tensor *table = &r->values[s->operands[1]];

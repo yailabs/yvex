@@ -211,6 +211,8 @@ int yvex_runtime_binding_open_compatible(
     yvex_complete_artifact_admission *admission,
     yvex_runtime_binding_failure *failure, yvex_error *err);
 void yvex_runtime_binding_close(yvex_runtime_binding *binding);
+/* Borrowed immutable plan; lifetime ends with the authenticated binding. */
+const struct yvex_compiled_model_plan *yvex_runtime_binding_compiled_plan(const yvex_runtime_binding *);
 int yvex_runtime_binding_import_materialization(
     const yvex_runtime_binding *binding, const yvex_artifact *artifact,
     const yvex_materialization_options *options, yvex_materialization_plan **plan_out,

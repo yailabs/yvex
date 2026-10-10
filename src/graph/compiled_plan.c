@@ -1727,3 +1727,39 @@ const yvex_operator_graph_ir *yvex_compiled_model_plan_operator_graph(
 {
     return plan ? plan->operator_graph : NULL;
 }
+
+int yvex_compiled_model_program_at(const yvex_compiled_model_plan *p, size_t index,
+    yvex_compiled_program_view *out)
+{
+    if (out) memset(out, 0, sizeof(*out));
+    if (!p || !out) return 0;
+    const yvex_compiled_program_view fixed[] = {
+        {p->forward, "forward", 0, 0, 0u}, {p->output, "output", 0, 0, 0u},
+        {p->final, "final", 0, 0, 0u}, {p->draft_final, "final", 1, 0, 0u},
+        {p->feature, "feature", 0, 0, 0u}, {p->draft_feature, "feature", 1, 0, 0u},
+        {p->post, "post", 0, 0, 0u}, {p->draft_post, "post", 1, 0, 0u}};
+    for (size_t i = 0u; i < sizeof(fixed) / sizeof(*fixed); ++i) {
+        if (!fixed[i].program) continue;
+        if (!index) { *out = fixed[i]; return 1; }
+        index--;
+    }
+    for (unsigned int draft = 0u; draft < 2u; ++draft) {
+        const yvex_moe_plan *moe = draft ? p->draft_moe : p->moe;
+        const yvex_moe_plan_summary *s = yvex_moe_plan_summary_get(moe);
+        for (unsigned long long i = 0u; s && i < s->layer_count; ++i) {
+            const yvex_moe_layer_plan *layer = yvex_moe_plan_layer_at(moe, i);
+            const yvex_program_physical *programs[] = {
+                yvex_moe_plan_ingress(moe, i), yvex_moe_plan_shared(moe, i)};
+            for (size_t j = 0u; j < 2u; ++j) {
+                if (!programs[j]) continue;
+                if (!index) {
+                    *out = (yvex_compiled_program_view){programs[j], j ? "moe.shared" : "moe.ingress",
+                        (int)draft, 1, layer->layer_index};
+                    return 1;
+                }
+                index--;
+            }
+        }
+    }
+    return 0;
+}

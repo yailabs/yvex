@@ -625,7 +625,7 @@ fn optimization_json(
         "decode_tokens_per_second": null, "quality": null
     })}).collect::<Vec<_>>();
     Ok(serde_json::json!({
-                "schema": "yvex.optimization.search.v2", "goal": goal, "backend": backend,
+                "schema": "yvex.optimization.search.v3", "goal": goal, "backend": backend,
                 "technique": if allocation { "source-retention-allocation-v1" } else { "fixed-recipes-v1" },
                 "weight_budget_bytes": weight_budget,
                 "resolved_context": {
@@ -671,6 +671,25 @@ fn optimization_json(
                     serde_json::json!({
                         "candidate_identity": d.candidate, "binding_identity": d.binding,
                         "artifact_identity": d.artifact, "status": d.status, "reason": d.reason,
+                        "computational_alternatives": d.programs.iter().map(|p| serde_json::json!({
+                            "technique": "immutable-input-views-v1", "role": ffi::text(&p.role),
+                            "scope": if p.draft != 0 { "draft" } else { "target" },
+                            "layer": (p.has_layer != 0).then_some(p.layer), "rows": p.rows,
+                            "operator_graph_identity": ffi::text(&p.operator_graph_identity),
+                            "semantic_identity": ffi::text(&p.semantic_identity),
+                            "parameter_identity": ffi::text(&p.parameter_identity),
+                            "baseline_program": ffi::text(&p.baseline_identity),
+                            "candidate_program": (p.status == 0).then(|| ffi::text(&p.candidate_identity)),
+                            "status": p.status, "reason": ffi::text(&p.reason),
+                            "operations": p.operations,
+                            "eliminated_copies": (p.status == 0).then_some(p.views),
+                            "eliminated_copy_bytes_per_invocation": (p.status == 0).then_some(p.copy_bytes),
+                            "baseline_slots": p.baseline_slots,
+                            "candidate_slots": (p.status == 0).then_some(p.candidate_slots),
+                            "runtime_selector_exists": p.runtime_consumer != 0,
+                            "capacity_saving_bytes": null, "measured_speedup": null,
+                            "selection_eligible": false, "artifact_changed": false
+                        })).collect::<Vec<_>>(),
                         "execution_strategy": invocation.value("--execution-strategy").unwrap_or("target-only"),
                         "sampling": "greedy", "context": request.context_tokens,
                         "prefill_chunk": request.prefill_tokens, "concurrency": request.concurrent_sequences,
@@ -679,8 +698,10 @@ fn optimization_json(
                         "plan": d.plan.as_ref().map(|p| serde_json::json!({
                             "identity": ffi::text(&p.identity), "model_bytes": p.model_bytes,
                             "derived_layout_bytes": p.derived_layout_bytes, "workspace_bytes": p.workspace_bytes,
-                            "state_pool_bytes": p.state_pool_bytes, "candidate_reserve_bytes": p.candidate_reserve_bytes,
-                            "persistent_state_bytes": p.persistent_state_bytes, "prefix_cache_bytes": p.prefix_cache_bytes,
+                            "state_pool_bytes": p.state_pool_bytes,
+                            "candidate_reserve_bytes": p.candidate_reserve_bytes,
+                            "persistent_state_bytes": p.persistent_state_bytes,
+                            "prefix_cache_bytes": p.prefix_cache_bytes,
                             "scheduler_bytes": p.scheduler_bytes, "graph_bytes": p.graph_bytes,
                             "system_reserve_bytes": p.system_reserve_bytes, "required_bytes": p.required_bytes
                         })),
@@ -735,16 +756,33 @@ fn optimization_human(
             ffi::variant::optimization_state(c.state)
         ));
         if c.failure_status == 0 {
-            lines.push(format!("  {}… · weights {:.2} GiB · initial minimum {:.2} GiB · approximate tensors {} · matrix refusals {}/{}",
-                ffi::text(&c.candidate_identity).chars().take(12).collect::<String>(),
-                c.encoded_bytes as f64 / 1073741824.0, c.initial_required_bytes as f64 / 1073741824.0,
-                c.approximate_tensors, c.matrix_incompatible_tensors, c.routed_tensors));
+            lines.push(format!(
+                concat!(
+                    "  {}… · weights {:.2} GiB · initial minimum {:.2} GiB · ",
+                    "approximate tensors {} · matrix refusals {}/{}"
+                ),
+                ffi::text(&c.candidate_identity)
+                    .chars()
+                    .take(12)
+                    .collect::<String>(),
+                c.encoded_bytes as f64 / 1073741824.0,
+                c.initial_required_bytes as f64 / 1073741824.0,
+                c.approximate_tensors,
+                c.matrix_incompatible_tensors,
+                c.routed_tensors
+            ));
         }
         if c.state != raw::yvex_optimization_state_YVEX_OPTIMIZATION_NEEDS_QUALIFICATION {
             lines.push(format!("  {}", ffi::text(&c.reason)));
         }
     }
-    lines.push("Full identities and individual proof gaps: repeat the request with --json. Export requires the full candidate identity.".into());
+    lines.push(
+        concat!(
+            "Full identities and individual proof gaps: repeat the request with --json. ",
+            "Export requires the full candidate identity."
+        )
+        .into(),
+    );
     let mut output = presentation::flow_lines(&lines, styled)?;
     for item in evidence.as_array().into_iter().flatten() {
         let receipt = &item["receipt"];
@@ -753,13 +791,48 @@ fn optimization_human(
             &vec![
                 ("receipt".into(), receipt["id"].as_str().unwrap_or("").into()),
                 ("target identity".into(), receipt["target_identity"].as_str().unwrap_or("").into()),
-                ("quality".into(), receipt["claims"]["representation-quality"]["state"].as_str().unwrap_or("").into()),
-                ("performance".into(), receipt["claims"]["deployment-performance"]["state"].as_str().unwrap_or("").into()),
-                ("scope".into(), "Only the exact target/workload in this receipt; --json exposes complete context".into()),
+                ("quality".into(), receipt["claims"]["representation-quality"]["state"]
+                    .as_str().unwrap_or("").into()),
+                ("performance".into(), receipt["claims"]["deployment-performance"]["state"]
+                    .as_str().unwrap_or("").into()),
+                ("scope".into(),
+                    "Only the exact target/workload in this receipt; --json exposes complete context".into()),
             ], width, styled,
         )?);
     }
     if let Some(d) = deployment {
+        output.push_str(&render(
+            "COMPUTATIONAL ALTERNATIVES · immutable input views",
+            &vec![
+                ("sealed programs".into(), d.programs.len().to_string()),
+                (
+                    "legal alternatives".into(),
+                    d.programs
+                        .iter()
+                        .filter(|p| p.status == 0 && p.views != 0)
+                        .count()
+                        .to_string(),
+                ),
+                (
+                    "population refusals".into(),
+                    d.programs
+                        .iter()
+                        .filter(|p| p.status != 0)
+                        .count()
+                        .to_string(),
+                ),
+                (
+                    "detail".into(),
+                    "--json: exact graph, layer, program identities and copy extents".into(),
+                ),
+                (
+                    "evidence".into(),
+                    "Static legality; no measured speedup or full resource-fit claim".into(),
+                ),
+            ],
+            width,
+            styled,
+        )?);
         output.push_str(&render(
             "PRODUCED BINDING · capacity preflight",
             &vec![
@@ -1105,7 +1178,8 @@ fn emission_json(
                 "code": e.code, "owner": e.owner, "reason": e.message
             }))
         })), "quality": null,
-        "scope": "native production result; not a reusable admission proof, independent quality qualification or runtime admission"
+        "scope": concat!("native production result; not a reusable admission proof, ",
+            "independent quality qualification or runtime admission")
     })
 }
 
