@@ -810,3 +810,11 @@ missing retained encoder→decoder contract; no Axx is promoted by this selectio
 ## Evidence and delivery
 
 [Retained observations](../evaluation/retained-observations.md) · [Evaluation](../evaluation/README.md) · [Selected Tasks](TASKS.md) · [Release gates](../releases/v0.1.md)
+
+## Product experience integration guidance
+
+AGENTS routes substantial public-client changes to the short
+[interface handoff](../architecture/interfaces-protocols.md#studio-consumer-handoff).
+YVEX contracts remain independently consumable; Studio owns its experience mapping.
+No runtime capability, benchmark, installed service or maturity row changes. Native
+Studio, real-model and operator acceptance are not qualified by this docs-only adoption.

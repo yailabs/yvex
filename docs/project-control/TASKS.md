@@ -1084,3 +1084,11 @@ Depends on: FINITE.DECISION.PRODUCER.0.
 Reconcile its exit, evidence and owning docs in the same delivery. New independent
 outcomes become Tasks; implementation steps stay inside their parent Task.
 [Agent contract](../../AGENTS.md) · [Engineering method](../guides/agentic-engineering.md)
+
+### Product experience handoff adoption
+
+Existing public integration delivery uses the
+[interface handoff](../architecture/interfaces-protocols.md#studio-consumer-handoff).
+This documentation-only adoption adds no Task, selects no runtime work and changes
+no completion state. The active DeepSeek computational owner remains independent;
+Studio records its own presentation defects and qualification.
