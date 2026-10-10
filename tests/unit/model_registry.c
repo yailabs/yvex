@@ -289,6 +289,99 @@ static void fill_entry(yvex_model_registry_entry *entry, const char *path,
     entry->runtime_context = 4096ull;
 }
 
+static int test_metadata_evidence_levels(void)
+{
+    static const char *const levels[] = {
+        "selected-tensor-materialized", "full-weights-materialized",
+        "partial-graph-executable", "prefill-ready", "decode-ready",
+        "generation-ready"
+    };
+    yvex_model_registry_entry registered, current;
+    yvex_model_metadata_drift_report report;
+    yvex_error err;
+    size_t index;
+
+    fill_entry(&registered, "structural-fixture.gguf", "binding-not-opened");
+    current = registered;
+    for (index = 0u; index < sizeof(levels) / sizeof(levels[0]); ++index) {
+        registered.support_level = levels[index];
+        YVEX_TEST_ASSERT(yvex_model_registry_compare_metadata(
+            &registered, &current, &report, &err) == YVEX_OK &&
+            !strcmp(report.metadata_status, "pass") && !report.issue_count,
+            "later evidence level is not container metadata drift");
+        YVEX_TEST_ASSERT(!strcmp(current.support_level, "selected-tensor-materialized") &&
+            !current.execution_ready, "comparison never promotes current execution readiness");
+    }
+    current.support_level = "descriptor-only";
+    YVEX_TEST_ASSERT(yvex_model_registry_compare_metadata(
+        &registered, &current, &report, &err) == YVEX_OK &&
+        !strcmp(report.metadata_status, "fail"), "insufficient structural support fails closed");
+    current.support_level = "selected-tensor-materialized";
+    registered.support_level = "unknown-ready";
+    YVEX_TEST_ASSERT(yvex_model_registry_compare_metadata(
+        &registered, &current, &report, &err) == YVEX_OK &&
+        !strcmp(report.metadata_status, "fail"), "unknown support claim is not normalized");
+    registered.support_level = "generation-ready";
+    current.primary_tensor_dims = "[4,7]";
+    YVEX_TEST_ASSERT(yvex_model_registry_compare_metadata(
+        &registered, &current, &report, &err) == YVEX_OK &&
+        !strcmp(report.metadata_status, "fail") &&
+        !strcmp(report.issues[0].code, "primary-tensor-dims-mismatch"),
+        "true metadata drift remains visible under a generation claim");
+    current.primary_tensor_dims = registered.primary_tensor_dims;
+    current.selected_embedding_ready = 0;
+    YVEX_TEST_ASSERT(yvex_model_registry_compare_metadata(
+        &registered, &current, &report, &err) == YVEX_OK &&
+        !strcmp(report.readiness_status, "fail"), "selected readiness mismatch remains fail closed");
+    registered.primary_tensor_name = "";
+    YVEX_TEST_ASSERT(yvex_model_registry_compare_metadata(
+        &registered, &current, &report, &err) == YVEX_OK &&
+        !strcmp(report.metadata_status, "missing"), "generation label cannot supply missing facts");
+    return 0;
+}
+
+static int test_integrity_support_not_promoted(void)
+{
+    yvex_model_metadata_snapshot snapshot;
+    yvex_artifact_file_identity identity;
+    yvex_model_ref ref = {0};
+    yvex_artifact_integrity_options options = {0};
+    yvex_artifact_integrity_report integrity;
+    yvex_model_registry_verification verified;
+    yvex_error err;
+
+    ref.path = "tests/fixtures/gguf/valid-tokenizer-simple.gguf";
+    ref.kind = YVEX_MODEL_REF_ALIAS;
+    YVEX_TEST_ASSERT(yvex_model_metadata_snapshot_read(&snapshot, ref.path, &err) == YVEX_OK &&
+        yvex_artifact_identity_read(ref.path, &identity, &err) == YVEX_OK,
+        "independent bounded file facts");
+    ref.sha256 = identity.sha256;
+    ref.registered_file_size = identity.file_size;
+    ref.support_level = "generation-ready";
+    ref.format = snapshot.entry.format;
+    ref.architecture = snapshot.entry.architecture;
+    ref.tensor_count = snapshot.entry.tensor_count;
+    ref.known_tensor_bytes = snapshot.entry.known_tensor_bytes;
+    ref.primary_tensor_name = snapshot.entry.primary_tensor_name;
+    ref.primary_tensor_role = snapshot.entry.primary_tensor_role;
+    ref.primary_tensor_dtype = snapshot.entry.primary_tensor_dtype;
+    ref.primary_tensor_rank = snapshot.entry.primary_tensor_rank;
+    ref.primary_tensor_dims = snapshot.entry.primary_tensor_dims;
+    ref.primary_tensor_bytes = snapshot.entry.primary_tensor_bytes;
+    ref.selected_embedding_ready = snapshot.entry.selected_embedding_ready;
+    ref.selected_embedding_hidden_size = snapshot.entry.selected_embedding_hidden_size;
+    ref.selected_embedding_vocab_size = snapshot.entry.selected_embedding_vocab_size;
+    ref.selected_embedding_output_count = snapshot.entry.selected_embedding_output_count;
+    ref.selected_embedding_slice_bytes = snapshot.entry.selected_embedding_slice_bytes;
+    options.expect_sha256 = identity.sha256;
+    YVEX_TEST_ASSERT(yvex_artifact_integrity_check_path(ref.path, &options, &integrity, &err) == YVEX_OK &&
+        yvex_model_ref_verify_integrity(&ref, &integrity, &verified, &err) == YVEX_OK &&
+        verified.passed, "registered stronger label does not invalidate equal structural facts");
+    YVEX_TEST_ASSERT(!strcmp(verified.current.entry.support_level, "selected-tensor-materialized") &&
+        !verified.current.entry.execution_ready, "integrity observation never copies a generation claim");
+    return 0;
+}
+
 static int test_registry_lifecycle(void)
 {
     const char *dir = "build/tests/model-registry";
@@ -1077,6 +1170,8 @@ int yvex_test_model_registry(void)
     if (test_derive_metadata() != 0) return 1;
     if (test_owned_derivation() != 0) return 1;
     if (test_integrity_metadata_admission() != 0) return 1;
+    if (test_metadata_evidence_levels() != 0) return 1;
+    if (test_integrity_support_not_promoted() != 0) return 1;
     if (test_registry_lifecycle() != 0) return 1;
     if (test_composite_profile() != 0) return 1;
     if (test_finite_profile() != 0) return 1;

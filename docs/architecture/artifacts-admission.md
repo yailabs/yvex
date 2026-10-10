@@ -48,6 +48,17 @@ facts, every required tensor role, qtype support, source/derivation/variant
 identities, and exact file identity. Structural GGUF validity is necessary but
 not sufficient.
 
+Registry drift comparison uses the structural projection of a support level.
+A container snapshot observes at most `selected-tensor-materialized`; a
+registered `generation-ready` label records a different, later evidence scope.
+Their labels alone do not establish metadata drift. Digest, extent, tensor
+metadata and selected-embedding readiness comparisons remain exact. Neither
+comparison nor integrity verification copies the stronger registered label
+into the current file observation. A metadata/readiness-status PASS here is
+not a generation-readiness certificate: authenticated complete-artifact and
+runtime-binding admission, backend capacity and actual engine/session readiness
+remain independently mandatory. Missing structural facts still refuse.
+
 Artifact materialization builds and commits an authenticated package mapping:
 checked tensor bindings and bounded access to file-backed package ranges used by
 the runtime descriptor, PEIR construction and runtime binding. It does not
