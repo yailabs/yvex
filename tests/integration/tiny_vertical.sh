@@ -572,10 +572,14 @@ if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model unload tiny-executa
 fi
 grep -F 'live sessions or model leases prevent unload' \
     "$root/unload.live.err" >/dev/null
+HOME="$home" XDG_RUNTIME_DIR="$runtime" python3 tests/rust_workbench_pty.py \
+    --binary "$YVEX_BIN" --retire-runtime refuse --output "$root/workbench"
 for session in persisted independent adaptive multipart forked reasoning-limit; do
     HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session close "$session" \
         >/dev/null
 done
+HOME="$home" XDG_RUNTIME_DIR="$runtime" python3 tests/rust_workbench_pty.py \
+    --binary "$YVEX_BIN" --retire-runtime allow --output "$root/workbench"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model unload tiny-executable \
     --json >"$root/unload.first"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model unload tiny-executable \

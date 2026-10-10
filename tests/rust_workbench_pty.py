@@ -163,15 +163,32 @@ def isolated(binary, fixture, output):
                 else: os.environ[key] = value
 
 
+def retirement(binary, output, refusal):
+    chat = Chat(binary, 'workbench-retire-' + str(refusal), output,
+                plain=True, arguments=['workbench'])
+    try:
+        action(chat, '/models', b'Models')
+        action(chat, '/engine/1', b'generation')
+        action(chat, '/unload', b'type confirm')
+        action(chat, 'confirm', b'live sessions or model leases prevent unload' if refusal
+               else b'Selected engine retirement returned successfully')
+        chat.finish(b'/quit\r')
+    finally:
+        chat.dispose()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--binary', required=True, type=Path)
     parser.add_argument('--fixture', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--tiny-runtime', action='store_true')
+    parser.add_argument('--retire-runtime', choices=['refuse', 'allow'])
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    if args.tiny_runtime:
+    if args.retire_runtime:
+        retirement(args.binary.resolve(), args.output, args.retire_runtime == 'refuse')
+    elif args.tiny_runtime:
         exercise(args.binary.resolve(), args.output, 100, real=True)
     else:
         isolated(args.binary.resolve(), args.fixture.resolve(), args.output)

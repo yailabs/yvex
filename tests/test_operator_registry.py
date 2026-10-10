@@ -437,7 +437,7 @@ def test_completion() -> None:
     require(match is not None, "missing Bash root completion candidates")
     root_candidates = set(match.group(1).split())
     require(root_candidates == {"chat", "help", "host", "inspect", "management", "model",
-                                "serve", "version"},
+                                "serve", "version", "workbench"},
             f"top-level completion leaks plumbing: {sorted(root_candidates)}")
     with tempfile.TemporaryDirectory(prefix="yvex-completion-") as temporary:
         root = pathlib.Path(temporary)

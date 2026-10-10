@@ -434,10 +434,17 @@ impl Workbench {
                 ),
                 (
                     "Memory",
-                    format!(
-                        "{:.2} GiB process RSS (not total device residency)",
-                        host.metrics.current_rss_bytes as f64 / 1073741824.0
-                    ),
+                    if host.metrics.resources.available
+                        & raw::YVEX_EXECUTION_RESOURCE_PROCESS_AVAILABLE as u64
+                        != 0
+                    {
+                        format!(
+                            "{:.2} GiB process RSS (not total device residency)",
+                            host.metrics.current_rss_bytes as f64 / 1073741824.0
+                        )
+                    } else {
+                        "not reported by runtime".into()
+                    },
                 ),
             ])?);
         } else {
@@ -469,7 +476,7 @@ impl Workbench {
                     vec!["/request".into(), "compile optimize --request FILE (reproducible typed request)".into()],
                     vec!["/techniques".into(), "compile optimize --list-techniques".into()],
                 ])?);
-                blocks.push(paragraph("Program P remains IN PROGRESS. Estimated, measured and qualified candidates are distinct. The workbench does not create recommendations.", Role::Warning)?);
+                blocks.push(paragraph("Estimated, measured and qualified candidates are distinct. Program P owns the evidence; the workbench does not create recommendations.", Role::Warning)?);
             }
             View::Activity => {
                 blocks.push(paragraph("SERVER TRACE · newest 32 retained events; /refresh samples again", Role::Dim)?);

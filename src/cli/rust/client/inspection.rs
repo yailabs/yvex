@@ -122,10 +122,13 @@ pub(crate) fn unload_selected(
     request.engine_generation = engine.generation;
     client.send(&request)?;
     let reply = response(&mut client, &request)?;
-    if reply.kind != raw::yvex_client_message_kind_YVEX_CLIENT_MESSAGE_ENGINE {
+    if reply.kind != raw::yvex_client_message_kind_YVEX_CLIENT_MESSAGE_ENGINE
+        || reply.engine.generation != engine.generation
+        || ffi::text(&reply.engine.alias) != ffi::text(&engine.alias)
+    {
         return Err(invalid(
             "engine.unload",
-            "unexpected retirement response; do not retry blindly",
+            "unexpected retirement response identity; do not retry blindly",
         ));
     }
     Ok(())
