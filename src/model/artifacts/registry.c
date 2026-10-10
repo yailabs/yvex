@@ -273,6 +273,23 @@ static int metadata_registered_summary_missing(const yvex_model_registry_entry *
     return 0;
 }
 
+/* A file snapshot observes container/tensor facts, not the later execution
+ * evidence recorded in a profile. Compare both at that structural ceiling;
+ * never promote the observed snapshot to the registered readiness claim. */
+static const char *metadata_structural_support(const char *level)
+{
+    static const char *const later_levels[] = {
+        "full-weights-materialized", "partial-graph-executable",
+        "prefill-ready", "decode-ready", "generation-ready"
+    };
+    size_t index;
+
+    for (index = 0u; index < sizeof(later_levels) / sizeof(later_levels[0]); ++index)
+        if (level && !strcmp(level, later_levels[index]))
+            return "selected-tensor-materialized";
+    return metadata_value_or_empty(level);
+}
+
 static void metadata_u64_to_text(unsigned long long value,
                                  char out[YVEX_MODEL_METADATA_VALUE_CAP])
 {
@@ -354,7 +371,8 @@ int yvex_model_registry_compare_metadata(
     }
 
     metadata_compare_string_field(out, "support-level-mismatch",
-                                  registered->support_level, current->support_level);
+                                  metadata_structural_support(registered->support_level),
+                                  metadata_structural_support(current->support_level));
     metadata_compare_string_field(out, "format-mismatch",
                                   registered->format, current->format);
     metadata_compare_string_field(out, "architecture-mismatch",

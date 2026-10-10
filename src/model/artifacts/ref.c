@@ -338,7 +338,6 @@ int yvex_model_ref_verify_integrity(const yvex_model_ref *ref,
                 metadata = rc == YVEX_OK ? out->drift.metadata_status : "fail";
                 readiness = rc == YVEX_OK ? out->drift.readiness_status : "fail";
                 if (strcmp(metadata, "pass") || strcmp(readiness, "pass")) out->passed = 0;
-                if (ref->support_level && ref->support_level[0]) out->current.entry.support_level = ref->support_level;
             } else if (alias) {
                 metadata = "not-checked";
             } else if (out->current.entry.selected_embedding_ready) readiness = "pass";
