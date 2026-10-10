@@ -23,10 +23,10 @@ LOCAL receipts are not YVEX-published qualification. Each plane stands alone; mi
 
 | Source / checkpoint | Exact targets | Representation quality | Performance |
 | --- | ---: | --- | --- |
-| [deepseek-ai/DeepSeek-V4-Flash-0731 · `7872f01b1d1f`](#checkpoint-1) | 37 | BLOCKED: 37 | BLOCKED: 3; CHARACTERIZED: 31; UNQUALIFIED: 3 |
+| [deepseek-ai/DeepSeek-V4-Flash-0731 · `7872f01b1d1f`](#checkpoint-1) | 38 | BLOCKED: 38 | BLOCKED: 3; CHARACTERIZED: 31; UNQUALIFIED: 4 |
 | [deepseek-ai/DeepSeek-V4-Flash-DSpark · `62af8fffb2f7`](#checkpoint-2) | 223 | BLOCKED: 210; UNQUALIFIED: 13 | CHARACTERIZED: 199; UNQUALIFIED: 24 |
 | [convaiinnovations/laya-typed-decisions · `1a793eb568e6`](#checkpoint-3) | 2 | BLOCKED: 2 | CHARACTERIZED: 2 |
-| [mistralai/Mamba-Codestral-7B-v0.1 · `4f086c08c1e0`](#checkpoint-4) | 4 | BLOCKED: 4 | UNQUALIFIED: 4 |
+| [mistralai/Mamba-Codestral-7B-v0.1 · `4f086c08c1e0`](#checkpoint-4) | 5 | BLOCKED: 5 | UNQUALIFIED: 5 |
 
 ## Checkpoint 1
 
@@ -35,7 +35,7 @@ LOCAL receipts are not YVEX-published qualification. Each plane stands alone; mi
 Counts describe independent records, not a percentage of model support.
 
 <details>
-<summary>Inspect 37 exact targets, variants and experiments</summary>
+<summary>Inspect 38 exact targets, variants and experiments</summary>
 
 | Target / full context | Execution | Quality | Performance | Origin |
 | --- | --- | --- | --- | --- |
@@ -76,6 +76,7 @@ Counts describe independent records, not a percentage of model support.
 | [0731 Q2_K: bounded full-model execution, first post-load prefill.promessi-8192](qualification-deepseek-0731-program-p-q2-prefill-promessi-8192-20261010.md) | cuda × 1; direct native engineering generation; not resident-host/native-protocol performance; target-only | BLOCKED | CHARACTERIZED | yvex-published |
 | [0731 Q2_K prepared candidate complete-model CUDA critical-path diagnostic; not a throughput sample](qualification-deepseek-0731-program-p-q2-prepared-critical-path-20261010.md) | cuda × 1; direct native engineering generation; not resident-host/native-protocol performance; target-only | BLOCKED | CHARACTERIZED | yvex-published |
 | [0731 Q2_K shared row matrix candidate complete-model CUDA critical-path diagnostic; not a throughput sample](qualification-deepseek-0731-program-p-q2-row-matrix-critical-path-20261010.md) | cuda × 1; direct native engineering generation; not resident-host/native-protocol performance; target-only | BLOCKED | CHARACTERIZED | yvex-published |
+| [DeepSeek 0731: bounded role allocation and canonical policy/plan production](qualification-deepseek-0731-program-p-resolved-profiles-20261010.md) | cuda × 1; native Rust compile optimize CLI; not inference; planning-only | BLOCKED | UNQUALIFIED | yvex-published |
 
 </details>
 
@@ -339,7 +340,7 @@ Counts describe independent records, not a percentage of model support.
 Counts describe independent records, not a percentage of model support.
 
 <details>
-<summary>Inspect 4 exact targets, variants and experiments</summary>
+<summary>Inspect 5 exact targets, variants and experiments</summary>
 
 | Target / full context | Execution | Quality | Performance | Origin |
 | --- | --- | --- | --- | --- |
@@ -347,6 +348,7 @@ Counts describe independent records, not a percentage of model support.
 | [Program P second architecture: newly produced Mamba BF16 artifact, bounded native CPU execution and state controls](qualification-mamba-program-p-produced-execution-20261010.md) | cpu × 1; native computational C API fixture; not CLI chat, public finite producer or HTTPS; finite candidate scoring; no generation | BLOCKED | UNQUALIFIED | yvex-published |
 | [Program P: new Mamba artifact admitted through generic production proof](qualification-mamba-program-p-production-proof-20261010.md) | cpu × 1; native compiler C API integration fixture; not CLI inference; not invoked | BLOCKED | UNQUALIFIED | yvex-published |
 | [Program P: canonical Mamba recipe and binding execute bounded token controls](qualification-mamba-program-p-reuse-20261010.md) | cpu × 1; native C runtime fixture; not CLI chat or HTTP; finite candidate readout; no sampling or generated output | BLOCKED | UNQUALIFIED | yvex-published |
+| [Mamba2: native guided profile resolution and explicit technique/backend refusal](qualification-mamba2-program-p-resolved-profiles-20261010.md) | cpu × 1; native Rust compile optimize CLI; not inference; planning-only | BLOCKED | UNQUALIFIED | yvex-published |
 
 </details>
 

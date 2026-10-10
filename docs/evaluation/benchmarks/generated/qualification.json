@@ -20632,6 +20632,363 @@
     "claims": {
       "backend-execution": {
         "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Not executed by these offline compiler controls",
+        "state": "UNQUALIFIED"
+      },
+      "checkpoint-reference": {
+        "blockers": [
+          "Independent checkpoint-matched full-model held-out evidence unavailable"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Source retention and an internal tensor probe are not independent model quality",
+        "state": "BLOCKED"
+      },
+      "deployment-performance": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Not executed by these offline compiler controls",
+        "state": "UNQUALIFIED"
+      },
+      "family-conformance": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Not executed by these offline compiler controls",
+        "state": "UNQUALIFIED"
+      },
+      "product-path": {
+        "blockers": [],
+        "evidence": {
+          "controls": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/receipt.json",
+            "result": "PASS",
+            "sha256": "07c573fe5bd9e3188a6ca70d22bd9222852e0c9b18acc6163a45d31e1994b242"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-source-v2/manifest.json",
+            "result": "PASS",
+            "sha256": "fe1e475bbcdf818beb4479baeb9d697a2f8c2a69282ceb32a0fa32e40015bdb3"
+          }
+        },
+        "required_evidence": [
+          "controls",
+          "source"
+        ],
+        "scope": "Profile resolution, exact planning, declared refusals and reproducible native CLI; no inference",
+        "state": "CHARACTERIZED"
+      },
+      "representation-quality": {
+        "blockers": [
+          "Independent checkpoint-matched full-model held-out evidence unavailable"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Source retention and an internal tensor probe are not independent model quality",
+        "state": "BLOCKED"
+      }
+    },
+    "id": "deepseek-0731-program-p-resolved-profiles-20261010",
+    "limitations": [
+      "Planning and source-retained element count are not measured quality, throughput or a qualified recommendation.",
+      "No full artifact/binding emitted by this continuation; no engine loaded, unloaded or replaced.",
+      "Full pre-production workspace/state accounting, automatic authenticated measured selection and complete guided production remain open.",
+      "Six pre-existing experimental CUDA edits are present in the retained source snapshot but neither exercised by model inference nor accepted by this compiler evidence.",
+      "The operator DSpark generation 1 remained resident; no same-machine inference measurement was attempted.",
+      "Software tests and official tokenizer vectors are separate from independent full-model reference and representation quality.",
+      "The exported source-retention-v1-0000000000000023 recipe is an experiment, not a performance recommendation. One source-preserved attention tensor passes an internal probe; no logits/NLL/PPL/KL or held-out score is provided."
+    ],
+    "measurements": [],
+    "origin": "yvex-published",
+    "provenance": {
+      "candidate": {
+        "approximate_tensors": 390,
+        "artifact_bytes": 104927927200,
+        "artifact_catalog_compatibility": "unknown",
+        "candidate_identity": "eabf8d05a642b433216032f92576970ac2b890e4bef931a73349649b7fc0ff6c",
+        "decode_tokens_per_second": null,
+        "encoded_bytes": 104916220920,
+        "failure_status": 0,
+        "initial_required_bytes": 122308178424,
+        "matrix_incompatible_tensors": 0,
+        "maximum_tensor_bytes": 1059061760,
+        "memory_budget_bytes": 126285467648,
+        "missing_evidence": 63,
+        "physical_variant_identity": "5d3bea3529b2c690b982d2c32c6aa3a4e2130b0cc90cd0416ad64dbf146002c4",
+        "policy_identity": "8aa1c45dc98828099aea215b485f5eaa93fb0400805d8ad50e9b39c76b85e84a",
+        "prefill_tokens_per_second": null,
+        "quality": null,
+        "reason": "initial bounds only; full deployment, independent quality and performance unqualified",
+        "recipe": "source-retention-v1-0000000000000023",
+        "reserve_bytes": 16332895744,
+        "routed_tensors": 138,
+        "source_identity": "d46c2f3a4305155f357191e0bd804defe33764b92997c3de123b3b5cab41e5ce",
+        "state": "needs-qualification",
+        "state_bytes": null,
+        "transform_identity": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+        "workspace_bytes": null
+      },
+      "diagnostics": [
+        {
+          "case": "0731-allocation",
+          "definition": "Actual compiled candidate population; not qualified configurations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation.stdout",
+          "id": "compiler.candidates",
+          "unit": "count",
+          "value": 26
+        },
+        {
+          "case": "0731-allocation",
+          "definition": "Canonical planned encoded tensor bytes; not physical working memory or an emitted artifact",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation.stdout",
+          "id": "compiler.encoded-bytes",
+          "unit": "byte",
+          "value": 104916220920
+        },
+        {
+          "case": "0731-allocation",
+          "definition": "Weights plus largest tensor and reserve; explicitly excludes unknown full workspace/state",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation.stdout",
+          "id": "compiler.initial-lower-bound",
+          "unit": "byte",
+          "value": 122308178424
+        },
+        {
+          "case": "0731-allocation",
+          "definition": "Sampled available system memory; not a resource reservation or exclusion of the resident operator engine",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation.stdout",
+          "id": "compiler.available-bytes",
+          "unit": "byte",
+          "value": 126285467648
+        },
+        {
+          "case": "0731-allocation",
+          "definition": "Source-authenticated semantic profile, not a Transformer assumption",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation.stdout",
+          "id": "model.attention-layers",
+          "unit": "count",
+          "value": 43
+        },
+        {
+          "case": "0731-allocation",
+          "definition": "Source-authenticated semantic profile; real state-space topology",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation.stdout",
+          "id": "model.sequence-mixer-layers",
+          "unit": "count",
+          "value": 0
+        }
+      ],
+      "profiled": false,
+      "reproduction": [
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation-request.json",
+            "--json"
+          ],
+          "case": "0731-allocation",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "c24937c6a398ecfe76e4dc6f12549b6bcc9b8318686f720f01bf9b021f9b3d78"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-insufficient-budget-request.json",
+            "--json"
+          ],
+          "case": "0731-insufficient-budget",
+          "exit_code": 1,
+          "stderr_sha256": "45e6104a7130a5d9d0012e85c0664aac4f711dfe225ef15711f3aa2bb6dae4b8",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets-request.json",
+            "--json"
+          ],
+          "case": "mamba-presets",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "42fcf507a509b6c93b1133fe250975fbff1d88d69bb427971f91875baa69a9fb"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-allocation-refusal-request.json",
+            "--json"
+          ],
+          "case": "mamba-allocation-refusal",
+          "exit_code": 5,
+          "stderr_sha256": "33300a274526140d8e657c19b1227b1d3ef399b3865a7cd13b88d2dcb18f9a06",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-metal-refusal-request.json",
+            "--json"
+          ],
+          "case": "mamba-metal-refusal",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "582e756c46d9927070d8c1feb065f1759b1be50a5e3ffbd98a6faa46a73402cd"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation-request.json",
+            "--select",
+            "eabf8d05a642b433216032f92576970ac2b890e4bef931a73349649b7fc0ff6c",
+            "--out-policy",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+            "--json"
+          ],
+          "case": "0731-export",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "4cc66d42c43047783fa88ab6668203b986c3c9f77c6fc142c4c0b12a6e86dcae"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "quant",
+            "plan",
+            "--target",
+            "deepseek4-v4-flash-0731",
+            "--source",
+            "/home/dgmothx/lab/models/source/hf/deepseek-ai/DeepSeek-V4-Flash-0731/7872f01b1d1fe23eabc4c98b48bffcef5a386062-8bba663a38a51aac70ea95ced5dff080023f7ac68b012426dccaa28a319e4fe1",
+            "--models-root",
+            "/home/dgmothx/lab/models",
+            "--source-manifest",
+            "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-source-manifest.json",
+            "--policy",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+            "--out-plan",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected.quant-plan"
+          ],
+          "case": "0731-plan",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "18fbe0e3f06465222a93f6434e5a07474d22ebc09cb5fed1523af6fd0f7d2acd"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "quant",
+            "probe",
+            "--target",
+            "deepseek4-v4-flash-0731",
+            "--source",
+            "/home/dgmothx/lab/models/source/hf/deepseek-ai/DeepSeek-V4-Flash-0731/7872f01b1d1fe23eabc4c98b48bffcef5a386062-8bba663a38a51aac70ea95ced5dff080023f7ac68b012426dccaa28a319e4fe1",
+            "--models-root",
+            "/home/dgmothx/lab/models",
+            "--source-manifest",
+            "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-source-manifest.json",
+            "--policy",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+            "--plan",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected.quant-plan",
+            "--tensor",
+            "blk.0.attn_q_a.weight"
+          ],
+          "case": "0731-probe",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "d9370920dfb29549aee59d94bae6f98ac06bb43ac350a2cb8573bce20682e559"
+        }
+      ],
+      "resolved_context": {
+        "attention_layers": 43,
+        "calibration": "candidate-bound; not held-out quality",
+        "capacity_scope": "semantic envelope only; full runtime capacity requires produced binding",
+        "draft_layers": 3,
+        "experts_per_row": 6,
+        "family": "deepseek-v4",
+        "identity": "8aa10a83d18b1fa792ee8f1f94d11c0f02994d74d6059aec1cc7a434dcfb9969",
+        "layers": 43,
+        "missing_evidence": 63,
+        "model_execution_identity": "590932401f60e5f0da4dbabbaa8c8aeacda482bc02c65e783a6466222189dfbb",
+        "quality": null,
+        "routed_experts": 256,
+        "schema": "yvex.optimization.context.v1",
+        "semantic_identity": "951991776ef6e6b53018904ff28e7ad9e5f7d790e43d36ac940574ba46706462",
+        "semantic_maximum_context": 1048576,
+        "sequence_mixer_layers": 0,
+        "source_identity": "bd7760f621871e3689b72715ead2eb6d02b64e54e3a0c163cdcbf77464e39849"
+      },
+      "source_capture": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-source-v2",
+      "source_stability": "frozen"
+    },
+    "schema": "yvex.qualification.receipt.v1",
+    "target": {
+      "artifact_set": null,
+      "backend": "cuda",
+      "backend_implementation": null,
+      "binding": null,
+      "build": "c39a1a67d8697b7e20cc8918c37442b6514cbc2471ae0f13987e027ac9a9e28d",
+      "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+      "concurrency": 1,
+      "context": 4096,
+      "device_count": 1,
+      "driver": "580.159.03",
+      "executable": "a3dfd7ae9f48b60d1b1f2a9f0992db0f7798b22d16536ef4d81ec40bf26fbaa9",
+      "family_contract": "deepseek-v4-flash-dspark",
+      "hardware_model": "NVIDIA DGX Spark GB10",
+      "kernel_bundle": null,
+      "memory_configuration": "130663165952 system bytes; available memory is a separate observation",
+      "physical_policy": "8aa1c45dc98828099aea215b485f5eaa93fb0400805d8ad50e9b39c76b85e84a",
+      "prefill_geometry": "requested chunk 512; not executed",
+      "product_path": "native Rust compile optimize CLI; not inference",
+      "reasoning": "not executed",
+      "representation": "5d3bea3529b2c690b982d2c32c6aa3a4e2130b0cc90cd0416ad64dbf146002c4",
+      "runtime_configuration": "offline profile resolution and physical planning; no engine or workspace admission",
+      "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+      "sampling": "not executed",
+      "schema": "yvex.qualification.target.v1",
+      "sequence_geometry": "requested width 1; no session",
+      "source_commit": "75fe822070c48ad3c1ab59cb1ed5f9044ac66bbd",
+      "source_delta": "46798a7a2756bfa7b61c4db90bf90c25544d2ba13b1ec092aa359d82789a1335",
+      "source_tree": "035b546897c2c6ce75edef3b7cd15f59b0d77ca3",
+      "specialization": null,
+      "strategy": "planning-only",
+      "suite": null,
+      "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+      "topology": "single GB10 coherent unified memory; compiler inspection only",
+      "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+      "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+    },
+    "target_identity": "7ce6d69d51f5742f4367651662315e68b88c896add497b1e796c25c0ebe8e37a",
+    "title": "DeepSeek 0731: bounded role allocation and canonical policy/plan production"
+  },
+  {
+    "claims": {
+      "backend-execution": {
+        "blockers": [],
         "evidence": {
           "profile": {
             "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/yvex-compute-profile-12/profile-summary-v2.json",
@@ -194864,5 +195221,368 @@
     },
     "target_identity": "4ff21c8e090cb0e54fe78b5cbba62bbcf23e9b22ca3a35785a7bc505020d7b85",
     "title": "Program P: canonical Mamba recipe and binding execute bounded token controls"
+  },
+  {
+    "claims": {
+      "backend-execution": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Not executed by these offline compiler controls",
+        "state": "UNQUALIFIED"
+      },
+      "checkpoint-reference": {
+        "blockers": [
+          "Independent checkpoint-matched full-model held-out evidence unavailable"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Source retention and an internal tensor probe are not independent model quality",
+        "state": "BLOCKED"
+      },
+      "deployment-performance": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Not executed by these offline compiler controls",
+        "state": "UNQUALIFIED"
+      },
+      "family-conformance": {
+        "blockers": [],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Not executed by these offline compiler controls",
+        "state": "UNQUALIFIED"
+      },
+      "product-path": {
+        "blockers": [],
+        "evidence": {
+          "controls": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/receipt.json",
+            "result": "PASS",
+            "sha256": "07c573fe5bd9e3188a6ca70d22bd9222852e0c9b18acc6163a45d31e1994b242"
+          },
+          "pty": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-guided.pty",
+            "result": "PASS",
+            "sha256": "7ed9e751f9a421aa9e50c9da875d0c1e660cf8b5c1c10817f75c2d4d8c3c2d58"
+          },
+          "source": {
+            "locator": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-source-v2/manifest.json",
+            "result": "PASS",
+            "sha256": "fe1e475bbcdf818beb4479baeb9d697a2f8c2a69282ceb32a0fa32e40015bdb3"
+          }
+        },
+        "required_evidence": [
+          "controls",
+          "source",
+          "pty"
+        ],
+        "scope": "Profile resolution, exact planning, declared refusals and reproducible native CLI; no inference",
+        "state": "CHARACTERIZED"
+      },
+      "representation-quality": {
+        "blockers": [
+          "Independent checkpoint-matched full-model held-out evidence unavailable"
+        ],
+        "evidence": {},
+        "required_evidence": [],
+        "scope": "Source retention and an internal tensor probe are not independent model quality",
+        "state": "BLOCKED"
+      }
+    },
+    "id": "mamba2-program-p-resolved-profiles-20261010",
+    "limitations": [
+      "Planning and source-retained element count are not measured quality, throughput or a qualified recommendation.",
+      "No full artifact/binding emitted by this continuation; no engine loaded, unloaded or replaced.",
+      "Full pre-production workspace/state accounting, automatic authenticated measured selection and complete guided production remain open.",
+      "Six pre-existing experimental CUDA edits are present in the retained source snapshot but neither exercised by model inference nor accepted by this compiler evidence.",
+      "The operator DSpark generation 1 remained resident; no same-machine inference measurement was attempted.",
+      "Software tests and official tokenizer vectors are separate from independent full-model reference and representation quality.",
+      "Mamba source-faithful plans retain BF16; recipe labels do not imply a new quantization. Source-retention allocation refuses because there are no legal alternative groups. Metal candidates are explicitly unsupported; no GPU model capability is inferred."
+    ],
+    "measurements": [],
+    "origin": "yvex-published",
+    "provenance": {
+      "candidate": {
+        "approximate_tensors": 0,
+        "artifact_bytes": 14574491136,
+        "artifact_catalog_compatibility": "matches-static-constraint",
+        "candidate_identity": "16f7c12f59a30038631b3075d6ccb4a93565bbe66056c0af22fe562a48d2d8d5",
+        "decode_tokens_per_second": null,
+        "encoded_bytes": 14570807296,
+        "failure_status": 0,
+        "initial_required_bytes": 31172138496,
+        "matrix_incompatible_tensors": 0,
+        "maximum_tensor_bytes": 268435456,
+        "memory_budget_bytes": 125807013888,
+        "missing_evidence": 63,
+        "physical_variant_identity": "a10c94158265f53ae6e6add7a11d1fae3851e3b51d22129d63701e80fdfff0c9",
+        "policy_identity": "5f457af00c3c47af62f4ee6ddcdcd15292d569857c6515612c79f6847b75dd5c",
+        "prefill_tokens_per_second": null,
+        "quality": null,
+        "reason": "initial bounds only; full deployment, independent quality and performance unqualified",
+        "recipe": "mamba-codestral-source-faithful-v1",
+        "reserve_bytes": 16332895744,
+        "routed_tensors": 0,
+        "source_identity": "67f63fd2d04e240aaf09d436e2fe2eec6c086a28e4e78f2829cc303943b8a75e",
+        "state": "needs-qualification",
+        "state_bytes": null,
+        "transform_identity": "6cde84173a2cc012d1b3c475d971a45a27d5506019c95cc09ffa0aa7a4ceab08",
+        "workspace_bytes": null
+      },
+      "diagnostics": [
+        {
+          "case": "mamba-presets",
+          "definition": "Actual compiled candidate population; not qualified configurations",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout",
+          "id": "compiler.candidates",
+          "unit": "count",
+          "value": 7
+        },
+        {
+          "case": "mamba-presets",
+          "definition": "Canonical planned encoded tensor bytes; not physical working memory or an emitted artifact",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout",
+          "id": "compiler.encoded-bytes",
+          "unit": "byte",
+          "value": 14570807296
+        },
+        {
+          "case": "mamba-presets",
+          "definition": "Weights plus largest tensor and reserve; explicitly excludes unknown full workspace/state",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout",
+          "id": "compiler.initial-lower-bound",
+          "unit": "byte",
+          "value": 31172138496
+        },
+        {
+          "case": "mamba-presets",
+          "definition": "Sampled available system memory; not a resource reservation or exclusion of the resident operator engine",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout",
+          "id": "compiler.available-bytes",
+          "unit": "byte",
+          "value": 125807013888
+        },
+        {
+          "case": "mamba-presets",
+          "definition": "Source-authenticated semantic profile, not a Transformer assumption",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout",
+          "id": "model.attention-layers",
+          "unit": "count",
+          "value": 0
+        },
+        {
+          "case": "mamba-presets",
+          "definition": "Source-authenticated semantic profile; real state-space topology",
+          "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout",
+          "id": "model.sequence-mixer-layers",
+          "unit": "count",
+          "value": 64
+        }
+      ],
+      "profiled": false,
+      "reproduction": [
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation-request.json",
+            "--json"
+          ],
+          "case": "0731-allocation",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "c24937c6a398ecfe76e4dc6f12549b6bcc9b8318686f720f01bf9b021f9b3d78"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-insufficient-budget-request.json",
+            "--json"
+          ],
+          "case": "0731-insufficient-budget",
+          "exit_code": 1,
+          "stderr_sha256": "45e6104a7130a5d9d0012e85c0664aac4f711dfe225ef15711f3aa2bb6dae4b8",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets-request.json",
+            "--json"
+          ],
+          "case": "mamba-presets",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "42fcf507a509b6c93b1133fe250975fbff1d88d69bb427971f91875baa69a9fb"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-allocation-refusal-request.json",
+            "--json"
+          ],
+          "case": "mamba-allocation-refusal",
+          "exit_code": 5,
+          "stderr_sha256": "33300a274526140d8e657c19b1227b1d3ef399b3865a7cd13b88d2dcb18f9a06",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-metal-refusal-request.json",
+            "--json"
+          ],
+          "case": "mamba-metal-refusal",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "582e756c46d9927070d8c1feb065f1759b1be50a5e3ffbd98a6faa46a73402cd"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "optimize",
+            "--request",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation-request.json",
+            "--select",
+            "eabf8d05a642b433216032f92576970ac2b890e4bef931a73349649b7fc0ff6c",
+            "--out-policy",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+            "--json"
+          ],
+          "case": "0731-export",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "4cc66d42c43047783fa88ab6668203b986c3c9f77c6fc142c4c0b12a6e86dcae"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "quant",
+            "plan",
+            "--target",
+            "deepseek4-v4-flash-0731",
+            "--source",
+            "/home/dgmothx/lab/models/source/hf/deepseek-ai/DeepSeek-V4-Flash-0731/7872f01b1d1fe23eabc4c98b48bffcef5a386062-8bba663a38a51aac70ea95ced5dff080023f7ac68b012426dccaa28a319e4fe1",
+            "--models-root",
+            "/home/dgmothx/lab/models",
+            "--source-manifest",
+            "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-source-manifest.json",
+            "--policy",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+            "--out-plan",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected.quant-plan"
+          ],
+          "case": "0731-plan",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "18fbe0e3f06465222a93f6434e5a07474d22ebc09cb5fed1523af6fd0f7d2acd"
+        },
+        {
+          "argv": [
+            "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+            "compile",
+            "quant",
+            "probe",
+            "--target",
+            "deepseek4-v4-flash-0731",
+            "--source",
+            "/home/dgmothx/lab/models/source/hf/deepseek-ai/DeepSeek-V4-Flash-0731/7872f01b1d1fe23eabc4c98b48bffcef5a386062-8bba663a38a51aac70ea95ced5dff080023f7ac68b012426dccaa28a319e4fe1",
+            "--models-root",
+            "/home/dgmothx/lab/models",
+            "--source-manifest",
+            "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-source-manifest.json",
+            "--policy",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+            "--plan",
+            "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected.quant-plan",
+            "--tensor",
+            "blk.0.attn_q_a.weight"
+          ],
+          "case": "0731-probe",
+          "exit_code": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_sha256": "d9370920dfb29549aee59d94bae6f98ac06bb43ac350a2cb8573bce20682e559"
+        }
+      ],
+      "resolved_context": {
+        "attention_layers": 0,
+        "calibration": "candidate-bound; not held-out quality",
+        "capacity_scope": "semantic envelope only; full runtime capacity requires produced binding",
+        "draft_layers": 0,
+        "experts_per_row": 0,
+        "family": "mamba2",
+        "identity": "df19e114425f9de557e62ffb072e8e5deeec0243968f59561127df9499a01dae",
+        "layers": 64,
+        "missing_evidence": 63,
+        "model_execution_identity": "44e4c1371fce34692d1edfeaa4a5d554800474a97d1b897c07d3a9e0475de2ea",
+        "quality": null,
+        "routed_experts": 0,
+        "schema": "yvex.optimization.context.v1",
+        "semantic_identity": "4e844c009356a73acd2f65a2956a801d941fe1db93772a803906879c31afc0ff",
+        "semantic_maximum_context": 1048576,
+        "sequence_mixer_layers": 64,
+        "source_identity": "67f63fd2d04e240aaf09d436e2fe2eec6c086a28e4e78f2829cc303943b8a75e"
+      },
+      "source_capture": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-source-v2",
+      "source_stability": "frozen"
+    },
+    "schema": "yvex.qualification.receipt.v1",
+    "target": {
+      "artifact_set": null,
+      "backend": "cpu",
+      "backend_implementation": null,
+      "binding": null,
+      "build": "c39a1a67d8697b7e20cc8918c37442b6514cbc2471ae0f13987e027ac9a9e28d",
+      "checkpoint": "4f086c08c1e0f07bdc50ca25125dbbf7475d21da",
+      "concurrency": 1,
+      "context": 4096,
+      "device_count": 1,
+      "driver": null,
+      "executable": "a3dfd7ae9f48b60d1b1f2a9f0992db0f7798b22d16536ef4d81ec40bf26fbaa9",
+      "family_contract": "mamba2",
+      "hardware_model": "DGX Spark aarch64 CPU",
+      "kernel_bundle": null,
+      "memory_configuration": "130663165952 system bytes; available memory is a separate observation",
+      "physical_policy": "5f457af00c3c47af62f4ee6ddcdcd15292d569857c6515612c79f6847b75dd5c",
+      "prefill_geometry": "requested chunk 512; not executed",
+      "product_path": "native Rust compile optimize CLI; not inference",
+      "reasoning": "not executed",
+      "representation": "a10c94158265f53ae6e6add7a11d1fae3851e3b51d22129d63701e80fdfff0c9",
+      "runtime_configuration": "offline profile resolution and physical planning; no engine or workspace admission",
+      "runtime_toolkit": "native C compiler planning",
+      "sampling": "not executed",
+      "schema": "yvex.qualification.target.v1",
+      "sequence_geometry": "requested width 1; no session",
+      "source_commit": "75fe822070c48ad3c1ab59cb1ed5f9044ac66bbd",
+      "source_delta": "46798a7a2756bfa7b61c4db90bf90c25544d2ba13b1ec092aa359d82789a1335",
+      "source_tree": "035b546897c2c6ce75edef3b7cd15f59b0d77ca3",
+      "specialization": null,
+      "strategy": "planning-only",
+      "suite": null,
+      "tokenizer_conversation": null,
+      "topology": "single CPU process; no device execution",
+      "transformation_ir": "6cde84173a2cc012d1b3c475d971a45a27d5506019c95cc09ffa0aa7a4ceab08",
+      "upstream_repository": "mistralai/Mamba-Codestral-7B-v0.1"
+    },
+    "target_identity": "b20506a86a7cf19b371fbd7088de6dac5b3af02e9107a5fa28c94fed6ee73636",
+    "title": "Mamba2: native guided profile resolution and explicit technique/backend refusal"
   }
 ]

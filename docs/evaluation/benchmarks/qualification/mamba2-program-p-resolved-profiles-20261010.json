@@ -1,0 +1,363 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "mamba2-program-p-resolved-profiles-20261010",
+  "title": "Mamba2: native guided profile resolution and explicit technique/backend refusal",
+  "target": {
+    "family_contract": "mamba2",
+    "upstream_repository": "mistralai/Mamba-Codestral-7B-v0.1",
+    "checkpoint": "4f086c08c1e0f07bdc50ca25125dbbf7475d21da",
+    "tokenizer_conversation": null,
+    "transformation_ir": "6cde84173a2cc012d1b3c475d971a45a27d5506019c95cc09ffa0aa7a4ceab08",
+    "physical_policy": "5f457af00c3c47af62f4ee6ddcdcd15292d569857c6515612c79f6847b75dd5c",
+    "representation": "a10c94158265f53ae6e6add7a11d1fae3851e3b51d22129d63701e80fdfff0c9",
+    "artifact_set": null,
+    "binding": null,
+    "specialization": null,
+    "source_commit": "75fe822070c48ad3c1ab59cb1ed5f9044ac66bbd",
+    "source_tree": "035b546897c2c6ce75edef3b7cd15f59b0d77ca3",
+    "source_delta": "46798a7a2756bfa7b61c4db90bf90c25544d2ba13b1ec092aa359d82789a1335",
+    "build": "c39a1a67d8697b7e20cc8918c37442b6514cbc2471ae0f13987e027ac9a9e28d",
+    "executable": "a3dfd7ae9f48b60d1b1f2a9f0992db0f7798b22d16536ef4d81ec40bf26fbaa9",
+    "backend": "cpu",
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": "DGX Spark aarch64 CPU",
+    "device_count": 1,
+    "topology": "single CPU process; no device execution",
+    "driver": null,
+    "runtime_toolkit": "native C compiler planning",
+    "memory_configuration": "130663165952 system bytes; available memory is a separate observation",
+    "runtime_configuration": "offline profile resolution and physical planning; no engine or workspace admission",
+    "context": 4096,
+    "prefill_geometry": "requested chunk 512; not executed",
+    "sequence_geometry": "requested width 1; no session",
+    "concurrency": 1,
+    "strategy": "planning-only",
+    "reasoning": "not executed",
+    "sampling": "not executed",
+    "product_path": "native Rust compile optimize CLI; not inference",
+    "suite": null,
+    "schema": "yvex.qualification.target.v1"
+  },
+  "target_identity": "b20506a86a7cf19b371fbd7088de6dac5b3af02e9107a5fa28c94fed6ee73636",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "Not executed by these offline compiler controls",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Source retention and an internal tensor probe are not independent model quality",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched full-model held-out evidence unavailable"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Source retention and an internal tensor probe are not independent model quality",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched full-model held-out evidence unavailable"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Not executed by these offline compiler controls",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "Not executed by these offline compiler controls",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Profile resolution, exact planning, declared refusals and reproducible native CLI; no inference",
+      "required_evidence": [
+        "controls",
+        "source",
+        "pty"
+      ],
+      "evidence": {
+        "controls": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/receipt.json",
+          "sha256": "07c573fe5bd9e3188a6ca70d22bd9222852e0c9b18acc6163a45d31e1994b242",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-source-v2/manifest.json",
+          "sha256": "fe1e475bbcdf818beb4479baeb9d697a2f8c2a69282ceb32a0fa32e40015bdb3",
+          "result": "PASS"
+        },
+        "pty": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-guided.pty",
+          "sha256": "7ed9e751f9a421aa9e50c9da875d0c1e660cf8b5c1c10817f75c2d4d8c3c2d58",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-source-v2",
+    "resolved_context": {
+      "attention_layers": 0,
+      "calibration": "candidate-bound; not held-out quality",
+      "capacity_scope": "semantic envelope only; full runtime capacity requires produced binding",
+      "draft_layers": 0,
+      "experts_per_row": 0,
+      "family": "mamba2",
+      "identity": "df19e114425f9de557e62ffb072e8e5deeec0243968f59561127df9499a01dae",
+      "layers": 64,
+      "missing_evidence": 63,
+      "model_execution_identity": "44e4c1371fce34692d1edfeaa4a5d554800474a97d1b897c07d3a9e0475de2ea",
+      "quality": null,
+      "routed_experts": 0,
+      "schema": "yvex.optimization.context.v1",
+      "semantic_identity": "4e844c009356a73acd2f65a2956a801d941fe1db93772a803906879c31afc0ff",
+      "semantic_maximum_context": 1048576,
+      "sequence_mixer_layers": 64,
+      "source_identity": "67f63fd2d04e240aaf09d436e2fe2eec6c086a28e4e78f2829cc303943b8a75e"
+    },
+    "candidate": {
+      "approximate_tensors": 0,
+      "artifact_bytes": 14574491136,
+      "artifact_catalog_compatibility": "matches-static-constraint",
+      "candidate_identity": "16f7c12f59a30038631b3075d6ccb4a93565bbe66056c0af22fe562a48d2d8d5",
+      "decode_tokens_per_second": null,
+      "encoded_bytes": 14570807296,
+      "failure_status": 0,
+      "initial_required_bytes": 31172138496,
+      "matrix_incompatible_tensors": 0,
+      "maximum_tensor_bytes": 268435456,
+      "memory_budget_bytes": 125807013888,
+      "missing_evidence": 63,
+      "physical_variant_identity": "a10c94158265f53ae6e6add7a11d1fae3851e3b51d22129d63701e80fdfff0c9",
+      "policy_identity": "5f457af00c3c47af62f4ee6ddcdcd15292d569857c6515612c79f6847b75dd5c",
+      "prefill_tokens_per_second": null,
+      "quality": null,
+      "reason": "initial bounds only; full deployment, independent quality and performance unqualified",
+      "recipe": "mamba-codestral-source-faithful-v1",
+      "reserve_bytes": 16332895744,
+      "routed_tensors": 0,
+      "source_identity": "67f63fd2d04e240aaf09d436e2fe2eec6c086a28e4e78f2829cc303943b8a75e",
+      "state": "needs-qualification",
+      "state_bytes": null,
+      "transform_identity": "6cde84173a2cc012d1b3c475d971a45a27d5506019c95cc09ffa0aa7a4ceab08",
+      "workspace_bytes": null
+    },
+    "diagnostics": [
+      {
+        "id": "compiler.candidates",
+        "case": "mamba-presets",
+        "value": 7,
+        "unit": "count",
+        "definition": "Actual compiled candidate population; not qualified configurations",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout"
+      },
+      {
+        "id": "compiler.encoded-bytes",
+        "case": "mamba-presets",
+        "value": 14570807296,
+        "unit": "byte",
+        "definition": "Canonical planned encoded tensor bytes; not physical working memory or an emitted artifact",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout"
+      },
+      {
+        "id": "compiler.initial-lower-bound",
+        "case": "mamba-presets",
+        "value": 31172138496,
+        "unit": "byte",
+        "definition": "Weights plus largest tensor and reserve; explicitly excludes unknown full workspace/state",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout"
+      },
+      {
+        "id": "compiler.available-bytes",
+        "case": "mamba-presets",
+        "value": 125807013888,
+        "unit": "byte",
+        "definition": "Sampled available system memory; not a resource reservation or exclusion of the resident operator engine",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout"
+      },
+      {
+        "id": "model.attention-layers",
+        "case": "mamba-presets",
+        "value": 0,
+        "unit": "count",
+        "definition": "Source-authenticated semantic profile, not a Transformer assumption",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout"
+      },
+      {
+        "id": "model.sequence-mixer-layers",
+        "case": "mamba-presets",
+        "value": 64,
+        "unit": "count",
+        "definition": "Source-authenticated semantic profile; real state-space topology",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets.stdout"
+      }
+    ],
+    "reproduction": [
+      {
+        "case": "0731-allocation",
+        "argv": [
+          "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+          "compile",
+          "optimize",
+          "--request",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation-request.json",
+          "--json"
+        ],
+        "exit_code": 0,
+        "stdout_sha256": "c24937c6a398ecfe76e4dc6f12549b6bcc9b8318686f720f01bf9b021f9b3d78",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "0731-insufficient-budget",
+        "argv": [
+          "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+          "compile",
+          "optimize",
+          "--request",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-insufficient-budget-request.json",
+          "--json"
+        ],
+        "exit_code": 1,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "45e6104a7130a5d9d0012e85c0664aac4f711dfe225ef15711f3aa2bb6dae4b8"
+      },
+      {
+        "case": "mamba-presets",
+        "argv": [
+          "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+          "compile",
+          "optimize",
+          "--request",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-presets-request.json",
+          "--json"
+        ],
+        "exit_code": 0,
+        "stdout_sha256": "42fcf507a509b6c93b1133fe250975fbff1d88d69bb427971f91875baa69a9fb",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "mamba-allocation-refusal",
+        "argv": [
+          "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+          "compile",
+          "optimize",
+          "--request",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-allocation-refusal-request.json",
+          "--json"
+        ],
+        "exit_code": 5,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "33300a274526140d8e657c19b1227b1d3ef399b3865a7cd13b88d2dcb18f9a06"
+      },
+      {
+        "case": "mamba-metal-refusal",
+        "argv": [
+          "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+          "compile",
+          "optimize",
+          "--request",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/mamba-metal-refusal-request.json",
+          "--json"
+        ],
+        "exit_code": 0,
+        "stdout_sha256": "582e756c46d9927070d8c1feb065f1759b1be50a5e3ffbd98a6faa46a73402cd",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "0731-export",
+        "argv": [
+          "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+          "compile",
+          "optimize",
+          "--request",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/0731-allocation-request.json",
+          "--select",
+          "eabf8d05a642b433216032f92576970ac2b890e4bef931a73349649b7fc0ff6c",
+          "--out-policy",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+          "--json"
+        ],
+        "exit_code": 0,
+        "stdout_sha256": "4cc66d42c43047783fa88ab6668203b986c3c9f77c6fc142c4c0b12a6e86dcae",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "0731-plan",
+        "argv": [
+          "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+          "compile",
+          "quant",
+          "plan",
+          "--target",
+          "deepseek4-v4-flash-0731",
+          "--source",
+          "/home/dgmothx/lab/models/source/hf/deepseek-ai/DeepSeek-V4-Flash-0731/7872f01b1d1fe23eabc4c98b48bffcef5a386062-8bba663a38a51aac70ea95ced5dff080023f7ac68b012426dccaa28a319e4fe1",
+          "--models-root",
+          "/home/dgmothx/lab/models",
+          "--source-manifest",
+          "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-source-manifest.json",
+          "--policy",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+          "--out-plan",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected.quant-plan"
+        ],
+        "exit_code": 0,
+        "stdout_sha256": "18fbe0e3f06465222a93f6434e5a07474d22ebc09cb5fed1523af6fd0f7d2acd",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "0731-probe",
+        "argv": [
+          "/home/dgmothx/lab/yvex-computational-5/build/cargo/release/yvex",
+          "compile",
+          "quant",
+          "probe",
+          "--target",
+          "deepseek4-v4-flash-0731",
+          "--source",
+          "/home/dgmothx/lab/models/source/hf/deepseek-ai/DeepSeek-V4-Flash-0731/7872f01b1d1fe23eabc4c98b48bffcef5a386062-8bba663a38a51aac70ea95ced5dff080023f7ac68b012426dccaa28a319e4fe1",
+          "--models-root",
+          "/home/dgmothx/lab/models",
+          "--source-manifest",
+          "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-source-manifest.json",
+          "--policy",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected-policy.json",
+          "--plan",
+          "/home/dgmothx/lab/models/evidence/physical-profiles-20261010.8cRfaJF3/final-controls/selected.quant-plan",
+          "--tensor",
+          "blk.0.attn_q_a.weight"
+        ],
+        "exit_code": 0,
+        "stdout_sha256": "d9370920dfb29549aee59d94bae6f98ac06bb43ac350a2cb8573bce20682e559",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  "limitations": [
+    "Planning and source-retained element count are not measured quality, throughput or a qualified recommendation.",
+    "No full artifact/binding emitted by this continuation; no engine loaded, unloaded or replaced.",
+    "Full pre-production workspace/state accounting, automatic authenticated measured selection and complete guided production remain open.",
+    "Six pre-existing experimental CUDA edits are present in the retained source snapshot but neither exercised by model inference nor accepted by this compiler evidence.",
+    "The operator DSpark generation 1 remained resident; no same-machine inference measurement was attempted.",
+    "Software tests and official tokenizer vectors are separate from independent full-model reference and representation quality.",
+    "Mamba source-faithful plans retain BF16; recipe labels do not imply a new quantization. Source-retention allocation refuses because there are no legal alternative groups. Metal candidates are explicitly unsupported; no GPU model capability is inferred."
+  ]
+}
