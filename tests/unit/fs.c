@@ -353,7 +353,7 @@ static int test_safe_file_lifecycle(void)
     return 0;
 }
 
-int yvex_test_fs(void)
+static int run_fs_cases(void)
 {
     if (test_default_paths() != 0) {
         return 1;
@@ -377,4 +377,32 @@ int yvex_test_fs(void)
         return 1;
     }
     return 0;
+}
+
+int yvex_test_fs(void)
+{
+    static const char *const names[] = {
+        "HOME", "YVEX_CONFIG_DIR", "YVEX_CACHE_DIR", "YVEX_STATE_DIR",
+        "YVEX_DATA_DIR", "YVEX_RUN_DIR"
+    };
+    char *saved[sizeof(names) / sizeof(names[0])] = {0};
+    size_t index;
+    int rc = 0;
+
+    /* Bounds tests deliberately poison these values; no later unit may inherit them. */
+    for (index = 0; index < sizeof(names) / sizeof(names[0]); ++index) {
+        const char *value = getenv(names[index]);
+        if (value && !(saved[index] = strdup(value))) {
+            while (index) free(saved[--index]);
+            return 1;
+        }
+    }
+    rc = run_fs_cases();
+    for (index = 0; index < sizeof(names) / sizeof(names[0]); ++index) {
+        int restored = saved[index] ? setenv(names[index], saved[index], 1)
+                                    : unsetenv(names[index]);
+        if (restored != 0) rc = 1;
+        free(saved[index]);
+    }
+    return rc;
 }
