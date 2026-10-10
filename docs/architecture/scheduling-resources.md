@@ -181,6 +181,21 @@ YVEX knowing physical page residency. Explicit CUDA allocation, process RSS,
 and physical GPU working set are not substituted for one another. Overlapping
 spans, state subsets, and peak classes are never presented as an additive total.
 
+Linux memory witnesses may join process start identity, smaps RSS/PSS and
+anonymous/COW subsets, file device/inode, cgroup accounting and system
+`MemAvailable`. These are overlapping, non-atomic observations, not a new
+allocation ledger. CUDA registration may not appear as `VmLck`/`Locked`; zero
+there does not prove absence of driver-held pages. A large mapped-file RSS is
+not proof of a second weight allocation. `MemAvailable` already estimates
+reclaimable cache: never add the file cache to it a second time.
+
+An admission deficit is not a throughput ceiling. Preserve the runtime reserve,
+transient and later workspace checks. After an operator-controlled reboot,
+compare the same source/artifact/configuration and distinguish boot recovery,
+service population, cold file pages and executable changes. A changed boot ID
+or increased available memory alone does not prove engine admission. See the
+[read-only witness methodology](../evaluation/benchmarks/methodology.md#linux-memory-and-reboot-witnesses).
+
 
 ## Future training resource horizon
 

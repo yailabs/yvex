@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import qualification as q
 import qualification_reference as independent
 import qualification_gguf as projection
+import qualification_memory as memory
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("measurement", ROOT / "tools/qualification_run.py")
@@ -1265,6 +1266,84 @@ class QualificationTests(unittest.TestCase):
             q.probability_quality([[.1,.2]],[[.1,.2]],[1])
         with self.assertRaisesRegex(ValueError,"unbounded"):
             q.probability_quality([[.5,.5]],[[0.,1.]],[1])
+
+
+class MemoryWitnessTests(unittest.TestCase):
+    def test_bounded_reads_do_not_request_large_procfs_buffers(self):
+        class Bounded(io.StringIO):
+            def read(self, size=-1):
+                self.assert_size(size)
+                return super().read(size)
+            def assert_size(self, size):
+                if not 0 < size <= 4096:
+                    raise AssertionError("large procfs read")
+        path = Mock()
+        path.open.return_value = Bounded("x" * 5000)
+        self.assertEqual(len(memory.read(path)), 5000)
+        path.open.return_value = Bounded("x" * 5000)
+        with self.assertRaisesRegex(ValueError, "bound"):
+            memory.read(path, 4999)
+
+    def test_units_and_unavailable_are_not_zero(self):
+        self.assertEqual(memory.counters("Rss: 7 kB\nThreads: 4\nPss: unknown\n"),
+                         {"Rss": 7168, "Threads": 4})
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(memory.optional(Path(directory) / "missing")["value"])
+
+    def test_stat_name_with_spaces_and_parenthesis(self):
+        fields = ["S", "7"] + ["0"] * 17 + ["99", "0", "0"]
+        row = memory.identity("42 (worker (name)) " + " ".join(fields))
+        self.assertEqual((row["pid"], row["parent_pid"], row["start_ticks"]), (42, 7, 99))
+        self.assertEqual(row["name"], "worker (name)")
+
+    def test_mapping_inode_and_cow_are_not_duplicate_allocations(self):
+        value = ("1000-2000 r--p 0000 08:01 3 /weights\nRss: 8 kB\nPss: 4 kB\nAnonymous: 2 kB\n"
+                 "2000-3000 r--p 1000 08:01 3 /weights\nRss: 4 kB\nPss: 2 kB\nAnonymous: 0 kB\n"
+                 "3000-4000 r--p 0000 08:01 4 /weights\nRss: 1 kB\n"
+                 "4000-5000 rw-p 0000 00:00 0\nRss: 2 kB\nAnonymous: 2 kB\n")
+        rows = memory.mappings(value)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["mapping_count"], 2)
+        self.assertEqual(rows[0]["Rss"], 12288)
+        self.assertEqual(rows[0]["Pss"], 6144)
+        self.assertEqual(rows[0]["Anonymous"], 2048)
+        self.assertIsNone(rows[0]["Locked"])
+
+    def test_pid_reuse_discards_counter_attribution(self):
+        before = dict(pid=42, start_ticks=1)
+        after = dict(pid=42, start_ticks=2)
+        def probe(path, parser=None):
+            if path.name == "stat":
+                value = before if not getattr(probe, "seen", False) else after
+                probe.seen = True
+                return dict(value=value, error=None)
+            return dict(value={"Rss": 100}, error=None)
+        with patch.object(memory, "optional", side_effect=probe):
+            row = memory.process(Path("/unused"), 42)
+        self.assertFalse(row["stable_identity"])
+        self.assertIsNone(row["rollup"]["value"])
+
+    def test_reboot_delta_is_not_automatic_admission(self):
+        before = dict(schema="yvex.qualification.linux-memory-observation.v1",
+                      boot={"value": "a"}, meminfo={"value": {"MemAvailable": 100}},
+                      same_boot_during_sample=True)
+        after = copy.deepcopy(before)
+        after["boot"]["value"] = "b"
+        after["meminfo"]["value"]["MemAvailable"] = 120
+        result = memory.difference(before, after)
+        self.assertTrue(result["boot_changed"])
+        self.assertEqual(result["available_delta_bytes"], 20)
+        self.assertNotIn("admitted", result)
+        after["same_boot_during_sample"] = False
+        with self.assertRaises(ValueError):
+            memory.difference(before, after)
+
+    def test_missing_available_refuses_comparison(self):
+        row = dict(schema="yvex.qualification.linux-memory-observation.v1",
+                   boot={"value": "a"}, meminfo={"value": {"MemFree": 100}},
+                   same_boot_during_sample=True)
+        with self.assertRaisesRegex(ValueError, "MemAvailable unavailable"):
+            memory.difference(row, row)
 
 
 if __name__ == "__main__":

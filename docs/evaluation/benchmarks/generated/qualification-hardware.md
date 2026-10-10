@@ -18,6 +18,7 @@ Every row links its complete context. Missing metrics are not zero; these rows d
 
 | Target | backend | hardware_model | device_count | topology | context | strategy | reasoning | Quality | Performance |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [DeepSeek 0731: protected-service memory audit and operator reboot barrier](qualification-deepseek-0731-memory-audit-20261010.md) | cuda | NVIDIA DGX Spark GB10 | 1 | single GB10 coherent unified memory | 4096 | target-only | none intended; no request submitted | BLOCKED | BLOCKED |
 | [DeepSeek 0731 native artifact and binding; inference unqualified](qualification-deepseek-0731-native-admission-20261009.md) | NOT RETAINED | NOT RETAINED | NOT RETAINED | NOT RETAINED | NOT RETAINED | NOT RETAINED | NOT RETAINED | BLOCKED | UNQUALIFIED |
 | [DeepSeek 0731 Q8/Q2: native load blocked by memory admission](qualification-deepseek-0731-native-load-refusal-20261009.md) | cuda | NVIDIA DGX Spark GB10 | 1 | single GB10 coherent unified memory | 4096 | target-only | none intended; no request submitted | BLOCKED | BLOCKED |
 | [DeepSeek candidate — diagnostic whole-model CUDA submission profile](qualification-deepseek-candidate-compute-profile-12.md) | cuda | NVIDIA GB10 | 1 | single-node single-device coherent unified memory | 4096 | target-only | none | BLOCKED | UNQUALIFIED |

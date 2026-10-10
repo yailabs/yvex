@@ -3149,3 +3149,133 @@ architectural speedup, independent full-model quality promotion, high/maximum
 matrix completion, 20/700 gate, hardware ceiling or installed upgrade is earned
 by these records. `.4` remains stopped with its original requirements unearned;
 `.5` alone owns further computational implementation.
+
+## 0731 memory audit and operator reboot boundary (2026-10-10)
+
+The [generated memory witness](benchmarks/generated/qualification-deepseek-0731-memory-audit-20261010.md)
+binds the pending native Q8_0/Q2_K candidate to its previous authenticated
+preparation/load-refusal record. Its OS/service observations instead describe
+the **older installed** DeepSeek and finite engines; they do not pretend the
+0731 candidate was loaded. Exact byte values and before/after samples live only
+in the structured receipt and generated view.
+
+The observed Host RSS is predominantly the older model's file-backed mapping,
+not a second anonymous weight copy. Anonymous Host arenas remain material, but
+procfs cannot attribute them completely to individual YVEX/CUDA/allocator owners
+or establish a leak. Runtime reports no current session state or separately
+prepared weight storage; finite workspace remains legitimate protected state.
+System page cache overlaps the mapped file RSS and is already considered by
+Linux's available-memory estimate. Visible service cgroup ancestors are unlimited;
+this audit does not replace the runtime's live cgroup/capacity check.
+
+No abandoned test process, disposable CUDA owner or deleted-file descriptor was
+established in the observed service population. No process was killed, payload
+deleted, cache dropped, engine unloaded or service restarted. Source artifacts,
+partial unpublished experiments and retained receipts stay on disk. Changes
+between the two memory samples are ambient movement, not reclaimed bytes.
+Root/GDM processes expose status/RSS but not all smaps data to this user; their
+missing PSS and driver pinning/allocator ownership remain explicitly unavailable.
+Noninteractive privileged access was unavailable; no credential was requested.
+
+The independently tested read-only observer adds bounded procfs reads,
+PID/start-identity fencing, inode/device mapping groups, anonymous/COW subsets,
+unavailable-value preservation and a boot-aware sample comparison. It is
+engineering evidence tooling, not a second runtime resource owner or a model
+optimization. An initial observer run requested too large a sysctl read and
+received `ENOMEM` for the boot ID. Its rejected raw witness is retained; bounded
+reads and a regression control fix the observer. That failure is **not** evidence
+that the GPU or model exhausted memory.
+
+### Executable-layout decision
+
+The inspected external DwarfStar source is the clean pinned `9139e2ae` control.
+Its retained profiled startup log reports aligned artifacts **replacing expert
+raw residency**, with the original mapping left unpinned. That is different
+from making a compulsory full-size duplicate, and different from warming pages.
+Its preparation time is startup work, not a decode speed measurement. The
+checkpoint relationship and distinct quantizations remain as recorded in the
+0731 preparation evidence; preserved-F32 controls are not proof of whole-weight
+equivalence.
+
+For YVEX, retaining a second complete encoded weight copy is rejected by capacity
+arithmetic before performance experimentation; the size of a different prepared
+layout must be derived, not borrowed from the external quantization. The current initial
+envelope already leaves only a narrow necessary bound for other unavailable
+memory, **before later workspace/backend/state admission**. The existing
+IQ2-gate/up plus Q2-down matrix selector also does not admit the new all-Q2
+expert triplet. Merely increasing residency or alignment cannot change that
+consumer contract. No 0731 execution has yet measured its dequantization,
+memory traffic or kernel geometry costs.
+
+The constrained next design is
+[selective/replacement executable preparation](../architecture/representation-artifacts.md#executable-weight-preparation-boundary),
+with explicit numerical class, source-span coverage, construction peak and
+engine lifetime. A Q2-compatible physical consumer and a separately calibrated
+IQ2 variant are distinct experiments with different qualification obligations.
+Neither is installed or claimed faster. Prior phase-local preparation, page
+warming and managed-prefetch negatives are preserved, not repeated.
+
+### Reboot handoff and reproducible admission sequence
+
+The operator alone performs the reboot. This continuation grants no shutdown,
+automatic reboot, shared-Host restart, service disabling or model unload. The
+pre-reboot boot identity and service generations are retained in the receipt.
+After the operator confirms the reboot, resume `.5` in this order:
+
+1. Capture a fresh read-only witness using the
+   [memory observer](benchmarks/methodology.md#linux-memory-and-reboot-witnesses),
+   replacing its example PIDs with `systemctl --user show yvex-host
+   --property MainPID --value` and the other freshly observed service PIDs.
+   Compare against the external `pre-reboot.json`, not the rejected observer run.
+   Require a changed boot ID; do not call an ordinary later sample post-reboot.
+2. Record `./yvex version --json`, `./yvex host status --json`,
+   `./yvex engine list --json`, service executable identity and
+   `nvidia-smi --query-compute-apps=gpu_uuid,pid,used_memory --format=csv`.
+   Reconcile finite/listener health and all generations; never replay a historical
+   request. If the old DeepSeek has automatically reloaded or another GPU owner
+   exists, **stop before the candidate** and coordinate a new free-device window.
+   Reboot authorization does not authorize unloading an automatically restored
+   engine. Preserve finite and management.
+3. Keep the clean baseline checkout `/home/dgmothx/lab/yvex-0731-baseline-4ecc2b6b`
+   at the source/tree/executable identities in the prior load-refusal receipt.
+   Do not rebuild it or substitute the dirty development candidate. Re-run the
+   retained read-only `native_capacity_probe` against the exact binding and record
+   its JSON in a new external evidence directory. Compare its effective capacity,
+   reserve, maximum-tensor transient and available bytes; do not force a host
+   limit or relax the reserve. Authentication may read file pages: capture memory
+   before and after, and label the following attempt post-authentication rather
+   than untouched cold-file execution.
+4. Only in the confirmed uncontended window, under the existing
+   `cuda-device`/`gb10-live-model` qualification resource locks, attempt **once**
+   the existing standalone native operator below. It creates only its own
+   engine/session and uses the same authenticated runtime admission/cleanup owner;
+   it does not load into or restart the production Host. Retain status, stdout,
+   stderr, typed failure fields, before/after resource witnesses and binary digest.
+   A timeout, failure or indeterminate cleanup is not a retry instruction.
+
+```sh
+cd /home/dgmothx/lab/yvex-0731-baseline-4ecc2b6b
+./yvex bench transformer generate \
+  --target deepseek4-v4-flash-0731 \
+  --artifact /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/deepseek-v4-flash-0731-q8_0-q2_k-v1.gguf \
+  --runtime-binding /home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-bindings/29676295361a8c99b86b3e1837a64e23791337f862d01fbeaeb2b5361399cc6d.yvex-runtime-binding \
+  --backend cuda --generation-mode target-only \
+  --context-capacity 4096 --prefill-chunk-tokens 512 \
+  --user ciao --max-new-tokens 1 --temperature 0 --output json
+```
+
+This command is **prepared, not executed** by the audit. Its one-token bound is
+an admission/first-forward control only, never sustained throughput, model
+quality or a native-chat performance sample. It cannot replace the frozen
+2K/8K, 256-output coding, DSpark and reasoning qualification matrix. A successful
+initial memory probe still must pass subsequent workspace/backend admission.
+If it refuses, preserve the exact required/available stage and continue with a
+separately budgeted representation/layout; do not claim reboot guaranteed fit.
+The historical `native_0731_window.py` automatically restores an old engine and
+is **not** the reboot handoff: do not rerun it blindly under this authority.
+
+Compare cold-start resource changes with the **same** binary/artifact first.
+Only subsequent separately identified candidates may establish an implementation
+benefit. Current service identities are unchanged, all six retained CUDA
+candidate modifications are preserved, `.5` stays IN PROGRESS, and 20/700,
+independent full-model quality and rollout remain unearned.

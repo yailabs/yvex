@@ -53,6 +53,14 @@ installed-process restart requires separate authority; alternatively a smaller
 representation needs its own preparation/qualification. No reserve reduction,
 automatic rollout, hardware throughput ceiling or 20/700 completion is claimed.
 
+The 2026-10-10 continuation selects a non-destructive
+[memory audit and reboot handoff](../evaluation/retained-observations.md#0731-memory-audit-and-operator-reboot-boundary-2026-10-10)
+inside `.5`. The operator exclusively owns the next reboot; no automatic reboot,
+shared-Host restart or DeepSeek/finite unload is authorized by this continuation.
+The read-only witness and executable-layout constraints do not close admission
+or performance. Keep `.5` IN PROGRESS, preserve the current services and compare
+the same authenticated candidate after a separately confirmed free-device window.
+
 The predecessor `.4` owns the retained
 [cancelled-prefill decode-clock repair](../evaluation/retained-observations.md#cancelled-prefill-decode-clock-repair-2026-10-08):
 missing first-commit timing stays unavailable rather than reporting process

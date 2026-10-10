@@ -20,6 +20,7 @@ LOCAL receipts are not YVEX-published qualification. Each plane stands alone; mi
 
 | Target | Representation | Backend / devices | Path / strategy | Quality | Performance | Origin |
 | --- | --- | --- | --- | --- | --- | --- |
+| [DeepSeek 0731: protected-service memory audit and operator reboot barrier](qualification-deepseek-0731-memory-audit-20261010.md) | deepseek-v4-flash-0731-q8_0-q2_k-v1 | cuda / 1 | isolated Rust host / native protocol v25 load admission / target-only | BLOCKED | BLOCKED | yvex-published |
 | [DeepSeek 0731 native artifact and binding; inference unqualified](qualification-deepseek-0731-native-admission-20261009.md) | deepseek-v4-flash-0731-q8_0-q2_k-v1 | NOT RETAINED / NOT RETAINED | native offline preparation and artifact-bound tokenizer; no inference / NOT RETAINED | BLOCKED | UNQUALIFIED | yvex-published |
 | [DeepSeek 0731 Q8/Q2: native load blocked by memory admission](qualification-deepseek-0731-native-load-refusal-20261009.md) | deepseek-v4-flash-0731-q8_0-q2_k-v1 | cuda / 1 | isolated Rust host / native protocol v25 load admission / target-only | BLOCKED | BLOCKED | yvex-published |
 | [DeepSeek candidate — diagnostic whole-model CUDA submission profile](qualification-deepseek-candidate-compute-profile-12.md) | deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1@b669d807 | cuda / 1 | controlled-engine/native-v24 / target-only | BLOCKED | UNQUALIFIED | local |

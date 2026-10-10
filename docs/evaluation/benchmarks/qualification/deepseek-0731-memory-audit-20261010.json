@@ -1,0 +1,504 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-0731-memory-audit-20261010",
+  "title": "DeepSeek 0731: protected-service memory audit and operator reboot barrier",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "physical_policy": "d66294b5e016806f2e283e8b0160e25385302fa6c9db4ac24a49e94140fa0ea9",
+    "representation": "deepseek-v4-flash-0731-q8_0-q2_k-v1",
+    "artifact_set": "4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a",
+    "binding": "29676295361a8c99b86b3e1837a64e23791337f862d01fbeaeb2b5361399cc6d",
+    "specialization": null,
+    "source_commit": "4ecc2b6b4abde7e76e34ba3758b946842f0a04f3",
+    "source_tree": "599754283780af35ae3b6bfcda2f5f1448741207",
+    "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build": "90f1b0db1d8341e7608359d5dc68fa665637f26cd86c773d6922a82311a515ef",
+    "executable": "f3d1611be8a322d080117380d9cf61591f0544173cc20071095d85e5a9c53c72",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "device_count": 1,
+    "topology": "single GB10 coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "runtime_configuration": "requested 4096 context; native host isolated; no engine admitted",
+    "context": 4096,
+    "prefill_geometry": "not admitted; configured CUDA default 512 not reached",
+    "sequence_geometry": "requested width 1; no session created",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none intended; no request submitted",
+    "sampling": "greedy intended; no request submitted",
+    "product_path": "isolated Rust host / native protocol v25 load admission",
+    "suite": null
+  },
+  "target_identity": "cf323fcb612cf1e88ba9f3ca25af7291be31ed2e18e6b61297700b91a6ada6da",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "CHARACTERIZED",
+      "scope": "Four official encoding vectors plus artifact-bound BPE and bounded none/high/maximum prompt controls; not full tool/history semantics",
+      "required_evidence": [],
+      "evidence": {
+        "native-tokenizer": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-binding-tokenizer-evidence.json",
+          "sha256": "404ab4490c787bf443c976e8d9c17f5a10ed5a3107d23ba6a71e157e0af4f94a",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Exact 0731 source; independent full-model checkpoint reference remains missing",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No checkpoint-matched independent full-model output/logit evidence"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Native Q8_0/Q2_K artifact integrity is not quantization quality",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "No independent checkpoint-matched quality comparison for this physical variant"
+      ]
+    },
+    "backend-execution": {
+      "state": "BLOCKED",
+      "scope": "0731 admission/execution remains blocked; audit preserves installed old DeepSeek and finite",
+      "required_evidence": [],
+      "evidence": {
+        "native-load": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01/failure.json",
+          "sha256": "49cff4de54191f3937272354e3d19975ce51ddf1bbe96ea6e6400310f55ed175",
+          "result": "BLOCKED"
+        },
+        "memory-audit": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json",
+          "sha256": "5ba0492d896bdc223b9f4f872cbbdc7d50ba9004ba9173b19b55f1c75a18a4fe",
+          "result": "PASS"
+        }
+      },
+      "blockers": [
+        "Operator owns reboot; no stop/restart/unload permitted. Initial 0731 envelope remains above sampled available bytes. Reboot recovery and later full workspace/backend admission are unproven."
+      ]
+    },
+    "deployment-performance": {
+      "state": "BLOCKED",
+      "scope": "0731 admission/execution remains blocked; audit preserves installed old DeepSeek and finite",
+      "required_evidence": [],
+      "evidence": {
+        "native-load": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01/failure.json",
+          "sha256": "49cff4de54191f3937272354e3d19975ce51ddf1bbe96ea6e6400310f55ed175",
+          "result": "BLOCKED"
+        },
+        "memory-audit": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json",
+          "sha256": "5ba0492d896bdc223b9f4f872cbbdc7d50ba9004ba9173b19b55f1c75a18a4fe",
+          "result": "PASS"
+        }
+      },
+      "blockers": [
+        "Operator owns reboot; no stop/restart/unload permitted. Initial 0731 envelope remains above sampled available bytes. Reboot recovery and later full workspace/backend admission are unproven."
+      ]
+    },
+    "product-path": {
+      "state": "BLOCKED",
+      "scope": "0731 admission/execution remains blocked; audit preserves installed old DeepSeek and finite",
+      "required_evidence": [],
+      "evidence": {
+        "native-load": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-computational-20261009.v9tUlTUe/0731-clean-native-01/failure.json",
+          "sha256": "49cff4de54191f3937272354e3d19975ce51ddf1bbe96ea6e6400310f55ed175",
+          "result": "BLOCKED"
+        },
+        "memory-audit": {
+          "locator": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json",
+          "sha256": "5ba0492d896bdc223b9f4f872cbbdc7d50ba9004ba9173b19b55f1c75a18a4fe",
+          "result": "PASS"
+        }
+      },
+      "blockers": [
+        "Operator owns reboot; no stop/restart/unload permitted. Initial 0731 envelope remains above sampled available bytes. Reboot recovery and later full workspace/backend admission are unproven."
+      ]
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "scope": "Read-only sampled host/OS resource accounting for a pending 0731 admission; target identifies the unchanged refused candidate, NOT the loaded older checkpoint. No new load, forward or throughput sample.",
+    "evidence_root": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu",
+    "raw": {
+      "pre-reboot.json": {
+        "locator": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json",
+        "sha256": "5ba0492d896bdc223b9f4f872cbbdc7d50ba9004ba9173b19b55f1c75a18a4fe"
+      },
+      "post-audit.json": {
+        "locator": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/post-audit.json",
+        "sha256": "cc2bc36124c081159af1bbf071de98e09b5344117f29d5bc466dd3f4f2586249"
+      },
+      "service-confirmed.json": {
+        "locator": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/service-confirmed.json",
+        "sha256": "eac20a863e6a61d2023cfc6eb2e352c6e2fd26027dd750e29e7dc48846f31de1"
+      },
+      "service-final.json": {
+        "locator": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/service-final.json",
+        "sha256": "f93f38bbb716083958c7e69fe303f50a9c865381487e65b74f99fc4be1f7ae64"
+      },
+      "capture.py": {
+        "locator": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/capture.py",
+        "sha256": "f7e4b42e607aa95a96c82c622b7082753d88b0c985b4b51629cde9beb95db967"
+      }
+    },
+    "boot_id": "7063d25e-9b77-492c-ab29-b36324a8a194",
+    "collector_sha256": "16d983fc40e3da89bce392f22d85bf742d24fef6e8ab31da9709e1c5e5ae0c88",
+    "installed": {
+      "build_commit": "337e7e73057abd8a784a67eea58ad8a6f079869d",
+      "build_identity": "a72b5d98f4361eb97eb051d761a7133268d1f97da66d7543d9fecc7046a0b857",
+      "local_protocol_version": 25,
+      "registry_identity": "a953f0b0ae2800162cc4b4db609c40a3a1134984c683b6c4866c807f8d50f6da",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "c4e4e75aabd40946d17d0d0705c3b34bea9bc348efb653250ac11a2f298837e1",
+      "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_state": "clean",
+      "source_tree": "14b7fea18275a542739d4d2afaa38f6fd720d407",
+      "version": "0.1.0"
+    },
+    "installed_executable_sha256": "eb108d22b68674f92a5430e246723e4e7f0505ae4d0eef01beb590845a8fba7d",
+    "installed_engines": [
+      {
+        "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+        "generation": 19,
+        "artifact": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+        "binding": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+        "active_work": 0,
+        "sessions": 0,
+        "attached_clients": 0,
+        "model_leases": 0
+      },
+      {
+        "alias": "laya-typed-finite-cpu",
+        "generation": 2,
+        "artifact": "4fa56de72383a9d3efa9cfa78955733c81b9fc8067a587ca4beb82c78107a24e",
+        "binding": "5d1d4598c32c8317efbacfa3097cc4e630485cb9722e1f25e3fc3fe802fa1c41",
+        "active_work": 0,
+        "sessions": 0,
+        "attached_clients": 0,
+        "model_leases": 0
+      }
+    ],
+    "hardware": {
+      "device": "GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc",
+      "cuda_visible_processes": [
+        83569
+      ],
+      "temperature_celsius": 39,
+      "clock_sm_mhz": 2411,
+      "power_watts": 9.85,
+      "device_memory_total": null,
+      "device_memory_free": null
+    },
+    "cleanup": {
+      "retired_processes": [],
+      "deleted_payloads": [],
+      "cache_evictions": 0,
+      "host_restarts": 0,
+      "engine_unloads": 0,
+      "bytes_proven_recovered": 0,
+      "reason": "No abandoned test process or owned stale allocation established. Anonymous host arenas are not safely externally releasable. System/driver/editor/management services retained."
+    },
+    "visibility": {
+      "processes_observed": 440,
+      "rollup_unavailable": 385,
+      "userspace_rollup_unavailable": 100,
+      "privileged_proc_access": "unavailable; sudo noninteractive requires password",
+      "cuda_registration_locked_bytes": null,
+      "anonymous_allocator_ownership": null,
+      "system_cgroup_limits": "visible ancestor memory.max=max; root memory controller has no limit file",
+      "no_deleted_open_files_for_service_pids": true
+    },
+    "external_layout_reference": {
+      "source_commit": "9139e2ae58a41503968a500f36f75895c1ba63fc",
+      "locator": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-forensics-window-02/ds4-prepared-dspark-profile/stderr.raw",
+      "reported_prepared_gib": "78.71 (rounded log)",
+      "allocations": 474,
+      "reported_construction_seconds": 60.7,
+      "expert_raw_residency_replaced": true,
+      "model_mapping_left_unpinned": true,
+      "scope": "historical profiled external execution, not current YVEX performance or exact quantized-weight equivalence",
+      "sha256": "12832888e76064862a90017bd67630ab60c3a0e698d0a306d0b75415035dfcdf"
+    },
+    "decision": "No reserve weakening, no whole-model prepared duplicate. Selective/replacement preparation remains a candidate requiring exact consumer-class admission and bounded transient/retained accounting. Current all-Q2 routed triplet cannot select existing IQ2-gate/up + Q2-down matrix class.",
+    "diagnostics": [
+      {
+        "id": "system.MemTotal",
+        "case": "pre-reboot",
+        "value": 130663165952,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.MemFree",
+        "case": "pre-reboot",
+        "value": 10169864192,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.MemAvailable",
+        "case": "pre-reboot",
+        "value": 120348803072,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.Cached",
+        "case": "pre-reboot",
+        "value": 110090727424,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.SReclaimable",
+        "case": "pre-reboot",
+        "value": 1078419456,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.SUnreclaim",
+        "case": "pre-reboot",
+        "value": 352362496,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.AnonPages",
+        "case": "pre-reboot",
+        "value": 7160889344,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.PageTables",
+        "case": "pre-reboot",
+        "value": 247607296,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.KernelStack",
+        "case": "pre-reboot",
+        "value": 18907136,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.SwapTotal",
+        "case": "pre-reboot",
+        "value": 17179865088,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.SwapFree",
+        "case": "pre-reboot",
+        "value": 17016446976,
+        "unit": "byte",
+        "definition": "Linux /proc/meminfo; byte classes overlap and are not additive",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.Rss",
+        "case": "pre-reboot",
+        "value": 101221384192,
+        "unit": "byte",
+        "definition": "Installed PID/start-identity smaps rollup; not CUDA allocation or unique memory total; Locked is not driver pinning evidence",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.Pss",
+        "case": "pre-reboot",
+        "value": 101216276480,
+        "unit": "byte",
+        "definition": "Installed PID/start-identity smaps rollup; not CUDA allocation or unique memory total; Locked is not driver pinning evidence",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.Pss_Anon",
+        "case": "pre-reboot",
+        "value": 5373894656,
+        "unit": "byte",
+        "definition": "Installed PID/start-identity smaps rollup; not CUDA allocation or unique memory total; Locked is not driver pinning evidence",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.Pss_File",
+        "case": "pre-reboot",
+        "value": 95798145024,
+        "unit": "byte",
+        "definition": "Installed PID/start-identity smaps rollup; not CUDA allocation or unique memory total; Locked is not driver pinning evidence",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.Pss_Shmem",
+        "case": "pre-reboot",
+        "value": 44236800,
+        "unit": "byte",
+        "definition": "Installed PID/start-identity smaps rollup; not CUDA allocation or unique memory total; Locked is not driver pinning evidence",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.Swap",
+        "case": "pre-reboot",
+        "value": 39665664,
+        "unit": "byte",
+        "definition": "Installed PID/start-identity smaps rollup; not CUDA allocation or unique memory total; Locked is not driver pinning evidence",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.Locked",
+        "case": "pre-reboot",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Installed PID/start-identity smaps rollup; not CUDA allocation or unique memory total; Locked is not driver pinning evidence",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "old-deepseek.file-rss",
+        "case": "pre-reboot",
+        "value": 94971764736,
+        "unit": "byte",
+        "definition": "Observed old-checkpoint artifact mapping resident pages, not new 0731; subset of host RSS and file cache",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "old-deepseek.mapping-size",
+        "case": "pre-reboot",
+        "value": 95050211328,
+        "unit": "byte",
+        "definition": "Virtual mapping size, not an additional allocation",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "finite.file-rss",
+        "case": "pre-reboot",
+        "value": 719384576,
+        "unit": "byte",
+        "definition": "Finite source mapping RSS; subset of host/file cache",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.declared-workspace",
+        "case": "pre-reboot",
+        "value": 214582212,
+        "unit": "byte",
+        "definition": "Runtime-owned workspace (finite), may overlap anonymous/PSS",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "host.declared-prepared",
+        "case": "pre-reboot",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Runtime reports no separate prepared model storage; not proof of no driver/allocator memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "candidate.payload",
+        "case": "pre-reboot",
+        "value": 107066194936,
+        "unit": "byte",
+        "definition": "Unchanged authenticated 0731 initial preflight arithmetic from prior receipt; not an allocation observed by this audit",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "candidate.maximum-tensor-transient",
+        "case": "pre-reboot",
+        "value": 1059061760,
+        "unit": "byte",
+        "definition": "Unchanged authenticated 0731 initial preflight arithmetic from prior receipt; not an allocation observed by this audit",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "candidate.system-reserve",
+        "case": "pre-reboot",
+        "value": 16332895744,
+        "unit": "byte",
+        "definition": "Unchanged authenticated 0731 initial preflight arithmetic from prior receipt; not an allocation observed by this audit",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "candidate.minimum-preflight",
+        "case": "pre-reboot",
+        "value": 124458152440,
+        "unit": "byte",
+        "definition": "Unchanged authenticated 0731 initial preflight arithmetic from prior receipt; not an allocation observed by this audit",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "candidate.deficit-at-sample",
+        "case": "pre-reboot",
+        "value": 4109349368,
+        "unit": "byte",
+        "definition": "Derived initial-preflight minus sampled available memory; no simultaneous second-model admission or fresh load attempt",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "candidate.maximum-other-unavailable",
+        "case": "pre-reboot",
+        "value": 6205013512,
+        "unit": "byte",
+        "definition": "Necessary initial bound only: other unavailable memory must fit here; later workspace/backend/state checks still mandatory",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "cleanup.proven-recovered",
+        "case": "pre-reboot",
+        "value": 0,
+        "unit": "byte",
+        "definition": "No attributable abandoned resource established or released",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/pre-reboot.json"
+      },
+      {
+        "id": "system.MemAvailable-after",
+        "case": "post-audit",
+        "value": 120347877376,
+        "unit": "byte",
+        "definition": "Second same-boot sample after read-only audit; delta is ambient movement, not cleanup benefit",
+        "evidence": "/home/dgmothx/lab/models/evidence/deepseek-memory-20261010.3bnxnVtu/post-audit.json"
+      }
+    ]
+  },
+  "limitations": [
+    "No 0731 load or inference executed in this audit. Artifact/source integrity and minimum preflight derive from prior authenticated receipts; this audit does not rehash the full model.",
+    "Memory samples are non-atomic. Host file-backed pages, system cache, PSS, cgroup charges and CUDA observations overlap. Do not add them.",
+    "Protected processes expose RSS but not all PSS/mappings. Driver allocations/pinning and anonymous allocator ownership remain incompletely attributable. No memory leak or safe reclaimable anonymous extent is proved.",
+    "The 190 MiB nvidia-smi process value is not whole UMA model memory. Zero smaps Locked does not refute CUDA registration.",
+    "No abandoned test process established. Nothing killed/deleted/evicted. Boot and installed service/engine generations unchanged; sample delta is not memory recovery.",
+    "Reboot may recover process/driver retention, but does not guarantee admission. If the old DeepSeek automatically returns, do not load a second one or unload it without new authority.",
+    "No new numerical class, prepared layout, runtime speedup, independent model quality, 20/700 result or rollout is qualified."
+  ]
+}

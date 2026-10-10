@@ -65,6 +65,38 @@ Retain distribution and sample count for latency. Component timing is not model
 throughput. Wall/device/host spans may overlap; do not add nested durations.
 Mapped, prepared, physical state and RSS byte classes may overlap as well.
 
+## Linux memory and reboot witnesses
+
+`tools/qualification_memory.py` produces a read-only external JSON witness, not
+a model benchmark, runtime admission decision or cleanup command. It records
+the boot identity, system counters, visible process counters and optional detailed
+mapping groups. PID/start-tick checks discard counters if a process disappears
+or is reused. Missing permission/data remains unavailable, not zero. The observer
+reads neither model contents nor process environments/command lines. Bounded
+small procfs reads avoid requesting a large sysctl buffer merely to read a boot ID.
+
+```sh
+python3 tools/qualification_memory.py --pid 1234 --output /external/evidence/before.json
+python3 tools/qualification_memory.py --pid 5678 --compare-before /external/evidence/before.json --output /external/evidence/after.json
+```
+
+Replace the example PIDs with freshly verified service PIDs and use new output
+paths; existing evidence is never overwritten. The comparison reports boot
+change and the `MemAvailable` delta only. Separately capture typed Host/Engine
+JSON, installed executable/build identity, device query, service/cgroup state
+and workload/configuration. Do not infer recovered memory causally from that
+delta when service population or execution state changed. Sampling a clear
+device list is not an exclusive reservation.
+
+Keep anonymous bytes within file mappings visible, use PSS to describe shared
+attribution, and do not sum PSS, RSS, cache, cgroup charges and CUDA allocations
+as independent totals. Ordinary procfs counters cannot identify which allocator
+owns an anonymous arena, prove a leak or prove CUDA pinning. `MemAvailable`
+includes a reclaimability estimate, not permission to load two large models.
+No global cache drop, allocator injection, service restart or model unload is
+part of this observer. Cold-start model authentication reads the artifact; record
+that activity instead of describing the subsequent load as untouched cold I/O.
+
 ## Qualification targets and local receipts
 
 Family conformance establishes reusable grammar or numerical semantics only at

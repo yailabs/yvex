@@ -53,6 +53,14 @@ the current host-preserving memory envelope. No 0731 forward or throughput was
 measured. The same older DeepSeek profile was restored, finite stayed on its
 original generation, and `.5` remains selected with its performance exit unearned.
 
+The subsequent [memory witness](../evaluation/retained-observations.md#0731-memory-audit-and-operator-reboot-boundary-2026-10-10)
+separates file-backed weights, anonymous Host memory, cgroup charges and declared
+workspace. No abandoned resource is established merely from anonymous RSS.
+The next cold-start comparison is behind the operator-controlled reboot boundary;
+services remain unchanged. Selective/replacement executable-weight preparation
+is a constrained candidate design, not a current acceleration or capability
+promotion. Admission, full-model 0731 execution and 20/700 remain unearned.
+
 ## Compute product refoundation
 
 The separately selected `COMPUTE.PLATFORM.PRODUCT.REFOUNDATION.0` reconciles
