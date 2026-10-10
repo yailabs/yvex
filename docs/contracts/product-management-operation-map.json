@@ -3,6 +3,12 @@
   "scope": "published operator registry; management v2 classification",
   "operations": [
     {
+      "operation": "workbench.open",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local terminal composition over existing typed model, compiler, generation and inspection operations; no separate remote workbench service or screen-shaped RPC."
+    },
+    {
       "operation": "model.qualification.list",
       "class": "cli_interaction",
       "public_operation": null,

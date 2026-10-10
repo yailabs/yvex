@@ -32,7 +32,7 @@ registry, compiler, catalog, lifecycle and generation owners.
 | Identity | Qualified subject |
 | --- | --- |
 | Base | `0e637f51a3fd14f6dc94c72053dbe5fdac01bb31`, tree `a49feaf29221d0b15e629d9388cafc39b78df23c` |
-| Implementation | `dc566f9d86918f1a68db0d166645eda5d5db7891`; final executable/test source `504279ef06d7bc8e7f796d877c6f5903ba489043`, tree `91cb63d8bb049b579fb482e3ac1ae77e61112e49`; clean frozen sources |
+| Initial implementation | `dc566f9d86918f1a68db0d166645eda5d5db7891`; first qualified executable/test source `504279ef06d7bc8e7f796d877c6f5903ba489043`, tree `91cb63d8bb049b579fb482e3ac1ae77e61112e49`; clean frozen sources |
 | Native build / protocol | `560c83beacfbfd5b89c66980e5f4f93a193a27f69b0cc6b41ce5c7431966acf9`; protocol 25, unchanged |
 | Release shell / executable | `b0ddddac340b7b1497b29a2cfe272a06da5570c4cef2e3bbb42e8c337787339c`; SHA-256 `396c342254f27830a699dbe7010f7e37f8098f0109bd5abde97236dfcd4237ff` |
 | REPLAI | Unchanged `c8e8f07faa6f0f7fc93c73d63c1e81627ee78334`, ABI 1 / presentation 1; no producer edits |
@@ -86,6 +86,34 @@ DeepSeek speed and compiler quality are not qualified here. Hosted CI is
 separate: base `0e637f51` already failed its Mac/native and hermetic jobs in
 [run 38080911040](https://github.com/yailabs/yvex/actions/runs/38080911040);
 local PASS does not assert a later hosted result.
+
+### Retained consumer correction and positive Models journey
+
+Clean `5cfea01d366a24b7bb744306153b51f4e05a8348`, tree
+`417cc6e94af072653fe74350e25804eae8b96458`, preserves the implementation above
+and corrects eight workbench source-line-width violations found by the broader
+structural audit; the ten pre-existing violations in `variant.rs` and
+`qualification{,/run}.rs` remain outside this delivery. Source formatting changes
+neither the displayed text nor runtime semantics.
+
+The extended real CPU PTY now also selects a catalog model, opens its details,
+cancels a load before dispatch, confirms a load, selects the observed generation
+and retires it. The host returns to zero loaded engines. The isolated workbench
+also exercises guided compilation's missing-source refusal and return to the
+editor. These are actual consumer operations, not a static screenshot.
+
+| Final-source repeat | Result | Canonical receipt |
+| --- | --- | --- |
+| `integration.terminal-workbench` | PASS | `1169348f51aeccc60f7b7386276ee7a6f1a8e9bf4d2d0bf1a21d3dcdd96be8eb` |
+| `integration.tiny-vertical` (release) | PASS | `2a83af8eca55fc11c036c99911ec303376e40439f11d2d9de842547ffbade9ac` |
+| `integration.rust-shell` | PASS | `b7484756a03403449b17269b16363376a430df3410174cdd30e42da52c0f711e` |
+
+The [public operation disposition](../contracts/product-management-operation-map.json)
+classifies `workbench.open` as `cli_interaction`, not a remote-management API.
+The base CI receipts separately identify 127 PASS / 6 FAIL in the hermetic lane
+and 20 PASS / 4 BLOCKED in the Mac/native lane (missing external SDK fixtures).
+The unclassified `compile.optimize` operation and pre-existing structural/docs
+failures are not silently repaired or promoted by this workbench boundary.
 
 ## Program P static search and post-boot admission (2026-10-10)
 
