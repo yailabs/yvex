@@ -138,7 +138,7 @@ fn compile(context: &mut Preparation<'_>, imatrix: Option<&str>, index: u64) -> 
     if exists(&stored.artifact)? {
         context.verify_artifact()?;
     } else {
-        variant.emit(&stored.plan, &stored.artifact)?;
+        variant.emit(&stored.plan, &stored.artifact, None)?;
         context.verify_artifact()?;
     }
     Ok(false)

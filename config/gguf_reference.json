@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/ggml-org/ggml",
+  "revision": "af97976c7810cdabb1863172f31c432dab767de7",
+  "tree": "5fb5ad4b93a9a3c59f16093241dee5b2dc1b1c10",
+  "archive_sha256": "06e84ccb46a4e18ea9bd921548d8faa04d09651e4eb091c0446abfccd6134672",
+  "scope": "Independent GGUF structural reader only; no inference backend or quality oracle."
+}

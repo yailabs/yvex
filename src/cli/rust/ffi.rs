@@ -38,6 +38,7 @@ pub(crate) mod distribution;
 pub(crate) mod execution;
 pub(crate) mod finite;
 pub(crate) mod generation;
+mod gguf_reference;
 pub(crate) mod media;
 pub(crate) mod pipeline;
 pub(crate) mod preparation;

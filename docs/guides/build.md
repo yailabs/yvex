@@ -30,6 +30,17 @@ Cargo owns Rust dependency tracking; Make owns native compilation, authenticated
 REPLAI source, native link inputs and atomic executable publication. There is no
 legacy C CLI fallback or second daemon executable.
 
+The compiler product also builds the exact independent GGUF structural parser
+in `config/gguf_reference.json` using CMake and a C++ compiler (`cc`/`c++`).
+`make client` prepares its authenticated private prefix under
+`BUILD_DIR/external/gguf-reference`; changed pins/toolchains or altered cached
+bytes refuse instead of silently replacing shared build state. Use a fresh
+build directory for an incompatible dependency build. The prefix receipt and
+original ggml license are included in software packages. No ggml inference
+backend is selected; `make lib` does not require this reader. This new producer
+dependency needs its own platform evidence, not inheritance from earlier Mac
+or Linux receipts.
+
 The root Makefile is the entry point. `config/make/config.mk` owns toolchain
 configuration; `rules.mk` owns source-relative compilation, generated inputs and
 linking; `qa.mk` supplies existing qualification adapters; `docs.mk` owns
@@ -89,7 +100,7 @@ Install the Xcode Command Line Tools and modern GNU Make; Apple's bundled Make
 pinned REPLAI producer and Python 3.14 for QA:
 
 ```sh
-brew install make pkg-config ripgrep coreutils python@3.14
+brew install make cmake pkg-config ripgrep coreutils python@3.14
 rustup toolchain install 1.98.1 --component rustfmt --component clippy
 export PATH="$(brew --prefix make)/libexec/gnubin:$(brew --prefix coreutils)/libexec/gnubin:$(brew --prefix python@3.14)/libexec/bin:$PATH"
 export RUSTUP_TOOLCHAIN=1.98.1

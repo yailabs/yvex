@@ -212,6 +212,21 @@ surface; it is not capability authority and is not a transformer or generation
 result.
 
 
+Encoded CUDA routed matrix gate/up execution admits homogeneous Q2_K pairs as
+well as IQ2_XXS pairs. Q2_K uses the same exact integer products, F32 reduction
+tree, BF16 publication and exceptional source-ordered F64 recovery as its
+existing encoded-row realization. This is not a replacement for ordered-F64
+decoded projection semantics. Backend component agreement does not qualify a
+new checkpoint quantization; representation-quality and complete-model gates
+remain separate.
+
+The same Q2_K integer-product primitive can execute a non-routed batch under
+the explicit row-reduction class. No expert selection is inferred. Each column
+retains its original per-block F32 operations, 32-leaf reduction tree and
+optional BF16 publication; source-ordered F64 exceptional recovery remains
+available. This does not substitute the ordinary wide-matrix reduction for an
+explicit row reduction, or relax ordered-F64 decoded projection semantics.
+
 ## Internal Transformer Execution Boundary
 
 `include/yvex/internal/transformer.h` owns the non-installed transformer plan,

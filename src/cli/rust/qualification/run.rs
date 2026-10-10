@@ -40,6 +40,30 @@ fn authenticate_lineage(
     Ok(lineage)
 }
 
+// A local candidate need not already appear in the published catalog. The
+// relationship names the exact artifact AND binding; the binding is separately
+// authenticated against the loaded engine before any benchmark session opens.
+// This is applicability evidence, never an inherited quality/performance claim.
+fn checkpoint_relationship(
+    records: &[Value],
+    suite: &Value,
+    artifact: &str,
+    binding: &str,
+    local: bool,
+) -> Result<Value> {
+    let record = records.iter().find(|r| {
+        r["target"]["artifact_set"] == artifact
+            && r["target"]["binding"] == binding
+            && r["target"]["upstream_repository"] == suite["applicability"]["repository"]
+            && r["target"]["checkpoint"] == suite["applicability"]["revision"]
+    }).ok_or("qualification: no exact artifact/binding/checkpoint relationship for this suite; family name is insufficient")?;
+    Ok(
+        json!({"source": if local {"explicit-local-record"} else {"embedded-catalog"},
+        "record_identity": ffi::digest(&serde_json::to_vec(record)?)?,
+        "target_identity": record["target_identity"], "claims_inherited": false}),
+    )
+}
+
 impl Session {
     fn close_checked(&self, expected_sessions: u64) -> Result<()> {
         self.operation(
@@ -529,14 +553,16 @@ pub(super) fn execute(inv: &Invocation<'_>, width: usize, styled: bool) -> Resul
             && engine.model_lease_count == 0,
         "operator work/client/lease present",
     )?;
-    let published: Vec<Value> = serde_json::from_str(super::CATALOG)?;
-    require(
-        published.iter().any(|r| {
-            r["target"]["artifact_set"] == ffi::text(&engine.artifact_identity)
-                && r["target"]["upstream_repository"] == suite["applicability"]["repository"]
-                && r["target"]["checkpoint"] == suite["applicability"]["revision"]
-        }),
-        "no exact artifact/checkpoint relationship for this suite; family name is insufficient",
+    let records: Vec<Value> = match inv.value("--relationship") {
+        Some(path) => vec![super::read_receipt(path)?],
+        None => serde_json::from_str(super::CATALOG)?,
+    };
+    let relationship = checkpoint_relationship(
+        &records,
+        suite,
+        &ffi::text(&engine.artifact_identity),
+        &ffi::text(&engine.runtime_binding_identity),
+        inv.has("--relationship"),
     )?;
     require(
         case["execution_strategies"]
@@ -646,7 +672,7 @@ pub(super) fn execute(inv: &Invocation<'_>, width: usize, styled: bool) -> Resul
         session.close_checked(engine.session_count)?;
     }
     log.sync_all()?;
-    let result = receipt(
+    let mut result = receipt(
         (suite, case, &texts),
         engine,
         &choice.contract,
@@ -655,6 +681,7 @@ pub(super) fn execute(inv: &Invocation<'_>, width: usize, styled: bool) -> Resul
         &observations,
         dir,
     )?;
+    result["provenance"]["checkpoint_relationship"] = relationship;
     super::validate(&result)?;
     let mut file = OpenOptions::new()
         .create_new(true)
@@ -902,6 +929,44 @@ fn receipt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn local_relationship_requires_exact_binding_artifact_and_checkpoint() {
+        let suite = json!({"applicability":{"repository":"owner/model","revision":"rev-a"}});
+        let record = json!({"target_identity":"target", "target":{
+            "artifact_set":"artifact-a", "binding":"binding-a",
+            "upstream_repository":"owner/model", "checkpoint":"rev-a"},
+            "claims":{"representation-quality":{"state":"QUALIFIED"}}});
+        let result = checkpoint_relationship(
+            std::slice::from_ref(&record),
+            &suite,
+            "artifact-a",
+            "binding-a",
+            true,
+        )
+        .unwrap();
+        assert_eq!(result["source"], "explicit-local-record");
+        assert_eq!(result["claims_inherited"], false);
+        assert!(result.get("claims").is_none());
+        assert_eq!(result["record_identity"].as_str().unwrap().len(), 64);
+        for field in [
+            "artifact_set",
+            "binding",
+            "upstream_repository",
+            "checkpoint",
+        ] {
+            let mut foreign = record.clone();
+            foreign["target"][field] = json!("foreign");
+            assert!(
+                checkpoint_relationship(&[foreign], &suite, "artifact-a", "binding-a", true)
+                    .is_err()
+            );
+        }
+        assert!(checkpoint_relationship(&[], &suite, "artifact-a", "binding-a", true).is_err());
+        let embedded =
+            checkpoint_relationship(&[record], &suite, "artifact-a", "binding-a", false).unwrap();
+        assert_eq!(embedded["source"], "embedded-catalog");
+    }
 
     #[test]
     fn visible_delivery_keeps_ttft_controls_and_absent_gaps_separate() {

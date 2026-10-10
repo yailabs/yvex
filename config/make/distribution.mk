@@ -17,6 +17,9 @@ package: client config/package_manifest.tsv LICENSE NOTICE.md
 	cp '$(REPLAI_RUST_SOURCE)/LICENSE' "$$package_dir/share/licenses/replai/"; \
 	cp '$(REPLAI_RUST_SOURCE).json' "$$package_dir/share/yvex/replai-source.json"; \
 	cp Cargo.lock '$(RUST_BUILD_CONFIG)' "$$package_dir/share/yvex/"; \
+	mkdir -p "$$package_dir/share/licenses/ggml"; \
+	cp '$(BUILD_DIR)/external/gguf-reference/LICENSE' "$$package_dir/share/licenses/ggml/"; \
+	cp '$(BUILD_DIR)/external/gguf-reference/receipt.json' "$$package_dir/share/yvex/gguf-reference.json"; \
 	printf '%s\n' 'yvex package: command and foreground model server' \
 		> "$$package_dir/share/yvex/profile"; \
 	commit=$$(git rev-parse HEAD); \

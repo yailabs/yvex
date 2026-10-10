@@ -31,3 +31,4 @@ Numbered ADRs retain context, decision, consequences and alternatives. Adoption 
 - [0011 — Independent platform client](0011-independent-platform-client.md)
 - [0012 — Identity-bound qualification and product evidence](0012-qualification-targets.md)
 - [0013 — Native model adaptation ownership horizon](0013-native-model-adaptation-horizon.md)
+- [0014 — Independent structural reader in physical production](0014-independent-artifact-reader.md)

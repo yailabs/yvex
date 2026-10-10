@@ -43,6 +43,7 @@ contains these installed domain headers:
 | `<yvex/materialization.h>` | backend-owned materialized-weight lifecycle and views |
 | `<yvex/qtype.h>` | canonical GGUF qtype identity and storage geometry |
 | `<yvex/quant.h>` | quantization policy, job and calibration manifests |
+| `<yvex/optimization.h>` | bounded physical candidate requests, compiler facts, refusal and identity-bound policy selection |
 | `<yvex/graph.h>` | generic graph, planning and memory-plan contracts |
 | `<yvex/backend.h>` | backend admission, device tensors and primitive dispatch |
 | `<yvex/provider.h>` | transport-neutral application request and result semantics |
@@ -87,6 +88,57 @@ release function runs.
 
 
 ## Installed ABI Versioning
+
+### Physical optimization v1
+
+`yvex_optimization_request` and `yvex_optimization_candidate` use schema 1.
+Requests bind an exact compiler target, authenticated source, backend/geometry,
+goal, approximation permission and resource constraints. Available memory is an
+observation, excluded from candidate identity; declared capacity, reserve,
+geometry and physical/source identity are included. No path or pointer is hashed.
+Unknown workspace, state, model execution, quality, performance and lifecycle
+remain explicit missing-evidence bits, never successful admission.
+
+`yvex_optimization_select` consumes schema-1 constraints and observation
+projections, returning schema-1 selection rows. It calculates a bounded frontier
+only within one comparison/quality-reference key. It does not authenticate the
+caller-supplied evidence hashes or turn a frontier member into a qualified
+recommendation. Evaluation retains that authority. All six measured dimensions
+must be available before a row can dominate: prefill, decode, TTFT, preparation,
+quality loss and complete peak working bytes. Missing evidence or too few samples
+produce `EVIDENCE_INCOMPLETE`; violated thresholds produce `OUTSIDE_CONSTRAINTS`.
+Lower quality loss is better under the exact supplied reference metric; no qtype
+name, artifact size or approximate tensor count substitutes for it. Dominance
+requires no worse values in every dimension and one strictly better value.
+Output remains untouched on malformed/stale/mixed input, and duplicate candidate
+identities refuse. The primitive does not yet ingest qualification receipts from
+the CLI; static search output continues to report no measured recommendation.
+
+The native priority comparator orders experiments from those assessments using
+the declared goal. It never ranks refused candidates above eligible candidates,
+never interprets approximate-tensor count as a quality score and never invents
+performance samples. The search uses a stable bounded sort; policy selection
+remains identity-based after reordering. Its projected priority basis is static
+and is not a qualified recommendation or Pareto result.
+
+The initial required bytes are encoded weights + largest tensor transient +
+canonical system reserve. This is an initial lower bound, not full deployment
+memory, observed RSS or proof of device fit. CPU/CUDA codec availability does not
+prove a complete program. Matrix operands are checked separately; Metal primitive
+support and summed multi-device memory do not imply admitted model execution.
+
+The opaque search owns its sealed policies. A policy borrowed by exact candidate
+identity expires with that search; refused or unknown candidates cannot be
+selected. Exported policies return to the existing quant plan/emit contracts.
+Static artifact-catalog compatibility is separately projected as unknown,
+matching, incompatible, or requiring complete production proof through the
+generic binding compiler. The last state permits an experiment but cannot admit
+its output without all artifact-owner proofs. A match does not authenticate emitted bytes. Physical
+plan views call per-qtype execution facts `operand_compute_available`, not
+`runtime_executable`.
+Selection is an explicit experiment, not a qualified recommendation. The CLI's
+`yvex.optimization.search.v1` JSON projects missing metrics as `null` and keeps
+`qualified_recommendation` null until its independent evidence is implemented.
 
 A versioned installed record is identified by its C type and schema value.
 One such pair names one field layout and semantic contract. A binary layout or

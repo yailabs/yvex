@@ -1,0 +1,141 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "mamba-program-p-production-proof-20261010",
+  "title": "Program P: new Mamba artifact admitted through generic production proof",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "mamba2",
+    "upstream_repository": "mistralai/Mamba-Codestral-7B-v0.1",
+    "checkpoint": "4f086c08c1e0f07bdc50ca25125dbbf7475d21da",
+    "tokenizer_conversation": "2555e53b19079a3037a9449265252d1c9bdee6bcfb2063f24e62386db1b52ea4",
+    "transformation_ir": "6cde84173a2cc012d1b3c475d971a45a27d5506019c95cc09ffa0aa7a4ceab08",
+    "physical_policy": "493f51f533cf81fe4c3c1ceeef1a23f787c7dc509ca4787687708c6e6dfe615b",
+    "representation": "goal-v1-source; family-preserved BF16; physical variant 45fcb2cff55c08df9a999e401bf9071cfbd03e524966ddabbf5458af1569a8fe",
+    "artifact_set": "6038bca5b2c7e56c6e347019b60612ebf35dee5f771ff67941d2e1babaf673d3",
+    "binding": "bee48031b8100b3f76f35e74fe819ab7d728b11a4e0e4adcdf907963ce3bb938",
+    "specialization": null,
+    "source_commit": "0f5a54b2aeccce0a67f98eb4e898072bb35cca95",
+    "source_tree": "bf4ee5f5f8f757b50bcedcba19e6d82f16faafd6",
+    "source_delta": "1ff446bafc4478104e99101962d5bbb530062e6b83ab7f32347bc31d4aaf0ff0",
+    "build": "static-library-sha256:575a2efe5132fe0b9508a151395ece57ec1d7c2f7f675f1ae2aa5897d2330e4c",
+    "executable": "c5af3df90edb0a84481ce09fabe5f10373ca1aa5495f483c67196981eb62b76a",
+    "backend": "cpu",
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": "NVIDIA DGX Spark; Arm CPU execution only",
+    "device_count": 1,
+    "topology": "single coherent CPU memory domain; GPU unused",
+    "driver": null,
+    "runtime_toolkit": null,
+    "memory_configuration": "130663165952 system bytes; mapped BF16 artifact; separate recurrent state banks",
+    "runtime_configuration": "offline emission and binding only; no resident engine",
+    "context": null,
+    "prefill_geometry": null,
+    "sequence_geometry": null,
+    "concurrency": null,
+    "strategy": "not invoked",
+    "reasoning": "not invoked",
+    "sampling": "not invoked",
+    "product_path": "native compiler C API integration fixture; not CLI inference",
+    "suite": null
+  },
+  "target_identity": "4d9777501455385462d876aeac0a5d24d972afde712db6bf16854c7a11e0c99f",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model execution in this production control",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Container proofs are not independent full-model quality evidence",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent full-model evidence not supplied by this control"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Container proofs are not independent full-model quality evidence",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent full-model evidence not supplied by this control"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "No model execution in this production control",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model execution in this production control",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Native compiler API admits a fresh noncatalog artifact using complete production proof; missing reader refuses without binding publication",
+      "required_evidence": [
+        "production",
+        "closure",
+        "source"
+      ],
+      "evidence": {
+        "production": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/production-bridge-directory-result.log",
+          "sha256": "21ec7f6c3b44420dd1ad8eaa48a5c90b5eff9f0880041abd345d8ea9a1b2dd8f",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/production-bridge-directory-closed.json",
+          "sha256": "9fa89b9b474a923898ea375151feb2cf05133eebc8ea44c5d5cb508ce298926e",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/production-bridge-prepublication-source/manifest.json",
+          "sha256": "99966c785a0d41aec8ad62ed67e251f50817cc890becf485c3466a055d1d648b",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/production-bridge-prepublication-source",
+    "build_command": "cc -std=c11 -Iinclude -I. production_bridge.c build/lib/libyvex.a -lm -lpthread -lz -ldl -o production_bridge_prepublication",
+    "driver_source_sha256": "17fe61562b8e0ad07ffe096b894df6fcc37805b924181b8d30a8dff717f183f9",
+    "input_receipt": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/production-bridge-directory-input.json",
+    "pinned_reader_revision": "af97976c7810cdabb1863172f31c432dab767de7",
+    "pinned_reader_sha256": "9ce7d9cb88d3be14b33ac977d7da169292b14874dbc7aac8a34c6d7c056cae91",
+    "previous_harness_failure": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/production-bridge-prepublication-closed.json",
+    "diagnostics": [
+      {
+        "id": "production.file-bytes",
+        "case": "source-preserving-production",
+        "value": 14574491104,
+        "unit": "byte",
+        "definition": "Exact published artifact extent independently read; not working memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/production-bridge-directory-result.log"
+      }
+    ]
+  },
+  "limitations": [
+    "No inference, performance, numerical quality or hosted conversation claim.",
+    "Pinned independent reader proves GGUF structure and counts, not model meaning.",
+    "Borrowed complete production proof is internal API; public receipt import and automatic optimization remain incomplete.",
+    "An earlier harness omitted the destination directory and correctly failed publication; repaired harness creates only its owned output directory.",
+    "Installed Host and its services were not modified."
+  ]
+}

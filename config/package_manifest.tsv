@@ -9,3 +9,5 @@ share/licenses/replai/LICENSE	product	dependency.replai	generated
 share/yvex/replai-source.json	product	dependency.replai	generated
 share/yvex/Cargo.lock	product	build.rust-dependencies	tracked
 share/yvex/rust_build_config	product	build.rust	generated
+share/licenses/ggml/LICENSE	product	dependency.gguf-reference	generated
+share/yvex/gguf-reference.json	product	dependency.gguf-reference	generated

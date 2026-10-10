@@ -1152,7 +1152,7 @@ static const yvex_family_binding_pipeline qwen_binding_pipeline = {
     .tokenizer_pre = "qwen2"};
 
 static const yvex_family_compiler_adapter qwen_compiler = {
-    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V2,
+    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V3,
     .adapter_id = YVEX_QWEN3_5_ADAPTER_ID,
     .adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION,
     .target_id = YVEX_QWEN3_8_27B_TARGET_ID,
@@ -1242,7 +1242,7 @@ static const yvex_family_binding_pipeline qwen_small_binding_pipeline = {
     .quant_plan_default = qwen_small_quant_default, .quant_plan_policy = qwen_small_quant_policy,
     .tokenizer_architecture = YVEX_QWEN3_5_FAMILY_KEY, .tokenizer_model = "gpt2", .tokenizer_pre = "qwen2"};
 static const yvex_family_compiler_adapter qwen_small_compiler = {
-    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V2,
+    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V3,
     .adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION,
     .target_id = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID, .family = YVEX_QWEN3_5_FAMILY_KEY,
     .logical_transform_identity = QWEN_SMALL_TRANSFORM_IDENTITY,

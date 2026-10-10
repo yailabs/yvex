@@ -182,7 +182,7 @@ int yvex_runtime_private_generation_capacity_preflight(
             "complete startup generation options are required");
     capacity = generation_capacity_options(options);
     return yvex_runtime_capacity_preflight(binding, backend, &capacity,
-        required_bytes, available_bytes, err);
+        required_bytes, available_bytes, NULL, err);
 }
 
 static int generation_stops_open(yvex_runtime_generation_context *context,

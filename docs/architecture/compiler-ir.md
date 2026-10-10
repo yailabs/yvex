@@ -34,6 +34,170 @@ implementation and resource envelope.
 
 ## Pipeline
 
+### Goal-constrained physical search (partial implementation)
+
+`compile optimize` is the native Program P entrypoint. Its C owner is
+`src/graph/optimization.c`; the Rust shell only parses the registered
+request and projects typed results. The search borrows the exact target's
+compiler adapter, synthesizes a bounded population of physical policies and
+uses the existing transformation/quantization/writer plans. It does not recreate
+family topology or encode tensors in the shell.
+
+The initial population includes exact-target presets and source/Q8_0/Q2_K/MXFP4
+policies for family-admitted quantizable terminals, plus a coupled MXFP4 policy
+with Q2_K routed gate/up/down. The latter separates expert storage cost from
+other quantizable roles; it does not infer quality or matrix compatibility.
+A routed-matrix candidate
+uses deployment-owned operand requirements and refuses absent checkpoint-matched
+calibration. Policy names describe requested rules, not necessarily every final
+tensor: family preservation obligations still decide which rules apply.
+
+The selected policy is exported by exact candidate identity for the existing
+`compile quant plan` / `compile quant emit` pipeline. The internal physical
+variant adapter is version 2 to admit a borrowed policy, cloned before ownership
+crosses the source session; its unchanged summary remains version 1.
+The family compiler adapter is version 3: a family may expose its existing
+static artifact catalog as a borrowed constraint. The planner compares physical,
+source, transformation, writer and file identities before emission; it never
+bypasses artifact authentication. Mamba2 projects its unchanged catalog this way.
+Absent constraints remain unknown rather than an affirmative admission.
+An out-of-catalog candidate using the generic binding compiler explicitly
+requires complete production proof; it is not automatically unsupported or
+admitted. A catalog-only consumer still refuses an incompatible recipe.
+The current DeepSeek family still admits exact verified files through its
+catalog. A synthesized policy is therefore not automatic admission of every
+artifact it could produce. Program P's first Q2 experiment has a separate
+catalog row backed by native emission, roundtrip and independent reader facts;
+general receipt-driven admission remains an unfinished part of the optimizer.
+
+`compile quant emit --json` projects the typed
+[physical production result](../contracts/artifacts.md#physical-production-result)
+without converting emission into admission or qualification evidence.
+
+An internal binding-preparation request can now borrow a complete production
+proof from the existing artifact owner instead of consulting a static catalog.
+That path still requires the writer, published emission, native full roundtrip
+and pinned independent-reader facts for the same file snapshot. The compiler
+checks authenticated source/payload lineage, re-verifies artifact bytes and
+compares its reconstructed writer/physical plan before binding publication.
+It cannot be combined with rebinding from an older source realization. The
+default remains catalog admission. The real Mamba source-preserving production
+control publishes a new binding through this path and refuses missing-reader
+evidence. The Rust product now composes the same path with
+`compile quant emit --binding-directory <existing-directory>`: the pinned
+independent reader examines the temporary native-roundtripped artifact before
+file publication, then the generic compiler authenticates and publishes the
+binding. No caller-supplied accepted flag or reusable admission receipt is
+imported. Binding refusal after artifact publication preserves the file and
+returns a nonzero exit with both outcomes explicitly projected. Component-only
+emission cannot request a complete-model binding. This does not create an engine
+or establish hardware fit, generation or model quality. See the
+[independent-reader decision](../decisions/0014-independent-artifact-reader.md).
+
+Goals select a deterministic **experiment order**, not a measured winner.
+Eligible rows precede static refusals. Memory prioritizes the smaller initial
+byte lower bound; quality prioritizes source preservation without treating a
+count of approximated tensors as quality loss; throughput prioritizes compatible
+routed-matrix operands without predicting a speedup. Balanced retains canonical
+recipe order rather than inventing a scalar quality/speed score. Ties are stable;
+policy ownership travels with each identity-bearing candidate. JSON exposes the
+`static-feasibility-hints-v1` basis and explicitly marks measured ranking absent.
+
+The native selection primitive separately computes a bounded measured Pareto
+frontier from evaluation-supplied observations. It requires the same explicit
+comparison and independent-quality-reference identities, applies quality, memory,
+rate, TTFT and sample-count constraints, and compares prefill/decode, TTFT,
+preparation, quality loss and peak working bytes without a hidden weighted score.
+Incomplete and undersampled rows cannot dominate known eligible rows. Equal
+rows remain tied; mixed keys, duplicate candidates and nonfinite facts refuse
+without partial output. This is a calculation over admitted projections, not a
+receipt authenticator or a source of quality evidence. The caller must obtain
+those projections from the existing qualification authority; process RSS alone
+does not supply complete execution working bytes.
+An unavailable independent quality reference is nullable only with explicit
+missing-quality evidence. It cannot win selection or mask disagreement between
+other candidates' known reference identities.
+
+`compile optimize --evidence <receipt.json>` reads one canonical qualification
+envelope or a bounded array of at most 32 envelopes (4 MiB total). The existing
+qualification validator checks target identities, statistics and independent
+claim planes. Physical-policy and Transformation IR identities identify related
+compiled candidates, not an exact recipe match: a different calibration can
+produce a different physical variant under those same two identities. The
+projection keeps `exact_recipe_match` unknown and does not infer calibration or
+artifact equivalence. Unrelated, duplicate or malformed records
+refuse. Full targets, origins, limitations and measurement definitions remain
+in the JSON projection; measurements from different deployments are not merged.
+This inspection neither authenticates external raw payloads nor transfers a
+published/local claim to the current machine, executable or recipe. Selection
+eligibility stays false. Inspecting evidence and exporting a policy are separate
+invocations, so refused evidence cannot leave a newly exported policy behind.
+
+For a produced artifact, `compile optimize --runtime-binding FILE` additionally
+uses the existing runtime capacity preflight. The binding must match a compiled
+physical variant and Transformation IR, including the calibration-dependent
+variant identity. The native owner supplies model, prepared layout, workspace,
+state, candidate reserve, scheduler/graph and system-reserve accounting, together
+with the transient-inclusive startup peak and observed available memory.
+`--execution-strategy target-only|speculative` selects that inspection's mode;
+sampling is explicitly greedy. Context, chunk and concurrency are unchanged.
+This opens a backend context but neither maps model weights into execution nor
+creates a resident engine. Passing does not reserve resources or authenticate
+current artifact bytes; actual load still performs integrity and live admission.
+Unknown/incompatible bindings refuse. A sealed resource plan remains visible on
+a memory refusal, without turning that refusal into successful admission.
+Custom `--reserve` is rejected for this inspection rather than silently ignored;
+the canonical runtime reserve and optional memory ceiling apply.
+
+Combining this inspection with `--evidence` can establish an exact recipe
+association: the qualification receipt's artifact and binding identities must
+match the native binding whose sealed physical variant and transformation
+matched the compiler candidate. A policy-only association remains explicitly
+weaker. This identity join does not authenticate supplied qualification claims,
+erase a capacity refusal or inherit performance/quality across configurations;
+`selection_eligible` remains false until the measured-selection gate is earned.
+
+**Not implemented by this first search boundary:** automatic admission of receipt
+measurements into selection, an independently qualified Pareto recommendation,
+full workspace/state planning before an executable binding exists,
+automatic finalist execution or new executable-layout preparation. Goals guide
+bounded exploration, not measured claims of optimality. Program P remains
+IN PROGRESS. No candidate becomes a resident engine through this command.
+
+The reproducible engineering workflow is:
+
+The same request may be retained in a bounded (64 KiB), strict
+`yvex.optimization.request.v1` JSON file and invoked as
+`./yvex compile optimize --request goals.json --json`. Required fields are
+`schema`, `target`, `source`, `models_root` and `source_manifest`. Optional
+fields map to the same registered inputs: `backend`, `goal`, `policy`,
+`imatrix_manifest`, `context`, `prefill`, `concurrency`, `memory_limit`,
+`reserve`, `max_candidates`, `allow_approximation` and `require_routed_matrix`.
+Memory fields are bytes; omitted values use the existing command defaults.
+Relative paths resolve from the invocation directory, not the JSON directory.
+Unknown/duplicate fields, stale schemas, ambiguous values and mixed individual
+planning flags refuse before compilation. Inspection/export flags (`--json`,
+`--evidence`, `--runtime-binding`, `--execution-strategy`, `--select`,
+`--out-policy`) remain explicit command controls. The file cannot enable
+automatic execution, alter a quality claim or bypass native feasibility.
+It projects through the operator registry and the same C planner; it is not
+another recipe interpreter. Equivalent explicit flags remain available:
+
+```text
+./yvex compile optimize --target <target> --source <source> --models-root <root> --source-manifest <manifest> --backend cuda --goal memory --allow-approximation --json
+./yvex compile optimize <same request> --select <candidate_identity> --out-policy <policy.json>
+./yvex compile quant plan --target <target> --source <source> --models-root <root> --source-manifest <manifest> --policy <policy.json> --out-plan <plan.json>
+./yvex compile quant emit --target <target> --source <source> --models-root <root> --source-manifest <manifest> --policy <policy.json> --plan <plan.json> --out <candidate.gguf>
+./yvex compile quant emit <same source/policy/plan inputs> --out <new-candidate.gguf> --binding-directory <existing-directory> --json
+```
+
+Use the same checkpoint-matched `--imatrix-manifest` at every applicable stage.
+Policy/plan output paths are explicit writer destinations; use new paths to
+preserve prior candidates. Changing the request invalidates its candidate
+selection; changing a sealed policy invalidates the corresponding physical plan.
+The engineering command currently requires source inputs; guided catalog/model
+selection and measured goal-specific ranking remain part of the open Task.
+
 <!-- docs:diagram physical_compilation -->
 ```mermaid
 %% yvex-figure: physical_compilation

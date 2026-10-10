@@ -101,6 +101,13 @@ static int test_open_validate_write(void)
     YVEX_TEST_ASSERT(rule && rule->role == YVEX_TENSOR_ROLE_TOKEN_EMBEDDING, "role parsed");
     YVEX_TEST_ASSERT(rule->qtype == YVEX_QUANT_QTYPE_Q8_0, "qtype parsed");
     YVEX_TEST_ASSERT(yvex_quant_policy_write_json(out, policy, &err) == YVEX_OK, "write policy JSON");
+    yvex_quant_policy *copy = NULL;
+    yvex_quant_policy_summary copied;
+    YVEX_TEST_ASSERT(yvex_quant_policy_clone(&copy, policy, &err) == YVEX_OK &&
+        yvex_quant_policy_get_summary(copy, &copied, &err) == YVEX_OK &&
+        copied.schema_version == 1u && !strcmp(copied.policy_identity, summary.policy_identity),
+        "cloning a legacy explicit policy preserves its schema and identity");
+    yvex_quant_policy_close(copy);
     yvex_quant_policy_close(policy);
     return 0;
 }
@@ -254,7 +261,16 @@ static int test_policy_v2_and_presets(void)
                          "built-in preset is sealed");
         YVEX_TEST_ASSERT_STREQ(summary.policy_identity, preset_identities[preset],
                                "family-owned preset preserves admitted identity");
+        yvex_quant_policy *copy = NULL;
+        yvex_quant_policy_summary copied = {0};
+        YVEX_TEST_ASSERT(yvex_quant_policy_clone(&copy, policy, &err) == YVEX_OK &&
+            yvex_quant_policy_get_summary(copy, &copied, &err) == YVEX_OK &&
+            !strcmp(copied.policy_identity, summary.policy_identity),
+            "native policy borrowing produces an independently owned identity-exact clone");
         yvex_quant_policy_close(policy);
+        YVEX_TEST_ASSERT(yvex_quant_policy_identity_validate(copy, &err) == YVEX_OK,
+            "clone survives its producer lifetime");
+        yvex_quant_policy_close(copy);
     }
     return 0;
 }

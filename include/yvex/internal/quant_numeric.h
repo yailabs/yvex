@@ -379,6 +379,8 @@ typedef struct {
 int yvex_quant_policy_create_definition(
     yvex_quant_policy **out, const yvex_quant_policy_definition *definition,
     yvex_error *err);
+int yvex_quant_policy_clone(yvex_quant_policy **out,
+                            const yvex_quant_policy *source, yvex_error *err);
 typedef struct {
     unsigned int qtype;
     int approximation;

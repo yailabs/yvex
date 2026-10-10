@@ -56,6 +56,7 @@ its producing owner can publish that exact lower bound.
 | --- | --- | ---: | ---: | --- | ---: | ---: | --- | --- |
 | target-only decode | short, width 1 | baseline required | correct sequence; >0 | unadmitted | 20 token/s | 24 token/s first preferred checkpoint | active bytes, 273 GB/s, launch and synchronization depth | medium |
 | target-only decode | 256 output tokens, width 1 | baseline required | exact continuation; >0 | unadmitted | 20 token/s | 24 token/s first preferred checkpoint | routed MoE, qtype row execution and remaining transformer work | medium |
+| 0731 uncached prefill | 2K and 8K newly executed positions, width 1; declared admitted chunk | unearned | correct persistent state; no prefix reuse | reference identity/representation must remain explicit | 700 input token/s | 800 input token/s | complete-model physical execution, not tiny-prompt or component timing | unearned |
 | target-only prefill | bounded current fixtures | baseline required | correct prefix; >0 | unadmitted | 20 token/s | 30 token/s | attention class, chunk width, active bytes, 48 SMs | low |
 | target-only decode | 12K context, width 1 | unmeasured | exact continuation; >0 | unadmitted | 15 token/s | 20 token/s | context-band state traffic and attention mix | low |
 | target-only decode | 64K context, width 1 | unmeasured | exact continuation; >0 | unadmitted | 8 token/s | 12 token/s | compressed/indexer history and capacity-safe state access | low |
@@ -69,6 +70,15 @@ its producing owner can publish that exact lower bound.
 
 Logical runnable concurrency is separate from the physical batch rows above.
 Cooperative session scheduling alone does not qualify a batched-throughput result.
+
+The selected Program P delivery inherits the unearned DeepSeek 0731 hard exit:
+at least 20 sustained target-only committed token/s and 700 uncached input
+token/s at the canonical 2K/8K bands. The older bounded-fixture and long-context
+rows are distinct historical workload objectives, not substitutes for that
+exit. The preferred 24/800 checkpoints remain separate from achieved evidence.
+Recipe feasibility, artifact production and a successful first forward do not
+earn either gate. [Tasks](../../project-control/TASKS.md) owns the selected
+implementation and the preceding `.5` dependency.
 
 The numerical YVEX and stretch columns are optimization objectives. The
 20--24 token/s class is an initial minimum engineering floor: 20 token/s is the

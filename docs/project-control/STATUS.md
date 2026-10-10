@@ -17,13 +17,75 @@ publication: {html: true, pdf: true, index: true}
 <!-- maturity-counts:start -->
 | Established | Partial | Open | Later | Total |
 | ---: | ---: | ---: | ---: | ---: |
-| 35 | 48 | 55 | 14 | 152 |
+| 35 | 49 | 54 | 14 | 152 |
 <!-- maturity-counts:end -->
 
-## Active computational architecture reconstruction
+## Active goal-driven Physical Model Compiler
 
-`V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` is the sole newly
-selected DeepSeek execution implementation, starting from published/installed
+`V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` now owns generic physical
+configuration search and the next DeepSeek implementation. `.5` retains its
+historical evidence and unearned 20/700 exits, BLOCKED on this selected owner;
+it is not COMPLETE. The initial native search implements typed requests, bounded
+policy synthesis, canonical initial reserve/operand checks and identity-bound
+policy export to the existing quant plan/emit pipeline. Static goal-specific
+experiment ordering does not predict throughput or rank approximate quality.
+The canonical Mamba policy reproduces its authenticated binding through the
+same search/export pipeline. The original catalog-only path refused a newly
+produced Mamba variant; a later generic production-proof control admits it
+without extending the family catalog. That newly produced artifact subsequently
+passes bounded CPU execution, candidate isolation, cancellation and replay;
+its independent oracle covers logsumexp arithmetic, not whole-model quality.
+Search now distinguishes that
+proof-required path from an incompatible catalog-only consumer.
+The reproduced binding also passes the existing CPU token/readout, replay,
+order and cancellation controls on the real model. This is bounded native
+execution reuse, not hosted conversation, independent model quality or speed.
+Software controls cover
+unknown evidence, reserve weakening, schema refusal and policy lifetime/identity.
+The native Pareto calculation refuses mismatched references and retains unknown
+quality as unknown, including an absent reference identity. It is not yet an
+optimization recommendation. The CLI can inspect canonical receipts associated
+by physical policy and Transformation IR (not proof of identical calibration or
+physical variant), retaining all original claim
+planes and deployment/workload context without automatic selection. An exact
+artifact/binding match against native produced-binding inspection additionally
+links the sealed physical variant; this does not authenticate a receipt's claims,
+inherit quality or erase capacity refusal. Authenticated
+measured receipt admission/selection,
+pre-production workspace/state accounting, executable preparation, independent quality
+and competitive inference remain unearned. No model capability is promoted.
+Produced-binding inspection now consumes the runtime's full capacity plan through
+the CLI, with exact variant matching and no engine load. The generic borrowed
+production-proof binding path passes real Mamba emission/reader/binding controls,
+including refusal without independent-reader evidence. The product now exposes
+opt-in emission plus independent structural verification and binding publication
+through `compile quant emit --binding-directory`; it does not choose a qualified
+recipe or load a model automatically. Typed JSON v2 reports partial publication
+truthfully. Neither v1 nor v2 is a reusable admission proof or quality certificate.
+The operator reboot was verified on 2026-10-10: Host/listeners returned with zero
+engines. Restored memory headroom is not 0731 runtime admission or a speedup.
+The full post-boot pre-residency check still refuses the Q8_0/Q2_K candidate at
+the requested 512-token prefill geometry; its workspace/state costs exceed the
+search's deliberately incomplete initial lower bound. A lighter generated Q2_K
+candidate has completed native emission, independent structural reading and
+authenticated binding admission. It executes bounded target-only generation
+and uncached input through the homogeneous Q2_K matrix consumer. This is an
+isolated experimental realization, not an installed deployment or independently
+qualified quantization. A shared-row Q2 matrix candidate now has repeated
+source-frozen native prefill improvement and unchanged coding decode, with
+separate complete-model CUPTI attribution and output-fragment regression facts.
+The same realization also completed three explicit DSpark coding controls with
+target-only fragment agreement; high reasoning reached its 256-token bound
+before the source delimiter and did not earn completion evidence. A phase-local
+Q2 prepared-layout experiment was rejected after slower profiled execution and
+full-model continuation drift despite passing component controls.
+See the [identity-bound series](../evaluation/retained-observations.md#program-p-static-search-and-post-boot-admission-2026-10-10).
+Measured recommendation and the 20/700 exits remain open.
+
+## Retained computational architecture reconstruction
+
+`V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` was selected as the
+DeepSeek execution implementation, starting from published/installed
 `337e7e73`. The predecessor `.4` is stopped at its retained checkpoint with
 unearned performance and independent-quality exits, not COMPLETE. New work
 must establish an executed-graph causal model and an independently qualified
@@ -51,15 +113,17 @@ The subsequent operator-released window produced a source-stable
 the initial Q8/Q2 representation plus existing transient/reserve admission exceeds
 the current host-preserving memory envelope. No 0731 forward or throughput was
 measured. The same older DeepSeek profile was restored, finite stayed on its
-original generation, and `.5` remains selected with its performance exit unearned.
+original generation at that checkpoint; `.5` retains its unearned performance exit.
 
 The subsequent [memory witness](../evaluation/retained-observations.md#0731-memory-audit-and-operator-reboot-boundary-2026-10-10)
 separates file-backed weights, anonymous Host memory, cgroup charges and declared
 workspace. No abandoned resource is established merely from anonymous RSS.
-The next cold-start comparison is behind the operator-controlled reboot boundary;
-services remain unchanged. Selective/replacement executable-weight preparation
+The operator has since completed the reboot. The Q8/Q2 post-boot admission still
+refuses, while Program P's separately identified Q2_K artifact executes in an
+isolated process. Selective/replacement executable-weight preparation
 is a constrained candidate design, not a current acceleration or capability
-promotion. Admission, full-model 0731 execution and 20/700 remain unearned.
+promotion. Independent quality, installed-product qualification and 20/700 remain
+unearned; earlier refusal records retain their historical scope.
 
 ## Compute product refoundation
 
@@ -198,7 +262,7 @@ below describe desired breadth; they are not additional maturity claims.
 | Runtime binding | 🟢 ESTABLISHED | Authenticated package and execution truth, including the canonical operator schedule, is reopened without family import or runtime compiler reconstruction. | Preserve package meaning versus runtime specialization. | R / P | [Runtime contract][runtime-contract] |
 | Existing quantized representation import | 🟡 PARTIAL | Multiple GGUF qtypes and low-precision execution paths are admitted. | Broader format coverage without per-format runtime redesign. | P | [Compilation][compilation]; [DeepSeek][deepseek] |
 | Quantization synthesis | 🟡 PARTIAL | Mixed per-tensor policy and bounded calibration-informed recipes can be constructed. | Generic sensitivity/calibration-driven synthesis with reproducible decision provenance. | P | [GB10 targets][gb10]; [compilation][compilation] |
-| Physical Model Compiler search | 🔴 OPEN | Deterministic lower layers exist; recipe exploration remains bounded/manual engineering. | Hardware/workload/quality-aware search and reproducible Pareto selection. | P | [GB10 targets][gb10]; [compilation][compilation] |
+| Physical Model Compiler search | 🟡 PARTIAL | Native bounded goal-driven policy synthesis, identity-bound export, operand/reserve refusal, produced-binding capacity inspection and a pure measured-frontier primitive exist. DeepSeek and Mamba exercise existing production owners; authenticated receipt selection and automatic qualified recommendation remain unearned. | Complete the measured optimization/production loop, executable-layout economics, independent quality and hardware/workload-specific recommendation. | P | [GB10 targets][gb10]; [compilation][compilation] |
 | Resource/state-root effect dependencies | 🔴 OPEN | Current lowering retains a global serial effect chain; explicit SSA/state foundations do not qualify independent state-root scheduling. | Order real dependencies, conflicting roots and explicit ordered semantics; preserve legal DAG branches for Target/Schedule choice. | C / S | [B1 compiler target](../research/state-realization.md#compiler-execution-dag-and-admitted-backend-target); [current lowering][compilation] |
 | N-gram / token-derived addressing semantics | 🔴 OPEN | Exact tokenizer and source identities exist; generic n-gram window/key/address semantics are not admitted. | Seal tokenizer-bound addressing, compressed mappings, boundaries and hash/table rules; qualify positive and malformed-address vectors. | C / R | [Addressing target](../research/sparse-parameter-memory.md#conditional-sparse-parameter-memory); [source contract][storage] |
 | Conditional sparse parameter memory | 🔴 OPEN | Dense parameters and routed experts do not establish indexed execution over huge immutable parameter tables. | Compile dynamic sparse row populations, physical table representations and bounded storage/cache execution with reference and refusal evidence. | C / P / S | [Conditional-memory target](../research/sparse-parameter-memory.md#conditional-sparse-parameter-memory); [compilation][compilation] |

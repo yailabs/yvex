@@ -573,6 +573,45 @@ unsigned long long yvex_quant_policy_rule_count(const yvex_quant_policy *policy)
     return policy ? policy->rule_count : 0;
 }
 
+int yvex_quant_policy_clone(yvex_quant_policy **out,
+                            const yvex_quant_policy *source, yvex_error *err)
+{
+    yvex_quant_policy *copy = NULL;
+    int rc = YVEX_OK;
+    if (out) *out = NULL;
+    if (!out || !source || source->summary.status != YVEX_QUANT_POLICY_STATUS_VALID) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "quant_policy_clone", "sealed policy required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    copy = calloc(1u, sizeof(*copy));
+    if (!copy) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "quant_policy_clone", "policy allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    copy->schema_version = source->schema_version;
+    copy->name = yvex_core_strdup(source->name);
+    copy->architecture = yvex_core_strdup(source->architecture);
+    copy->preset_name = source->preset_name ? yvex_core_strdup(source->preset_name) : NULL;
+    copy->source_kind = source->source_kind ? yvex_core_strdup(source->source_kind) : NULL;
+    copy->template_path = source->template_path ? yvex_core_strdup(source->template_path) : NULL;
+    if (!copy->name || !copy->architecture || (source->preset_name && !copy->preset_name) ||
+        (source->source_kind && !copy->source_kind) || (source->template_path && !copy->template_path)) {
+        yvex_quant_policy_close(copy);
+        yvex_error_set(err, YVEX_ERR_NOMEM, "quant_policy_clone", "policy identity allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    for (unsigned long long i = 0ull; rc == YVEX_OK && i < source->rule_count; ++i)
+        rc = policy_add_rule_v2(copy, &source->rules[i], err);
+    if (rc == YVEX_OK) rc = yvex_quant_policy_validate(copy, NULL, err);
+    if (rc == YVEX_OK && strcmp(copy->summary.policy_identity, source->summary.policy_identity)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "quant_policy_clone", "policy identity changed while cloning");
+        rc = YVEX_ERR_STATE;
+    }
+    if (rc == YVEX_OK) *out = copy;
+    else yvex_quant_policy_close(copy);
+    return rc;
+}
+
 const yvex_quant_policy_rule *yvex_quant_policy_rule_at(const yvex_quant_policy *policy,
                                                         unsigned long long index) {
     if (!policy || index >= policy->rule_count)

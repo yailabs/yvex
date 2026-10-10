@@ -1,0 +1,137 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-0731-program-p-mxfp4-admission-20261010",
+  "title": "Program P 0731 MXFP4 with routed Q2: authenticated artifact and native load",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "specialization": null,
+    "source_commit": "0f5a54b2aeccce0a67f98eb4e898072bb35cca95",
+    "source_tree": "bf4ee5f5f8f757b50bcedcba19e6d82f16faafd6",
+    "source_delta": "516b569f2204993ac54a4a1a61535b8cf26781ede78fe8d9a7b8995abd4d1072",
+    "build": "407b1df74781f1d78b0459f94f874475ce2ae5667552e668646524466ff16a1e",
+    "executable": "4507f4f3ed6a4e10e92c04b6b2975c189ea48f4630d51f33b789f15aaa98862a",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "device_count": 1,
+    "topology": "single GB10 coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "runtime_configuration": "isolated native host; context 4096; loaded, no prompt executed",
+    "context": 4096,
+    "prefill_geometry": "configured chunk 512; no input positions executed",
+    "sequence_geometry": "width 1; no session created",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none",
+    "sampling": "greedy; temperature 1; no stochastic draws",
+    "product_path": "native protocol v25 isolated host; load only",
+    "suite": null
+  },
+  "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Authenticated exact artifact/binding loads on isolated native host; benchmark refused before prompt because client catalog lacked this relationship",
+      "required_evidence": [
+        "binding",
+        "reader",
+        "load",
+        "source"
+      ],
+      "evidence": {
+        "binding": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-binding.json",
+          "sha256": "0fc8e85844bff779c15a07bc69637d402bc845ac51a229bb9fdf3a21460f89e8",
+          "result": "PASS"
+        },
+        "reader": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-independent-reader.log",
+          "sha256": "5c2001f36417f8955f1e536644c245b81b8c6c589ba908632b851f47e3fade16",
+          "result": "PASS"
+        },
+        "load": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-native-target/load-4096.json",
+          "sha256": "88e11a82b07600337f36874d52a53e17aa22d4b051ebe6540d50ac2e5fb059c7",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mxfp4-admitted-source/manifest.json",
+          "sha256": "926656f6317d1b6370b149ef0178be957ee1cc5af23ff4e949c02017ac9890e8",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mxfp4-admitted-source",
+    "pinned_reader_revision": "af97976c7810cdabb1863172f31c432dab767de7",
+    "refusal": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-native-target/4096-chat.short-stderr.log",
+    "closure": {
+      "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-native-target/closed.json",
+      "sha256": "f30beb00f960ddbd88b9e8d87c98bbf28ef6dba49b5b4591cdd5793a552f5ee9"
+    }
+  },
+  "limitations": [
+    "No inference, throughput or independent representation-quality claim.",
+    "Pinned GGUF reader establishes structure, not numerical quality.",
+    "Load included file verification and uncontrolled file-cache state; no comparative load-speed claim.",
+    "Installed Host was untouched; isolated host cleanly stopped after pre-request qualification refusal.",
+    "Same checkpoint lineage does not imply same quantized weights as Q2 or DwarfStar."
+  ]
+}

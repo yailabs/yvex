@@ -19,6 +19,207 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Program P static search and post-boot admission (2026-10-10)
+
+The later [produced-binding capacity controls](benchmarks/generated/qualification-deepseek-0731-program-p-produced-capacity-20261010.md)
+exercise the compiler CLI without loading a model: exact Q2 target/speculative
+bindings receive runtime-authored capacity plans; Q8 fails its full startup peak;
+an insufficient explicit budget retains an unknown unsealed plan, and an unrelated
+Mamba binding refuses before backend inspection. The installed Host remains empty.
+These are resource/admission controls, not inference measurements. The detailed
+byte facts and frozen source/build belong to the generated record.
+
+The selected Program P implementation adds bounded native recipe synthesis,
+goal-specific static experiment order, exact policy export and early refusal for
+operand, reserve, calibration and optional family artifact-catalog constraints.
+Its [compiler contract](../architecture/compiler-ir.md#goal-constrained-physical-search-partial-implementation)
+separates those facts from full admission, measured Pareto ranking and quality.
+
+The [post-boot preflight record](benchmarks/generated/qualification-deepseek-0731-program-p-preflight-20261010.md)
+shows the distinction experimentally: the existing 0731 Q8_0/Q2_K artifact
+passes the search's initial lower bound but fails canonical full pre-residency
+capacity admission. No input position or output token executed. The separately
+recorded small-chunk diagnostic also refuses; it is not a canonical prefill
+benchmark and does not silently change the requested geometry.
+
+Initial cross-architecture controls use Mamba2. A generated source-preserving policy
+emits a GGUF accepted by native roundtrip and the pinned independent ggml
+reader, but its new policy/physical identity is outside Mamba's exact artifact
+catalog. Binding publication correctly refuses it. Exposing that unchanged
+catalog through the compiler adapter makes search refuse the variant before
+production. Selecting the canonical Mamba policy through the same native API
+reproduces the existing authenticated binding instead. The
+[bounded token execution record](benchmarks/generated/qualification-mamba-program-p-reuse-20261010.md)
+then passes the existing CPU readout, replay, order, cancellation and recovery
+controls using that binding. This proves concrete compiler/runtime reuse and
+fail-closed selection, not independent representation quality or hosted chat.
+A separate raw generation probe refuses unavailable persistent generation state
+before output. Concurrent CPU compilation excludes these controls from a
+comparable performance series.
+
+The subsequent [generic production-proof control](benchmarks/generated/qualification-mamba-program-p-production-proof-20261010.md)
+emits the synthesized Mamba representation again, obtains native full roundtrip
+and pinned independent-reader facts, and publishes its binding without adding
+a family catalog row. Missing-reader evidence refuses publication. Search now
+reports this consumer as requiring complete production proof rather than
+catalog-incompatible; the historical refusal above remains correct for its
+older catalog-only path. This control does not execute the newly emitted model,
+qualify quality or complete the public optimization loop.
+
+Raw search receipts, rejected Mamba artifact, canonical policy/binding, source
+capture and build/test journals are retained under
+`/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq`.
+The baseline observations use the captured source delta, not later changes to
+the working tree. The lighter synthesized 0731 Q2_K recipe completed artifact
+production, native/independent GGUF structure checks and authenticated binding,
+then executed the complete model through the direct engineering entrypoint:
+[coding](benchmarks/generated/qualification-deepseek-0731-program-p-q2-coding-hash-table-20261010.md),
+[2K prefill](benchmarks/generated/qualification-deepseek-0731-program-p-q2-prefill-promessi-2048-20261010.md)
+and [8K prefill](benchmarks/generated/qualification-deepseek-0731-program-p-q2-prefill-promessi-8192-20261010.md).
+These are first-post-load, one-sample observations, not warm-series product
+qualification or independently established quantization quality. The internal
+subsequent-forward phase excludes readout/sampling/publication and is not used
+as a committed decode-rate denominator.
+
+The first isolated native-product attempt refused before inference because its
+frozen client catalog lacked the new artifact/checkpoint relationship. Its
+terminal cleanup is retained; it was not treated as a model failure or silently
+retried. Updating that client projection does not alter the baseline engine.
+The subsequent source-frozen native-v25 series uses three fresh sessions after
+a separate warmup per configuration. Baseline/candidate records are deliberately
+separate from the installed product and from the profiled diagnostic:
+
+| Controlled native case | Q2 executable baseline | Shared-row matrix candidate |
+| --- | --- | --- |
+| Coding, target-only, 256 outputs | [Baseline](benchmarks/generated/qualification-deepseek-0731-program-p-native-baseline-coding-hash-table-20261010.md) | [Candidate](benchmarks/generated/qualification-deepseek-0731-program-p-native-row-matrix-coding-hash-table-20261010.md) |
+| Newly executed 2K input | [Baseline](benchmarks/generated/qualification-deepseek-0731-program-p-native-baseline-prefill-promessi-2048-20261010.md) | [Candidate](benchmarks/generated/qualification-deepseek-0731-program-p-native-row-matrix-prefill-promessi-2048-20261010.md) |
+| Newly executed 8K input | [Baseline](benchmarks/generated/qualification-deepseek-0731-program-p-native-baseline-prefill-promessi-8192-20261010.md) | [Candidate](benchmarks/generated/qualification-deepseek-0731-program-p-native-row-matrix-prefill-promessi-8192-20261010.md) |
+| Complete-model CUPTI attribution | [Baseline diagnostic](benchmarks/generated/qualification-deepseek-0731-program-p-q2-critical-path-20261010.md) | [Candidate diagnostic](benchmarks/generated/qualification-deepseek-0731-program-p-q2-row-matrix-critical-path-20261010.md) |
+
+The intervention replaces independent shared-expert Q2 row work with equivalent
+integer matrix work, retaining the explicit row reduction tree and without
+another weight allocation. It improves these prefill cells; coding decode is
+effectively unchanged. The observed reduction in the row-kernel population and
+the replacement matrix population explain the prefill gain, rather than page
+warming. Other major populations remain. The native fragmented output hashes,
+channel ordering and byte lengths agree across all paired requests; aggregate
+generation identities also bind execution/state provenance and are not pure
+token-ID hashes. This is internal regression evidence, not independent quality.
+Default Compute Sanitizer host-backtrace collection crashed inside an unwinder;
+retained debugging evidence does not assign a proven root cause. The same full
+qtype memory check with device-only backtraces completed with no memory errors.
+That bounded result does not erase the failed tool configuration.
+
+A subsequent [Q2 prepared-layout experiment](benchmarks/generated/qualification-deepseek-0731-program-p-q2-prepared-critical-path-20261010.md)
+transposed selected expert codes/scales into reusable phase-local tiles. Its
+component decoded-weight/bitwise controls and CUDA memory check passed, but the
+full-model continuation differed and complete diagnostic execution was slower
+with larger staging capacity. It is rejected, not a retained preparation mode.
+The numerical discrepancy remains unlocalized; it cannot be dismissed because
+component tests passed. Source, executable and full trace are retained outside
+Git. The three experimental implementation/test files were restored exactly to
+the previously frozen shared-row candidate. This does not discard the six
+pre-existing CUDA changes inherited from `.5`.
+
+The subsequent [same-generation native reasoning matrix](benchmarks/generated/qualification-deepseek-0731-program-p-native-high-bounded-refusal-20261010.md) completed the three
+non-thinking coding samples, then reached the explicit 256-token output bound
+in `high` before the source-owned reasoning delimiter. The native qualification
+runner retained the failure and closed its owned session/host without retry;
+it emitted no successful performance receipt for that turn. The final-channel
+transition is not measured, and `maximum` was not executed after that refusal.
+This is not the historical attention-state invalidation and is not a qualified
+reasoning-completion result. Raw evidence is `0731-q2-native-thinking-matrix`
+under the Program P evidence directory above.
+
+The separately [measured speculative coding lane](benchmarks/generated/qualification-deepseek-0731-program-p-native-speculative-coding-hash-table-20261010.md)
+uses the same Q2 artifact, frozen shared-row candidate, prompt, output bound and
+sampling policy, with an explicitly speculative engine. Three fresh sessions
+retain verified committed rates and draft/verification/commit economics. Their
+fragment hashes, byte lengths and channel order equal the corresponding
+target-only samples. Acceptance counts exclude the already selected target
+anchor; accepted proposals alone are not the total output population. The
+record is not a baseline-to-candidate speculative speedup, a reasoning result
+or independent quantization-quality evidence.
+
+The planner also produced a distinct MXFP4 nonrouted / Q2_K routed candidate.
+Its [authenticated admission](benchmarks/generated/qualification-deepseek-0731-program-p-mxfp4-admission-20261010.md),
+[target-only coding](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-coding-hash-table-20261010.md),
+[2K](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-prefill-promessi-2048-20261010.md)
+and [8K](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-prefill-promessi-8192-20261010.md)
+records retain separate artifact, binding, build, resource and workload identities.
+The larger representation provides only a small target-only change in these
+samples; it is not an independently qualified quality/performance recommendation.
+The [speculative coding](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-speculative-coding-hash-table-20261010.md)
+and [writing](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-speculative-writing-runbook-20261010.md)
+lanes expose materially different acceptance economics. Coding's fragment
+sequence agrees with this candidate's target-only output but differs from the
+Q2-only control: a changed quantized continuation and acceptance distribution
+must not be presented as an isolated runtime speedup. No paired target-only
+writing result is asserted by the speculative writing record.
+
+Local qualification can consume an explicit checkpoint relationship through
+the registry-owned `--relationship` option, without publishing a user artifact
+as an official target. The runner requires exact artifact, binding, repository
+and revision, then authenticates the live engine lineage independently. The
+receipt records the supplied relationship identity but inherits no claims.
+The successful speculative MXFP4 runs exercise this path; the earlier missing
+embedded-relationship refusal remains retained as a pre-request negative.
+
+Separate complete-model [coding](benchmarks/generated/qualification-deepseek-0731-program-p-mxfp4-graph-coding-hash-table-20261010.md)
+and [2K](benchmarks/generated/qualification-deepseek-0731-program-p-mxfp4-graph-prefill-promessi-2048-20261010.md)
+diagnostics now correlate scalar projection arguments with both direct launches
+and cloned/replayed CUDA graph nodes. The bounded observer control covers direct
+execution, capture and repeated graph execution before model use. All observed
+projection instances resolve to geometry in these captures, with no dropped
+activity. This removes the previously unknown graph population; it does not
+turn shape into a tensor-role identity or kernel duration into measured bandwidth.
+The profile keeps runtime transfer/synchronization counters separate from device
+intervals. Concurrent software validation means host timing is diagnostic only.
+No weight warming, numerical change or new prepared allocation is introduced by
+the observer. Its first invalid resource-descriptor cast failed in the disposable
+control, was corrected against the installed CUDA sample, and never qualified a
+model result.
+
+Two further same-artifact scalar Q2 experiments are rejected. An added constant
+16-block branch does not improve complete-model
+[coding](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-fixed-row-coding-hash-table-20261010.md),
+[2K](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-fixed-row-prefill-promessi-2048-20261010.md)
+or [8K](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-fixed-row-prefill-promessi-8192-20261010.md).
+Separate fixed-Q2 scalar entrypoints reduce compiled register counts but only
+produce sub-percent differences in
+[coding](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-specialized-row-coding-hash-table-20261010.md),
+[2K](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-specialized-row-prefill-promessi-2048-20261010.md)
+and [8K](benchmarks/generated/qualification-deepseek-0731-program-p-native-mxfp4-specialized-row-prefill-promessi-8192-20261010.md).
+They do not justify extra dispatch/entrypoint complexity or establish occupancy
+as the dominant constraint. Both preserve all paired fragment hashes/channels
+in the captured runs and pass bounded CUDA numerical/refusal controls; neither
+is retained. Generated-token evidence identities also bind execution lineage
+and are not pure cross-build token-sequence hashes. The specialization's first
+measurement attempt refused a stale build/source relationship before model
+execution; the rebuilt capture is separate, not a retry of indeterminate work.
+
+The [newly produced Mamba artifact](benchmarks/generated/qualification-mamba-program-p-produced-execution-20261010.md)
+also completes bounded native CPU execution, independent candidate-state
+isolation, order/replay controls, cancellation without partial publication and
+cleanup. This follows the generic source-policy production and binding proof,
+not a new hand-authored family catalog entry. The independent long-double oracle
+qualifies only the logsumexp arithmetic; model-level comparisons remain internal
+and no independent checkpoint-quality score is implied. The run is not a
+performance sample and does not change the separately owned finite producer.
+
+The [ordinary CLI production control](benchmarks/generated/qualification-mamba-program-p-cli-production-20261010.md)
+now exercises emission, native roundtrip, the independently pinned GGUF reader
+and authenticated binding publication without a test-only production driver.
+The source-preserving Mamba artifact is byte-identical to the earlier native
+control. An existing destination refuses without changing its bytes; a separate
+late binding refusal preserves the newly published artifact and returns nonzero
+with the two durable outcomes distinguished. Structural reader acceptance is
+not model-quality evidence. This Linux AArch64 consumer result does not qualify
+the new build dependency on Darwin or establish inference throughput.
+
+Installed Host/listeners remain unchanged with no engines loaded. Program P and
+the inherited competitive performance requirements remain incomplete.
+
 ## DeepSeek 0731 native preparation (2026-10-09)
 
 The active `.5` source-to-binding checkpoint is published through the
@@ -3148,7 +3349,8 @@ This is an incomplete `.5` implementation checkpoint, not its exit. No accepted
 architectural speedup, independent full-model quality promotion, high/maximum
 matrix completion, 20/700 gate, hardware ceiling or installed upgrade is earned
 by these records. `.4` remains stopped with its original requirements unearned;
-`.5` alone owns further computational implementation.
+At that checkpoint `.5` owned further computational implementation. The later
+Program P selection transfers that authority without completing either exit.
 
 ## 0731 memory audit and operator reboot boundary (2026-10-10)
 

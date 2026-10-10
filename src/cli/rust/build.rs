@@ -53,12 +53,52 @@ fn main() {
     );
     println!("cargo:rustc-link-lib=static=yvex");
     native_link_inputs(&build);
+    gguf_reference_bindings(&build);
     let bindings = native_standard_headers(native_bindings(&root))
         .generate()
         .expect("compile the actual installed C contracts");
     bindings
         .write_to_file(PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("ffi.rs"))
         .expect("write generated private FFI projection");
+}
+
+fn gguf_reference_bindings(build: &std::path::Path) {
+    let prefix = build.join("external/gguf-reference");
+    for name in [
+        "receipt.json",
+        "include/gguf.h",
+        "include/ggml.h",
+        "lib/libggml-base.a",
+    ] {
+        let path = prefix.join(name);
+        assert!(path.is_file(), "run make gguf-reference-dependency");
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
+    println!(
+        "cargo:rustc-link-search=native={}",
+        prefix.join("lib").display()
+    );
+    println!("cargo:rustc-link-lib=static=ggml-base");
+    println!(
+        "cargo:rustc-link-lib={}",
+        if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+            "c++"
+        } else {
+            "stdc++"
+        }
+    );
+    native_standard_headers(
+        bindgen::Builder::default()
+            .header(prefix.join("include/gguf.h").to_str().unwrap())
+            .allowlist_function("gguf_(init_from_file|free|get_.*|find_key)")
+            .allowlist_function("ggml_(free|get_tensor|n_dims|nbytes)")
+            .derive_default(true)
+            .layout_tests(false),
+    )
+    .generate()
+    .expect("pinned official GGUF header")
+    .write_to_file(PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("gguf_reference.rs"))
+    .expect("write official-reader FFI");
 }
 
 fn native_link_inputs(build: &std::path::Path) {
@@ -208,6 +248,8 @@ fn native_bindings(root: &std::path::Path) -> bindgen::Builder {
                 "#include <yvex/internal/model.h>\n",
                 "#include <yvex/internal/model_lifecycle.h>\n",
                 "#include <yvex/internal/model_preparation.h>\n",
+                "#include <yvex/optimization.h>\n",
+                "#include <yvex/internal/runtime_capacity.h>\n",
                 "#include <yvex/internal/source_distribution.h>\n",
                 "#include <yvex/tokenizer.h>\n#include <yvex/internal/family_catalog.h>\n",
                 "#include <yvex/internal/core.h>\n",
@@ -221,6 +263,9 @@ fn native_bindings(root: &std::path::Path) -> bindgen::Builder {
         ))
         .allowlist_function("yvex_model_library_.*")
         .allowlist_function("yvex_model_preparation_.*")
+        .allowlist_function("yvex_optimization_.*")
+        .allowlist_function("yvex_runtime_private_memory_capacity")
+        .allowlist_function("yvex_runtime_capacity_preflight")
         .allowlist_function("yvex_artifact_catalog_(open|close|count|at|next)")
         .allowlist_function("yvex_source_acquisition_provenance_(paths|read|resolve)")
         .allowlist_function("yvex_source_acquisition_(target_find|default_patterns)")

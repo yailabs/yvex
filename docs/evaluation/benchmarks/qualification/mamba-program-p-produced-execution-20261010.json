@@ -1,0 +1,214 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "mamba-program-p-produced-execution-20261010",
+  "title": "Program P second architecture: newly produced Mamba BF16 artifact, bounded native CPU execution and state controls",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "mamba2",
+    "upstream_repository": "mistralai/Mamba-Codestral-7B-v0.1",
+    "checkpoint": "4f086c08c1e0f07bdc50ca25125dbbf7475d21da",
+    "tokenizer_conversation": "2555e53b19079a3037a9449265252d1c9bdee6bcfb2063f24e62386db1b52ea4",
+    "transformation_ir": "6cde84173a2cc012d1b3c475d971a45a27d5506019c95cc09ffa0aa7a4ceab08",
+    "physical_policy": "493f51f533cf81fe4c3c1ceeef1a23f787c7dc509ca4787687708c6e6dfe615b",
+    "representation": "goal-v1-source; family-preserved BF16; physical variant 45fcb2cff55c08df9a999e401bf9071cfbd03e524966ddabbf5458af1569a8fe",
+    "artifact_set": "6038bca5b2c7e56c6e347019b60612ebf35dee5f771ff67941d2e1babaf673d3",
+    "binding": "bee48031b8100b3f76f35e74fe819ab7d728b11a4e0e4adcdf907963ce3bb938",
+    "specialization": null,
+    "source_commit": "0f5a54b2aeccce0a67f98eb4e898072bb35cca95",
+    "source_tree": "bf4ee5f5f8f757b50bcedcba19e6d82f16faafd6",
+    "source_delta": "32b0b37da4b7e3b96013dbe7600b52afa42faa483b1e0715dca379984dd8809a",
+    "build": "static-library-sha256:02f51698cf2b22af705464610b78574ce31b285e94c350e0c824bcf9e37e09a9",
+    "executable": "5b71c9d9a99bae75d9999661a52010fb6895ea3b57f54ac87bca88cb44b384d3",
+    "backend": "cpu",
+    "backend_implementation": "portable CPU reference; recurrent Mamba execution",
+    "kernel_bundle": null,
+    "hardware_model": "NVIDIA DGX Spark; Arm CPU execution only",
+    "device_count": 1,
+    "topology": "single coherent CPU memory domain; GPU unused",
+    "driver": null,
+    "runtime_toolkit": null,
+    "memory_configuration": "130663165952 system bytes; mapped BF16 artifact; separate recurrent state banks",
+    "runtime_configuration": "bounded native readout fixture; independent candidate state and shared prefix; no installed service",
+    "context": 8,
+    "prefill_geometry": "one prefix token",
+    "sequence_geometry": "four candidate branches; five teacher-forced tokens",
+    "concurrency": 1,
+    "strategy": "finite candidate scoring; no generation",
+    "reasoning": "not invoked",
+    "sampling": "not invoked",
+    "product_path": "native computational C API fixture; not CLI chat, public finite producer or HTTPS",
+    "suite": "registered live.mamba2.decision-readout fixture; exact source digest retained"
+  },
+  "target_identity": "b9814d2974213785571f896b6b59d66245a6e7d184cef69e682f098fe32f54c0",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model execution in this production control",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Container proofs are not independent full-model quality evidence",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent full-model evidence not supplied by this control"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Container proofs are not independent full-model quality evidence",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent full-model evidence not supplied by this control"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Fresh noncatalog artifact passes actual native execution, ordering, cancellation, no partial publication, replay and cleanup controls; not independent model quality; logsumexp max absolute error 3.14446848770612795185e-15 <= 1e-12; internal replay 9.7856314422183977e-15 <= 1e-12",
+      "required_evidence": [
+        "result",
+        "identity",
+        "closure"
+      ],
+      "evidence": {
+        "result": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log",
+          "sha256": "6b769ff1b3d425be774bcb252d4ca86738dd1949a7addc7e0180bb63fd843f18",
+          "result": "PASS"
+        },
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/identity.json",
+          "sha256": "3164de034f0160155a696ebfbc93caa3058da914cbf0cced053d1e8d393db1fc",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/closed.json",
+          "sha256": "b589cdcfa72e18d4f7b225817f99ac6da176efb00b0e5836334c32528b7fef0f",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "One correctness execution with concurrent software work; no timed performance claim",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Fresh noncatalog artifact passes actual native execution, ordering, cancellation, no partial publication, replay and cleanup controls; not independent model quality",
+      "required_evidence": [
+        "result",
+        "identity",
+        "closure"
+      ],
+      "evidence": {
+        "result": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log",
+          "sha256": "6b769ff1b3d425be774bcb252d4ca86738dd1949a7addc7e0180bb63fd843f18",
+          "result": "PASS"
+        },
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/identity.json",
+          "sha256": "3164de034f0160155a696ebfbc93caa3058da914cbf0cced053d1e8d393db1fc",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/closed.json",
+          "sha256": "b589cdcfa72e18d4f7b225817f99ac6da176efb00b0e5836334c32528b7fef0f",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "diagnostics": [
+      {
+        "id": "runtime.mapped_model_bytes",
+        "case": "bounded-candidate-readout",
+        "value": 14574491104,
+        "unit": "byte",
+        "definition": "Native owned extent, not observed physical RSS or additive device memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log"
+      },
+      {
+        "id": "runtime.prepared_model_bytes",
+        "case": "bounded-candidate-readout",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Native owned extent, not observed physical RSS or additive device memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log"
+      },
+      {
+        "id": "runtime.shared_state_bytes",
+        "case": "bounded-candidate-readout",
+        "value": 557842432,
+        "unit": "byte",
+        "definition": "Native owned extent, not observed physical RSS or additive device memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log"
+      },
+      {
+        "id": "runtime.branch_state_bytes",
+        "case": "bounded-candidate-readout",
+        "value": 557842432,
+        "unit": "byte",
+        "definition": "Native owned extent, not observed physical RSS or additive device memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log"
+      },
+      {
+        "id": "runtime.workspace_bytes",
+        "case": "bounded-candidate-readout",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Native owned extent, not observed physical RSS or additive device memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log"
+      }
+    ],
+    "numerical_controls": [
+      {
+        "id": "oracle.logsumexp-max-absolute-error",
+        "max_absolute_error": 3.144468487706128e-15,
+        "tolerance": 1e-12,
+        "authority": "independent long-double logsumexp only",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log"
+      },
+      {
+        "id": "internal.order-max-absolute-error",
+        "max_absolute_error": 0.0,
+        "tolerance": 1e-12,
+        "authority": "internal execution regression",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log"
+      },
+      {
+        "id": "internal.replay-max-absolute-error",
+        "max_absolute_error": 9.785631442218398e-15,
+        "tolerance": 1e-12,
+        "authority": "internal execution regression",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/result.log"
+      }
+    ],
+    "fixture_source_sha256": "ca2deee2386e126cf0fd6057194319b3c6e7e4b28ef19789adc325ee93d0071b",
+    "reproduce": [
+      "Exact command and source capture in /home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-new-production-execution-v2/identity.json"
+    ],
+    "prior_control_failure": "First coordinator refused empty observer PID selection before subprocess launch; no model request or indeterminate retry"
+  },
+  "limitations": [
+    "No independent checkpoint logits or representation-quality score.",
+    "Source-preserving BF16 production and real CPU execution do not establish CUDA or chat support.",
+    "The installed Host, finite service and operator generations were not loaded, replaced or requalified.",
+    "No performance measurement: concurrent source builds and one bounded correctness run.",
+    "Planner-to-production-to-binding-to-execution reuse is established at native owners; automatic qualified recommendation remains incomplete."
+  ]
+}

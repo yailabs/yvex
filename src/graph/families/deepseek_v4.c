@@ -348,7 +348,7 @@ static const yvex_family_binding_pipeline deepseek_0731_pipeline = {
     DEEPSEEK_PIPELINE_FIELDS, .source_open = deepseek_0731_source_open};
 #undef DEEPSEEK_PIPELINE_FIELDS
 #define DEEPSEEK_COMPILER_FIELDS \
-    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V2, \
+    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V3, \
     .adapter_id = YVEX_DEEPSEEK_V4_ADAPTER_ID, .adapter_version = YVEX_DEEPSEEK_V4_ADAPTER_VERSION, \
     .family = "deepseek-v4", .graph = deepseek_graph_compile, \
     .operator_graph_build = yvex_operator_graph_ir_build_transformer, \

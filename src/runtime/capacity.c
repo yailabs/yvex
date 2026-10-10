@@ -179,10 +179,7 @@ int yvex_runtime_private_memory_capacity(unsigned long long *total_bytes,
 unsigned long long yvex_runtime_private_system_reserve(
     unsigned long long capacity_bytes)
 {
-    unsigned long long proportional = capacity_bytes / 8ull;
-    return proportional > YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE
-               ? proportional
-               : YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE;
+    return yvex_execution_system_reserve(capacity_bytes);
 }
 
 
@@ -1260,7 +1257,7 @@ int yvex_runtime_capacity_preflight(
     const yvex_runtime_binding *binding, yvex_backend *backend,
     const yvex_runtime_capacity_options *options,
     unsigned long long *required_bytes, unsigned long long *available_bytes,
-    yvex_error *err)
+    yvex_runtime_capacity *assessment, yvex_error *err)
 {
     runtime_capacity_context context = {0};
     yvex_model_engine_view view = {0};
@@ -1268,6 +1265,7 @@ int yvex_runtime_capacity_preflight(
     yvex_runtime_weight_placement placement;
     unsigned long long transient_bytes, model_bytes;
     int rc;
+    if (assessment) memset(assessment, 0, sizeof(*assessment));
     if (required_bytes) *required_bytes = 0ull;
     if (available_bytes) *available_bytes = 0ull;
     if (!binding || !capacity_options_valid(options) ||
@@ -1296,5 +1294,9 @@ int yvex_runtime_capacity_preflight(
             0, transient_bytes, &workspace_capacity, required_bytes,
             available_bytes, err);
     yvex_graph_attention_capacity_plan_close(&workspace_capacity);
+    /* A sealed plan remains inspectable on a live-memory refusal. Earlier
+     * semantic/backend refusals do not publish a partially filled assessment. */
+    if (assessment && context.result.capacity_plan.identity[0])
+        *assessment = context.result;
     return rc;
 }

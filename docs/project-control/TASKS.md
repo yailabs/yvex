@@ -15,7 +15,16 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **DeepSeek GB10 computational architecture reconstruction IN PROGRESS; predecessor competitive wave stopped with unearned exits; A03 remains READY and unstarted**.
+Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
+The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
+2026-10-10. This is the sole active implementation authority for physical
+configuration search and the associated DeepSeek representation/backend work.
+`.5` retains its source, admission, numerical and performance evidence and is
+BLOCKED on this successor, not COMPLETE. No duplicate implementation is selected.
+The six retained experimental CUDA edits remain unaccepted until reconciled and
+qualified. The post-reboot Host has no loaded engines; service availability is
+not model admission. Program P does not authorize replacement of operator engines.
+
 The operator independently selected
 `V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` on 2026-10-09.
 Earlier repairs retain their exact evidence and external gates. This selection
@@ -25,7 +34,8 @@ The predecessor `.4` implementation is stopped at published `337e7e73`, not
 COMPLETE. Its controlled row is BLOCKED because its exit remains unearned and
 implementation authority has moved to `.5`; this does not assert a hardware
 ceiling or erase pending numerical, quality, lifecycle or performance gates.
-There is one active implementation of this execution problem: `.5`.
+At that historical selection, `.5` was the active implementation; Program P now
+owns the next implementation while retaining the earlier unmet exits.
 The historical paragraphs below retain the `.4` observations and ownership.
 
 On 2026-10-09 the operator selected the exact Flash 0731 target/support pair
@@ -58,7 +68,7 @@ The 2026-10-10 continuation selects a non-destructive
 inside `.5`. The operator exclusively owns the next reboot; no automatic reboot,
 shared-Host restart or DeepSeek/finite unload is authorized by this continuation.
 The read-only witness and executable-layout constraints do not close admission
-or performance. Keep `.5` IN PROGRESS, preserve the current services and compare
+or performance. Preserve `.5`'s unearned exit, the current services and compare
 the same authenticated candidate after a separately confirmed free-device window.
 
 The predecessor `.4` owns the retained
@@ -135,10 +145,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 53 | 39 | 4 | 1 | 9 |
+| 54 | 39 | 4 | 1 | 10 |
 <!-- task-counts:end -->
 
-**39/53 selected Tasks complete.** This denominator includes the significant
+**39/54 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -146,11 +156,24 @@ candidates are not selected Tasks.
 
 ## DeepSeek competitive execution and qualification authority
 
+### Program P implementation selection — 2026-10-10
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` | Operational goal-driven Physical Model Compiler | P1 | 🔵 IN PROGRESS | Typed hardware/workload/quality goals; bounded deterministic recipe search through existing compiler, artifact and deployment owners; coupled kernel compatibility and complete resource feasibility; reproducible production, independent qualification and explainable Pareto recommendation; Rust registry-driven CLI and second admitted model reuse. DeepSeek 0731 revision `7872f01b1d1fe23eabc4c98b48bffcef5a386062` requires native execution, independent numerics/quality and complete-model 20 target-only decode / 700 uncached prefill (preferred 24/800). Generic machinery and competitive exits are reported separately. No automatic installed-engine replacement, reserve weakening, A03, training or cross-product changes. |
+
+The authenticated Q8_0/Q2_K baseline remains a candidate, not a selected optimum.
+Initial-memory fit, qtype readability, coupled-kernel compatibility, full runtime
+admission, measured performance and independently qualified quality are distinct.
+The operator reboot is confirmed by boot ID
+`54835689-f267-4b02-be92-24be60646f9d`; no new reboot is selected. Post-boot
+memory observations remain external receipts and do not establish 0731 execution.
+
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
 | `V010.RUNTIME.DEEPSEEK.GB10.THROUGHPUT.3` | Complete GB10 inference throughput, reasoning and representation qualification | P1 | ⛔ BLOCKED | Operator closed the previous bounded investigation at its earned handoff; 20 committed decode token/s and 700 uncached prefill token/s remain unearned, not a hardware-ceiling claim. Preserve its candidate, missing independent quality gates and retained observations; successor selection does not promote them. |
 | `V010.RUNTIME.DEEPSEEK.GB10.COMPETITIVE.EXECUTION.RESIDENCY.4` | Decompose same-machine YVEX/DwarfStar checkpoint, representation, residency and execution effects; retain qualified generic improvements | P1 | ⛔ BLOCKED | Implementation stopped by the operator at published checkpoint `337e7e73057abd8a784a67eea58ad8a6f079869d` (tree `14b7fea18275a542739d4d2afaa38f6fd720d407`); original performance and independent-quality exits remain unearned. Successor `.5` alone owns new computational implementation. The following predecessor observations remain historical, not current installed-state assertions. Published `a444bcdd` remains the retained installed baseline; the approved idle Host replacement now installs `7fc562d5` with the same DeepSeek and a separately qualified faster finite CPU producer. The 20/700 exit is not earned; Rust/native product, finite reference/refusal and HTTP recovery evidence retain their bounded scope. Source-stable controlled geometry candidates improve prefill, not sustained coding decode. Already-resident scoped page warming is neutral; wider decoded and five-digit candidates are rejected on complete-model tradeoffs. Same-stream copies remove intermediate barriers but move observed waits to completion without a material complete-request gain. Program-owned reusable packing and four-stream warp-cell normalization have source-stable controlled characterization and bounded numerical/reuse/refusal evidence; neither earns the performance exit. Warp-row normalization, small-row attention, fixed expert geometry and certified MXFP4 matrix alternatives are rejected on complete-model tradeoffs. Separate identity-bound receipts and generated views retain those outcomes, not a common performance claim. Operator cancellation exposed a generic attention begin/abort invalidation defect; target/draft first-layer and between-layer regressions pass after repair, included in the current installed Host without changing model/configuration identities. The operator service and finite generation are preserved; new operator sessions are never retired for experiments. [Longer-bound native coding/high turns](../evaluation/retained-observations.md#native-long-turn-reasoning-completion-2026-10-08) reach natural EOS in the retained sample set, separately from short controls and unexecuted reasoning/strategy cells; independent quality, complete high/maximum characterization, remaining execution costs, comparative closure and the 20/700 gates remain unearned. The published single-sequence CUDA prefill policy retains native coding/2K/8K characterization and cancellation/recovery; it is not yet the installed Host. [Certified projection candidates and device/API attribution](../evaluation/retained-observations.md#certified-projection-candidates-and-device-activity-attribution-2026-10-08) reject component-correct candidates without material complete-model benefit and keep profiled diagnosis separate from timing. DwarfStar uses a different checkpoint, so its results are not an exact engine A/B. [Installed matrix](../evaluation/retained-observations.md#installed-native-coding-and-multi-turn-matrix-2026-10-07); [controlled experiments](../evaluation/retained-observations.md#controlled-physical-geometry-and-page-warming-experiments-2026-10-07); [submission and rejected candidates](../evaluation/retained-observations.md#submission-lifetime-and-rejected-decoded-candidates-2026-10-07). |
-| `V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` | Reconstruct the executed computational graph and retain a coherent physical/numerical execution correction on GB10 | P1 | 🔵 IN PROGRESS | Inherits `.4` checkpoint `337e7e73`, independent-reference gaps and rejected experiments without promoting them. Measure target-only decode and uncached 2K/8K critical paths; separate checkpoint/representation, layout, numerical realization, device work, control and overlapping waits. Implement the dominant causal correction through canonical compiler/representation/runtime/backend owners. Exit requires independent numerical/lifecycle qualification, complete-model before/after, resource/preparation costs and native-product confirmation: at least 20 sustained target-only committed token/s and 700 uncached prefill token/s (preferred 24/800). Missing gates leave this milestone incomplete. Protect installed DeepSeek/finite, operator sessions and concurrent edits; no implicit rollout, numerical relaxation, terminal redesign, atlas, YAI/Studio/REPLAI changes or A03. |
+| `V010.RUNTIME.DEEPSEEK.GB10.COMPUTATIONAL.ARCHITECTURE.5` | Reconstruct the executed computational graph and retain a coherent physical/numerical execution correction on GB10 | P1 | ⛔ BLOCKED | Implementation authority transferred to Program P on 2026-10-10; original gates remain unearned, not a hardware ceiling. Inherits `.4` checkpoint `337e7e73`, independent-reference gaps and rejected experiments without promoting them. Measure target-only decode and uncached 2K/8K critical paths; separate checkpoint/representation, layout, numerical realization, device work, control and overlapping waits. Implement the dominant causal correction through canonical compiler/representation/runtime/backend owners. Exit requires independent numerical/lifecycle qualification, complete-model before/after, resource/preparation costs and native-product confirmation: at least 20 sustained target-only committed token/s and 700 uncached prefill token/s (preferred 24/800). Missing gates leave this milestone incomplete. Protect installed DeepSeek/finite, operator sessions and concurrent edits; no implicit rollout, numerical relaxation, terminal redesign, atlas, YAI/Studio/REPLAI changes or A03. |
 
 ### Computational architecture reconstruction selection — 2026-10-09
 

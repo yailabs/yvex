@@ -557,9 +557,7 @@ int yvex_transform_binding_payload_plan_build(
     size_t page_bytes,
     yvex_source_payload_failure *failure,
     yvex_error *err);
-/* Runtime-binding publication is a preparation-plane operation.  The CLI
- * supplies resolved paths and adapter identity, then receives only the
- * content-addressed path; runtime admission independently reopens the file. */
+/* Preparation-plane publication; runtime independently reopens the binding. */
 typedef struct yvex_compilation_runtime_binding_request {
     const char *source_path;
     const char *models_root;
@@ -574,6 +572,8 @@ typedef struct yvex_compilation_runtime_binding_request {
     unsigned long long family_adapter_version;
     unsigned int source_stream_count;
     int rebind_existing_artifact;
+    /* Borrowed complete production proof; NULL retains family catalog admission. */
+    const struct yvex_artifact_admission_request *artifact_production;
 } yvex_compilation_runtime_binding_request;
 typedef struct yvex_compilation_runtime_binding_result {
     char path[YVEX_PATH_CAP];

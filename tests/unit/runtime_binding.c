@@ -17,6 +17,7 @@
 #include <yvex/internal/graph_state.h>
 #include <yvex/internal/operator_graph.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/runtime_capacity.h>
 #include <yvex/internal/runtime_prefix.h>
 #include <yvex/internal/runtime_state_store.h>
 #include <yvex/internal/stateful_attention.h>
@@ -2032,6 +2033,16 @@ static int test_planned_prefill_width(yvex_model_engine *model)
     const yvex_model_engine_view *view = yvex_model_engine_view_get(model);
     unsigned long long planned = ULLONG_MAX, live = ULLONG_MAX;
     yvex_error err;
+    yvex_runtime_capacity assessment;
+    yvex_runtime_capacity_options options = {0};
+    unsigned long long required = 99ull, available = 99ull;
+    memset(&assessment, 0x5a, sizeof(assessment));
+    options.context_capacity = 8ull;
+    options.prefill_chunk_tokens = 4ull;
+    YVEX_TEST_ASSERT(yvex_runtime_capacity_preflight(NULL, NULL, &options,
+        &required, &available, &assessment, &err) == YVEX_ERR_INVALID_ARG &&
+        !required && !available && !assessment.capacity_plan.identity[0],
+        "missing binding clears inspection output instead of publishing stale capacity");
     YVEX_TEST_ASSERT(view && yvex_runtime_private_binding_prefill_width(
         view->compiled_binding, YVEX_BACKEND_KIND_CPU, NULL, &planned, &err) == YVEX_OK &&
         yvex_model_engine_phase_maximum_width_copy(
@@ -2812,6 +2823,18 @@ static int test_runtime_family_neutrality(void)
                          &rejected.published, &err) == YVEX_ERR_INVALID_ARG &&
                          !rejected.published && !rejected.path[0],
                      "generic publication owner refuses incomplete family compiler products");
+    {
+        yvex_artifact_admission_request production = {0};
+        request.source_path = request.models_root = request.source_manifest_path = "/not-opened";
+        request.artifact_path = "/not-opened/artifact";
+        request.artifact_production = &production;
+        production.artifact_path = request.artifact_path;
+        YVEX_TEST_ASSERT(yvex_runtime_binding_compile_publish(
+            compiler, &request, rejected.path, &rejected.published, &err) == YVEX_ERR_INVALID_ARG &&
+            !rejected.published && !rejected.path[0],
+            "incomplete production proof refuses before source I/O or binding publication");
+        request.artifact_production = NULL;
+    }
     YVEX_TEST_ASSERT(yvex_graph_execution_find(
                          deepseek->adapter_id, deepseek->adapter_version, NULL) == NULL &&
                          yvex_graph_execution_find(

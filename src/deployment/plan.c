@@ -4,6 +4,33 @@
 #include <limits.h>
 #include <string.h>
 #include <yvex/internal/core.h>
+#include <yvex/qtype.h>
+
+unsigned long long yvex_execution_system_reserve(unsigned long long capacity_bytes)
+{
+    unsigned long long proportional = capacity_bytes / 8ull;
+    return proportional > YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE
+               ? proportional : YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE;
+}
+
+unsigned int yvex_execution_routed_matrix_qtype(yvex_tensor_role role)
+{
+    if (role == YVEX_TENSOR_ROLE_MOE_EXPERT_GATE || role == YVEX_TENSOR_ROLE_MOE_EXPERT_UP)
+        return YVEX_GGUF_QTYPE_IQ2_XXS;
+    if (role == YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN) return YVEX_GGUF_QTYPE_Q2_K;
+    return UINT_MAX;
+}
+
+int yvex_execution_routed_matrix_operand_admitted(
+    yvex_backend_kind backend, unsigned int compute_major,
+    yvex_tensor_role role, unsigned int qtype, unsigned long long row_width)
+{
+    if (backend != YVEX_BACKEND_KIND_CUDA || compute_major < 8u ||
+        !row_width || row_width % 256ull || row_width > 8192ull) return 0;
+    if ((role == YVEX_TENSOR_ROLE_MOE_EXPERT_GATE || role == YVEX_TENSOR_ROLE_MOE_EXPERT_UP) &&
+        qtype == YVEX_GGUF_QTYPE_Q2_K) return 1;
+    return qtype != UINT_MAX && qtype == yvex_execution_routed_matrix_qtype(role);
+}
 
 static int execution_refuse(yvex_error *err, yvex_status status,
                             const char *where, const char *reason)

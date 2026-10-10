@@ -31,6 +31,27 @@ typedef struct {
 } deepseek_artifact_variant;
 
 static const deepseek_artifact_variant deepseek_artifact_catalog[] = {
+    /* Program P experiment: native emission/roundtrip and independent pinned
+     * reader evidence authenticate this exact file. Not a quality or speed
+     * recommendation, and not permission to admit arbitrary planner output. */
+    {&deepseek_0731_source, 103717174264ull, 103728880544ull,
+     YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY,
+     "572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+     "goal-v1-mxfp4-routed-q2_k",
+     "e460eb3e3e30c712912dc5810bbd12f269f8cd44b599cba173a13872994a7710",
+     "49e3ed3d77650ddea0f9d6ff25ff9c8610c15ff949a69de8f3edc3e12d7c45d0",
+     "8637ec092f1ab95b4874e288b720730d099161384f79da52b67624fde6b95a5a",
+     "20d50ed22b8cc286d62395e128b14531d361fca92adc7349a5dd3e774938b190",
+     "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041"},
+    {&deepseek_0731_source, 102436666360ull, 102448372608ull,
+     YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY,
+     "bdb68a95537525560d5af218975cc6d560ad0c93013d970f91925c2d2629a028",
+     "goal-v1-q2_k",
+     "3258e5f54107ec7aa2cb98c7fa515d74bfa6c3d968ee8eeab0114072813d0279",
+     "8b8e3e240ddb68ae3330455f8c23fa34a562914f36ce636aa8ec0c1e6fbc03ad",
+     "2dae2252f9899af87a6a77118e4cafbd70ff38d876ce37d8b5e8c969d74e4558",
+     "76ad99a2657f4f488ec0785d16feaebb99c3ff41a3b0439addcba81a00515c12",
+     "7b33f67b79c6ad47c6a0b78aafac4131ad8d6ec27c162ebcf5b0a056670eb38f"},
     {&deepseek_0731_source, 107066194936ull, 107077901216ull,
      YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY,
      "09312d58916c4081ef9091e41bfd35caecc51ed698847a44c2f25740f3db1024",

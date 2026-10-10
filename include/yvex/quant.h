@@ -396,6 +396,10 @@ int yvex_quant_policy_preset_open(yvex_quant_policy **out,
                                   yvex_error *err);
 unsigned long long yvex_quant_policy_preset_count(void);
 const char *yvex_quant_policy_preset_name(unsigned long long index);
+/* Exact-target catalog projection; names are not matched by family prefix. */
+unsigned long long yvex_quant_policy_target_preset_count(const char *target_id);
+const char *yvex_quant_policy_target_preset_name(const char *target_id,
+                                                unsigned long long index);
 int yvex_quant_policy_identity_validate(const yvex_quant_policy *policy,
                                         yvex_error *err);
 

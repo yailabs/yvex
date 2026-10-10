@@ -18,6 +18,11 @@ publication: {html: true, pdf: true, index: true}
 > [Status](../project-control/STATUS.md) owns demonstrated capability;
 > [Tasks](../project-control/TASKS.md) owns authorized delivery.
 
+The selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` begins implementing
+this target through the [native bounded search](../architecture/compiler-ir.md#goal-constrained-physical-search-partial-implementation).
+Its initial policy synthesis and static refusal do not complete the research
+target's measured optimization, preparation or independent qualification loop.
+
 ## Question and qualification
 
 Which reproducible representation best satisfies workload, quality and hardware constraints?

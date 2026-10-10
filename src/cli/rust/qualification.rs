@@ -33,6 +33,115 @@ fn read_receipt(path: &str) -> Result<Value> {
     Ok(value)
 }
 
+/// Inspect qualification envelopes related by policy and source transformation.
+/// These keys do not establish exact recipe identity: calibration, physical
+/// variant and produced artifact must be bound independently before selection.
+/// This is inspection, not admission: differing builds, hardware, workloads and
+/// quality references remain visible and are never merged into a winner.
+pub(crate) fn optimization_evidence(
+    path: Option<&str>,
+    candidates: &[ffi::raw::yvex_optimization_candidate],
+    deployment: Option<&ffi::variant::DeploymentAssessment>,
+) -> Result<Value> {
+    let Some(path) = path else {
+        return Ok(json!([]));
+    };
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?
+        .take(4 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)?;
+    require(
+        bytes.len() <= 4 * 1024 * 1024,
+        "optimization evidence exceeds 4 MiB",
+    )?;
+    let input: Value = serde_json::from_slice(&bytes)?;
+    let records = if let Some(records) = input.as_array() {
+        records.clone()
+    } else {
+        vec![input]
+    };
+    let mut projected = project_optimization_evidence(&records, candidates)?;
+    if let Some(deployment) = deployment {
+        bind_optimization_evidence(&mut projected, deployment)?;
+    }
+    Ok(projected)
+}
+
+/// The native binding reader already matched its sealed physical variant and
+/// transformation to this compiler candidate. Join only that exact artifact
+/// and binding; a matching policy alone cannot transfer calibration evidence.
+/// Identity correspondence is not receipt authentication or earned selection.
+fn bind_optimization_evidence(
+    projected: &mut Value,
+    deployment: &ffi::variant::DeploymentAssessment,
+) -> Result<()> {
+    for row in projected
+        .as_array_mut()
+        .ok_or("invalid evidence projection")?
+    {
+        let target = &row["receipt"]["target"];
+        let related = row["related_candidate_identities"]
+            .as_array()
+            .is_some_and(|ids| ids.iter().any(|id| id == &deployment.candidate));
+        if !related
+            || target["artifact_set"] != deployment.artifact
+            || target["binding"] != deployment.binding
+        {
+            continue;
+        }
+        row["association"] = json!("sealed-binding-physical-variant");
+        row["exact_recipe_match"] = json!(deployment.candidate);
+        row["reason"] = json!(
+            "sealed binding links the compiled physical variant to this artifact identity; receipt claims, configuration comparability and independent quality still require qualification; capacity refusal is not erased"
+        );
+    }
+    Ok(())
+}
+
+fn project_optimization_evidence(
+    records: &[Value],
+    candidates: &[ffi::raw::yvex_optimization_candidate],
+) -> Result<Value> {
+    require(
+        !records.is_empty() && records.len() <= 32,
+        "1..32 qualification receipts required",
+    )?;
+    let mut seen = BTreeSet::new();
+    let mut projected = Vec::new();
+    for record in records {
+        validate(record)?;
+        let digest = ffi::digest(&serde_json::to_vec(record)?)?;
+        require(
+            seen.insert(digest.clone()),
+            "duplicate qualification receipt",
+        )?;
+        let matches = candidates
+            .iter()
+            .filter(|candidate| {
+                candidate.failure_status == 0
+                    && record["target"]["physical_policy"] == ffi::text(&candidate.policy_identity)
+                    && record["target"]["transformation_ir"]
+                        == ffi::text(&candidate.transform_identity)
+            })
+            .map(|candidate| ffi::text(&candidate.candidate_identity))
+            .collect::<Vec<_>>();
+        require(
+            !matches.is_empty(),
+            "receipt does not match any compiled policy/transformation",
+        )?;
+        projected.push(json!({
+            "receipt_identity": digest,
+            "related_candidate_identities": matches,
+            "receipt": record,
+            "association": "policy-and-transformation-only",
+            "exact_recipe_match": null,
+            "selection_eligible": false,
+            "reason": "calibration and physical variant are not authenticated by this association; no transfer of quality, lifecycle, working-set or performance evidence"
+        }));
+    }
+    Ok(Value::Array(projected))
+}
+
 fn target_identity(target: &Value, rules: &Value) -> Result<String> {
     let object = target
         .as_object()
@@ -652,6 +761,109 @@ mod tests {
         for receipt in receipts {
             validate(&receipt).unwrap();
         }
+    }
+    #[test]
+    fn optimizer_related_receipts_do_not_establish_exact_recipe_or_qualification() {
+        let receipts: Vec<Value> = serde_json::from_str(CATALOG).unwrap();
+        let record = receipts
+            .iter()
+            .find(|r| {
+                ["physical_policy", "transformation_ir"]
+                    .iter()
+                    .all(|k| r["target"][k].as_str().is_some_and(|s| s.len() == 64))
+            })
+            .unwrap();
+        let mut candidate = ffi::raw::yvex_optimization_candidate::default();
+        for (dst, key) in [
+            (&mut candidate.policy_identity, "physical_policy"),
+            (&mut candidate.transform_identity, "transformation_ir"),
+        ] {
+            for (slot, byte) in dst
+                .iter_mut()
+                .zip(record["target"][key].as_str().unwrap().bytes())
+            {
+                *slot = byte as _;
+            }
+        }
+        candidate.candidate_identity[..64].fill(b'a' as _);
+        let result =
+            project_optimization_evidence(std::slice::from_ref(record), &[candidate]).unwrap();
+        assert_eq!(result[0]["receipt"], *record);
+        assert_eq!(result[0]["selection_eligible"], false);
+        assert_eq!(result[0]["related_candidate_identities"][0], "a".repeat(64));
+        assert!(result[0]["exact_recipe_match"].is_null());
+        // Changing the calibration-dependent physical variant leaves the policy
+        // and source transformation unchanged. Neither association is exact.
+        let mut recalibrated = candidate;
+        recalibrated.physical_variant_identity[..64].fill(b'b' as _);
+        let related =
+            project_optimization_evidence(std::slice::from_ref(record), &[recalibrated]).unwrap();
+        assert!(related[0]["exact_recipe_match"].is_null());
+        assert_eq!(related[0]["selection_eligible"], false);
+        assert!(project_optimization_evidence(&[], &[candidate]).is_err());
+        assert!(project_optimization_evidence(std::slice::from_ref(record), &[]).is_err());
+        assert!(project_optimization_evidence(&vec![record.clone(); 33], &[candidate]).is_err());
+        assert!(
+            project_optimization_evidence(&[record.clone(), record.clone()], &[candidate]).is_err()
+        );
+        for policy in [true, false] {
+            let mut other = candidate;
+            let dst = if policy {
+                &mut other.policy_identity
+            } else {
+                &mut other.transform_identity
+            };
+            dst[0] = if dst[0] == b'a' as std::ffi::c_char {
+                b'b' as _
+            } else {
+                b'a' as _
+            };
+            assert!(project_optimization_evidence(std::slice::from_ref(record), &[other]).is_err());
+        }
+        candidate.failure_status = -1;
+        assert!(project_optimization_evidence(std::slice::from_ref(record), &[candidate]).is_err());
+        let mut forged = record.clone();
+        forged["target_identity"] = json!("0".repeat(64));
+        assert!(project_optimization_evidence(&[forged], &[candidate]).is_err());
+    }
+    #[test]
+    fn sealed_binding_association_does_not_promote_receipt_or_capacity() {
+        let assessment = ffi::variant::DeploymentAssessment {
+            candidate: "a".repeat(64),
+            binding: "b".repeat(64),
+            artifact: "c".repeat(64),
+            status: -1,
+            reason: "resource refusal".into(),
+            required: 200,
+            available: 100,
+            plan: None,
+        };
+        let original = json!([{
+            "related_candidate_identities": [assessment.candidate],
+            "receipt": {"target": {"artifact_set": assessment.artifact, "binding": assessment.binding},
+                "claims": {"representation-quality": {"state": "BLOCKED"}}},
+            "association": "policy-and-transformation-only", "exact_recipe_match": null,
+            "selection_eligible": false
+        }]);
+        let mut matched = original.clone();
+        bind_optimization_evidence(&mut matched, &assessment).unwrap();
+        assert_eq!(matched[0]["exact_recipe_match"], assessment.candidate);
+        assert_eq!(matched[0]["association"], "sealed-binding-physical-variant");
+        assert_eq!(matched[0]["receipt"], original[0]["receipt"]);
+        assert_eq!(matched[0]["selection_eligible"], false);
+        assert_eq!(assessment.status, -1);
+        for key in ["artifact_set", "binding"] {
+            let mut wrong = original.clone();
+            wrong[0]["receipt"]["target"][key] = json!("d".repeat(64));
+            let before = wrong.clone();
+            bind_optimization_evidence(&mut wrong, &assessment).unwrap();
+            assert_eq!(wrong, before);
+        }
+        let mut unrelated = original.clone();
+        unrelated[0]["related_candidate_identities"] = json!(["d".repeat(64)]);
+        let before = unrelated.clone();
+        bind_optimization_evidence(&mut unrelated, &assessment).unwrap();
+        assert_eq!(unrelated, before);
     }
     #[test]
     fn complete_performance_context_compares_but_missing_context_refuses() {

@@ -284,8 +284,9 @@ static int attention_matvec(yvex_cuda_work *work,
               work->state->q8_quantize_function && work->state->qtype_matvec_function;
     tensorcore_path = q8_path && work->state->qtype_tensorcore_rows_function &&
                       cuda_qtype_tensorcore_eligible(input_rows);
-    row_matrix_path = q8_path && !tensorcore_path && weight->qtype == YVEX_GGUF_QTYPE_MXFP4 &&
-        work->state->mxfp4_q8_matrix_function &&
+    row_matrix_path = q8_path && !tensorcore_path &&
+        (weight->qtype == YVEX_GGUF_QTYPE_MXFP4 || weight->qtype == YVEX_GGUF_QTYPE_Q2_K) &&
+        work->state->q8_row_matrix_function &&
         yvex_cuda_q8_row_matrix_geometry(rows, weight->row_width, input_rows,
             &row_matrix_grid, &row_matrix_block);
     shared_q8_path = q8_path && !tensorcore_path && !row_matrix_path &&
@@ -357,7 +358,7 @@ static int attention_matvec(yvex_cuda_work *work,
                 (void *)&weight->qtype, &quantized, (void *)&weight->row_width,
                 &q8_input, &block_row, &work->forensic_numeric, &additive,
                 &out, &rows, &output_bf16, &status};
-            rc = attention_launch(work, work->state->mxfp4_q8_matrix_function,
+            rc = attention_launch(work, work->state->q8_row_matrix_function,
                 row_matrix_grid, row_matrix_block, 0u, params, stage, failure, err);
             if (rc == YVEX_OK) work->tensor_core_launches++;
         } else if (rc == YVEX_OK && shared_q8_path) {

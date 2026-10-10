@@ -3632,6 +3632,18 @@
     ],
     "cli_offline_quant_emit": [
       {
+        "description": "Verify the new complete artifact with the pinned independent reader and publish its binding here; does not load an engine.",
+        "name": "--binding-directory",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Emit a typed production result, not an artifact admission or quality certificate.",
+        "name": "--json",
+        "takes_value": false,
+        "value_type": "boolean"
+      },
+      {
         "description": "Set component.",
         "name": "--component",
         "takes_value": true,
@@ -3940,6 +3952,158 @@
         "name": "--tool-path",
         "takes_value": true,
         "value_type": "delegated"
+      }
+    ],
+    "cli_offline_optimize": [
+      {
+        "description": "Read a bounded versioned optimization request; do not mix with individual planning flags.",
+        "name": "--request",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Inspect canonical runtime capacity for a produced binding matching a candidate; does not load an engine.",
+        "name": "--runtime-binding",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Execution mode for produced-binding capacity inspection.",
+        "name": "--execution-strategy",
+        "takes_value": true,
+        "value_type": "enum",
+        "enum_values": ["target-only", "speculative"]
+      },
+      {
+        "description": "Inspect canonical receipts related by policy/source; exact calibration and recipe match remain unproven.",
+        "name": "--evidence",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Select an exact feasible candidate identity for policy export; not a qualification claim.",
+        "name": "--select",
+        "takes_value": true,
+        "value_type": "delegated"
+      },
+      {
+        "description": "Write selected policy for the existing quant plan/emit pipeline.",
+        "name": "--out-policy",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Emit the typed candidate assessment as JSON.",
+        "name": "--json",
+        "takes_value": false,
+        "value_type": "boolean"
+      },
+      {
+        "description": "Exact compiler target.",
+        "name": "--target",
+        "takes_value": true,
+        "value_type": "delegated"
+      },
+      {
+        "description": "Authenticated source directory.",
+        "name": "--source",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Canonical payload root.",
+        "name": "--models-root",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Authenticated source manifest.",
+        "name": "--source-manifest",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Optional expert physical-policy restriction.",
+        "name": "--policy",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Checkpoint-matched calibration input.",
+        "name": "--imatrix-manifest",
+        "takes_value": true,
+        "value_type": "path"
+      },
+      {
+        "description": "Target execution backend.",
+        "enum_values": [
+          "cpu",
+          "cuda",
+          "metal"
+        ],
+        "name": "--backend",
+        "takes_value": true,
+        "value_type": "enum"
+      },
+      {
+        "description": "Physical optimization objective.",
+        "enum_values": [
+          "balanced",
+          "throughput",
+          "memory",
+          "quality"
+        ],
+        "name": "--goal",
+        "takes_value": true,
+        "value_type": "enum"
+      },
+      {
+        "description": "Required context tokens.",
+        "name": "--context",
+        "takes_value": true,
+        "value_type": "u64"
+      },
+      {
+        "description": "Required prefill chunk.",
+        "name": "--prefill",
+        "takes_value": true,
+        "value_type": "u64"
+      },
+      {
+        "description": "Required concurrent sequences.",
+        "name": "--concurrency",
+        "takes_value": true,
+        "value_type": "u64"
+      },
+      {
+        "description": "Maximum complete execution bytes; zero uses observed availability.",
+        "name": "--memory-limit",
+        "takes_value": true,
+        "value_type": "u64"
+      },
+      {
+        "description": "System reserve bytes; cannot reduce canonical reserve.",
+        "name": "--reserve",
+        "takes_value": true,
+        "value_type": "u64"
+      },
+      {
+        "description": "Bounded exact-target recipe count.",
+        "name": "--max-candidates",
+        "takes_value": true,
+        "value_type": "u64"
+      },
+      {
+        "description": "Permit approximate weights; independent quality still required.",
+        "name": "--allow-approximation",
+        "takes_value": false,
+        "value_type": "boolean"
+      },
+      {
+        "description": "Require admitted routed matrix operand compatibility.",
+        "name": "--require-routed-matrix",
+        "takes_value": false,
+        "value_type": "boolean"
       }
     ],
     "cli_offline_quant_plan": [
@@ -5187,6 +5351,12 @@
           "description": "Select the immutable suite ID."
         },
         {
+          "name": "--relationship",
+          "value_type": "path",
+          "takes_value": true,
+          "description": "Use an exact local artifact/binding/checkpoint qualification record; does not inherit its claims."
+        },
+        {
           "name": "--case",
           "value_type": "text",
           "takes_value": true,
@@ -6405,6 +6575,28 @@
       "side_effects": "may write compilation output",
       "summary": "Manage external quantization job manifests.",
       "visibility": "engineering"
+    },
+    {
+      "adapter_argv": [
+        "quant",
+        "optimize"
+      ],
+      "adapter_id": "quant",
+      "architectural_plane": "Compile",
+      "arguments": [],
+      "command_path": [
+        "compile",
+        "optimize"
+      ],
+      "flag_sets": [
+        "cli_offline_optimize"
+      ],
+      "help_group": "Compilation",
+      "lane": "offline-engine",
+      "operation_id": "compile.optimize",
+      "side_effects": "may write selected physical policy",
+      "summary": "Inspect goal-constrained physical recipes without loading a model.",
+      "visibility": "product-advanced"
     },
     {
       "adapter_argv": [

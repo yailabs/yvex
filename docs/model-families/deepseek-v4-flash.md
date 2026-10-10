@@ -100,8 +100,15 @@ binds to
 `29676295361a8c99b86b3e1837a64e23791337f862d01fbeaeb2b5361399cc6d`;
 the sealed tokenizer policy is
 `bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819`.
-This establishes preparation, not engine residency, a model forward or
-independent quantization quality. No hosted 0731 generation is qualified yet.
+That Q8/Q2 record establishes preparation, not engine residency, a model forward
+or independent quantization quality. Program P subsequently emitted a distinct
+`goal-v1-q2_k` artifact (`7b33f67b79c6ad47c6a0b78aafac4131ad8d6ec27c162ebcf5b0a056670eb38f`)
+and authenticated binding
+`a4bb99c92e1f8d1fb61f7db3ed0fc5d7a900fcc87b7ecd6fd8c75c486a939737`.
+Its native target-only full-model execution is bounded experimental evidence;
+the generic homogeneous Q2_K matrix consumer preserves its declared arithmetic
+class. This neither requalifies Q8/Q2 nor establishes independent model quality,
+a recommended quantization, installed-product deployment or the throughput exit.
 
 Configuration, tokenizer and index bytes match the prior DSpark source, but an
 identical index does not authenticate identical tensor payloads. The retained
@@ -139,7 +146,8 @@ The `deepseek_0731_official_encoding` entry in `tests/vectors/manifest.json` own
 upstream input hashes. `tests/vectors/deepseek_0731_product.json` preserves the
 previous suite's logical cases under this separate checkpoint authority.
 Thirty case/mode inputs are prepared with the upstream encoder; independent
-full-model outputs and native forward execution qualification remain absent.
+full-model outputs remain absent. The bounded native Q2_K execution described
+above is separate evidence, not an independent reference continuation.
 The separate `deepseek_0731_prefill.json` and `deepseek_0731_competitive.json`
 suites retain the earlier logical workload bytes under the new checkpoint
 authority. They do not inherit earlier speed or quality claims.

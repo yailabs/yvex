@@ -394,6 +394,23 @@ static int test_deepseek_same_extent_selection(const char *root)
 
 static int test_deepseek_checkpoint_catalog(const char *root)
 {
+    static const struct {
+        unsigned long long bytes;
+        const char *profile, *name, *artifact;
+    } variants[] = {
+        {107077901216ull,
+         "09312d58916c4081ef9091e41bfd35caecc51ed698847a44c2f25740f3db1024",
+         YVEX_DEEPSEEK_0731_QUANT_PRESET,
+         "4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a"},
+        {102448372608ull,
+         "bdb68a95537525560d5af218975cc6d560ad0c93013d970f91925c2d2629a028",
+         "goal-v1-q2_k",
+         "7b33f67b79c6ad47c6a0b78aafac4131ad8d6ec27c162ebcf5b0a056670eb38f"},
+        {103728880544ull,
+         "572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+         "goal-v1-mxfp4-routed-q2_k",
+         "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041"}
+    };
     char path[YVEX_ARTIFACT_PATH_CAP];
     yvex_artifact_options options = {0};
     yvex_complete_artifact_admission admission;
@@ -404,10 +421,10 @@ static int test_deepseek_checkpoint_catalog(const char *root)
 
     YVEX_TEST_ASSERT(snprintf(path, sizeof(path), "%s/0731.gguf", root) <
                          (int)sizeof(path), "checkpoint fixture path fits");
+    for (size_t index = 0u; index < sizeof(variants) / sizeof(variants[0]); ++index) {
     fd = open(path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
-    YVEX_TEST_ASSERT(fd >= 0 && ftruncate(fd, 107077901216ll) == 0 &&
-                         write_deepseek_profile(fd,
-                             "09312d58916c4081ef9091e41bfd35caecc51ed698847a44c2f25740f3db1024") &&
+    YVEX_TEST_ASSERT(fd >= 0 && ftruncate(fd, (off_t)variants[index].bytes) == 0 &&
+                         write_deepseek_profile(fd, variants[index].profile) &&
                          close(fd) == 0, "checkpoint sparse fixture created");
     options.path = path;
     options.readonly = 1;
@@ -420,14 +437,15 @@ static int test_deepseek_checkpoint_catalog(const char *root)
                              "d46c2f3a4305155f357191e0bd804defe33764b92997c3de123b3b5cab41e5ce") == 0 &&
                          strcmp(admission.transform_identity,
                              YVEX_DEEPSEEK_0731_TRANSFORM_IDENTITY) == 0 &&
-                         strcmp(admission.profile_name, YVEX_DEEPSEEK_0731_QUANT_PRESET) == 0 &&
-                         strcmp(admission.artifact_identity,
-                             "4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a") == 0,
+                         strcmp(admission.profile_name, variants[index].name) == 0 &&
+                         strcmp(admission.artifact_identity, variants[index].artifact) == 0,
                      "equal structural inventory never substitutes old checkpoint payload or IR");
     YVEX_TEST_ASSERT(!admission.artifact_identity_verified && admission.artifact_bytes_hashed == 0u,
                      "0731 sparse fixture is not authenticated model evidence");
     yvex_artifact_close(artifact);
+    artifact = NULL;
     YVEX_TEST_ASSERT(unlink(path) == 0, "0731 sparse fixture removed");
+    }
     return 0;
 }
 

@@ -49,6 +49,15 @@ binary: distributors must also carry the notices required by the exact linked
 Rust dependencies. The current build receipt/pin is provenance, not a complete
 third-party compliance certification.
 
+The compiler product also statically links the independent GGUF parser from
+[ggml](https://github.com/ggml-org/ggml), at the exact revision and archive digest
+in `config/gguf_reference.json`. Its original MIT notice is retained verbatim in
+`share/licenses/ggml/LICENSE`; `share/yvex/gguf-reference.json` records the
+authenticated source and built library. Only structural-reader functions are
+used: ggml is not a YVEX inference backend, quantizer or model-quality oracle.
+The native C++ runtime and exact compiled dependencies remain subject to the
+existing artifact-bound distribution gate.
+
 `make package` now labels that staged software candidate `UNQUALIFIED` for
 distribution. The [artifact-bound legal gate](docs/releases/distribution-legal.md)
 requires original recipient notices and corresponding source where applicable;

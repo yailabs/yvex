@@ -30,6 +30,7 @@ src/cli/rust/ffi/source.rs	cli	cli.native_source	generic	private	typed-ffi	cli.r
 src/cli/rust/ffi/artifact.rs	cli	cli.native_artifact	generic	private	typed-ffi	cli.rust	implementation	none
 src/cli/rust/ffi/quant.rs	cli	cli.native_quantization	generic	private	typed-ffi	cli.rust	implementation	none
 src/cli/rust/ffi/variant.rs	cli	cli.native_physical_variant	generic	private	typed-ffi	cli.rust	implementation	none
+src/cli/rust/ffi/gguf_reference.rs	cli	cli.independent_artifact_reader	generic	private	generated-abi	cli.rust	implementation	none
 src/cli/rust/ffi/execution.rs	cli	cli.native_operator_execution	generic	private	typed-ffi	cli.rust	implementation	none
 src/cli/rust/attention.rs	cli	cli.rust_attention_workflow	generic	private	resource-lifecycle	cli.rust	implementation	none
 src/cli/rust/attention_projection.rs	cli	cli.rust_attention_projection	generic	private	typed-projection	cli.rust	implementation	none
@@ -161,6 +162,7 @@ include/yvex/model.h	abi	abi.model	generic	public	public-abi	repository	interfac
 include/yvex/provider.h	abi	abi.provider	generic	public	public-abi	repository	interface	none
 include/yvex/qtype.h	abi	abi.qtype	generic	public	public-abi	repository	interface	none
 include/yvex/quant.h	abi	abi.quant	generic	public	public-abi	repository	interface	none
+include/yvex/optimization.h	abi	abi.optimization	generic	public	public-abi	repository	interface	none
 include/yvex/registry.h	abi	abi.registry	generic	public	public-abi	repository	interface	none
 include/yvex/server.h	abi	abi.server	generic	public	public-abi	repository	interface	none
 include/yvex/source.h	abi	abi.source	generic	public	public-abi	repository	interface	none
@@ -305,6 +307,7 @@ src/model/compilation/ir.c	model.compilation	model.compilation.ir	generic	privat
 src/model/compilation/ir_identity.c	model.compilation	model.compilation.ir_identity	generic	private	canonical-identity	model.family,quant	implementation	none
 src/model/compilation/ir_validate.c	model.compilation	model.compilation.ir_validate	generic	private	reusable-algorithm	model.family,quant	implementation	none
 src/model/compilation/semantic.c	model.compilation	model.compilation.semantic_ir	generic	private	immutable-planning	model.family,graph,runtime,tests	implementation	none
+src/graph/optimization.c	graph	graph.optimization	generic	private	resource-lifecycle	cli,tests	implementation	none
 src/model/compilation/private.h	model.compilation	model.compilation.ir	generic	private	private-interface	model.compilation	interface	none
 src/deployment/plan.c	deployment	deployment.plan	generic	private	reusable-algorithm	graph,runtime,tests	implementation	none
 src/model/deployment_compatibility.c	model.catalog	model.catalog.deployment-compatibility	generic	private	reusable-algorithm	model.catalog,cli,server,tests	implementation	none

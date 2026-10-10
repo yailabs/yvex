@@ -147,6 +147,51 @@ A supported artifact additionally requires the runtime, generation,
 evaluation, benchmark, and release gates in
 [Release Doctrine](../releases/doctrine.md).
 
+## Physical production result
+
+`compile quant emit --json` emits `yvex.physical-production.result.v1` from the
+native writer and roundtrip results, without parsing human text. A successful
+record contains:
+
+- `status: emitted`, complete/component `kind` and the output `artifact_path`;
+- `identities`: physical variant, policy, calibration (`imatrix`), source
+  payload, Transformation IR, writer plan, payload plan, quant execution,
+  payload bytes and final artifact;
+- integer file/payload bytes, metadata/tensor/verified-terminal counts and
+  tokenizer token/merge counts;
+- `native_roundtrip: accepted`, `official_reader_admission: pending`, and
+  explicit unknown (`null`) runtime binding and model quality.
+
+An empty calibration identity means none was selected, not a calibrated recipe.
+The local output path is a locator, not an input to artifact identity. A native
+refusal uses the same schema with `status: refused`, numeric `code`, `owner`
+and `reason`, a nonzero process exit and no newly published artifact.
+
+This is a machine-readable production result, **not** a serialized admission
+proof. Complete admission still requires the exact writer, published emission,
+native roundtrip and pinned independent-reader facts under their existing file
+snapshot contracts. Quality, runtime execution and deployment evidence are
+separate obligations.
+
+Opting into `--binding-directory <existing-directory>` uses
+`yvex.physical-production.result.v2`; the existing emission-only v1 contract is
+unchanged. The product invokes the exact pinned independent structural reader
+on the temporary artifact, with no tensor payload allocation. The native
+artifact owner joins its snapshot-bound fact to the complete writer, emission
+and roundtrip. The compiler reauthenticates the source/artifact and reconstructs
+the physical plan before binding publication. There is no receipt-import or
+caller-supplied verification bypass.
+
+In v2, `official_reader_admission` is `accepted` after that check, and
+`runtime_binding` contains `path`, `published`, `status` (`admitted` or
+`refused`) and nullable typed `failure` (`code`, `owner`, `reason`). `published`
+distinguishes a new binding from reuse of an identical existing binding.
+Successful artifact production remains `status: emitted` even if subsequent
+binding preparation fails: the process then exits nonzero and retains the
+artifact. A pre-publication refusal remains `status: refused`, with no new
+artifact. Neither form claims successful residency, engine creation, quality
+or performance. Original source/artifact inputs and bindings are not replaced.
+
 ## Verified Reopen
 
 Complete byte authentication may publish a rebuildable local verified-reopen

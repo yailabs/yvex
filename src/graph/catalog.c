@@ -328,6 +328,32 @@ unsigned long long yvex_quant_policy_preset_count(void)
     return count;
 }
 
+static const yvex_quant_preset_catalog *target_presets(const char *target_id)
+{
+    const yvex_quant_preset_catalog *selected = NULL;
+    if (!target_id || !target_id[0]) return NULL;
+    for (size_t i = 0u; i < family_descriptor_count(); ++i) {
+        const yvex_quant_preset_catalog *catalog = quant_preset_catalog_at(i);
+        if (!catalog || strcmp(catalog->target_id, target_id)) continue;
+        if (selected) return NULL;
+        selected = catalog;
+    }
+    return selected;
+}
+
+unsigned long long yvex_quant_policy_target_preset_count(const char *target_id)
+{
+    const yvex_quant_preset_catalog *catalog = target_presets(target_id);
+    return catalog ? catalog->count() : 0ull;
+}
+
+const char *yvex_quant_policy_target_preset_name(const char *target_id,
+                                                unsigned long long index)
+{
+    const yvex_quant_preset_catalog *catalog = target_presets(target_id);
+    return catalog && index < catalog->count() ? catalog->name(index) : NULL;
+}
+
 const char *yvex_quant_policy_preset_name(unsigned long long ordinal)
 {
     size_t index;

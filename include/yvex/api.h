@@ -17,6 +17,7 @@
 #include <yvex/provider.h>
 #include <yvex/qtype.h>
 #include <yvex/quant.h>
+#include <yvex/optimization.h>
 #include <yvex/registry.h>
 #include <yvex/server.h>
 #include <yvex/source.h>

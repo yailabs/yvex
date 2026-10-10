@@ -486,9 +486,7 @@ static void mamba_compilation_source_close(void *owner)
     yvex_compilation_source_operations.close(owner);
 }
 
-static int mamba_artifact_admit(
-    const yvex_artifact *artifact, yvex_complete_artifact_admission *out,
-    yvex_artifact_admission_failure *failure, yvex_error *err)
+static const yvex_complete_artifact_admission *mamba_artifact_constraint(void)
 {
     static const yvex_complete_artifact_admission catalog = {
         .artifact_class = YVEX_ARTIFACT_CLASS_COMPLETE_YVEX,
@@ -520,14 +518,22 @@ static int mamba_artifact_admit(
         .official_reader_accepted = 1,
         .payload_integrity_accepted = 1,
         .materialization_input_ready = 1};
-    yvex_artifact_catalog_contract contract = {.catalog = &catalog};
+    return &catalog;
+}
 
-    if (artifact && yvex_artifact_size(artifact) != catalog.file_bytes) {
+static int mamba_artifact_admit(
+    const yvex_artifact *artifact, yvex_complete_artifact_admission *out,
+    yvex_artifact_admission_failure *failure, yvex_error *err)
+{
+    const yvex_complete_artifact_admission *catalog = mamba_artifact_constraint();
+    yvex_artifact_catalog_contract contract = {.catalog = catalog};
+
+    if (artifact && yvex_artifact_size(artifact) != catalog->file_bytes) {
         if (out) memset(out, 0, sizeof(*out));
         if (failure) {
             memset(failure, 0, sizeof(*failure));
             failure->code = YVEX_ARTIFACT_ADMISSION_IDENTITY_MISMATCH;
-            failure->expected = catalog.file_bytes;
+            failure->expected = catalog->file_bytes;
             failure->actual = yvex_artifact_size(artifact);
             yvex_core_text_copy(failure->field, sizeof(failure->field), "file-bytes");
         }
@@ -751,7 +757,7 @@ static const yvex_family_binding_pipeline mamba_binding_pipeline = {
     .tokenizer_pre = "sentencepiece"};
 
 static const yvex_family_compiler_adapter mamba_compiler = {
-    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V2,
+    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V3,
     .adapter_id = YVEX_MAMBA2_ADAPTER_ID,
     .adapter_version = YVEX_MAMBA2_ADAPTER_VERSION,
     .target_id = YVEX_MAMBA2_TARGET, .family = "mamba2",
@@ -765,6 +771,7 @@ static const yvex_family_compiler_adapter mamba_compiler = {
     .tokenizer_policy = mamba_tokenizer_policy,
     .physical_variant = yvex_graph_physical_variant_api_get,
     .binding_pipeline = &mamba_binding_pipeline,
+    .artifact_constraint = mamba_artifact_constraint,
     .binding_compile = yvex_family_binding_compile};
 
 static const yvex_model_deployment_defaults mamba_deployment_defaults = {

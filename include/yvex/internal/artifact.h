@@ -80,7 +80,7 @@ typedef struct yvex_artifact_admission_failure {
     unsigned long long expected, actual;
     char field[96];
 } yvex_artifact_admission_failure;
-typedef struct {
+typedef struct yvex_artifact_admission_request {
     const char *artifact_path;
     const yvex_gguf_writer_plan *writer_plan;
     const yvex_gguf_file_sink_summary *emission;

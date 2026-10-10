@@ -1556,7 +1556,8 @@ static int cuda_encoded_matvec(
                       q8_path && state && state->qtype_tensorcore_rows_function &&
                       cuda_qtype_tensorcore_eligible(input_rows);
     row_matrix_path = reduction_policy == YVEX_ENCODED_REDUCTION_ROW && q8_path &&
-        qtype == YVEX_GGUF_QTYPE_MXFP4 && state && state->mxfp4_q8_matrix_function &&
+        (qtype == YVEX_GGUF_QTYPE_MXFP4 || qtype == YVEX_GGUF_QTYPE_Q2_K) &&
+        state && state->q8_row_matrix_function &&
         yvex_cuda_q8_row_matrix_geometry(row_count, row_width, input_rows,
             &row_matrix_grid, &row_matrix_block);
     if (!state || !resident_encoded || !encoded_bytes || !row_count || !input_rows ||
@@ -1665,7 +1666,7 @@ static int cuda_encoded_matvec(
         rc = yvex_cuda_launch(
             backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
             tensorcore_path ? cuda_qtype_tensorcore_function(state, row_count, input_rows, qtype)
-                            : row_matrix_path ? state->mxfp4_q8_matrix_function
+                            : row_matrix_path ? state->q8_row_matrix_function
                             : split_input ? state->qtype_split_matvec_function
                                           : state->qtype_matvec_function,
             tensorcore_path ? tensorcore_grid : row_matrix_path ? row_matrix_grid : matvec_grid,

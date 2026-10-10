@@ -72,9 +72,9 @@ grep '^terminal_decisions: 1409$' "$OUT_DIR/accepted.out" >/dev/null ||
     fail "complete terminal count missing"
 grep '^artifact_emittable: 1$' "$OUT_DIR/accepted.out" >/dev/null ||
     fail "artifact compatibility missing"
-grep '^cpu_runtime_executable: 1$' "$OUT_DIR/accepted.out" >/dev/null ||
+grep '^cpu_operand_compute_available: 1$' "$OUT_DIR/accepted.out" >/dev/null ||
     fail "CPU compatibility missing"
-grep '^cuda_runtime_executable: 1$' "$OUT_DIR/accepted.out" >/dev/null ||
+grep '^cuda_operand_compute_available: 1$' "$OUT_DIR/accepted.out" >/dev/null ||
     fail "CUDA compatibility missing"
 
 "$YVEX_BIN" compile quant probe \

@@ -790,8 +790,9 @@ static int moe_cuda_tensorcore_expert_qtypes(
     const yvex_moe_weight_view *gate, const yvex_moe_weight_view *up,
     const yvex_moe_weight_view *down)
 {
-    return gate && up && down && gate->qtype == YVEX_GGUF_QTYPE_IQ2_XXS &&
-           up->qtype == YVEX_GGUF_QTYPE_IQ2_XXS &&
+    return gate && up && down &&
+           (gate->qtype == YVEX_GGUF_QTYPE_IQ2_XXS || gate->qtype == YVEX_GGUF_QTYPE_Q2_K) &&
+           up->qtype == gate->qtype &&
            down->qtype == YVEX_GGUF_QTYPE_Q2_K;
 }
 

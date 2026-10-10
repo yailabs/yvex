@@ -45,7 +45,8 @@ int yvex_runtime_capacity_derive(
 int yvex_runtime_capacity_preflight(
     const yvex_runtime_binding *binding, yvex_backend *backend,
     const yvex_runtime_capacity_options *options,
-    unsigned long long *required, unsigned long long *available, yvex_error *err);
+    unsigned long long *required, unsigned long long *available,
+    yvex_runtime_capacity *assessment, yvex_error *err);
 
 #ifdef __cplusplus
 }

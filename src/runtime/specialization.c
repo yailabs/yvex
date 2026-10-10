@@ -657,6 +657,7 @@ static int specialization_matrix_experts(const yvex_physical_execution_ir *ir,
 {
     const yvex_physical_execution_summary *summary = yvex_physical_execution_ir_summary(ir);
     unsigned int roles = 0u;
+    unsigned int gate_qtype = 0u, up_qtype = 0u;
     if (!summary || !owner || !consumer_is_routed(owner->consumer) ||
         device->kind != YVEX_BACKEND_KIND_CUDA ||
         device->compute_capability_major < 8) return 0;
@@ -668,20 +669,23 @@ static int specialization_matrix_experts(const yvex_physical_execution_ir *ir,
         if (decision->scope != owner->scope || decision->layer_index != owner->layer_index ||
             decision->predictor_index != owner->predictor_index) continue;
         if (decision->expert_count != owner->expert_count) return 0;
-        if (!decision->canonical_row_width || decision->canonical_row_width % 256ull ||
-            decision->canonical_row_width > 8192ull) return 0;
+        if (!yvex_execution_routed_matrix_operand_admitted(
+                device->kind, (unsigned int)device->compute_capability_major,
+                decision->role, decision->canonical_qtype,
+                decision->canonical_row_width)) return 0;
         if (decision->consumer == YVEX_EXECUTION_CONSUMER_ROUTED_GATE_UP) {
-            if (decision->canonical_qtype != YVEX_GGUF_QTYPE_IQ2_XXS) return 0;
-            if (decision->role == YVEX_TENSOR_ROLE_MOE_EXPERT_GATE) roles |= 1u;
-            else if (decision->role == YVEX_TENSOR_ROLE_MOE_EXPERT_UP) roles |= 2u;
+            if (decision->role == YVEX_TENSOR_ROLE_MOE_EXPERT_GATE) {
+                roles |= 1u; gate_qtype = decision->canonical_qtype;
+            } else if (decision->role == YVEX_TENSOR_ROLE_MOE_EXPERT_UP) {
+                roles |= 2u; up_qtype = decision->canonical_qtype;
+            }
             else return 0;
         } else {
-            if (decision->canonical_qtype != YVEX_GGUF_QTYPE_Q2_K) return 0;
             if (decision->role != YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN) return 0;
             roles |= 4u;
         }
     }
-    return roles == 7u;
+    return roles == 7u && gate_qtype == up_qtype;
 }
 
 static int specialization_build(

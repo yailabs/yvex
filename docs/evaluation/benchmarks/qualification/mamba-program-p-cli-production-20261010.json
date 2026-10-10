@@ -1,0 +1,184 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "mamba-program-p-cli-production-20261010",
+  "title": "Program P: ordinary CLI artifact production, independent reader and binding",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "mamba2",
+    "upstream_repository": "mistralai/Mamba-Codestral-7B-v0.1",
+    "checkpoint": "4f086c08c1e0f07bdc50ca25125dbbf7475d21da",
+    "tokenizer_conversation": "2555e53b19079a3037a9449265252d1c9bdee6bcfb2063f24e62386db1b52ea4",
+    "transformation_ir": "6cde84173a2cc012d1b3c475d971a45a27d5506019c95cc09ffa0aa7a4ceab08",
+    "physical_policy": "493f51f533cf81fe4c3c1ceeef1a23f787c7dc509ca4787687708c6e6dfe615b",
+    "representation": "goal-v1-source; family-preserved BF16; physical variant 45fcb2cff55c08df9a999e401bf9071cfbd03e524966ddabbf5458af1569a8fe",
+    "artifact_set": "6038bca5b2c7e56c6e347019b60612ebf35dee5f771ff67941d2e1babaf673d3",
+    "binding": "bee48031b8100b3f76f35e74fe819ab7d728b11a4e0e4adcdf907963ce3bb938",
+    "specialization": null,
+    "source_commit": "0f5a54b2aeccce0a67f98eb4e898072bb35cca95",
+    "source_tree": "bf4ee5f5f8f757b50bcedcba19e6d82f16faafd6",
+    "source_delta": "4971f1f5d4de0f02d44ed8f0d09f7e14e391c0ba697c43c1e123d73c99b1a9eb",
+    "build": "e0c46a69eff1fed162ce4f41ac16ba445087fa9018997ded8e762220f724dba4",
+    "executable": "b0a1f44f7462b9104422135d71baeb300c83eea66c5e6d4388b76165ecfb0ecc",
+    "backend": "cpu",
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": "NVIDIA DGX Spark; Arm CPU execution only",
+    "device_count": 1,
+    "topology": "single coherent CPU memory domain; GPU unused",
+    "driver": null,
+    "runtime_toolkit": null,
+    "memory_configuration": "130663165952 system bytes; offline source-to-artifact production; no engine residency",
+    "runtime_configuration": "offline emission and binding only; no resident engine",
+    "context": null,
+    "prefill_geometry": null,
+    "sequence_geometry": null,
+    "concurrency": null,
+    "strategy": "not invoked",
+    "reasoning": "not invoked",
+    "sampling": "not invoked",
+    "product_path": "Rust CLI compile quant emit --binding-directory; no inference transport",
+    "suite": null
+  },
+  "target_identity": "b54a1331d502665e1d12ee201739d5a31875a955f9aa63aa9d421f3011c96b94",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model execution in this production control",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "Container proofs are not independent full-model quality evidence",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent full-model evidence not supplied by this control"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "Container proofs are not independent full-model quality evidence",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent full-model evidence not supplied by this control"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "No model execution in this production control",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model execution in this production control",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Ordinary Rust CLI emits a new source-preserving Mamba artifact, reads its GGUF structure independently and publishes the authenticated binding; overwrite and late-binding-refusal controls preserve the existing artifact.",
+      "required_evidence": [
+        "production",
+        "closure",
+        "controls",
+        "partial",
+        "source",
+        "reader"
+      ],
+      "evidence": {
+        "production": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-cli-production/result.json",
+          "sha256": "2a305b452545d4ff094c74f265214f17ee39d041cc83b1f0c6322ae8b3152b44",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-cli-production/closed.json",
+          "sha256": "1045bbebe93103bef656c1ee7cb6cc0d9359d39213167895dadea2b28ec2c721",
+          "result": "PASS"
+        },
+        "controls": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-cli-production/controls.json",
+          "sha256": "5b222b22520e1776ec411e9a329f6d6a7b8e630428baf266012f4cae41632e3c",
+          "result": "PASS"
+        },
+        "partial": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-cli-production-partial/controls.json",
+          "sha256": "2d4c2400fcfe1c81622e1f3d641661e40d2027687610405eeeec54204e0f0b38",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/cli-production-source-v2/manifest.json",
+          "sha256": "8de6740eea12bf4689c1bb67db063871ae6a8714ae8e4e988985ea5ebcbbc671",
+          "result": "PASS"
+        },
+        "reader": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/cli-production-source-v2/executable-3",
+          "sha256": "0259ac4ee75b7669876845cd0d0323dd65c143a7f39884275040df2af8c19d12",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/cli-production-source-v2",
+    "build_command": "make client RUST_PROFILE=dev",
+    "input_receipt": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-cli-production/input.json",
+    "shell_build_identity": "33c1d0f16390ea4663b8e8c26e79ef210c247f3b7a2c121931797264293bf98a",
+    "static_library_sha256": "59222a14a6bec1d56b28a964a6a5cd205d062a19984e20ace5ced82976902a3b",
+    "reader_library_sha256": "472495ef995e582ce041795fd942f5fa6b2f24b304b24b5f9e4805397f5ceb32",
+    "pinned_reader_revision": "af97976c7810cdabb1863172f31c432dab767de7",
+    "reproduction": [
+      "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/cli-production-source-v2/executable-0",
+      "compile",
+      "quant",
+      "emit",
+      "--target",
+      "mamba-codestral-7b-v0.1",
+      "--source",
+      "/home/dgmothx/lab/models/source/hf/mistralai/Mamba-Codestral-7B-v0.1/4f086c08c1e0f07bdc50ca25125dbbf7475d21da",
+      "--models-root",
+      "/home/dgmothx/lab/models",
+      "--source-manifest",
+      "/home/dgmothx/lab/models/registry/provenance/mamba2/mamba-codestral-7b-v0.1.source-manifest.json",
+      "--policy",
+      "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-policy.json",
+      "--plan",
+      "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-plan.json",
+      "--out",
+      "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-cli-production/mamba.gguf",
+      "--binding-directory",
+      "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-cli-production/bindings",
+      "--json"
+    ],
+    "diagnostics": [
+      {
+        "id": "production.file-bytes",
+        "case": "source-preserving-production",
+        "value": 14574491104,
+        "unit": "byte",
+        "definition": "Exact emitted file extent, independently structurally read; not runtime working memory",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/mamba-cli-production/result.json"
+      }
+    ]
+  },
+  "limitations": [
+    "No inference, throughput, quantization-quality or hosted-conversation claim.",
+    "The pinned independent GGUF reader establishes structural facts, not checkpoint-specific numerical quality.",
+    "This is the opt-in emit-to-binding path. Goal-driven final-candidate evaluation and qualified recommendation remain incomplete.",
+    "Source stability binds the retained dirty delta and executable; the HEAD alone does not identify this implementation.",
+    "A late binding refusal leaves the complete artifact intact and exits nonzero. It does not roll back publication or load an engine.",
+    "Linux AArch64 consumer evidence only; this control does not qualify the new external reader build on Darwin.",
+    "Installed Host, management service and models were not changed."
+  ]
+}

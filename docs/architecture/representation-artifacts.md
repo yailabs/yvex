@@ -38,9 +38,11 @@ from a different checkpoint is a prior, not calibration of the new checkpoint.
 ## Current machinery and target search
 
 Current quant planning, encoding, writer and admission machinery can construct
-selected representations. Automatic sensitivity search, Pareto selection and
-hardware-aware recipe recommendation remain the
-[Physical Model Compiler research target](../research/physical-model-compiler.md).
+selected representations. The [bounded native search](compiler-ir.md#goal-constrained-physical-search-partial-implementation)
+now synthesizes policies and checks initial constraints before expensive emission.
+Automatic sensitivity search, Pareto selection, prepared execution layouts and
+qualified hardware-aware recommendation remain unearned exits of the selected
+[Physical Model Compiler target](../research/physical-model-compiler.md).
 
 ## Physical policy
 
@@ -106,13 +108,14 @@ under a particular registration. Account for the actual backing and driver path.
 Publication follows completed preparation and validation; partial construction
 must unwind without invalidating the authenticated artifact or another engine.
 
-The current 0731 Q2_K gate/up/down artifact does not satisfy the existing CUDA
-matrix-triplet selector, which requires IQ2_XXS gate/up and Q2_K down. Repacking
-alone therefore cannot select that existing class. A generic Q2_K-compatible
-implementation needs explicit admission and numerical/full-model evidence;
-changing storage to calibrated IQ2 is instead a new physical variant with
-checkpoint-matched calibration and quality obligations. Neither alternative is
-qualified by the present memory audit. See the
+The pre-Program-P matrix-triplet selector required IQ2_XXS gate/up and Q2_K down,
+so the native 0731 Q2_K triplet was incompatible even when its storage codec was
+readable. Program P extends that generic consumer to homogeneous Q2_K gate/up
+pairs under the existing encoded arithmetic class; row/matrix numerical and
+CUDA memory controls are distinct from complete-model qualification. The
+extension does not prepare a second weight copy or promote model quality.
+Changing storage to calibrated IQ2 remains a separate physical variant with
+checkpoint-matched calibration and quality obligations. See the
 [dated admission boundary](../evaluation/retained-observations.md#0731-memory-audit-and-operator-reboot-boundary-2026-10-10).
 
 

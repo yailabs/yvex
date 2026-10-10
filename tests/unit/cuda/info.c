@@ -1782,8 +1782,8 @@ int yvex_cuda_test_info(void)
                "yvex_mxfp4_q8_rows") == 0,
         "graph identity resolves the admitted exact MXFP4 narrow-row kernel");
     YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
-        yvex_cuda_state(backend), yvex_cuda_state(backend)->mxfp4_q8_matrix_function),
-        "yvex_mxfp4_q8_matrix") == 0,
+        yvex_cuda_state(backend), yvex_cuda_state(backend)->q8_row_matrix_function),
+        "yvex_q8_row_matrix") == 0,
         "row-class matrix resolves its distinct exact kernel identity");
     YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
         yvex_cuda_state(backend), yvex_cuda_state(backend)->attention_reduce_native_warp_function),

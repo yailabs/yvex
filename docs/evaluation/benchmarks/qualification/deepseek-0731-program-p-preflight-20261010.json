@@ -1,0 +1,97 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-0731-program-p-preflight-20261010",
+  "title": "Program P: 0731 post-reboot full preflight refuses; no inference result",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "physical_policy": "d66294b5e016806f2e283e8b0160e25385302fa6c9db4ac24a49e94140fa0ea9",
+    "representation": "deepseek-v4-flash-0731-q8_0-q2_k-v1",
+    "artifact_set": "4dc4265a92d77c874c82aa16c1358688b71bb7b10267cc80911c3ef42d2fa11a",
+    "binding": "29676295361a8c99b86b3e1837a64e23791337f862d01fbeaeb2b5361399cc6d",
+    "specialization": null,
+    "source_commit": "0f5a54b2aeccce0a67f98eb4e898072bb35cca95",
+    "source_tree": "bf4ee5f5f8f757b50bcedcba19e6d82f16faafd6",
+    "source_delta": "169496be38fa8e1e8dd187d859613705919ea4db2ca96064ff7bd705aad8bb73",
+    "build": "dd88d1a5ec632d5f9365920a515b079baf77e607be00eb9c42b90f98846b9294",
+    "executable": "4368d9461e4b243868d2fa92059d2141574571173424cb296c955c2d70a3987f",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "kernel_bundle": null,
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "device_count": 1,
+    "topology": "single GB10 coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "runtime_configuration": "requested 4096 context and 8 output tokens; pre-residency refusal",
+    "context": 4096,
+    "prefill_geometry": "requested chunk 512; no input positions executed",
+    "sequence_geometry": "requested width 1; fresh isolated execution",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none",
+    "sampling": "greedy; temperature 1; no stochastic draws",
+    "product_path": "direct native engineering generation; not resident-host/native-protocol performance",
+    "suite": null
+  },
+  "target_identity": "7ac82ea30ffa328646938969b0db79b437c48c94c980240f5e846b89a29f92aa",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED", "scope": "Not rerun in this resource probe; prior exact-checkpoint encoding evidence remains separate",
+      "required_evidence": [], "evidence": {}, "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED", "scope": "No independent full-model 0731 reference supplied by this probe",
+      "required_evidence": [], "evidence": {}, "blockers": ["Checkpoint-matched independent inference evidence missing"]
+    },
+    "representation-quality": {
+      "state": "BLOCKED", "scope": "Artifact identity and byte feasibility are not numerical quality",
+      "required_evidence": [], "evidence": {}, "blockers": ["Independent held-out comparison missing"]
+    },
+    "backend-execution": {
+      "state": "BLOCKED", "scope": "Full capacity check refuses before residency; no model forward",
+      "required_evidence": [],
+      "evidence": {"capacity-refusal": {"locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-postboot-admission/stderr.log", "sha256": "e6b4e736ca6d771a88473ae0d34f34c58d2c36f60bfe4961fcc3dd3729814b3c", "result": "BLOCKED"}},
+      "blockers": ["Full pre-residency envelope exceeds observed available memory; no reserve relaxation"]
+    },
+    "deployment-performance": {
+      "state": "BLOCKED", "scope": "Refusal is not a zero-rate performance sample",
+      "required_evidence": [], "evidence": {}, "blockers": ["No admitted model or committed generation"]
+    },
+    "product-path": {
+      "state": "UNQUALIFIED", "scope": "No native protocol or HTTP inference measurement; installed Host untouched",
+      "required_evidence": [], "evidence": {}, "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "scope": "Frozen replayable dirty source; includes six retained unaccepted CUDA edits, but no kernel execution occurred",
+    "source_capture": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/source-capture/manifest.json",
+    "boot_id": "54835689-f267-4b02-be92-24be60646f9d",
+    "device_uuid": "GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc",
+    "request": {"locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-postboot-admission/identity.json", "sha256": "a43587c2030935ac20cefd94385046c4fc03c77680edc3a0c5bf17f19fb4ec27"},
+    "result": {"locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-postboot-admission/result.json", "sha256": "fa0b831345beffc192906977bf52f2e3e618247e012a380779cf0d366790fd80"},
+    "cleanup": {"locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-postboot-admission/closed.json", "sha256": "fef003e7293a2ad2bee4675e359387a1e877ed2d0f77295fd9a338a73648990f"},
+    "diagnostics": [
+      {"id": "admission.initial-lower-bound", "case": "postboot-512", "value": 124458152440, "unit": "byte", "definition": "Encoded payload plus largest tensor transient and reserve only; excludes full workspace/state", "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/deepseek-search.json"},
+      {"id": "admission.full-required", "case": "postboot-512", "value": 126708988072, "unit": "byte", "definition": "Canonical runtime pre-residency requirement for requested context 4096 and chunk 512", "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-postboot-admission/stderr.log"},
+      {"id": "admission.available", "case": "postboot-512", "value": 125732470784, "unit": "byte", "definition": "Available capacity observed at the failed full preflight; not a reservation", "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-postboot-admission/stderr.log"}
+    ]
+  },
+  "limitations": [
+    "No successful 0731 native forward, timing, model-quality claim or 20/700 exit.",
+    "Post-reboot service population differs from historical pre-reboot observations; memory recovery is not a model optimization.",
+    "No installed model, listener or service was restarted or replaced; Host remained ready with zero engines.",
+    "The independent 64-token chunk diagnostic has a separate raw receipt and is not combined into this target.",
+    "Static search records unknown workspace/state explicitly; passing its initial lower bound does not promise full runtime fit.",
+    "Candidate preparation and future measured ranking remain separate from this refused baseline. No hardware throughput ceiling is established."
+  ]
+}

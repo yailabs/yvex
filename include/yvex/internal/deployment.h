@@ -22,6 +22,13 @@ extern "C" {
 #define YVEX_EXECUTION_TEXT_CAP 64u
 #define YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE (8ull * 1024ull * 1024ull * 1024ull)
 
+/* Shared cold-planning and engine-specialization constraints, not admission. */
+unsigned long long yvex_execution_system_reserve(unsigned long long capacity_bytes);
+unsigned int yvex_execution_routed_matrix_qtype(yvex_tensor_role role);
+int yvex_execution_routed_matrix_operand_admitted(
+    yvex_backend_kind backend, unsigned int compute_major,
+    yvex_tensor_role role, unsigned int qtype, unsigned long long row_width);
+
 /* Product preparation defaults bridge one exact target to a reproducible profile. */
 typedef struct yvex_model_deployment_defaults {
     unsigned int schema_version;

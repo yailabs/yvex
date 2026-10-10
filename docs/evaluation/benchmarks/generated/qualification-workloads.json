@@ -781,7 +781,48 @@
       "strategy": "target-only",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-0731-program-p-native-baseline-coding-hash-table-20261010",
+          "target_identity": "1aa7cc1937b362785501c38109dcf92540026c6b879f0a9ddca7772f38470a93",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-coding-hash-table-20261010",
+          "target_identity": "9ff6976476be41683fc8fc7dd8003359abca979fa21df960dcab2d3dc16fb911",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-fixed-row-coding-hash-table-20261010",
+          "target_identity": "0c45aa2028dcf841c5233aac47bfcd92a258381ee7122b4ccf1733e1af42ffed",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-specialized-row-coding-hash-table-20261010",
+          "target_identity": "d7e7413742246c12b6de36d4707ba3ef56856fba768375fb18784b5ed67c031f",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-row-matrix-coding-hash-table-20261010",
+          "target_identity": "b648c2d2b792268b74ef6149fb15e1dc84b0edb793be694fefc99383ae23fbd9",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-0731-competitive",
@@ -791,7 +832,24 @@
       "strategy": "speculative",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-speculative-coding-hash-table-20261010",
+          "target_identity": "304177388665cb2b7d655c36f1d638667e481029dd475d0185d07ac97644ee5e",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-speculative-coding-hash-table-20261010",
+          "target_identity": "a835506d0b4aea13e25c24cbdf86fcead4c1a5374fe938787f60e401d2492c88",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-0731-competitive",
@@ -801,7 +859,18 @@
       "strategy": "target-only",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-0731-program-p-native-high-bounded-refusal-20261010",
+          "target_identity": "3f2a7bd6610817055fcfa7047909d048ec2d26f3a1841924b8f5e3fcdebbcd6f",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": [
+            "FAIL"
+          ]
+        }
+      ]
     },
     {
       "suite": "deepseek-0731-competitive",
@@ -901,7 +970,48 @@
       "strategy": "target-only",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-0731-program-p-native-baseline-prefill-promessi-2048-20261010",
+          "target_identity": "68e25053d76ba9ab98bf32dc91bef8a1ea97677b7fe0e75c59e62da16f256b83",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-fixed-row-prefill-promessi-2048-20261010",
+          "target_identity": "7c6fdd084d013bb52125031fa92b8c61b83fc43631c0ca13ea8c8cb4f0a2250e",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-prefill-promessi-2048-20261010",
+          "target_identity": "c354964ce679decb7172dfd6086c450d79a916f6fdbb207f6749850e8128a473",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-specialized-row-prefill-promessi-2048-20261010",
+          "target_identity": "b6e4741d1a5449c7c09d93423b0f1f9ce0d82a3b4e160814cdf9e6eb9534ec0c",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-row-matrix-prefill-promessi-2048-20261010",
+          "target_identity": "bcb8d31c7fa7f4b5fd42552f8744d5421aa7b97465ee6e82f70f6cac6b9ce047",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-0731-prefill",
@@ -961,7 +1071,48 @@
       "strategy": "target-only",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-0731-program-p-native-baseline-prefill-promessi-8192-20261010",
+          "target_identity": "68e25053d76ba9ab98bf32dc91bef8a1ea97677b7fe0e75c59e62da16f256b83",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-fixed-row-prefill-promessi-8192-20261010",
+          "target_identity": "7c6fdd084d013bb52125031fa92b8c61b83fc43631c0ca13ea8c8cb4f0a2250e",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-prefill-promessi-8192-20261010",
+          "target_identity": "c354964ce679decb7172dfd6086c450d79a916f6fdbb207f6749850e8128a473",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-specialized-row-prefill-promessi-8192-20261010",
+          "target_identity": "b6e4741d1a5449c7c09d93423b0f1f9ce0d82a3b4e160814cdf9e6eb9534ec0c",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
+          "id": "deepseek-0731-program-p-native-row-matrix-prefill-promessi-8192-20261010",
+          "target_identity": "bcb8d31c7fa7f4b5fd42552f8744d5421aa7b97465ee6e82f70f6cac6b9ce047",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-0731-prefill",
@@ -1271,7 +1422,16 @@
       "strategy": "speculative",
       "state": "UNQUALIFIED",
       "workload_class": "representative",
-      "targets": []
+      "targets": [
+        {
+          "id": "deepseek-0731-program-p-native-mxfp4-speculative-writing-runbook-20261010",
+          "target_identity": "3397f10d8f51b14a508aff1286719b7afda9544854d19c6ad50b8251c925f034",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        }
+      ]
     },
     {
       "suite": "deepseek-0731-product",

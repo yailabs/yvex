@@ -160,6 +160,7 @@ YVEX_SHELL_BUILD_IDENTITY = $(shell printf '%s\n' \
 	'ldflags=$(YVEX_BUILD_LDFLAGS)' 'ldlibs=$(YVEX_BUILD_LDLIBS)' \
 	'cargo-lock=$(shell sha256sum Cargo.lock 2>/dev/null | cut -d" " -f1)' \
 	'replai-pin=$(shell sha256sum config/replai.json 2>/dev/null | cut -d" " -f1)' \
+	'gguf-reference=$(shell sha256sum $(BUILD_DIR)/external/gguf-reference/receipt.json 2>/dev/null | cut -d" " -f1)' \
 	| sha256sum | cut -d' ' -f1)
 
 ifneq ($(filter-out clean help info print-build-inputs print-archive-layout,$(if $(MAKECMDGOALS),$(MAKECMDGOALS),all)),)

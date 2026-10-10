@@ -1,0 +1,985 @@
+{
+  "schema": "yvex.qualification.receipt.v1",
+  "id": "deepseek-0731-program-p-mxfp4-graph-coding-hash-table-20261010",
+  "title": "0731 MXFP4/Q2 complete-model projection geometry including CUDA graph replay: coding.hash-table",
+  "target": {
+    "schema": "yvex.qualification.target.v1",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "specialization": "87d7a08ec2dfb0b9a9f2861a57455472ffccf1089e433db5eda543cd824dc13e",
+    "source_commit": "0f5a54b2aeccce0a67f98eb4e898072bb35cca95",
+    "source_tree": "bf4ee5f5f8f757b50bcedcba19e6d82f16faafd6",
+    "source_delta": "516b569f2204993ac54a4a1a61535b8cf26781ede78fe8d9a7b8995abd4d1072",
+    "build": "407b1df74781f1d78b0459f94f874475ce2ae5667552e668646524466ff16a1e",
+    "executable": "4507f4f3ed6a4e10e92c04b6b2975c189ea48f4630d51f33b789f15aaa98862a",
+    "backend": "cuda",
+    "backend_implementation": null,
+    "kernel_bundle": "43eb78da7f8beb3edfda0ee3cf12e18cc17db96808cafaba4b7d6d192ee4cea1",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "device_count": 1,
+    "topology": "single GB10 coherent unified memory",
+    "driver": "580.159.03",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "runtime_configuration": "fresh headless execution; kernel/API and scalar launch/graph-node observer",
+    "context": 4096,
+    "prefill_geometry": "chunk 512; newly executed 31 positions",
+    "sequence_geometry": "width 1; fresh state",
+    "concurrency": 1,
+    "strategy": "target-only",
+    "reasoning": "none",
+    "sampling": "greedy; temperature argument 1 inactive under greedy selection",
+    "product_path": "controlled-engine native benchmark; CUPTI-instrumented; not local protocol",
+    "suite": "deepseek-gb10-competitive-v1 / coding.hash-table"
+  },
+  "target_identity": "d854c68fa7bc158861925f36a7c88915e5fd8243ca97cf482df5257b7dd25c4d",
+  "origin": "yvex-published",
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Instrumented complete model; physical projection geometry and kernel intervals, not timed throughput or a numerical oracle",
+      "required_evidence": [
+        "trace",
+        "identity",
+        "closure",
+        "observer-control"
+      ],
+      "evidence": {
+        "trace": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv",
+          "sha256": "88ef6d4d38a1a92d0f18a7699da7bd8034296ec5bc83a901cf843215f9cb8368",
+          "result": "PASS"
+        },
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/identity.json",
+          "sha256": "cfb4368f6537046dc562e201d473565ac99bbf962ecc4751981777997637088f",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/closed.json",
+          "sha256": "c987e4586f01a1c29f9180822b551e9476ef8a40e59d7463107483adab6f144f",
+          "result": "PASS"
+        },
+        "observer-control": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/cupti-graph-geometry-control-v2/receipt.json",
+          "sha256": "7854832883f1fc0c29a9b142ba3e2dcb5bfdd40dcfd1f7046178edaabc1a27bd",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Instrumented complete model; physical projection geometry and kernel intervals, not timed throughput or a numerical oracle",
+      "required_evidence": [
+        "trace",
+        "identity",
+        "closure",
+        "observer-control"
+      ],
+      "evidence": {
+        "trace": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv",
+          "sha256": "88ef6d4d38a1a92d0f18a7699da7bd8034296ec5bc83a901cf843215f9cb8368",
+          "result": "PASS"
+        },
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/identity.json",
+          "sha256": "cfb4368f6537046dc562e201d473565ac99bbf962ecc4751981777997637088f",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/closed.json",
+          "sha256": "c987e4586f01a1c29f9180822b551e9476ef8a40e59d7463107483adab6f144f",
+          "result": "PASS"
+        },
+        "observer-control": {
+          "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/cupti-graph-geometry-control-v2/receipt.json",
+          "sha256": "7854832883f1fc0c29a9b142ba3e2dcb5bfdd40dcfd1f7046178edaabc1a27bd",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "No native socket or HTTP consumer in this diagnostic",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "measurements": [],
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": true,
+    "observer": {
+      "binary": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/cupti_graph_geometry.so",
+      "sha256": "410fb3ef81507021461376bbdb0bcf40be299f29a509337a34d9148902e9dc8c",
+      "source": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/cupti_graph_geometry.cpp",
+      "source_sha256": "7f66a65814bc310bdc3a8cf48bbc03814cbe83fef1d8b29116144a42fb02fd9e"
+    },
+    "diagnostics": [
+      {
+        "id": "projection.0.duration",
+        "case": "coding.hash-table",
+        "value": 0.054074764,
+        "unit": "s",
+        "definition": "width=2048 rows=4096 inputs=1 qtype=39 q8=1 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.0.launches",
+        "case": "coding.hash-table",
+        "value": 1376,
+        "unit": "count",
+        "definition": "width=2048 rows=4096 inputs=1 qtype=39 q8=1 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.1.duration",
+        "case": "coding.hash-table",
+        "value": 0.014725081,
+        "unit": "s",
+        "definition": "width=4096 rows=64 inputs=1 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.1.launches",
+        "case": "coding.hash-table",
+        "value": 672,
+        "unit": "count",
+        "definition": "width=4096 rows=64 inputs=1 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.2.duration",
+        "case": "coding.hash-table",
+        "value": 0.001354915,
+        "unit": "s",
+        "definition": "width=4096 rows=64 inputs=31 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.2.launches",
+        "case": "coding.hash-table",
+        "value": 21,
+        "unit": "count",
+        "definition": "width=4096 rows=64 inputs=31 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.3.duration",
+        "case": "coding.hash-table",
+        "value": 0.07978243,
+        "unit": "s",
+        "definition": "width=4096 rows=256 inputs=1 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.3.launches",
+        "case": "coding.hash-table",
+        "value": 2720,
+        "unit": "count",
+        "definition": "width=4096 rows=256 inputs=1 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.4.duration",
+        "case": "coding.hash-table",
+        "value": 0.012138389,
+        "unit": "s",
+        "definition": "width=4096 rows=256 inputs=31 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.4.launches",
+        "case": "coding.hash-table",
+        "value": 85,
+        "unit": "count",
+        "definition": "width=4096 rows=256 inputs=31 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.5.duration",
+        "case": "coding.hash-table",
+        "value": 0.071438056,
+        "unit": "s",
+        "definition": "width=4096 rows=512 inputs=1 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.5.launches",
+        "case": "coding.hash-table",
+        "value": 1280,
+        "unit": "count",
+        "definition": "width=4096 rows=512 inputs=1 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.6.duration",
+        "case": "coding.hash-table",
+        "value": 0.021451922,
+        "unit": "s",
+        "definition": "width=4096 rows=512 inputs=1 qtype=39 q8=1 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.6.launches",
+        "case": "coding.hash-table",
+        "value": 1376,
+        "unit": "count",
+        "definition": "width=4096 rows=512 inputs=1 qtype=39 q8=1 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.7.duration",
+        "case": "coding.hash-table",
+        "value": 0.010515734,
+        "unit": "s",
+        "definition": "width=4096 rows=512 inputs=31 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.7.launches",
+        "case": "coding.hash-table",
+        "value": 40,
+        "unit": "count",
+        "definition": "width=4096 rows=512 inputs=31 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.8.duration",
+        "case": "coding.hash-table",
+        "value": 0.100925515,
+        "unit": "s",
+        "definition": "width=4096 rows=1024 inputs=1 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.8.launches",
+        "case": "coding.hash-table",
+        "value": 1344,
+        "unit": "count",
+        "definition": "width=4096 rows=1024 inputs=1 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.9.duration",
+        "case": "coding.hash-table",
+        "value": 0.032153279,
+        "unit": "s",
+        "definition": "width=4096 rows=1024 inputs=1 qtype=39 q8=1 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.9.launches",
+        "case": "coding.hash-table",
+        "value": 1376,
+        "unit": "count",
+        "definition": "width=4096 rows=1024 inputs=1 qtype=39 q8=1 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.10.duration",
+        "case": "coding.hash-table",
+        "value": 0.02013047,
+        "unit": "s",
+        "definition": "width=4096 rows=1024 inputs=31 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.10.launches",
+        "case": "coding.hash-table",
+        "value": 42,
+        "unit": "count",
+        "definition": "width=4096 rows=1024 inputs=31 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.11.duration",
+        "case": "coding.hash-table",
+        "value": 0.135460518,
+        "unit": "s",
+        "definition": "width=4096 rows=2048 inputs=1 qtype=39 q8=1 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.11.launches",
+        "case": "coding.hash-table",
+        "value": 2752,
+        "unit": "count",
+        "definition": "width=4096 rows=2048 inputs=1 qtype=39 q8=1 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.12.duration",
+        "case": "coding.hash-table",
+        "value": 0.202125749,
+        "unit": "s",
+        "definition": "width=4096 rows=129280 inputs=1 qtype=30 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.12.launches",
+        "case": "coding.hash-table",
+        "value": 32,
+        "unit": "count",
+        "definition": "width=4096 rows=129280 inputs=1 qtype=30 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.13.duration",
+        "case": "coding.hash-table",
+        "value": 0.183293169,
+        "unit": "s",
+        "definition": "width=8192 rows=4096 inputs=1 qtype=39 q8=1 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.13.launches",
+        "case": "coding.hash-table",
+        "value": 1376,
+        "unit": "count",
+        "definition": "width=8192 rows=4096 inputs=1 qtype=39 q8=1 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.14.duration",
+        "case": "coding.hash-table",
+        "value": 0.091732076,
+        "unit": "s",
+        "definition": "width=16384 rows=24 inputs=1 qtype=0 q8=0 block=1 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.14.launches",
+        "case": "coding.hash-table",
+        "value": 2752,
+        "unit": "count",
+        "definition": "width=16384 rows=24 inputs=1 qtype=0 q8=0 block=1 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.15.duration",
+        "case": "coding.hash-table",
+        "value": 0.181510811,
+        "unit": "s",
+        "definition": "width=16384 rows=24 inputs=31 qtype=0 q8=0 block=0 forensic=0; summed observed device duration, not additive with API waits",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "projection.15.launches",
+        "case": "coding.hash-table",
+        "value": 86,
+        "unit": "count",
+        "definition": "width=16384 rows=24 inputs=31 qtype=0 q8=0 block=0 forensic=0; includes correlated graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_qtype_matvec.duration",
+        "case": "coding.hash-table",
+        "value": 1.212812878,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_qtype_matvec.launches",
+        "case": "coding.hash-table",
+        "value": 17330,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_moe_grouped_up_rows.duration",
+        "case": "coding.hash-table",
+        "value": 0.435995641,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_moe_grouped_up_rows.launches",
+        "case": "coding.hash-table",
+        "value": 1419,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_moe_grouped_down_rows.duration",
+        "case": "coding.hash-table",
+        "value": 0.277385904,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_moe_grouped_down_rows.launches",
+        "case": "coding.hash-table",
+        "value": 1419,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_decoded_mxfp4_rows.duration",
+        "case": "coding.hash-table",
+        "value": 0.243137046,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_decoded_mxfp4_rows.launches",
+        "case": "coding.hash-table",
+        "value": 1376,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_mxfp4_q8_rows.duration",
+        "case": "coding.hash-table",
+        "value": 0.217181901,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_mxfp4_q8_rows.launches",
+        "case": "coding.hash-table",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_residual_mhc_pre.duration",
+        "case": "coding.hash-table",
+        "value": 0.190687678,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_residual_mhc_pre.launches",
+        "case": "coding.hash-table",
+        "value": 2838,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_attention_yarn_rope.duration",
+        "case": "coding.hash-table",
+        "value": 0.104093902,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_attention_yarn_rope.launches",
+        "case": "coding.hash-table",
+        "value": 5328,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_qtype_tensorcore_rows.duration",
+        "case": "coding.hash-table",
+        "value": 0.086903659,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_qtype_tensorcore_rows.launches",
+        "case": "coding.hash-table",
+        "value": 236,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_attention_reduce_native.duration",
+        "case": "coding.hash-table",
+        "value": 0.070311155,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_attention_reduce_native.launches",
+        "case": "coding.hash-table",
+        "value": 1376,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_attention_activation_quantize.duration",
+        "case": "coding.hash-table",
+        "value": 0.070108916,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_attention_activation_quantize.launches",
+        "case": "coding.hash-table",
+        "value": 2490,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_attention_weighted_norm.duration",
+        "case": "coding.hash-table",
+        "value": 0.066847059,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_attention_weighted_norm.launches",
+        "case": "coding.hash-table",
+        "value": 6054,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_moe_grouped_up_tensorcore.duration",
+        "case": "coding.hash-table",
+        "value": 0.0547171,
+        "unit": "s",
+        "definition": "Observed device population; not tensor-role identification or disjoint request stage",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "kernel.yvex_moe_grouped_up_tensorcore.launches",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed device kernel executions including graph replay",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "runtime.accelerated_matrix_launches",
+        "case": "coding.hash-table",
+        "value": 322,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.accepted_draft_tokens",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.cache_evictions",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.cache_hits",
+        "case": "coding.hash-table",
+        "value": 5676,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.cache_misses",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.d2d_bytes",
+        "case": "coding.hash-table",
+        "value": 2197297668,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.d2h_bytes",
+        "case": "coding.hash-table",
+        "value": 409761132,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.device_allocations",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.device_synchronizations",
+        "case": "coding.hash-table",
+        "value": 33,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.discarded_candidate_rows",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.downloads",
+        "case": "coding.hash-table",
+        "value": 4290,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.draft_forwards",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.draft_rows",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.event_synchronizations",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.expert_bytes",
+        "case": "coding.hash-table",
+        "value": 138307182336,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.expert_subviews",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.full_array_host_scan_bytes",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.generated_tokens",
+        "case": "coding.hash-table",
+        "value": 32,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.graph_captures",
+        "case": "coding.hash-table",
+        "value": 235,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.graph_launches",
+        "case": "coding.hash-table",
+        "value": 2838,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.graph_replays",
+        "case": "coding.hash-table",
+        "value": 2838,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.h2d_bytes",
+        "case": "coding.hash-table",
+        "value": 416325372,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.host_allocations",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.host_payload_reads",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.kernel_launches",
+        "case": "coding.hash-table",
+        "value": 81049,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.logits_d2d_bytes",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.logits_d2h_bytes",
+        "case": "coding.hash-table",
+        "value": 768,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.logits_h2d_bytes",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.managed_prefetch_bytes",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "byte",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.mapped_bytes_touched",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.new_prefill_tokens",
+        "case": "coding.hash-table",
+        "value": 31,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.output_head_rows",
+        "case": "coding.hash-table",
+        "value": 32,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.promoted_target_rows",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.prompt_tokens",
+        "case": "coding.hash-table",
+        "value": 31,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.queue_synchronizations",
+        "case": "coding.hash-table",
+        "value": 4355,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.replayed_accepted_target_rows",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.reused_tokens",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.row_expert_pairs",
+        "case": "coding.hash-table",
+        "value": 16254,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.target_extensions",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.target_forwards",
+        "case": "coding.hash-table",
+        "value": 33,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.target_rows",
+        "case": "coding.hash-table",
+        "value": 63,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.target_verifications",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.unique_experts",
+        "case": "coding.hash-table",
+        "value": 10890,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.uploads",
+        "case": "coding.hash-table",
+        "value": 1452,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.verified_rows",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      },
+      {
+        "id": "runtime.workspace_resets",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Runtime-authored diagnostic counter; transfer bytes are not physical DRAM traffic",
+        "evidence": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/result.json"
+      }
+    ],
+    "reproduce": [
+      "Exact frozen command in /home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-q2-profile-mxfp4-graph-geometry-coding.hash-table/identity.json"
+    ]
+  },
+  "limitations": [
+    "Profiled 32-output coding / 16-output prefill diagnostic, not sustained unprofiled performance or a native-product measurement.",
+    "Geometry is copied from scalar launch arguments and inherited by correlated graph nodes; no weight, activation or hidden reasoning payload is captured.",
+    "No missed projection association or dropped CUPTI activity in these captures; kernel counts alone do not prove occupancy, bandwidth or Tensor Core utilization.",
+    "API waits overlap device activity; stage and kernel sums must not be added to request duration.",
+    "Concurrent software validation/build activity prevents an uncontended host-overhead claim; frozen numerical executable remains unchanged.",
+    "The first graph observer fixture crashed due to an incorrect resource descriptor cast; repaired against installed CUDA sample and qualified independently before this model run.",
+    "Independent representation quality and 20/700 performance gates remain unearned."
+  ]
+}

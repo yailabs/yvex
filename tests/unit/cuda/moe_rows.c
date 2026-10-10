@@ -271,6 +271,22 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
         "expert execution preserves weights, inputs and worklist");
     YVEX_TEST_ASSERT(observed->before_canary == 12345.0f && observed->after_canary == 12345.0f,
         "partial row groups preserve output canaries");
+    if (matrix && qtype == YVEX_GGUF_QTYPE_Q2_K && (scenario == 0u || scenario == 4u)) {
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, host, sizeof(*host), &err) == YVEX_OK,
+            "reset independent Q2 matrix versus encoded-row comparison");
+        offsets = populations = summary = 0; minimum = 0ull;
+        YVEX_TEST_ASSERT(yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            up_stage ? state->moe_grouped_up_rows_function : state->moe_grouped_down_rows_function,
+            (unsigned int)(pairs * ((width + 7ull) / 8ull)), 256u, 0u,
+            up_stage ? up_params : params, "cuda.test.q2-row-reference", &err) == YVEX_OK &&
+            yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                &device_wide, "cuda.test.q2-row-reference", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, host, sizeof(*host), &err) == YVEX_OK,
+            "execute Q2 encoded-row numerical reference");
+        YVEX_TEST_ASSERT(host->status == observed->status &&
+            !memcmp(host->outputs, observed->outputs, sizeof(host->outputs)),
+            "Q2 matrix and encoded row preserve the same published bits");
+    }
     printf("moe encoded rows: matrix=%d stage=%s qtype=%u blocks=%llu scenario=%u pairs=%llu values=%llu status=%d max_abs=%.12g "
            "worst_error_over_tolerance=%.9g recovery_exact=%s\n", matrix, up_stage ? "up" : "down", qtype, blocks, scenario,
            pairs, pairs * width, observed->status, maximum_error, maximum_ratio, scenario == 4u ? "true" : "n/a");
@@ -389,12 +405,16 @@ int yvex_cuda_test_moe_rows(void)
             if (moe_rows_check(backend, qtypes[q], blocks[i], 0u, up_stage, 4ull)) return 1;
         for (unsigned int scenario = 1u; scenario <= 7u; ++scenario)
             if (moe_rows_check(backend, qtypes[q], q ? 8ull : 16ull, scenario, up_stage, 4ull)) return 1;
+        if (qtypes[q] == YVEX_GGUF_QTYPE_Q2_K)
+            for (unsigned int scenario = 1u; scenario <= 7u; ++scenario)
+                if (moe_rows_check(backend, qtypes[q], 16ull, scenario, up_stage, 4ull)) return 1;
         for (size_t i = 0u; i < sizeof(blocks) / sizeof(blocks[0]); ++i)
             if (moe_rows_check(backend, qtypes[q], blocks[i], 0u, up_stage, 64ull)) return 1;
         if (moe_rows_check(backend, qtypes[q], 17ull, 3u, up_stage, 64ull)) return 1;
     }
-    for (int up_stage = 0; up_stage <= 1; ++up_stage) {
-        unsigned int qtype = up_stage ? YVEX_GGUF_QTYPE_IQ2_XXS : YVEX_GGUF_QTYPE_Q2_K;
+    for (int matrix_case = 0; matrix_case < 3; ++matrix_case) {
+        int up_stage = matrix_case != 0;
+        unsigned int qtype = matrix_case == 1 ? YVEX_GGUF_QTYPE_IQ2_XXS : YVEX_GGUF_QTYPE_Q2_K;
         for (size_t i = 0u; i < sizeof(blocks) / sizeof(blocks[0]); ++i)
             if (moe_rows_check_impl(backend, qtype, blocks[i], 0u, up_stage, 64ull, 1, 3ull)) return 1;
         for (unsigned int scenario = 1u; scenario <= 7u; ++scenario)

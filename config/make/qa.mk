@@ -1174,6 +1174,10 @@ test-project-control: tests/test_project_control.sh ROADMAP.md CONTRIBUTING.md
 test-public-abi: tests/test_public_abi.py
 	python3 tests/test_public_abi.py
 
+.PHONY: test-gguf-reference
+test-gguf-reference: tests/test_gguf_reference.py tools/prepare_gguf_reference.py
+	python3 -B tests/test_gguf_reference.py
+
 test-docs-surface: $(YVEX_BIN) tests/test_docs_surface.sh
 	sh tests/test_docs_surface.sh
 

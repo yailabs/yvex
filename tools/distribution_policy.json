@@ -5,7 +5,7 @@
   "first_party_terms": "MIT",
   "profiles": {
     "product": {
-      "build_inputs": ["Makefile", "config/make/config.mk", "config/make/rules.mk", "config/make/qa.mk", "config/make/docs.mk", "config/make/distribution.mk", "config/package_manifest.tsv", "config/replai.json", "tools/prepare_replai.py", "Cargo.toml", "Cargo.lock", "src/cli/rust/build.rs", "LICENSE", "NOTICE.md"],
+      "build_inputs": ["Makefile", "config/make/config.mk", "config/make/rules.mk", "config/make/qa.mk", "config/make/docs.mk", "config/make/distribution.mk", "config/package_manifest.tsv", "config/replai.json", "tools/prepare_replai.py", "config/gguf_reference.json", "tools/prepare_gguf_reference.py", "Cargo.toml", "Cargo.lock", "src/cli/rust/build.rs", "LICENSE", "NOTICE.md"],
       "cargo_manifests": ["Cargo.toml"],
       "unresolved": [
         "The exact Rust-shell/Cargo/native compiled distribution closure requires artifact-bound notices; the authenticated REPLAI source receipt alone is not a binary legal closure.",

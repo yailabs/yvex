@@ -18,6 +18,21 @@ ROOT = Path(__file__).resolve().parents[1]
 # schema decision. Updating an entry is therefore a reviewable ABI migration,
 # not a mechanical consequence of editing an installed header.
 RECORDS = {
+    "yvex_optimization_observation": (
+        "include/yvex/optimization.h", "YVEX_OPTIMIZATION_SCHEMA_V1", 1, 96,
+        "62cb267151b28030666ad79bf8b3eee8b69da38b5c4f3913e5a4c09533185061"),
+    "yvex_optimization_constraints": (
+        "include/yvex/optimization.h", "YVEX_OPTIMIZATION_SCHEMA_V1", 1, 48,
+        "b6e22c3e4a12d58b70c81ff2a222fae8aebc6fa7db1802c13f2a4437803acac1"),
+    "yvex_optimization_selection": (
+        "include/yvex/optimization.h", "YVEX_OPTIMIZATION_SCHEMA_V1", 1, 12,
+        "f57c06cfa0b51a7c5f6461d7e8eec92a26002059118d115b39916d8b52489e49"),
+    "yvex_optimization_request": (
+        "include/yvex/optimization.h", "YVEX_OPTIMIZATION_SCHEMA_V1", 1, 144,
+        "4ab0b5fc012979ed07e0ea757505fb85fbf217862a40418b40fe16603e101f8e"),
+    "yvex_optimization_candidate": (
+        "include/yvex/optimization.h", "YVEX_OPTIMIZATION_SCHEMA_V1", 1, 816,
+        "53bbd661d9127b2ec06b94bc257ec1a074d963ff236449315cb0852c8c9a4edc"),
     "yvex_finite_decision_engine_options": (
         "include/yvex/finite_decision.h", "YVEX_FINITE_DECISION_SCHEMA_V1", 1, 64,
         "418182f8ad309073e3b9d0789650adf641cf7c40049719bf3daad5ebf9098d4d"),
@@ -186,6 +201,7 @@ def compiler_source() -> str:
         "#include <yvex/finite_decision_producer.h>",
         "#include <yvex/provider.h>",
         "#include <yvex/quant.h>",
+        "#include <yvex/optimization.h>",
         "#include <yvex/registry.h>",
         "#include <yvex/server.h>",
         "#include <yvex/server_finite_decision.h>",

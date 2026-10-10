@@ -26,7 +26,7 @@ int yvex_runtime_binding_compile_publish(
     if (path) memset(path, 0, YVEX_PATH_CAP);
     if (published) *published = 0;
     if (!adapter || !request || !path || !published ||
-        adapter->schema_version != YVEX_FAMILY_COMPILER_SCHEMA_V2 ||
+        adapter->schema_version != YVEX_FAMILY_COMPILER_SCHEMA_V3 ||
         !adapter->adapter_id || !adapter->adapter_version || !adapter->binding_pipeline ||
         !adapter->binding_compile) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG,

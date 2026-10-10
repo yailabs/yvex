@@ -330,7 +330,13 @@ static __device__ float4 tensorcore_f32x4_add(float4 a,float4 b) {
  * followed by the original 32-lane reduction tree. It is not the ordinary
  * projection's serial scaled-block sum. Integer MMA replaces only the exact
  * 32-element products; bit-reversed leaves preserve that tree verbatim. */
-extern "C" __global__ void yvex_mxfp4_q8_matrix(
+static __device__ float4 tensorcore_expert_register_dot(const unsigned char *weights,
+    unsigned long long rb, unsigned long long rows, unsigned long long rowbase,
+    const unsigned char *input, unsigned blocks, const unsigned long long *order,
+    unsigned long long offset, unsigned pop, unsigned topk, unsigned columnbase,
+    unsigned qtype, int ordered, int *status, const unsigned int *grid_table);
+
+extern "C" __global__ void yvex_q8_row_matrix(
     const unsigned char *weights, unsigned long long row_bytes, unsigned long long width,
     unsigned long long start, unsigned long long rows, unsigned long long inputs,
     unsigned qtype, const unsigned char *activation, unsigned long long stride,
@@ -339,10 +345,12 @@ extern "C" __global__ void yvex_mxfp4_q8_matrix(
 {
     if (!status || *status) return;
     if (!weights || !activation || !output || !width || width > 8192ull ||
-        width % 256ull || row_bytes != width / 32ull * 17ull ||
+        width % 256ull || row_bytes != width / 256ull *
+            (qtype == YVEX_GGUF_QTYPE_Q2_K ? 84ull : 136ull) ||
         !rows || rows > 131072ull || start > ~0ull - rows ||
         (start + rows) > ~0ull / row_bytes || !inputs || inputs > 1024ull ||
-        qtype != YVEX_GGUF_QTYPE_MXFP4 || stride != width || q8 != 1 ||
+        (qtype != YVEX_GGUF_QTYPE_MXFP4 && qtype != YVEX_GGUF_QTYPE_Q2_K) ||
+        stride != width || q8 != 1 ||
         block_row || forensic || output_stride < rows || output_stride > ~0ull / inputs ||
         blockDim.x < 32u || blockDim.x > 128u || blockDim.x % 32u ||
         (output_bf16 != 0 && output_bf16 != 1)) {
@@ -356,7 +364,13 @@ extern "C" __global__ void yvex_mxfp4_q8_matrix(
     unsigned long long input_base = (blockIdx.x % groups) * columns + warp * 8ull;
     if (row_base >= rows || input_base >= inputs) return;
     float4 s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, result = {};
-    for (unsigned leaf = 0u; leaf < 32u; ++leaf) {
+    if (qtype == YVEX_GGUF_QTYPE_Q2_K) {
+        /* Independent columns reuse encoded weights through the same integer
+         * products and 32-leaf F32 tree as the ordinary Q2_K/Q8 row dot. */
+        result = tensorcore_expert_register_dot(weights + start * row_bytes, row_bytes,
+            rows, row_base, activation, blocks, nullptr, 0ull, (unsigned)inputs,
+            1u, (unsigned)input_base, qtype, 1, status, nullptr);
+    } else for (unsigned leaf = 0u; leaf < 32u; ++leaf) {
         unsigned block = __brev(leaf) >> 27u;
         float values[4] = {};
         if (block < blocks) {
@@ -403,7 +417,7 @@ extern "C" __global__ void yvex_mxfp4_q8_matrix(
             float value = values[j];
             if (!isfinite(value)) value = qtype_q8_dot_recover_f64(
                 weights + (start + row) * row_bytes, activation + col * blocks * 292ull,
-                blocks, 136ull, YVEX_GGUF_QTYPE_MXFP4, status);
+                blocks, qtype == YVEX_GGUF_QTYPE_Q2_K ? 84ull : 136ull, qtype, status);
             if (additive) value = __fadd_rn(value, additive[col * output_stride + row]);
             if (output_bf16) value = float_to_bf16_rne(value);
             if (!isfinite(value)) atomicCAS(status, 0, 1);
@@ -555,7 +569,8 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
     /* IQ2 fragment lanes use different codebook entries. Stage the canonical
      * table once rather than serializing divergent constant-memory reads. */
     __shared__ unsigned int grid_table[512];
-    tensorcore_iq2_grid(grid_table);
+    if (gate_qtype == YVEX_GGUF_QTYPE_IQ2_XXS || up_qtype == YVEX_GGUF_QTYPE_IQ2_XXS)
+        tensorcore_iq2_grid(grid_table);
     __syncthreads();
     unsigned int warp = threadIdx.x >> 5u, lane = threadIdx.x & 31u;
     unsigned long long tiles = (intermediate_width + 15ull) / 16ull;
@@ -578,8 +593,9 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
     unsigned long long input_blocks = input_width / YVEX_CUDA_Q8_K_BLOCK;
     if (!gate || !up || !selected || !weights || !order || !input || !intermediate ||
         !topk || !input_blocks || input_blocks > 32ull || !intermediate_width ||
-        !tensor_core_minimum || gate_qtype != YVEX_GGUF_QTYPE_IQ2_XXS ||
-        up_qtype != YVEX_GGUF_QTYPE_IQ2_XXS) {
+        !tensor_core_minimum ||
+        (gate_qtype != YVEX_GGUF_QTYPE_IQ2_XXS && gate_qtype != YVEX_GGUF_QTYPE_Q2_K) ||
+        (up_qtype != YVEX_GGUF_QTYPE_IQ2_XXS && up_qtype != YVEX_GGUF_QTYPE_Q2_K)) {
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }

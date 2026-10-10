@@ -245,7 +245,7 @@ typedef struct {
     CUfunction qtype_split_matvec_function, qtype_tensorcore_rows_function;
     CUfunction qtype_tensorcore_wide_rows_function;
     CUfunction mxfp4_tensorcore_wide_rows_function;
-    CUfunction mxfp4_q8_matrix_function;
+    CUfunction q8_row_matrix_function;
     CUfunction decoded_prepare_function, decoded_rows_function, decoded_mxfp4_function;
     CUfunction qtype_gather_function, argmax_f32_function;
     CUfunction sample_stochastic_f32_function;

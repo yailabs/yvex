@@ -193,6 +193,15 @@ products, the admitted F32 reduction tree, BF16 publication and exceptional
 source-ordered F64 recovery. It introduces no prepared weight layout or
 different routing policy.
 
+The gate/up matrix consumer accepts homogeneous IQ2_XXS or Q2_K pairs, with
+Q2_K down operands. The Q2_K gate/up path reuses the existing encoded integer
+product and admitted reduction; it does not silently introduce another
+arithmetic class or require a second prepared weight copy. Deployment and
+offline candidate screening reject incompatible operand geometry and mixed
+gate/up pairs. Component qualification covers decoded-weight F64 references,
+bitwise agreement with the existing Q2_K row path, tails and failure controls;
+this alone does not establish checkpoint quality or full-model throughput.
+
 ## Backend boundary
 
 Upstream supplies legal operations, package representation, numerical
@@ -273,7 +282,7 @@ topology, not the numerical class; a finite F32 warp reduction is not an
 equivalent substitute. Q8 activation keeps its separately admitted reduction.
 Non-finite results still refuse through the device-status completion owner.
 
-For admitted MXFP4 weights with Q8 activations, the explicit row-reduction
+For admitted MXFP4 or Q2_K weights with Q8 activations, the explicit row-reduction
 realization may share encoded-weight traversal across independent input rows
 using integer matrix instructions. Its geometry covers real populations and
 partial output tiles; narrow attention populations use the same generic owner.
@@ -282,6 +291,13 @@ tree, including the intermediate F32 before optional BF16 publication. This is
 not the distinct ordinary wide-matrix reduction and does not change decoded-input
 projections, packing, weights, workspace ownership or numerical admission.
 The backend selects geometry from physical extents, never family names.
+The Q2_K realization reuses the routed operator's integer-product primitive
+without importing routing semantics: independent input columns have no expert
+worklist, and retain the ordinary row dot's ordered F32 tree. It consumes the
+original encoded backing, not a second prepared copy. Ordinary wide-matrix
+projection remains a distinct reduction contract. Q2_K component controls cover
+4–512 input rows, partial output tiles, F32/BF16 publication and independent
+decoded-weight CPU references; complete-model benefit is a separate gate.
 [Numerical and complete-model evidence](../evaluation/retained-observations.md#narrow-q8-matrix-row-reuse-2026-10-08)
 separates this bounded execution improvement from model quality and the unearned
 throughput targets.

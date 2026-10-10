@@ -21,6 +21,7 @@
 extern "C" {
 #endif
 #define YVEX_FAMILY_COMPILER_SCHEMA_V2 2u
+#define YVEX_FAMILY_COMPILER_SCHEMA_V3 3u
 #define YVEX_RUNTIME_EXECUTION_CAPABILITY_SCHEMA_V2 2u
 #define YVEX_TRANSFORMER_PLAN_SCHEMA_V2 2u
 #define YVEX_SPECULATION_FAMILY_POLICY_SCHEMA_V1 1u
@@ -205,6 +206,7 @@ typedef struct yvex_operator_graph_ir yvex_operator_graph_ir;
 typedef struct yvex_compiled_model_plan yvex_compiled_model_plan;
 
 #define YVEX_PHYSICAL_VARIANT_SESSION_SCHEMA_V1 1u
+#define YVEX_PHYSICAL_VARIANT_API_SCHEMA_V2 2u
 #define YVEX_COMPONENT_VARIANT_ADAPTER_SCHEMA_V2 2u
 typedef enum {
     YVEX_PHYSICAL_VARIANT_COMPLETE_MODEL = 1,
@@ -215,6 +217,9 @@ typedef struct {
     const char *quant_preset_name, *quant_policy_path, *imatrix_path, *backend;
     const char *component_id;
     unsigned int worker_count;
+    /* API v2: borrowed immutable policy; exactly one of preset/path/policy.
+     * The opened session clones it before publishing its immutable plans. */
+    const struct yvex_quant_policy *quant_policy;
 } yvex_physical_variant_request;
 typedef struct {
     unsigned int schema_version;
@@ -452,6 +457,9 @@ struct yvex_family_compiler_adapter {
     int (*tokenizer_policy)(struct yvex_tokenizer_family_policy *, yvex_error *);
     const yvex_physical_variant_api *(*physical_variant)(void);
     const yvex_family_binding_pipeline *binding_pipeline;
+    /* Optional static catalog constraint, not an admission bypass. NULL means
+     * no static constraint published; later artifact admission remains required. */
+    const struct yvex_complete_artifact_admission *(*artifact_constraint)(void);
     int (*binding_compile)(
         const struct yvex_family_compiler_adapter *adapter,
         const struct yvex_compilation_runtime_binding_request *request,

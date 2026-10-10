@@ -70,7 +70,7 @@ static int pipeline_valid(const yvex_family_compiler_adapter *adapter)
 {
     const yvex_family_binding_pipeline *pipeline = adapter ? adapter->binding_pipeline : NULL;
 
-    return adapter && adapter->schema_version == YVEX_FAMILY_COMPILER_SCHEMA_V2 &&
+    return adapter && adapter->schema_version == YVEX_FAMILY_COMPILER_SCHEMA_V3 &&
            adapter->adapter_id && adapter->adapter_version && adapter->target_id &&
            adapter->family && adapter->logical_transform_identity &&
            yvex_sha256_hex_is_valid(adapter->logical_transform_identity) && adapter->graph &&
@@ -140,7 +140,24 @@ static int binding_compiler_open(
     if (rc == YVEX_OK) rc = yvex_gguf_open(&compiler->gguf, compiler->artifact, err);
     if (rc == YVEX_OK)
         rc = yvex_tensor_table_from_gguf(&compiler->tensors, compiler->gguf, err);
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK && request->artifact_production) {
+        if (request->rebind_existing_artifact ||
+            !request->artifact_production->artifact_path ||
+            strcmp(request->artifact_production->artifact_path, request->artifact_path)) {
+            yvex_error_set(err, YVEX_ERR_INVALID_ARG, "compilation.runtime-binding",
+                           "production proof requires this artifact and exact-source preparation");
+            return YVEX_ERR_INVALID_ARG;
+        }
+        rc = yvex_complete_artifact_admit(request->artifact_production,
+            &compiler->admission, &compiler->admission_failure, err);
+        if (rc == YVEX_OK &&
+            (strcmp(compiler->admission.transform_identity, transform->transform_identity) ||
+             strcmp(compiler->admission.payload_identity, transform->required_payload_identity))) {
+            yvex_error_set(err, YVEX_ERR_STATE, "compilation.runtime-binding",
+                           "production proof does not identify the authenticated source transformation");
+            rc = YVEX_ERR_STATE;
+        }
+    } else if (rc == YVEX_OK)
         rc = compiler->pipeline->artifact_admit(
             compiler->artifact, &compiler->admission, &compiler->admission_failure, err);
     if (rc == YVEX_OK)
@@ -523,7 +540,15 @@ int yvex_family_binding_compile(
     if (owner) *owner = NULL;
     if (!pipeline_valid(adapter) || !request || !products || !owner ||
         !request->source_path || !request->models_root ||
-        !request->source_manifest_path || !request->artifact_path) {
+        !request->source_manifest_path || !request->artifact_path ||
+        (request->artifact_production &&
+         (request->rebind_existing_artifact ||
+          !request->artifact_production->artifact_path ||
+          strcmp(request->artifact_production->artifact_path, request->artifact_path) ||
+          !request->artifact_production->writer_plan ||
+          !request->artifact_production->emission ||
+          !request->artifact_production->native_roundtrip ||
+          !request->artifact_production->official_reader))) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "compilation.runtime-binding",
                        "complete family pipeline, source, artifact, and manifest are required");
         return YVEX_ERR_INVALID_ARG;
@@ -621,7 +646,7 @@ static int variant_complete_request_validate(
         return variant_refuse(
             YVEX_ERR_INVALID_ARG,
             "complete-model preparation does not accept a component", err);
-    if (!!request->quant_preset_name == !!request->quant_policy_path)
+    if (!!request->quant_preset_name + !!request->quant_policy_path + !!request->quant_policy != 1)
         return variant_refuse(
             YVEX_ERR_INVALID_ARG,
             "complete-model preparation requires exactly one quant preset or policy", err);
@@ -643,7 +668,9 @@ static int variant_complete_quant(
     yvex_imatrix_data_summary imatrix = {0};
     int rc;
 
-    rc = request->quant_preset_name
+    rc = request->quant_policy
+             ? yvex_quant_policy_clone(&compiler->quant_policy, request->quant_policy, err)
+             : request->quant_preset_name
              ? yvex_quant_policy_preset_open(
                    &compiler->quant_policy, request->quant_preset_name, err)
              : yvex_quant_policy_open(
@@ -718,6 +745,8 @@ static int variant_component_adapter_validate(
     const yvex_component_variant_adapter *adapter,
     const yvex_physical_variant_request *request, yvex_error *err)
 {
+    if (request->quant_policy)
+        return variant_refuse(YVEX_ERR_UNSUPPORTED, "component policy synthesis is not admitted", err);
     if (!adapter ||
         adapter->schema_version != YVEX_COMPONENT_VARIANT_ADAPTER_SCHEMA_V2 ||
         !adapter->target_id || strcmp(adapter->target_id, request->target_id) != 0 ||
@@ -932,7 +961,7 @@ static const yvex_physical_variant_view *physical_variant_session_view(
 const yvex_physical_variant_api *yvex_graph_physical_variant_api_get(void)
 {
     static const yvex_physical_variant_api api = {
-        YVEX_PHYSICAL_VARIANT_SESSION_SCHEMA_V1,
+        YVEX_PHYSICAL_VARIANT_API_SCHEMA_V2,
         physical_variant_session_open,
         physical_variant_session_close,
         physical_variant_session_view};

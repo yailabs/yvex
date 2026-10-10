@@ -126,6 +126,16 @@ observed clocks belong to provenance, not target identity. Exact device UUIDs,
 clock/thermal observations and raw evidence locations remain receipt provenance.
 
 `origin=local` identifies a local receipt, not a maintainer guarantee.
+Native `model qualification run --relationship <record.json>` accepts an
+explicit canonical local relationship for an artifact not yet in the embedded
+catalog. The bounded record must match the loaded artifact, runtime binding and
+suite's exact repository/checkpoint; the native binding is independently opened
+and authenticated against that engine before creating a benchmark session.
+Without this option the same exact relationship is required in the embedded
+catalog. The resulting receipt records the relationship digest and origin of
+selection, inherits none of its claims, and remains local. Supplying a record
+is not independent proof of checkpoint quality or a maintainer guarantee.
+
 `origin=yvex-published` identifies a maintainer-published record, **not** automatic
 qualification of all its planes. Each plane independently declares QUALIFIED,
 CHARACTERIZED, BLOCKED, UNQUALIFIED or UNSUPPORTED. The published matrix is sparse:

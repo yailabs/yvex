@@ -360,6 +360,7 @@ fn offline_projection(
         | "execute.graph.component.video-vae"
         | "execute.media.publish"
         | "execute.media.generate" => media::dispatch(invocation, width, styled).map(standard),
+        "compile.optimize" => variant::optimize(invocation, width, styled),
         "quant.plan" | "quant.emit" | "quant.probe" | "quant.explain" | "quant.summarize" => {
             variant::dispatch(invocation, width, styled)
         }
