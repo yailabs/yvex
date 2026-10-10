@@ -19,6 +19,74 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Terminal workbench consumer (2026-10-10)
+
+`V010.TERMINAL.WORKBENCH.INTEGRATION.0` qualifies a Linux **inline** workbench,
+not a second full-screen editor or runtime. The [operator journey](../guides/operator-runbook.md#optional-terminal-workbench)
+and [ownership contract](../architecture/interfaces-protocols.md#terminal-workbench-consumer)
+describe Home/conversation, Models, Compile, contextual inspection and Activity.
+Its registry operation is `workbench.open`; `yvex workbench` is opt-in and the
+linear CLI remains independent. Domain operations resolve through the existing
+registry, compiler, catalog, lifecycle and generation owners.
+
+| Identity | Qualified subject |
+| --- | --- |
+| Base | `0e637f51a3fd14f6dc94c72053dbe5fdac01bb31`, tree `a49feaf29221d0b15e629d9388cafc39b78df23c` |
+| Implementation | `dc566f9d86918f1a68db0d166645eda5d5db7891`; final executable/test source `504279ef06d7bc8e7f796d877c6f5903ba489043`, tree `91cb63d8bb049b579fb482e3ac1ae77e61112e49`; clean frozen sources |
+| Native build / protocol | `560c83beacfbfd5b89c66980e5f4f93a193a27f69b0cc6b41ce5c7431966acf9`; protocol 25, unchanged |
+| Release shell / executable | `b0ddddac340b7b1497b29a2cfe272a06da5570c4cef2e3bbb42e8c337787339c`; SHA-256 `396c342254f27830a699dbe7010f7e37f8098f0109bd5abde97236dfcd4237ff` |
+| REPLAI | Unchanged `c8e8f07faa6f0f7fc93c73d63c1e81627ee78334`, ABI 1 / presentation 1; no producer edits |
+| Real model control | Generated deterministic CPU fixture, context 8; artifact `a946a8447534b15556e9b6d38c57cfee2bb3f5f05ffa5932ac9c672b7641341d`, binding `5911a93e48dbe4b993b13fae4b3e2773f688db02ec125de92227f145f41c9884`; not DeepSeek or model-quality evidence |
+
+| Test / lane | Authority / fixture | Expected | Observed / result | Claim supported |
+| --- | --- | --- | --- | --- |
+| `integration.terminal-workbench` | REPLAI real PTY and isolated typed native producer | One editor, valid selection, restored terminal, no invented output | PASS at 40/80/180 columns; live 24/180 resize, draft/completion focus, Unicode, NO_COLOR, non-TTY refusal, SIGTERM, disconnected recovery and same-alias/generation host-restart refusal | Linux navigation, progressive committed fragments, bounded refresh and truthful refusal |
+| `integration.tiny-vertical` | Real compiled CPU artifact and native host, not a mock | Real generation and lifecycle; busy engine cannot retire | PASS through workbench; output `ok`; confirmed unload refuses with live sessions and succeeds after their explicit fixture-owned closure | Product-to-compute integration and lifecycle ownership |
+| `integration.rust-shell` | Existing typed contracts, chat PTY and registry projections | Linear CLI, compiler and chat behavior retained | PASS on `dc566f9d`; 109 unit tests PASS, 2 signal-sensitive tests separately owned; 5 Rust structure tests PASS; isolated cancellation test and clippy PASS. Final `504279ef` reruns the 109 unit/5 structure tests and clippy | Shared shell compatibility, Program P delegation and existing streaming/cancellation controls; not compiler-quality promotion |
+| `structural.operator-registry`, `unit.protocol`, `unit.server` | Canonical operation/wire/lifecycle tests | New command projection, unchanged protocol | 3 PASS on final source | Registry completeness and native compatibility |
+| `structural.documentation`, `property.qa-registry` | Canonical documentation and QA registries | Consistent ownership, registered gate | 2 PASS on final source; documentation site builds | Discoverability and reproduction |
+| Release repeat | Same workbench PTY and tiny-runtime suites, optimized executable | Same lifecycle as dev build | Both PASS on clean `504279ef` | Actual release binary, not only debug tests |
+| Operator runtime inspection | Read-only workbench over the existing UID socket | No session, prompt, engine or listener mutation | PASS: Models/engine inspector/Activity; exact generation 1 and zero sessions/leases unchanged | Direct product observation, not model generation or performance |
+
+Raw canonical receipts remain outside Git under `build/qa/evidence/` in the
+`yvex-workbench` worktree. Final-source receipt IDs are:
+
+| Gate | Receipt |
+| --- | --- |
+| Workbench | `a22b4b94d5680ac9f08a3e54fe7cdab8870630f8dd04a16949a6f7e420ffa43f` |
+| Tiny CPU | `7ccdf03c1c83f9d83b9a09b6e5e73bbb8229f1220a53f2e59c135c246c6dc201` |
+| Registry | `55e675787188442809d5dbb22d9dbb9a7ff0b86f441d3fd5b162cfc9a3dc6060` |
+| Protocol | `1f63715e316bf0957d6a479852e915a5adfe7dcc32d40a91183b7d06acd7504c` |
+| Server | `0a62f4a0b25acb756680d38518e8124939720dfad653768e84519a9f7ab9205b` |
+| Documentation | `30d36c0d47d0840f3baac900d618a587015b29e0a9a77782b3a753393e9d51b0` |
+| QA registry | `4ad6d1160555d501d3ea4fa121d106df113db203496890de6d893d5101fd7169` |
+| Shared shell (`dc566f9d`) | `e06a390300168f6f28befca5406a3da343537324ed9638b24af884fcfd9bb118` |
+
+The initial registry expectation omitted the new top-level completion; receipt
+`c36463392941a79b97498b8df8623b7271049f2397a1231247463e363aeec633`
+retains that FAIL, repaired and rerun above. The release repeat log is
+`/tmp/yvex-workbench-release-qa.log`, SHA-256
+`97f67567e389eb1d20b4e0ceda55c11a574c9597a4fbc51b6003949a532fef82`.
+The read-only operator transcript is
+`build/tests/workbench-live-inspection/operator-read-only-verified.typescript`,
+SHA-256 `10c760e94b3b794612c77b59641bd33c1ece1e9b1b34ff9d4797e6d3bd71b8f6`.
+
+Reproduce with `make test-workbench RUST_PROFILE=dev`,
+`make test-tiny-vertical`, `make test-rust-shell RUST_PROFILE=dev` and
+`make test-workbench test-tiny-vertical RUST_PROFILE=release`.
+Tests use private hosts/fixtures, not the operator's GPU model.
+
+No operator Host replacement or installation occurred. The observed resident
+DeepSeek remained generation 1 on installed Host `337e7e73`, separate from this
+consumer binary. Program P and the retained CUDA edits were untouched.
+Views refresh on entry/action or explicitly; snapshots are not atomic and not
+live background monitoring. Generation retains the chat owner's exclusive
+output, not concurrent draft editing. Mac/Windows, full-screen composition,
+DeepSeek speed and compiler quality are not qualified here. Hosted CI is
+separate: base `0e637f51` already failed its Mac/native and hermetic jobs in
+[run 38080911040](https://github.com/yailabs/yvex/actions/runs/38080911040);
+local PASS does not assert a later hosted result.
+
 ## Program P static search and post-boot admission (2026-10-10)
 
 The later [produced-binding capacity controls](benchmarks/generated/qualification-deepseek-0731-program-p-produced-capacity-20261010.md)

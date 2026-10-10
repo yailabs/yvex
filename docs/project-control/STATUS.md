@@ -17,7 +17,7 @@ publication: {html: true, pdf: true, index: true}
 <!-- maturity-counts:start -->
 | Established | Partial | Open | Later | Total |
 | ---: | ---: | ---: | ---: | ---: |
-| 35 | 49 | 54 | 14 | 152 |
+| 36 | 49 | 54 | 14 | 153 |
 <!-- maturity-counts:end -->
 
 ## Active goal-driven Physical Model Compiler
@@ -612,7 +612,7 @@ tokenizer kind is explicitly weaker than executing its processor.
 
 ## Interfaces and portability
 
-The selected terminal workbench consumes the current Rust shell, registry and
+The qualified Linux terminal workbench consumes the current Rust shell, registry and
 REPLAI pin. Its [inline state/ownership contract](../architecture/interfaces-protocols.md#terminal-workbench-consumer)
 does not change Program P qualification or installed model generations.
 
@@ -624,6 +624,7 @@ not inherit a macOS rerun or a model-throughput claim from REPLAI producer CI.
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |
 | Native CLI | 🟢 ESTABLISHED | Product operations consume typed owners. | Preserve thin parsing/rendering boundaries as operations grow. | X | [Command architecture][commands] |
+| Linux inline terminal workbench | 🟢 ESTABLISHED | Home/chat, Models, Compile, inspector and bounded Activity use one REPLAI terminal owner and canonical native operations. Real PTY and isolated CPU model tests qualify streaming, recovery, exact host/generation selection and confirmed retirement; read-only inspection preserves the operator engine. | Additional platform qualification is separate. No alternate-screen dashboard, idle polling, new compiler capability or model-speed claim. | X | [Consumer evidence](../evaluation/retained-observations.md#terminal-workbench-consumer-2026-10-10); [operator journey](../guides/operator-runbook.md#optional-terminal-workbench) |
 | REPLAI-backed interaction | 🟢 ESTABLISHED | Qualified pinned producer: external editing, responsive documents, composed prompts, completion menus and quiet feedback; YVEX retains command/session/cancellation meaning. Rust-native consumption supersedes the C-ABI adapter; the single Rust product passes Linux and macOS consumer qualification. | Preserve the boundary and qualify consumer/platform changes. | X / R | [Editor ADR][editor]; [terminal tests][terminal-tests] |
 | Local typed protocol | 🟢 ESTABLISHED | Versioned private contract routes exact engine/session facts. | Version only on explicit wire-contract changes. | X | [Local protocol][protocol] |
 | OpenAI-compatible projection | 🟡 PARTIAL | Bounded local compatibility; exact-tokenizer preflight and distinct byte/input/output/sequence limits are exposed for text engines. | Qualify additional real consumers; preflight is not resource reservation or whole-workload qualification. | X | [Compatibility matrix][openai] |

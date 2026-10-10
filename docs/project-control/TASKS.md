@@ -21,7 +21,7 @@ compiler/performance implementation authority and all its unearned exits.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `V010.TERMINAL.WORKBENCH.INTEGRATION.0` | Terminal-native operational workbench | P1 | 🔵 IN PROGRESS | Integrate Home/conversation, Models, Compile, contextual inspection and bounded Activity through the current registry/native owners; one REPLAI terminal owner, unchanged linear CLI and protocol. Qualify real PTY navigation, streaming, Unicode, resize, cancellation, disconnection, recovery and restoration plus isolated runtime operation. No operator engine/service mutation, new compiler authority or DeepSeek performance claim. |
+| `V010.TERMINAL.WORKBENCH.INTEGRATION.0` | Terminal-native operational workbench | P1 | ✅ COMPLETE | Linux inline Home/conversation, Models, Compile, contextual inspection and bounded Activity consume current registry/native owners through one REPLAI terminal owner. [Source-stable evidence](../evaluation/retained-observations.md#terminal-workbench-consumer-2026-10-10) qualifies PTY navigation, progressive output, Unicode, resize, cancellation, disconnection/recovery, host-incarnation refusal, restoration and real isolated CPU execution/retirement in dev and release builds. Linear CLI/protocol and operator engine remain unchanged. macOS rerun, full-screen UI, Program P quality and DeepSeek performance are not earned by this consumer delivery. |
 
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
@@ -156,10 +156,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 57 | 41 | 5 | 1 | 10 |
+| 57 | 42 | 4 | 1 | 10 |
 <!-- task-counts:end -->
 
-**41/57 selected Tasks complete.** This denominator includes the significant
+**42/57 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
