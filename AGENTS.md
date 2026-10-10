@@ -255,3 +255,13 @@ For the full method see [task delivery](docs/guides/agentic-engineering.md).
 Stop for incompatible foreign work, unresolved ownership/authority, unpublished
 external contracts or evidence required for a claim that cannot be obtained.
 Resolve routine implementation and editorial choices without repeated approval.
+
+## Product experience handoff
+
+For substantial product-facing contract changes, follow the local
+[Studio consumer handoff](docs/architecture/interfaces-protocols.md#studio-consumer-handoff). Supply exact public
+identities, revisions, availability, actions/recovery and reproducible observations.
+Studio owns the [experience integration contract](https://github.com/yailabs/studio/blob/main/docs/interaction-contracts.md#product-experience-integration) and its existing Task's
+navigation/rendering qualification. No new endpoint implies a new UI page, and
+producer/SDK qualification does not grant Studio or human acceptance. Unaffected
+changes need no Studio documentation preload.
