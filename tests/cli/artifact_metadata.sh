@@ -13,6 +13,7 @@ DTYPE_REG="$OUT_DIR/dtype.models.local.json"
 DIMS_REG="$OUT_DIR/dims.models.local.json"
 ARCH_REG="$OUT_DIR/arch.models.local.json"
 READY_REG="$OUT_DIR/readiness.models.local.json"
+SUPPORT_REG="$OUT_DIR/later-support.models.local.json"
 ALIAS="deepseek4-v4-flash-dspark-selected-embed"
 
 fail() {
@@ -162,6 +163,16 @@ contains "$OUT_DIR/verify-pass.out" "current_primary_dtype: F16"
 contains "$OUT_DIR/verify-pass.out" "registered_primary_dims: [4,8]"
 contains "$OUT_DIR/verify-pass.out" "current_primary_dims: [4,8]"
 contains "$OUT_DIR/verify-pass.out" "status: models-identity-pass"
+
+# A later registered evidence label is not a new structural snapshot or an
+# execution certificate. Keep both scopes visible and avoid false drift.
+mutate_registry "$REG" "$SUPPORT_REG" "support_level" "generation-ready"
+"$YVEX_BIN" profile verify "$ALIAS" --registry "$SUPPORT_REG" --audit \
+  >"$OUT_DIR/verify-later-support.out" 2>"$OUT_DIR/verify-later-support.err"
+contains "$OUT_DIR/verify-later-support.out" "metadata_status: pass"
+contains "$OUT_DIR/verify-later-support.out" "registered_artifact_support_level: generation-ready"
+contains "$OUT_DIR/verify-later-support.out" "current_artifact_support_level: selected-tensor-materialized"
+not_contains "$OUT_DIR/verify-later-support.out" "generation_ready: true"
 
 remove_metadata_fields "$REG" "$OLD_REG"
 "$YVEX_BIN" profile verify "$ALIAS" --registry "$OLD_REG" --audit \

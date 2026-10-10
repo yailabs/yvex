@@ -142,6 +142,63 @@ Responses, SSE, function-call, stop, JSON-object, error, and unsupported-field
 semantics are in [`openai-compatibility.md`](../contracts/openai-compatibility.md).
 
 
+## Installed DSpark 32K observation
+
+The [2026-10-10 activation record](../evaluation/dspark-32k-runtime-activation.md)
+identifies the previous DSpark, resident CUDA generation 1, unchanged inference
+Host `337e7e73` and management verifier backport `c0ccd7f1`. This is not 0731 or
+real-model tool-calling qualification. Do **not** repeat its load or SEND as an
+observation check. Keep the model resident.
+
+On Spark, use the installed client, independent of cwd:
+
+```sh
+/home/dgmothx/.local/lib/yvex/c0ccd7f19bdd20f53d11df5943b57b21feec51a9/bin/yvex host status
+/home/dgmothx/.local/lib/yvex/c0ccd7f19bdd20f53d11df5943b57b21feec51a9/bin/yvex host status --json
+/home/dgmothx/.local/lib/yvex/c0ccd7f19bdd20f53d11df5943b57b21feec51a9/bin/yvex engine list --json
+/home/dgmothx/.local/lib/yvex/c0ccd7f19bdd20f53d11df5943b57b21feec51a9/bin/yvex host memory --json
+```
+
+Expected: one loaded/ready DSpark, `generation=1`, `context_capacity=32768`,
+`prefill_chunk_tokens=512`, `execution_strategy=speculative`, physical width 1;
+artifact/binding/specialization match the handoff. Sessions and requests may
+change if another authorized client starts work; these are current observations,
+not a fixed requirement to interrupt it. Mapped/addressable model span is about
+88.52 GiB; physical page residency is not measured and overlapping classes must
+not be summed.
+
+On Exon, with the ordinary installed YAI and the already approved local Tenant,
+these official product commands are **read-only** and require no PATH/profile
+replacement or fixture setup:
+
+```sh
+yai provider show provider-target:965ce8d788b4d6321ed0fea629f99546
+yai provider show provider-target:965ce8d788b4d6321ed0fea629f99546 --json
+yai provider models provider-target:965ce8d788b4d6321ed0fea629f99546 --tenant tenant:studio-live-qualification
+yai provider models provider-target:965ce8d788b4d6321ed0fea629f99546 --tenant tenant:studio-live-qualification --json
+```
+
+Expected endpoint `http://127.0.0.1:18001`; catalog lists the exact model ID from
+the activation record with generation 1 and input/total sequence capacity 32,768.
+The stored `text_to_text` qualification is historical and is **not** a new native
+function/feedback certificate. Metadata does not grant execution authority.
+Refused authority or an unavailable carrier must be reported, not treated as
+permission to change credentials, replay Work or restart services.
+
+Direct service/catalog checks are supplementary public HTTP observations:
+
+```sh
+curl -fsS http://127.0.0.1:18001/health
+curl -fsS http://127.0.0.1:18001/v1/models
+```
+
+There is no independently qualified standalone `yai` command here for submitting
+an arbitrary capacity-only preflight body without a Conversation. Do not invent
+one or use SEND as a substitute. YAI's next owner must qualify actual native
+tool emission/feedback and Work using fresh approved submissions. Studio is
+unchanged; its owner compares the same public catalog/identities rather than
+deriving readiness from a model label.
+
 ## Session lifecycle
 
 Named sessions retain their own transcript, committed token ledger, sampling
