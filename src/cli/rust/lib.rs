@@ -24,6 +24,7 @@ pub mod help;
 pub mod host;
 mod interaction;
 mod management;
+mod management_compilation;
 mod management_host;
 mod management_jobs;
 mod management_local;

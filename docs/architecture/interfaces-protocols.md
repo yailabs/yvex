@@ -38,7 +38,7 @@ does not grant model admission or new public management operations.
 | Embedded integrator | [C API](../contracts/c-api.md) | Installed vs internal ABI tiers remain explicit |
 | Same-user client | [Local protocol](../contracts/local-protocol.md) | Exact version and generation checks |
 | Application provider | [OpenAI adapter](../contracts/openai-compatibility.md) | Bounded compatibility, not universal API parity |
-| Product operator | [Network management](../contracts/network-management.md) | Same-user local socket or authenticated HTTPS, explicit pairing/revocation; 36 typed lifecycle operations |
+| Product operator | [Network management](../contracts/network-management.md) | Same-user local socket or authenticated HTTPS, explicit pairing/revocation; capability-discovered typed operations |
 | Advanced SSH operator | [Remote management](../contracts/remote-management.md) | Separate read, product-management and finite grants |
 | Remote finite compute consumer | [Finite producer v1](../contracts/finite-decision-remote.md) | Explicit compute enrollment, separate JSON schemas, exact generation/population/model lineage |
 
@@ -48,8 +48,8 @@ management requires neither the YVEX compiler nor YAI. The historical yai-sdk
 package is a compatibility reexport of the exact published YVEX client.
 [ADR 0011](../decisions/0011-independent-platform-client.md) owns this dependency direction.
 
-The 36 management operations consume Source/model/build/package, Host/Engine/Session,
-Jobs and observation truth. Capability discovery is explicit; neither runtime brand
+Management operations consume Source/model/build/package, Host/Engine/Session,
+bounded compilation planning, Jobs and observation truth. Capability discovery is explicit; neither runtime brand
 nor version spelling is capability evidence. CLI and independent SDK clients consume
 the same domain owners. Direct computational generation remains separate from a
 YAI Case. The SDK also owns read freshness: absent data, an observed empty collection,

@@ -333,6 +333,36 @@ static int prepare_rebind_candidate(
     return accepted;
 }
 
+static int prepare_acquisition_manifest(model_prepare_plan *plan, yvex_error *err)
+{
+    yvex_source_acquisition_provenance *provenance;
+    int found, rc = YVEX_OK;
+    /* Retain existing authenticated local workflows. Otherwise consume the
+     * same source-owned destination as source.verify; no second provenance
+     * store and no copying of unverified manifests into a trusted location. */
+    if (access(plan->manifest_path, F_OK) == 0) return YVEX_OK;
+    provenance = calloc(1u, sizeof(*provenance));
+    if (!provenance) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "model.prepare.source",
+                       "acquisition projection allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    found = yvex_source_acquisition_provenance_resolve(
+        plan->source->path, &plan->operator_paths, provenance, err);
+    if (found < 0) rc = err && err->code ? err->code : YVEX_ERR_STATE;
+    else if (found && (strcmp(provenance->repo_id, plan->source->repository) ||
+                       strcmp(provenance->revision, plan->source->revision) ||
+                       strcmp(provenance->provider, plan->source->provider))) {
+        yvex_error_set(err, YVEX_ERR_STATE, "model.prepare.source",
+                       "acquisition identity differs from selected source");
+        rc = YVEX_ERR_STATE;
+    } else if (found) {
+        memcpy(plan->manifest_path, provenance->manifest_path, sizeof(plan->manifest_path));
+    }
+    free(provenance);
+    return rc;
+}
+
 static int prepare_plan_paths(const model_prepare_options *options,
                               model_prepare_plan *plan, yvex_error *err)
 {
@@ -364,6 +394,7 @@ static int prepare_plan_paths(const model_prepare_options *options,
     if (rc == YVEX_OK)
         rc = prepare_text_path(plan->manifest_path, reports_family, file,
                                "model.prepare.paths", err);
+    if (rc == YVEX_OK) rc = prepare_acquisition_manifest(plan, err);
     if (rc == YVEX_OK)
         rc = prepare_text_path(reports_family, plan->operator_paths.models_root,
                                "tmp/prepare", "model.prepare.paths", err);

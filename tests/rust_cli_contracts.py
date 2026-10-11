@@ -1156,6 +1156,9 @@ def optimization_guided(binary: Path) -> int:
         methods = invoke(binary, ["compile", "optimize", "--list-techniques", "--json"], environment)
         assert methods.returncode == 0, methods
         assert [m["name"] for m in json.loads(methods.stdout)["techniques"]] == ["presets", "source-retention"]
+        for conflicting in [["--target", "other"], ["--source", "/unowned"], ["--guided"]]:
+            refused = invoke(binary, ["compile", "optimize", "--model", "missing", *conflicting], environment)
+            assert refused.returncode and "cannot be mixed" in refused.stderr, refused
         for answers, saved in ((b"q\n", False), (b"1\n2\n1\n2\n", True)):
             status, transcript = guided_transcript(binary, words, environment, answers)
             assert status != 0, "unavailable source must not compile"
@@ -1178,7 +1181,7 @@ def optimization_guided(binary: Path) -> int:
         refused = invoke(binary, words, environment)
         assert refused.returncode and "unsupported optimization request schema" in refused.stderr, refused
         assert output.read_bytes() == previous
-        return 5
+        return 8
 
 
 def provider_catalog(binary: Path, reference: Path | None) -> int:
@@ -2249,6 +2252,43 @@ def model_preparation(binary: Path, reference: Path | None) -> int:
         assert ambiguous.returncode != 0, "two exact payload sources require disambiguation"
         metadata_record.unlink()  # Owned temporary fixture only.
         count += 2
+        legacy_manifest = models / "registry/provenance/deepseek/deepseek-v4-flash-dspark-source-manifest.json"
+        # Failed verification may retain diagnostic metadata in the legacy
+        # destination. Remove only that owned disposable fixture for this arm.
+        if legacy_manifest.exists():
+            legacy_manifest.unlink()
+        # Source verification and preparation consume one acquisition-owned
+        # manifest path, selected by the actual payload, not a checkpoint alias.
+        acquisition_dir = models / "registry/deepseek"
+        acquisition_dir.mkdir(parents=True, exist_ok=True)
+        acquisition_record = acquisition_dir / "exact-payload.download.json"
+        acquisition_facts = {"target_id": "deepseek4-v4-flash-dspark", "family": "deepseek",
+            "repo_id": "deepseek-ai/DeepSeek-V4-Flash-DSpark", "provider": "huggingface",
+            "revision": revision, "local_source_dir": str(source)}
+        acquisition_record.write_text(json.dumps(acquisition_facts))
+        acquired_plan = invoke(binary, words, environment)
+        assert acquired_plan.returncode == 0, acquired_plan
+        expected_manifest = models / "evidence/build/deepseek/exact-payload.source-manifest.json"
+        assert not expected_manifest.exists()  # Projection, not authentication.
+        expected_manifest.parent.mkdir(parents=True, exist_ok=True)
+        expected_manifest.write_text("{}")  # Deliberately untrusted, never admits source.
+        status, transcript = guided_transcript(binary, guided_words, environment,
+            f"{selected}\n1\n1\n1\n2\n".encode())
+        assert status and replay_path.exists(), transcript
+        assert json.loads(replay_path.read_text())["source_manifest"] == str(expected_manifest), replay_path.read_text()
+        expected_manifest.unlink()
+        replay_path.unlink()
+        acquisition_record.write_text(json.dumps({**acquisition_facts, "revision": "0" * 40}))
+        mismatch = invoke(binary, words, environment)
+        assert mismatch.returncode and "acquisition identity differs" in mismatch.stdout, mismatch
+        acquisition_record.write_text(json.dumps(acquisition_facts))
+        duplicate = acquisition_dir / "duplicate.download.json"
+        duplicate.write_text(json.dumps(acquisition_facts))
+        ambiguous_manifest = invoke(binary, words, environment)
+        assert ambiguous_manifest.returncode, ambiguous_manifest
+        duplicate.unlink()
+        acquisition_record.unlink()
+        count += 3
         for extra in [["--quant", "not-a-preset"], ["--quant", "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1"]]:
             result = invoke(binary, ["model", "prepare", "dspark", *common, *extra,
                                      "--dry-run", "--json"], environment)

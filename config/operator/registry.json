@@ -142,6 +142,18 @@
     ],
     "remote_product_management_operations": [
       {
+        "operation": "qualification.get",
+        "kind": "read"
+      },
+      {
+        "operation": "optimization.techniques",
+        "kind": "read"
+      },
+      {
+        "operation": "optimization.plan",
+        "kind": "job"
+      },
+      {
         "operation": "registry.accounts",
         "kind": "read"
       },
@@ -3959,6 +3971,10 @@
       {
         "description": "Inspect implemented native techniques and proof obligations; research names are not capabilities.",
         "name": "--list-techniques", "takes_value": false, "value_type": "boolean"
+      },
+      {
+        "description": "Resolve an exact acquired model from the native catalog; no source-path flags required.",
+        "name": "--model", "takes_value": true, "value_type": "text"
       },
       {
         "description": "Guide model, backend, goal and workload selection in the native terminal; no installation.",

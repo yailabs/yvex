@@ -90,11 +90,24 @@ def main():
 
         capabilities = request('management.capabilities', {})['data']
         supported = {row['operation'] for row in capabilities['operations']}
-        assert {'model.list', 'model.inspect', 'acquisition.start', 'build.start', 'package.verify'} <= supported
+        assert {'model.list', 'model.inspect', 'acquisition.start', 'build.start', 'package.verify',
+                'optimization.techniques', 'optimization.plan', 'qualification.get'} <= supported
+        record_id = 'mamba-program-p-cli-production-20261010'
+        published = request('qualification.get', {'id': record_id})['data']
+        local_record = json.loads(run('model', 'qualification', 'show', record_id, '--json'))['targets'][0]
+        assert published['schema'] == 'yvex.qualification.record.v1'
+        assert published['receipt'] == local_record
+        request('qualification.get', {'id': '/tmp/receipt.json'}, expect='refused')
+        request('qualification.get', {'id': 'not-published'}, expect='refused')
+        techniques = request('optimization.techniques', {})['data']
+        assert techniques['schema'] == 'yvex.optimization.techniques.v1'
+        local_techniques = json.loads(run('compile', 'optimize', '--list-techniques', '--json'))
+        assert techniques == local_techniques
         before = request('job.list', {})['data']['jobs']
         for operation, data in [
             ('acquisition.start', {'repository': 'org/model', 'revision': 'a' * 40, 'representation': 'bf16', 'token': 'REJECTED_FIXTURE'}),
             ('build.start', {'model': 'x', 'out': '/tmp/unowned'}),
+            ('optimization.plan', {'model': 'x', 'source': '/tmp/unowned'}),
             ('acquisition.resume', {'source': 'x'}),
             ('model.evict', {'model': 'x', 'representation': 'a' * 64, 'kind': 'package'}),
         ]:
@@ -169,6 +182,23 @@ def main():
             assert planned['result']['state'] == 'PLANNED' and not planned['result']['changed'], planned
             assert planned['result']['revision'] == build_revision
             assert planned['result']['target'] == 'deepseek4-v4-flash-dspark'
+            optimization_input = {'model': 'build-plan', 'expected_revision': build_revision,
+                'backend': 'cpu', 'goal': 'memory', 'context': 32, 'prefill': 8, 'concurrency': 1}
+            stale_optimization = job('optimization.plan', {**optimization_input, 'expected_revision': '0'*40})
+            assert stale_optimization['state'] == 'failed'
+            assert 'source_revision_changed_review_again' in stale_optimization['reason'], stale_optimization
+            missing_identity = hashlib.sha256(b'optimization-missing-source').hexdigest()
+            missing_optimization = job('optimization.plan', optimization_input, missing_identity)
+            assert missing_optimization['state'] == 'failed' and missing_optimization['result'] is None
+            # No output/artifact is manufactured from an incomplete source. The
+            # same exact request reobserves its failed Job rather than repeating work.
+            assert request('optimization.plan', optimization_input, missing_identity)['data'] == missing_optimization
+            request('optimization.plan', {**optimization_input, 'context': 64}, missing_identity, expect='refused')
+            cli_optimization = subprocess.run([str(binary), 'compile', 'optimize', '--model', 'build-plan',
+                '--context', '32', '--prefill', '8', '--backend', 'cpu', '--goal', 'memory', '--json'],
+                env=env, text=True, capture_output=True, timeout=30)
+            assert cli_optimization.returncode and not cli_optimization.stdout, cli_optimization
+            assert 'canonical shard catalog is required' in cli_optimization.stderr, cli_optimization
             assert len(planned['result']['plan_id']) == 64
             assessment = planned['result']['planning']
             assert assessment['schema'] == 'yvex.build.planning.v1'
@@ -255,5 +285,103 @@ def main():
                           'cleanup': 'revision-fenced dry run and logs-only cleanup', 'real_ssh': False, 'real_huggingface': False, 'operator_state_modified': False}))
 
 
+def planning_control(args):
+    """Real authenticated-source planning, with no inference or operator service mutation.
+
+    The explicit asset root is consumed read-only by the planner (apart from
+    its ordinary preparation lock); Job storage and the public companion are
+    disposable. No fake source is promoted to a successful compiler result.
+    """
+    with tempfile.TemporaryDirectory(prefix='yvex-plan-', dir=Path('/tmp').resolve()) as directory:
+        root = Path(directory)
+        root.chmod(0o700)
+        for name in ['config', 'data', 'runtime', 'xdg']:
+            (root / name).mkdir(mode=0o700)
+        env = {**os.environ, 'YVEX_CONFIG_DIR': str(root / 'config'),
+               'YVEX_DATA_DIR': str(root / 'data'), 'YVEX_MODELS_ROOT': str(args.models_root.resolve()),
+               'YVEX_MODELS_REGISTRY': str(root / 'config/models.local.json'),
+               'XDG_RUNTIME_DIR': str(root / 'runtime'), 'XDG_DATA_HOME': str(root / 'xdg')}
+        for key in ['SSH_CONNECTION', 'SSH_TTY', 'SSH_ORIGINAL_COMMAND']:
+            env.pop(key, None)
+        process = subprocess.Popen([str(binary), 'management', 'serve', '--bind', '127.0.0.1:0',
+                                    '--state-dir', str(root / 'service')], env=env, text=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        def sdk(*words):
+            result = subprocess.run([str(args.sdk_example.resolve()), *words], env=env,
+                text=True, capture_output=True, timeout=30)
+            assert result.returncode == 0, (words, result.stdout, result.stderr)
+            return result.stdout
+        try:
+            startup = json.loads(process.stdout.readline())
+            assert startup['discovery_advertised'] is False
+            input_path, invocation_path = root / 'input.json', root / 'invocation.json'
+            request = {'model': args.compiler_model, 'expected_revision': args.revision,
+                'backend': 'cpu', 'goal': 'memory', 'context': 32, 'prefill': 4,
+                'concurrency': 1, 'allow_approximation': True}
+            input_path.write_text(json.dumps(request))
+            job_id = sdk('prepare', str(input_path), str(invocation_path)).strip()
+            observed = json.loads(sdk('invoke', str(invocation_path)))
+            assert observed['value']['job_id'] == job_id
+            deadline = time.monotonic() + 120
+            while observed['value']['state'] in ['accepted', 'running'] and time.monotonic() < deadline:
+                time.sleep(.1)
+                observed = json.loads(sdk('get', job_id))
+            receipt = observed['value']
+            assert receipt['state'] == 'succeeded', receipt
+            plan = receipt['result']
+            assert plan['schema'] == 'yvex.optimization.plan.v1'
+            assert plan['revision'] == args.revision
+            assert plan['publication']['engine_loaded'] is False
+            assert plan['qualified_recommendation'] is None
+            assert all(row['quality'] is None and row['decode_tokens_per_second'] is None
+                       for row in plan['candidates'])
+            local = subprocess.run([str(binary), 'compile', 'optimize', '--model', args.compiler_model,
+                '--backend', 'cpu', '--goal', 'memory', '--context', '32', '--prefill', '4',
+                '--allow-approximation', '--json'], env=env, text=True, capture_output=True, timeout=120)
+            assert local.returncode == 0, local.stderr
+            native = json.loads(local.stdout)
+            assert native['resolved_context'] == plan['resolved_context']
+            assert [row['candidate_identity'] for row in native['candidates']] == [
+                row['candidate_identity'] for row in plan['candidates']]
+            assert native['qualification_evidence'] == []  # Explicit local receipt inspection is separate.
+            assert all(row['authentication'] == 'embedded-publication-match'
+                       and row['selection_eligible'] is False
+                       and row['exact_recipe_match'] is None
+                       for row in plan['qualification_evidence'])
+            for reference in plan['qualification_evidence']:
+                qualified = json.loads(sdk('evidence', reference['id']))['value']
+                assert qualified['receipt_identity'] == reference['receipt_identity']
+                assert qualified['receipt']['target_identity'] == reference['target_identity']
+                assert qualified['receipt']['claims'] == reference['claims']
+            assert json.loads(sdk('get', job_id))['value'] == receipt
+            if args.evidence_dir:
+                args.evidence_dir.mkdir(parents=True, exist_ok=False)
+                (args.evidence_dir / 'sdk-observation.json').write_text(json.dumps(observed, indent=2))
+                (args.evidence_dir / 'cli-observation.json').write_text(json.dumps(native, indent=2))
+            print(json.dumps({'result': 'PASS', 'scope': 'authenticated-source planning; no model execution',
+                'model': args.compiler_model, 'revision': args.revision, 'job': job_id,
+                'context': plan['resolved_context']['identity'], 'candidates': len(plan['candidates']),
+                'transport': 'public same-user companion through independent Rust SDK',
+                'cli_equivalent': True, 'engines_loaded': 0}))
+        finally:
+            process.terminate()  # Only the disposable companion created above.
+            process.wait(timeout=15)
+
+
 if __name__ == '__main__':
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--compiler-model')
+    parser.add_argument('--revision')
+    parser.add_argument('--models-root', type=Path)
+    parser.add_argument('--sdk-example', type=Path)
+    parser.add_argument('--evidence-dir', type=Path)
+    args = parser.parse_args()
+    if args.compiler_model:
+        if not all([args.revision, args.models_root, args.sdk_example]):
+            parser.error('real planning requires exact revision, models root and independent SDK example')
+        planning_control(args)
+    else:
+        if any([args.revision, args.models_root, args.sdk_example, args.evidence_dir]):
+            parser.error('planning controls require --compiler-model')
+        main()

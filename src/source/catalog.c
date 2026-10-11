@@ -201,8 +201,6 @@ static int acquisition_provenance_parse(const char *buf, const char *target, con
     memset(parsed_source, 0, sizeof(parsed_source));
 
     yvex_json_probe_string_field(buf, "target_id", parsed_target, sizeof(parsed_target));
-    if (parsed_target[0] && strcmp(parsed_target, target) != 0)
-        return 0;
     yvex_json_probe_string_field(buf, "family", parsed_family, sizeof(parsed_family));
     if (parsed_family[0] && strcmp(parsed_family, family) != 0)
         return 0;
@@ -217,6 +215,11 @@ static int acquisition_provenance_parse(const char *buf, const char *target, con
     if (!parsed_source[0]) {
         yvex_json_probe_string_field(buf, "path", parsed_source, sizeof(parsed_source));
     }
+    /* An exact selected catalog source disambiguates metadata-only and tensor
+     * acquisitions of the same checkpoint. Paths below remain owner-formed;
+     * the record cannot redirect the verifier's output location. */
+    if (target[0] == '/' ? strcmp(parsed_source, target) != 0
+                          : parsed_target[0] && strcmp(parsed_target, target)) return 0;
 
     (void)yvex_json_probe_string_field(buf, "source_payload_digest",
                                        out->source_payload_digest, sizeof(out->source_payload_digest));
@@ -285,7 +288,8 @@ static int acquisition_selected_identity(const char *target, const char *family,
         stem[length - ending] = '\0';
         if (!yvex_source_acquisition_provenance_paths(stem, family, paths, &candidate, err) ||
             !yvex_source_acquisition_provenance_read(candidate.registry_path, target, family, &candidate)) continue;
-        if (found && strcmp(out->local_source_dir, candidate.local_source_dir)) {
+        if (found && (strcmp(out->local_source_dir, candidate.local_source_dir) ||
+                      (target[0] == '/' && strcmp(out->registry_path, candidate.registry_path)))) {
             closedir(stream);
             memset(out, 0, sizeof(*out));
             yvex_error_set(err, YVEX_ERR_STATE, "source.acquisition.resolve",
@@ -322,7 +326,9 @@ int yvex_source_acquisition_provenance_resolve(const char *target,
                        "source.acquisition.resolve") != YVEX_OK ||
             lstat(path, &status) != 0 || !S_ISDIR(status.st_mode)) continue;
         selected = acquisition_selected_identity(target, entry->d_name, operator_paths, &candidate, err);
-        if (selected < 0 || (selected && found && strcmp(out->local_source_dir, candidate.local_source_dir))) {
+        if (selected < 0 || (selected && found &&
+            (strcmp(out->local_source_dir, candidate.local_source_dir) ||
+             (target[0] == '/' && strcmp(out->registry_path, candidate.registry_path))))) {
             found = -1;
             memset(out, 0, sizeof(*out));
             yvex_error_set(err, YVEX_ERR_STATE, "source.acquisition.resolve", "ambiguous acquisition target");

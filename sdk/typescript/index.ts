@@ -7,6 +7,159 @@ export type HostState = "running" | "stopped" | "unavailable";
 export type Reasoning = "disabled" | "enabled" | "low" | "maximum";
 export interface EmptyInput {
 }
+export interface QualificationReadInput {
+  id: string;
+}
+export interface QualificationRecord {
+  schema: string;
+  receipt_identity: string;
+  authentication: string;
+  receipt: unknown;
+  [field: string]: unknown;
+}
+export interface OptimizationEvidenceReference {
+  id: string;
+  target_identity: string;
+  receipt_identity: string;
+  authentication: string;
+  claims: unknown;
+  association: string;
+  exact_recipe_match: string | null;
+  selection_eligible: boolean;
+  related_candidate_identities: Array<string>;
+  [field: string]: unknown;
+}
+export interface OptimizationPlanInput {
+  model: string;
+  expected_revision: string;
+  backend: string;
+  goal: string;
+  context: number;
+  prefill: number;
+  concurrency: number;
+  memory_limit?: number;
+  max_candidates?: number;
+  allow_approximation?: boolean;
+  require_routed_matrix?: boolean;
+  technique?: string;
+  weight_budget?: number;
+  search_states?: number;
+}
+export interface OptimizationTechnique {
+  identity: string;
+  name: string;
+  inputs: string;
+  objective: string;
+  unearned_evidence: string;
+  [field: string]: unknown;
+}
+export interface OptimizationTechniques {
+  schema: string;
+  techniques: Array<OptimizationTechnique>;
+  [field: string]: unknown;
+}
+export interface OptimizationContext {
+  schema: string;
+  identity: string;
+  semantic_identity: string;
+  source_identity: string;
+  model_execution_identity: string;
+  family: string;
+  semantic_maximum_context: number;
+  layers: number;
+  attention_layers: number;
+  sequence_mixer_layers: number;
+  routed_experts: number;
+  experts_per_row: number;
+  draft_layers: number;
+  capacity_scope: string;
+  missing_evidence: number;
+  quality: unknown | null;
+  calibration: string;
+  [field: string]: unknown;
+}
+export interface OptimizationCandidate {
+  recipe: string;
+  state: string;
+  candidate_identity: string;
+  physical_variant_identity: string;
+  source_identity: string;
+  transform_identity: string;
+  policy_identity: string;
+  artifact_bytes: number | null;
+  encoded_bytes: number | null;
+  maximum_tensor_bytes: number | null;
+  reserve_bytes: number | null;
+  initial_required_bytes: number | null;
+  memory_budget_bytes: number | null;
+  missing_evidence: number;
+  approximate_tensors: number | null;
+  routed_tensors: number | null;
+  matrix_incompatible_tensors: number | null;
+  artifact_catalog_compatibility: string;
+  reason: string;
+  failure_status: number;
+  workspace_bytes: number | null;
+  state_bytes: number | null;
+  prefill_tokens_per_second: number | null;
+  decode_tokens_per_second: number | null;
+  quality: unknown | null;
+  [field: string]: unknown;
+}
+export interface OptimizationPriority {
+  model: string;
+  basis: string;
+  measured_ranking: boolean;
+  predicted_rates: unknown | null;
+  [field: string]: unknown;
+}
+export interface OptimizationPublication {
+  artifact_produced: boolean;
+  binding_published: boolean;
+  engine_loaded: boolean;
+  selection: string;
+  production: string;
+  evaluation: string;
+  deployment: string;
+  [field: string]: unknown;
+}
+export interface OptimizationPlanResult {
+  schema: string;
+  model: string;
+  revision: string;
+  target: string;
+  goal: string;
+  backend: string;
+  technique: string;
+  weight_budget_bytes: number | null;
+  resolved_context: OptimizationContext;
+  source_commit: string;
+  source_tree: string;
+  source_state: string;
+  source_delta_identity: string;
+  build_identity: string;
+  shell_build_identity: string;
+  memory_limit_bytes: number;
+  allow_approximation: boolean;
+  require_routed_matrix: boolean;
+  context_tokens: number;
+  prefill_tokens: number;
+  concurrent_sequences: number;
+  total_memory_bytes: number;
+  available_memory_bytes: number;
+  process_memory_limited: boolean;
+  compute_capability: Array<number>;
+  device_count: number;
+  selected_candidate: string | null;
+  exported_policy: string | null;
+  experiment_priority: OptimizationPriority;
+  qualified_recommendation: unknown | null;
+  candidates: Array<OptimizationCandidate>;
+  qualification_evidence: Array<OptimizationEvidenceReference>;
+  deployment_assessment: unknown | null;
+  publication: OptimizationPublication;
+  [field: string]: unknown;
+}
 export interface OperationCapability {
   operation: string;
   kind: OperationKind;
@@ -814,6 +967,7 @@ export interface HostControlResult {
   [field: string]: unknown;
 }
 export interface JobResults {
+  "optimization.plan": OptimizationPlanResult;
   "engine.load": EngineResult;
   "engine.unload": EngineResult | Acknowledgement;
   "session.create": SessionResult;
@@ -840,6 +994,9 @@ export interface JobResults {
 }
 export type Job = { [O in keyof JobResults]: Omit<JobRecord, "operation" | "result" | "input"> & { operation: O; input: OperationInputs[O]; result: JobResults[O] | null } }[keyof JobResults];
 export interface OperationInputs {
+  "qualification.get": QualificationReadInput;
+  "optimization.techniques": EmptyInput;
+  "optimization.plan": OptimizationPlanInput;
   "management.capabilities": EmptyInput;
   "model.list": ModelListInput;
   "model.get": ModelInput;
@@ -882,6 +1039,9 @@ export interface OperationInputs {
   "host.restart": HostStopInput;
 }
 export interface OperationOutputs {
+  "qualification.get": QualificationRecord;
+  "optimization.techniques": OptimizationTechniques;
+  "optimization.plan": Job;
   "management.capabilities": Capabilities;
   "model.list": ModelList;
   "model.get": ModelDetail;

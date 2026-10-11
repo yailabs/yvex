@@ -480,6 +480,7 @@ src/cli/rust/management_host.rs	cli	cli.management_host	generic	private	resource
 src/cli/rust/management_jobs.rs	cli	cli.management_jobs	generic	private	resource-lifecycle	cli.rust	implementation	none
 src/cli/rust/management_runtime.rs	cli	cli.management_runtime	generic	private	protocol-client	cli.rust	implementation	none
 src/cli/rust/management_models.rs	cli	cli.management_models	generic	private	typed-projection	cli.rust	implementation	none
+src/cli/rust/management_compilation.rs	cli	cli.management_compilation	generic	private	typed-projection	cli.rust	implementation	none
 src/cli/rust/management_network.rs	cli	cli.management_network	generic	private	platform-interface	cli.rust	implementation	none
 src/cli/rust/management_pairing.rs	cli	cli.management_pairing	generic	private	platform-interface	cli.rust	implementation	none
 src/cli/rust/management_local.rs	cli	cli.management_local	generic	private	platform-interface	cli.rust	implementation	none

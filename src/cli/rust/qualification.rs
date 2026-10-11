@@ -68,6 +68,55 @@ pub(crate) fn optimization_evidence(
     Ok(projected)
 }
 
+/// Metadata references, not duplicated metric populations. Public consumers
+/// retrieve complete canonical records through qualification.get. Policy and
+/// transformation correspondence never authenticates an exact recipe.
+pub(crate) fn published_optimization_evidence(
+    candidates: &[ffi::raw::yvex_optimization_candidate],
+) -> Result<Value> {
+    let catalog: Vec<Value> = serde_json::from_str(CATALOG)?;
+    let mut rows = Vec::new();
+    for record in catalog.iter().filter(|record| {
+        candidates
+            .iter()
+            .any(|candidate| related_candidate(record, candidate))
+    }) {
+        validate(record)?;
+        rows.push(
+            json!({"id":record["id"],"target_identity":record["target_identity"],
+            "receipt_identity":ffi::digest(&serde_json::to_vec(record)?)?,
+            "authentication":"embedded-publication-match","claims":record["claims"],
+            "association":"policy-and-transformation-only","exact_recipe_match":null,
+            "selection_eligible":false,
+            "related_candidate_identities": candidates.iter()
+                .filter(|candidate| related_candidate(record, candidate))
+                .map(|candidate| ffi::text(&candidate.candidate_identity)).collect::<Vec<_>>() }),
+        );
+    }
+    Ok(json!(rows))
+}
+
+/// Public ID lookup only: never interpret a selector as a local receipt path.
+pub(crate) fn published_record(id: &str) -> Result<Value> {
+    let catalog: Vec<Value> = serde_json::from_str(CATALOG)?;
+    let record = catalog
+        .iter()
+        .find(|record| record["id"] == id)
+        .ok_or("published qualification record not found")?;
+    validate(record)?;
+    Ok(
+        json!({"schema":"yvex.qualification.record.v1","receipt":record,
+        "receipt_identity":ffi::digest(&serde_json::to_vec(record)?)?,
+        "authentication":"embedded-publication-match"}),
+    )
+}
+
+fn related_candidate(record: &Value, candidate: &ffi::raw::yvex_optimization_candidate) -> bool {
+    candidate.failure_status == 0
+        && record["target"]["physical_policy"] == ffi::text(&candidate.policy_identity)
+        && record["target"]["transformation_ir"] == ffi::text(&candidate.transform_identity)
+}
+
 /// Only published records admitted by the embedded authority enter automatic
 /// comparison. Changed representation is an explicit experimental axis, never
 /// permission to change checkpoint, workload, hardware, build or sampling.
@@ -181,12 +230,7 @@ fn project_optimization_evidence(
         )?;
         let matches = candidates
             .iter()
-            .filter(|candidate| {
-                candidate.failure_status == 0
-                    && record["target"]["physical_policy"] == ffi::text(&candidate.policy_identity)
-                    && record["target"]["transformation_ir"]
-                        == ffi::text(&candidate.transform_identity)
-            })
+            .filter(|candidate| related_candidate(record, candidate))
             .map(|candidate| ffi::text(&candidate.candidate_identity))
             .collect::<Vec<_>>();
         require(
@@ -861,6 +905,31 @@ mod tests {
             project_optimization_evidence(std::slice::from_ref(record), &[candidate]).unwrap();
         assert_eq!(matched[0]["authentication"], "embedded-publication-match");
         assert_eq!(matched[0]["selection_eligible"], false);
+        let automatic = published_optimization_evidence(&[candidate]).unwrap();
+        assert!(
+            automatic
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["id"] == record["id"])
+        );
+        assert!(automatic.as_array().unwrap().iter().all(|row| {
+            row["authentication"] == "embedded-publication-match"
+                && row["selection_eligible"] == false
+                && row["exact_recipe_match"].is_null()
+        }));
+        assert_eq!(published_optimization_evidence(&[]).unwrap(), json!([]));
+        assert_eq!(
+            published_record(record["id"].as_str().unwrap()).unwrap()["receipt"],
+            *record
+        );
+        assert!(published_record("/tmp/local-receipt.json").is_err());
+        candidate.failure_status = ffi::raw::yvex_status_YVEX_ERR_UNSUPPORTED;
+        assert_eq!(
+            published_optimization_evidence(&[candidate]).unwrap(),
+            json!([])
+        );
+        candidate.failure_status = 0;
         // A plausible, schema-valid edited record is still not published evidence.
         let mut edited = record.clone();
         edited["title"] = json!("Caller edited evidence");

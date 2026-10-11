@@ -103,6 +103,26 @@ passes 22 registered software/component checks and five sanitizer controls.
 Actual stage allocation reductions are retained; 0731 full-model acceptance is
 unearned, with protected resident service and a live 32K capacity refusal.
 
+The mainline continuation adds catalog-selected `compile optimize --model` and
+the bounded public `optimization.plan` Job, both calling the same native
+compiler. Preparation consumes the canonical acquisition verification manifest
+when no legacy preparation manifest exists; ambiguous or changed source lineage
+refuses. Public inputs cannot supply filesystem paths, replace a reserve, emit
+weights or load an Engine. Rust/TypeScript projections derive from the existing
+management contract; invocation identity and `job.get` retain outcome recovery.
+SDK planning links matching embedded qualification records; `qualification.get`
+retrieves their complete context through the same authority as native CLI
+inspection, without transferring quality across policy-only associations or
+manufacturing selection.
+The real Mamba source planning control preserves its 64 state-space layers and
+zero attention layers, with identical candidate/context identities across CLI
+and independent SDK. This is not another complete-model execution result.
+The 0731 produced-binding checks at 4K, 16K and 32K each refuse their observed
+full initial capacity envelope; no loaded Engine or GPU reservation follows.
+See [compiler evidence](../evaluation/compiler-evidence.md#mainline-public-planning-and-source-handoff).
+Integrated qualified selection, stronger executable optimization and 20/700
+remain open. No installed service or model generation is replaced.
+
 ## Retained computational architecture reconstruction
 
 The separate operator-authorized

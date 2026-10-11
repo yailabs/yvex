@@ -54,6 +54,85 @@
       ]
     },
     "EmptyInput": {},
+    "QualificationReadInput": {"id":"string"},
+    "QualificationRecord": {
+      "schema":"string", "receipt_identity":"string",
+      "authentication":"string", "receipt":"json"
+    },
+    "OptimizationEvidenceReference": {
+      "id":"string", "target_identity":"string", "receipt_identity":"string",
+      "authentication":"string", "claims":"json", "association":"string",
+      "exact_recipe_match":"nullable:string", "selection_eligible":"bool",
+      "related_candidate_identities":"array:string"
+    },
+    "OptimizationPlanInput": {
+      "model": "string",
+      "expected_revision": "string",
+      "backend": "string",
+      "goal": "string",
+      "context": "u64",
+      "prefill": "u64",
+      "concurrency": "u64",
+      "memory_limit": "optional:u64",
+      "max_candidates": "optional:u32",
+      "allow_approximation": "optional:bool",
+      "require_routed_matrix": "optional:bool",
+      "technique": "optional:string",
+      "weight_budget": "optional:u64",
+      "search_states": "optional:u32"
+    },
+    "OptimizationTechnique": {
+      "identity": "string", "name": "string", "inputs": "string",
+      "objective": "string", "unearned_evidence": "string"
+    },
+    "OptimizationTechniques": {
+      "schema": "string", "techniques": "array:OptimizationTechnique"
+    },
+    "OptimizationContext": {
+      "schema": "string", "identity": "string", "semantic_identity": "string",
+      "source_identity": "string", "model_execution_identity": "string", "family": "string",
+      "semantic_maximum_context": "u64", "layers": "u64", "attention_layers": "u64",
+      "sequence_mixer_layers": "u64", "routed_experts": "u64", "experts_per_row": "u64",
+      "draft_layers": "u64", "capacity_scope": "string", "missing_evidence": "u32",
+      "quality": "nullable:json", "calibration": "string"
+    },
+    "OptimizationCandidate": {
+      "recipe": "string", "state": "string", "candidate_identity": "string",
+      "physical_variant_identity": "string", "source_identity": "string",
+      "transform_identity": "string", "policy_identity": "string",
+      "artifact_bytes": "nullable:u64", "encoded_bytes": "nullable:u64",
+      "maximum_tensor_bytes": "nullable:u64", "reserve_bytes": "nullable:u64",
+      "initial_required_bytes": "nullable:u64", "memory_budget_bytes": "nullable:u64",
+      "missing_evidence": "u32", "approximate_tensors": "nullable:u64",
+      "routed_tensors": "nullable:u64", "matrix_incompatible_tensors": "nullable:u64",
+      "artifact_catalog_compatibility": "string", "reason": "string", "failure_status": "i64",
+      "workspace_bytes": "nullable:u64", "state_bytes": "nullable:u64",
+      "prefill_tokens_per_second": "nullable:f64", "decode_tokens_per_second": "nullable:f64",
+      "quality": "nullable:json"
+    },
+    "OptimizationPriority": {
+      "model": "string", "basis": "string", "measured_ranking": "bool",
+      "predicted_rates": "nullable:json"
+    },
+    "OptimizationPublication": {
+      "artifact_produced": "bool", "binding_published": "bool", "engine_loaded": "bool",
+      "selection": "string", "production": "string", "evaluation": "string", "deployment": "string"
+    },
+    "OptimizationPlanResult": {
+      "schema": "string", "model": "string", "revision": "string", "target": "string",
+      "goal": "string", "backend": "string", "technique": "string",
+      "weight_budget_bytes": "nullable:u64", "resolved_context": "OptimizationContext",
+      "source_commit": "string", "source_tree": "string", "source_state": "string",
+      "source_delta_identity": "string", "build_identity": "string", "shell_build_identity": "string",
+      "memory_limit_bytes": "u64", "allow_approximation": "bool", "require_routed_matrix": "bool",
+      "context_tokens": "u64", "prefill_tokens": "u64", "concurrent_sequences": "u64",
+      "total_memory_bytes": "u64", "available_memory_bytes": "u64", "process_memory_limited": "bool",
+      "compute_capability": "array:u32", "device_count": "u32",
+      "selected_candidate": "nullable:string", "exported_policy": "nullable:string",
+      "experiment_priority": "OptimizationPriority", "qualified_recommendation": "nullable:json",
+      "candidates": "array:OptimizationCandidate", "qualification_evidence": "array:OptimizationEvidenceReference",
+      "deployment_assessment": "nullable:json", "publication": "OptimizationPublication"
+    },
     "OperationCapability": {
       "operation": "string",
       "kind": "OperationKind"
@@ -859,6 +938,18 @@
   },
   "operations": [
     {
+      "operation":"qualification.get", "kind":"read",
+      "input":"QualificationReadInput", "output":"QualificationRecord"
+    },
+    {
+      "operation": "optimization.techniques", "kind": "read",
+      "input": "EmptyInput", "output": "OptimizationTechniques"
+    },
+    {
+      "operation": "optimization.plan", "kind": "job",
+      "input": "OptimizationPlanInput", "output": "Job"
+    },
+    {
       "operation": "management.capabilities",
       "kind": "read",
       "input": "EmptyInput",
@@ -1100,6 +1191,7 @@
     }
   ],
   "job_results": {
+    "optimization.plan": ["OptimizationPlanResult"],
     "engine.load": [
       "EngineResult"
     ],
@@ -1173,7 +1265,7 @@
   },
   "producer_schemas": {
     "request_schema_path": "docs/contracts/schemas/product-management-request.v2.schema.json",
-    "request_schema_sha256": "5da19e24b4f90a09d0c979c245febb188fefe02110ecf87f562c63aba27d2826",
+    "request_schema_sha256": "9f24685bf0b8740f2815c66e988e480bb8dfb24a5dbd81c448dbee08c93e3b98",
     "response_schema_path": "docs/contracts/schemas/product-management-response.v2.schema.json",
     "response_schema_sha256": "135a0f242d8a0124d3e85ae8a8f7bfac6ee7dae42805f97714573f9569e58eaf"
   }

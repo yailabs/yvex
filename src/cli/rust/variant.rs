@@ -426,6 +426,73 @@ fn optimize_guided(
     optimize(&parsed, width, styled)
 }
 
+fn optimize_model(invocation: &Invocation<'_>, width: usize, styled: bool) -> Result<Output> {
+    if [
+        "--request",
+        "--guided",
+        "--target",
+        "--source",
+        "--source-manifest",
+    ]
+    .iter()
+    .any(|flag| invocation.has(flag))
+    {
+        return Err(grammar(
+            "catalog model and explicit source selection cannot be mixed",
+        ));
+    }
+    let selector = required(invocation, "--model")?;
+    let root = invocation.value("--models-root");
+    let _lease = ffi::preparation::lock(root, selector)?;
+    let library = ffi::Library::open(root, None)?;
+    let mut indices = Vec::new();
+    for index in 0..library.count() {
+        if library.matches(index, selector)? {
+            indices.push(index);
+        }
+    }
+    if indices.len() != 1 {
+        return Err(grammar("select one exact acquired model"));
+    }
+    let source = ffi::preparation::Preparation::open(
+        &library,
+        indices[0],
+        ffi::preparation::Request {
+            root,
+            registry: None,
+            quant: None,
+            imatrix: None,
+            dry: true,
+        },
+    )?
+    .view()?;
+    let mut words = invocation.operation.command_path.clone();
+    for (flag, values) in &invocation.flags {
+        if matches!(flag.as_str(), "--model" | "--models-root") {
+            continue;
+        }
+        words.push(flag.clone());
+        if invocation
+            .operation
+            .flags
+            .iter()
+            .any(|f| f.name == *flag && f.takes_value)
+        {
+            words.extend(values.iter().cloned());
+        }
+    }
+    for (flag, value) in [
+        ("--target", &source.target),
+        ("--source", &source.source),
+        ("--models-root", &source.models_root),
+        ("--source-manifest", &source.manifest),
+    ] {
+        words.extend([flag.into(), value.clone()]);
+    }
+    let registry = crate::registry::Registry::embedded()?;
+    optimize(&registry.parse(&words)?, width, styled)
+}
+
 pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) -> Result<Output> {
     if invocation.has("--list-techniques") {
         if invocation
@@ -470,6 +537,9 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
     }
     if invocation.has("--request") {
         return optimize_file(invocation, width, styled);
+    }
+    if invocation.has("--model") {
+        return optimize_model(invocation, width, styled);
     }
     if invocation.has("--guided") {
         return optimize_guided(invocation, None, width, styled);
@@ -586,20 +656,15 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
     )
 }
 
-fn optimization_json(
+// Shared CLI/management projection of native facts; not another planner.
+pub(crate) fn optimization_projection(
     report: &ffi::variant::OptimizationReport,
     request: &raw::yvex_optimization_request,
-    invocation: &Invocation<'_>,
-    evidence: &serde_json::Value,
-    deployment: Option<&ffi::variant::DeploymentAssessment>,
-) -> Result<serde_json::Value> {
-    let goal = invocation.value("--goal").unwrap_or("balanced");
-    let backend = invocation.value("--backend").unwrap_or("cpu");
-    let allocation = invocation.value("--technique") == Some("source-retention");
-    let weight_budget = invocation
-        .value("--weight-budget")
-        .map(str::parse::<u64>)
-        .transpose()?;
+    target: &str,
+    goal: &str,
+    backend: &str,
+    weight_budget: Option<u64>,
+) -> serde_json::Value {
     let rows = report.rows.iter().map(|c| {
         let facts = c.failure_status == 0;
         serde_json::json!({
@@ -624,9 +689,11 @@ fn optimization_json(
         "workspace_bytes": null, "state_bytes": null, "prefill_tokens_per_second": null,
         "decode_tokens_per_second": null, "quality": null
     })}).collect::<Vec<_>>();
-    Ok(serde_json::json!({
+    serde_json::json!({
                 "schema": "yvex.optimization.search.v3", "goal": goal, "backend": backend,
-                "technique": if allocation { "source-retention-allocation-v1" } else { "fixed-recipes-v1" },
+                "technique": if weight_budget.is_some() {
+                    "source-retention-allocation-v1"
+                } else { "fixed-recipes-v1" },
                 "weight_budget_bytes": weight_budget,
                 "resolved_context": {
                     "schema": "yvex.optimization.context.v1",
@@ -646,7 +713,7 @@ fn optimization_json(
                     "quality": null, "calibration": "candidate-bound; not held-out quality",
                     "missing_evidence": report.context.missing_evidence
                 },
-                "target": invocation.value("--target"),
+                "target": target,
                 "source_commit": env!("YVEX_BUILD_COMMIT"),
                 "source_tree": env!("YVEX_BUILD_SOURCE_TREE"),
                 "source_state": env!("YVEX_BUILD_SOURCE_STATE"),
@@ -661,13 +728,40 @@ fn optimization_json(
                 "total_memory_bytes": report.total_memory, "available_memory_bytes": report.available_memory,
                 "process_memory_limited": report.process_limited,
                 "compute_capability": [report.compute_major, report.compute_minor], "device_count": 1,
-                "selected_candidate": invocation.value("--select"), "exported_policy": invocation.value("--out-policy"),
+                "selected_candidate": null, "exported_policy": null,
                 "experiment_priority": {"model":"static-feasibility-hints-v1",
                     "basis": ffi::variant::optimization_priority(request.goal),
                     "measured_ranking":false, "predicted_rates":null},
                 "qualified_recommendation": null, "candidates": rows,
-                "qualification_evidence": evidence,
-                "deployment_assessment": deployment.as_ref().map(|d| {
+                "qualification_evidence": null, "deployment_assessment": null
+    })
+}
+
+fn optimization_json(
+    report: &ffi::variant::OptimizationReport,
+    request: &raw::yvex_optimization_request,
+    invocation: &Invocation<'_>,
+    evidence: &serde_json::Value,
+    deployment: Option<&ffi::variant::DeploymentAssessment>,
+) -> Result<serde_json::Value> {
+    let goal = invocation.value("--goal").unwrap_or("balanced");
+    let backend = invocation.value("--backend").unwrap_or("cpu");
+    let weight_budget = invocation
+        .value("--weight-budget")
+        .map(str::parse::<u64>)
+        .transpose()?;
+    let mut projection = optimization_projection(
+        report,
+        request,
+        required(invocation, "--target")?,
+        goal,
+        backend,
+        weight_budget,
+    );
+    projection["selected_candidate"] = serde_json::json!(invocation.value("--select"));
+    projection["exported_policy"] = serde_json::json!(invocation.value("--out-policy"));
+    projection["qualification_evidence"] = evidence.clone();
+    projection["deployment_assessment"] = serde_json::json!(deployment.as_ref().map(|d| {
                     serde_json::json!({
                         "candidate_identity": d.candidate, "binding_identity": d.binding,
                         "artifact_identity": d.artifact, "status": d.status, "reason": d.reason,
@@ -708,7 +802,8 @@ fn optimization_json(
                         "scope": "runtime capacity plan only; no weight residency, engine creation or reservation"
                     })
                 })
-    }))
+    );
+    Ok(projection)
 }
 
 fn optimization_human(

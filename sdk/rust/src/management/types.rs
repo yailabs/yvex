@@ -52,6 +52,210 @@ pub enum Reasoning {
 pub struct EmptyInput {
 }
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationReadInput {
+    pub id: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct QualificationRecord {
+    pub schema: String,
+    pub receipt_identity: String,
+    pub authentication: String,
+    pub receipt: serde_json::Value,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OptimizationEvidenceReference {
+    pub id: String,
+    pub target_identity: String,
+    pub receipt_identity: String,
+    pub authentication: String,
+    pub claims: serde_json::Value,
+    pub association: String,
+    #[serde(default)]
+    pub exact_recipe_match: Option<String>,
+    pub selection_eligible: bool,
+    pub related_candidate_identities: Vec<String>,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OptimizationPlanInput {
+    pub model: String,
+    pub expected_revision: String,
+    pub backend: String,
+    pub goal: String,
+    pub context: u64,
+    pub prefill: u64,
+    pub concurrency: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_limit: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_candidates: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_approximation: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub require_routed_matrix: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub technique: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight_budget: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search_states: Option<u32>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OptimizationTechnique {
+    pub identity: String,
+    pub name: String,
+    pub inputs: String,
+    pub objective: String,
+    pub unearned_evidence: String,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OptimizationTechniques {
+    pub schema: String,
+    pub techniques: Vec<OptimizationTechnique>,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OptimizationContext {
+    pub schema: String,
+    pub identity: String,
+    pub semantic_identity: String,
+    pub source_identity: String,
+    pub model_execution_identity: String,
+    pub family: String,
+    pub semantic_maximum_context: u64,
+    pub layers: u64,
+    pub attention_layers: u64,
+    pub sequence_mixer_layers: u64,
+    pub routed_experts: u64,
+    pub experts_per_row: u64,
+    pub draft_layers: u64,
+    pub capacity_scope: String,
+    pub missing_evidence: u32,
+    #[serde(default)]
+    pub quality: Option<serde_json::Value>,
+    pub calibration: String,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OptimizationCandidate {
+    pub recipe: String,
+    pub state: String,
+    pub candidate_identity: String,
+    pub physical_variant_identity: String,
+    pub source_identity: String,
+    pub transform_identity: String,
+    pub policy_identity: String,
+    #[serde(default)]
+    pub artifact_bytes: Option<u64>,
+    #[serde(default)]
+    pub encoded_bytes: Option<u64>,
+    #[serde(default)]
+    pub maximum_tensor_bytes: Option<u64>,
+    #[serde(default)]
+    pub reserve_bytes: Option<u64>,
+    #[serde(default)]
+    pub initial_required_bytes: Option<u64>,
+    #[serde(default)]
+    pub memory_budget_bytes: Option<u64>,
+    pub missing_evidence: u32,
+    #[serde(default)]
+    pub approximate_tensors: Option<u64>,
+    #[serde(default)]
+    pub routed_tensors: Option<u64>,
+    #[serde(default)]
+    pub matrix_incompatible_tensors: Option<u64>,
+    pub artifact_catalog_compatibility: String,
+    pub reason: String,
+    pub failure_status: i64,
+    #[serde(default)]
+    pub workspace_bytes: Option<u64>,
+    #[serde(default)]
+    pub state_bytes: Option<u64>,
+    #[serde(default)]
+    pub prefill_tokens_per_second: Option<f64>,
+    #[serde(default)]
+    pub decode_tokens_per_second: Option<f64>,
+    #[serde(default)]
+    pub quality: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OptimizationPriority {
+    pub model: String,
+    pub basis: String,
+    pub measured_ranking: bool,
+    #[serde(default)]
+    pub predicted_rates: Option<serde_json::Value>,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OptimizationPublication {
+    pub artifact_produced: bool,
+    pub binding_published: bool,
+    pub engine_loaded: bool,
+    pub selection: String,
+    pub production: String,
+    pub evaluation: String,
+    pub deployment: String,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct OptimizationPlanResult {
+    pub schema: String,
+    pub model: String,
+    pub revision: String,
+    pub target: String,
+    pub goal: String,
+    pub backend: String,
+    pub technique: String,
+    #[serde(default)]
+    pub weight_budget_bytes: Option<u64>,
+    pub resolved_context: OptimizationContext,
+    pub source_commit: String,
+    pub source_tree: String,
+    pub source_state: String,
+    pub source_delta_identity: String,
+    pub build_identity: String,
+    pub shell_build_identity: String,
+    pub memory_limit_bytes: u64,
+    pub allow_approximation: bool,
+    pub require_routed_matrix: bool,
+    pub context_tokens: u64,
+    pub prefill_tokens: u64,
+    pub concurrent_sequences: u64,
+    pub total_memory_bytes: u64,
+    pub available_memory_bytes: u64,
+    pub process_memory_limited: bool,
+    pub compute_capability: Vec<u32>,
+    pub device_count: u32,
+    #[serde(default)]
+    pub selected_candidate: Option<String>,
+    #[serde(default)]
+    pub exported_policy: Option<String>,
+    pub experiment_priority: OptimizationPriority,
+    #[serde(default)]
+    pub qualified_recommendation: Option<serde_json::Value>,
+    pub candidates: Vec<OptimizationCandidate>,
+    pub qualification_evidence: Vec<OptimizationEvidenceReference>,
+    #[serde(default)]
+    pub deployment_assessment: Option<serde_json::Value>,
+    pub publication: OptimizationPublication,
+    #[serde(flatten)]
+    pub additional: std::collections::BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OperationCapability {
     pub operation: String,
     pub kind: OperationKind,
@@ -1173,6 +1377,27 @@ pub struct HostControlResult {
 pub mod operations {
     use super::*;
     use crate::management::Operation;
+    pub struct QualificationGet;
+    impl Operation for QualificationGet {
+        type Input = super::QualificationReadInput;
+        type Output = super::QualificationRecord;
+        const ID: &'static str = "qualification.get";
+        const KIND: OperationKind = OperationKind::Read;
+    }
+    pub struct OptimizationTechniques;
+    impl Operation for OptimizationTechniques {
+        type Input = super::EmptyInput;
+        type Output = super::OptimizationTechniques;
+        const ID: &'static str = "optimization.techniques";
+        const KIND: OperationKind = OperationKind::Read;
+    }
+    pub struct OptimizationPlan;
+    impl Operation for OptimizationPlan {
+        type Input = super::OptimizationPlanInput;
+        type Output = super::Job;
+        const ID: &'static str = "optimization.plan";
+        const KIND: OperationKind = OperationKind::Job;
+    }
     pub struct ManagementCapabilities;
     impl Operation for ManagementCapabilities {
         type Input = super::EmptyInput;
@@ -1456,6 +1681,9 @@ pub mod operations {
 }
 pub(crate) fn validate_input(operation: &str, value: &serde_json::Value) -> Result<(), serde_json::Error> {
     match operation {
+        "qualification.get" => serde_json::from_value::<QualificationReadInput>(value.clone()).map(|_| ()),
+        "optimization.techniques" => serde_json::from_value::<EmptyInput>(value.clone()).map(|_| ()),
+        "optimization.plan" => serde_json::from_value::<OptimizationPlanInput>(value.clone()).map(|_| ()),
         "management.capabilities" => serde_json::from_value::<EmptyInput>(value.clone()).map(|_| ()),
         "model.list" => serde_json::from_value::<ModelListInput>(value.clone()).map(|_| ()),
         "model.get" => serde_json::from_value::<ModelInput>(value.clone()).map(|_| ()),
@@ -1501,6 +1729,9 @@ pub(crate) fn validate_input(operation: &str, value: &serde_json::Value) -> Resu
 }
 pub(crate) fn validate_projection(operation: &str, value: &serde_json::Value) -> Result<(), serde_json::Error> {
     match operation {
+        "qualification.get" => serde_json::from_value::<QualificationRecord>(value.clone()).map(|_| ()),
+        "optimization.techniques" => serde_json::from_value::<OptimizationTechniques>(value.clone()).map(|_| ()),
+        "optimization.plan" => serde_json::from_value::<Job>(value.clone()).map(|_| ()),
         "management.capabilities" => serde_json::from_value::<Capabilities>(value.clone()).map(|_| ()),
         "model.list" => serde_json::from_value::<ModelList>(value.clone()).map(|_| ()),
         "model.get" => serde_json::from_value::<ModelDetail>(value.clone()).map(|_| ()),
@@ -1546,6 +1777,13 @@ pub(crate) fn validate_projection(operation: &str, value: &serde_json::Value) ->
 }
 pub(crate) fn validate_job(job: &Job) -> Result<(), serde_json::Error> {
     match job.operation.as_str() {
+        "optimization.plan" => {
+            serde_json::from_value::<OptimizationPlanInput>(job.input.clone())?;
+            if let Some(result) = &job.result {
+                serde_json::from_value::<OptimizationPlanResult>(result.clone()).map(|_| ())?;
+            }
+            Ok(())
+        }
         "engine.load" => {
             serde_json::from_value::<EngineLoadInput>(job.input.clone())?;
             if let Some(result) = &job.result {
@@ -1711,6 +1949,9 @@ pub(crate) fn validate_job(job: &Job) -> Result<(), serde_json::Error> {
     }
 }
 pub const OPERATIONS: &[(&str, OperationKind)] = &[
+    ("qualification.get", OperationKind::Read),
+    ("optimization.techniques", OperationKind::Read),
+    ("optimization.plan", OperationKind::Job),
     ("management.capabilities", OperationKind::Read),
     ("model.list", OperationKind::Read),
     ("model.get", OperationKind::Read),
@@ -1954,5 +2195,26 @@ impl crate::management::Client {
 impl Management<'_> {
     pub fn capabilities(&self, input: &EmptyInput) -> Result<crate::management::Observation<Capabilities>, crate::management::Error> {
         self.0.read::<operations::ManagementCapabilities>(input)
+    }
+}
+pub struct Optimizations<'a>(&'a crate::management::Client);
+impl crate::management::Client {
+    pub fn optimizations(&self) -> Optimizations<'_> { Optimizations(self) }
+}
+impl Optimizations<'_> {
+    pub fn techniques(&self, input: &EmptyInput) -> Result<crate::management::Observation<OptimizationTechniques>, crate::management::Error> {
+        self.0.read::<operations::OptimizationTechniques>(input)
+    }
+    pub fn prepare_plan(&self, input: &OptimizationPlanInput) -> Result<crate::management::Prepared<operations::OptimizationPlan>, crate::management::Error> {
+        self.0.prepare::<operations::OptimizationPlan>(input)
+    }
+}
+pub struct Qualifications<'a>(&'a crate::management::Client);
+impl crate::management::Client {
+    pub fn qualifications(&self) -> Qualifications<'_> { Qualifications(self) }
+}
+impl Qualifications<'_> {
+    pub fn get(&self, input: &QualificationReadInput) -> Result<crate::management::Observation<QualificationRecord>, crate::management::Error> {
+        self.0.read::<operations::QualificationGet>(input)
     }
 }

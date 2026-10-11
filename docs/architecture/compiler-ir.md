@@ -378,6 +378,13 @@ allows cancellation without compilation, and refuses overwriting a saved request
 Saved intent is not a successful compilation receipt. Replay with
 `./yvex compile optimize --request goals.json --json` uses the identical parser
 and native planner. Source discovery does not load an engine or replace a service.
+`./yvex compile optimize --model <selector> --backend cpu --goal memory
+--context 32 --prefill 4 --json` uses the same catalog resolution without a
+terminal or copied source paths. Mixed explicit source, request-file or guided
+inputs refuse. Preparation preserves an existing local manifest; otherwise it
+selects the acquisition owner's manifest by exact payload path, repository and
+revision. Metadata-only sibling acquisitions cannot redirect that selection.
+Missing authentication still refuses compilation.
 Measured goal-specific ranking and independent qualified recommendation remain
 open; source retention alone cannot establish either.
 
@@ -386,10 +393,13 @@ in `<yvex/optimization.h>`; the Rust operator projection is
 `yvex.optimization.search.v3`. Opt-in complete production returns
 `yvex.physical-production.result.v2`, preserving emission-only v1. These are
 offline source/policy/variant/artifact/binding operations, not Host/Engine/Session
-admission and not a new remote management endpoint. No independent SDK or Studio
-consumer is updated or qualified by this delivery. A future consumer uses the
-typed native contract, not parsed human CLI output, and retains missing quality
-and unmeasured performance. After a partial production result, inspect the
+admission. The canonical SDK additionally exposes a bounded catalog-selected
+planning Job through [product management](../contracts/product-management.md#physical-compilation-consumer-handoff),
+using `yvex.optimization.plan.v1`. This shares the search projection's native
+facts but adds reviewed model/revision and non-publication semantics under its
+own schema. Arbitrary paths, candidate emission/evaluation and deployment are
+not exposed by this operation. No Studio implementation is included. Consumers
+retain missing quality and unmeasured performance. After a partial result, inspect the
 artifact and binding outcomes separately; a lost acknowledgement or absent
 binding does not authorize blind re-emission or overwrite. Installed clients
 must advertise the operation/schema before it is offered as available.

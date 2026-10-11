@@ -10,6 +10,9 @@ use std::io::{self, BufRead, Read};
 const REQUEST_CAP: usize = 131072;
 const RESPONSE_CAP: usize = 1048576;
 pub(crate) const OPERATIONS: &[(&str, &str)] = &[
+    ("optimization.techniques", "read"),
+    ("optimization.plan", "job"),
+    ("qualification.get", "read"),
     ("profile.scan", "job"),
     ("profile.verify", "job"),
     ("profile.create", "job"),

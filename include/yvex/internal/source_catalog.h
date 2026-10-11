@@ -11,7 +11,8 @@ extern "C" {
 
 /* Acquisition provenance is a source record, not a parser or readiness claim.
  * Caller-owned fixed storage; paths are formed before reading record facts.
- * Resolve returns 1 found / 0 absent / -1 ambiguous or invalid. */
+ * Resolve accepts a target or exact catalog source path and returns
+ * 1 found / 0 absent / -1 ambiguous or invalid. */
 #define YVEX_SOURCE_ACQUISITION_PATTERN_CAP 32u
 typedef struct {
     int found;

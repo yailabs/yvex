@@ -88,11 +88,19 @@ IDs; it is not a copied Make recipe.
 the exclusive `metal-device` resource. Its native Darwin-arm64 prerequisite
 does not assert an actual GPU; real device/pipeline admission and dispatch are
 mandatory assertions in the test. Missing hardware prerequisites are BLOCKED,
-not CPU fallback or PASS. `native` selects 15 CPU/platform/host/terminal cases,
+not CPU fallback or PASS. `native` selects registered CPU/platform/host/terminal cases,
 including native Rust shell contracts and real PTY lifecycle,
 including explicit invalid or unavailable Metal refusal, without requiring a
 GPU. The [Metal foundation evidence](macos-metal.md) remains separate from
 full-model, performance and release evidence.
+
+`integration.sdk-contract` independently builds/tests the canonical Rust SDK,
+including retained planning invocations and generated typed Job results.
+`integration.product-management-models` checks bounded public inputs, revision
+fences, failed/replayed planning Jobs and native CLI correspondence. Its optional
+real-source mode qualifies planning through a disposable public companion, not
+model execution. `structural.product-management-contract` checks operation-set
+equality, schema digests and generated Rust/TypeScript consistency.
 
 `ci` contains only hermetic evidence suitable for ordinary hosted Linux. It
 does not pretend to qualify GB10, SM121, or large external model artifacts.

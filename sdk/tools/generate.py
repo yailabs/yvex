@@ -72,7 +72,7 @@ def render(contract):
     rs += ['pub const OPERATIONS: &[(&str, OperationKind)] = &[']
     rs += [f'    ("{op["operation"]}", OperationKind::{op["kind"].title()}),' for op in contract['operations']]
     rs += ['];']
-    families = {'model':'Models','acquisition':'Acquisitions','build':'Builds','package':'Packages','host':'Hosts','engine':'Engines','session':'Sessions','generation':'Generations','job':'Jobs','observe':'Observe','source':'Sources','profile':'Profiles','registry':'Registries','management':'Management'}
+    families = {'model':'Models','acquisition':'Acquisitions','build':'Builds','package':'Packages','host':'Hosts','engine':'Engines','session':'Sessions','generation':'Generations','job':'Jobs','observe':'Observe','source':'Sources','profile':'Profiles','registry':'Registries','management':'Management','optimization':'Optimizations','qualification':'Qualifications'}
     for family, domain in families.items():
         selected=[op for op in contract['operations'] if op['operation'].split('.')[0]==family]
         if not selected: continue

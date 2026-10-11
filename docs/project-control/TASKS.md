@@ -197,6 +197,13 @@ The existing Mamba proof remains the non-Transformer control. Technique referenc
 are not implemented capabilities; 20/700 and independent quality remain unearned.
 No second implementation Task or installed-engine replacement is selected.
 
+The mainline continuation starts at `2de077e9` and connects the same native
+planning and production owners to bounded catalog-selected CLI/SDK observations
+and recoverable Jobs. Compiler search, emitted artifacts, admitted execution and
+independent qualification remain separate gates. Archived prepared-IQ2 work is
+not reselected. Installed Host/model generations and the divergent Metal branch
+remain protected; this continuation selects neither a new branch nor a Task.
+
 The computational-graph continuation uses sealed operator/program facts to
 select executable alternatives, not just weight policies. Its first bounded
 candidate is input-backed, read-only physical view lowering: eliminate redundant

@@ -352,8 +352,11 @@ static int source_session_open(
     rc = yvex_source_verify_with_snapshot(
         &session->source_options, &session->verification, &snapshot, err);
     if (rc == YVEX_OK && (!session->verification.verified || !snapshot)) {
-        yvex_error_set(err, YVEX_ERR_STATE, "compilation.source",
-                       "source verification did not retain its snapshot");
+        yvex_error_setf(err, YVEX_ERR_STATE, "compilation.source",
+                       "authenticated source snapshot unavailable: %s",
+                       session->verification.blocker_count
+                           ? session->verification.blockers[0]
+                           : "source verification did not retain its snapshot");
         rc = YVEX_ERR_STATE;
     }
     if (rc == YVEX_OK)

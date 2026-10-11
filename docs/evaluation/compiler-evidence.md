@@ -86,3 +86,51 @@ remain historical, separately identified observations. In particular, the retain
 MXFP4 publication records lack a kernel-bundle identity: the new comparison gate
 does not fill that gap from the current build or rank those rows automatically.
 Independent held-out quality and the 20/700 performance gates remain unearned.
+
+## Mainline public planning and source handoff
+
+The continuation based on `2de077e9` closes a bounded producer/consumer path,
+not Program P's competitive exit. The implementation consumes the existing
+compiler and source owners; it does not add another planner or qualification
+store. The [public handoff](../contracts/product-management.md#physical-compilation-consumer-handoff)
+owns request/result schemas and authorization boundaries.
+
+| Control | Observation / oracle | Claim boundary |
+| --- | --- | --- |
+| Acquired-source preparation | Exact catalog path resolves the source-owned manifest destination; changed revision/provider and duplicate acquisitions refuse | No copied manifest or directory name is accepted as authentication |
+| Real Mamba planning | Authenticated `mamba-codestral-7b-v0.1`, revision `4f086c08c1e0f07bdc50ca25125dbbf7475d21da`; CPU, context 32, prefill 4, concurrency 1, memory objective | Seven native candidates; 64 sequence-mixer layers, zero attention; no Engine or payload production |
+| Independent Rust SDK | Disposable public same-user companion; persisted invocation, one dispatch, `job.get`, then exact CLI context/candidate comparison | Job recovery and native planning equivalence, not SSH enrollment, remote GPU execution or model quality |
+| Published evidence association | Bounded metadata references by policy/transformation, followed by public `qualification.get`; same canonical records as CLI inspection | Related evidence is visible; unknown calibration/artifact correspondence cannot earn a recommendation |
+| 0731 capacity | Existing authenticated MXFP4/Q2 artifact/binding; target-only, widths 512/1, independent 4K/16K/32K assessments | All observed peak envelopes refused before residency; available memory is volatile, not reserved |
+
+Reproduce the independent consumer control against an isolated candidate binary:
+
+```sh
+cargo build --manifest-path sdk/rust/Cargo.toml --locked --example optimization
+make YVEX_BIN=build/program-p-mainline/yvex RUST_PROFILE=dev client
+```
+
+`tests/integration/product_management_models.py --compiler-model MODEL
+--revision REVISION --models-root ROOT --sdk-example EXAMPLE --evidence-dir DIR`
+is the registered integration owner's optional real-source control. Its test
+adapter receives the candidate executable via `YVEX_BIN`; ordinary product use
+requires no environment setup. The disposable companion has its own config,
+journal and public socket, and is the only process it retires. It never loads a
+model or stops the operator Host. The source must already be authenticated.
+
+The consumer test retains the exact CLI and SDK JSON, including native context,
+candidate, source/tree/delta/build and Job identities. Capacity observations
+remain separate from timed inference. No new load, TTFT, decode, prefill or
+held-out quality result is inferred from these controls. Historical model
+execution receipts remain the authority for their original configurations.
+
+The complete journey still has open gates: pre-production full workspace/state
+costing, independently qualified candidate selection, an accepted dominant
+execution correction, and comparable complete-model DeepSeek measurements.
+The operator-owned old-checkpoint generation is not a disposable 0731 fixture.
+
+The inherited `2de077e9` hosted `integration.repl` failure was reproduced locally:
+the fixture expected automatic session reuse after a different Host incarnation.
+The current client correctly fences that session. The corrected regression
+requires refusal, no prompt dispatch, unsuccessful stale detach and explicit
+new-client recovery; it changes no runtime or terminal implementation.

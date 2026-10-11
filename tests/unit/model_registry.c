@@ -1129,6 +1129,59 @@ static int test_discovery_refusals(void)
     return 0;
 }
 
+static int test_exact_acquisition_provenance(void)
+{
+    char root[] = "build/tests/source-provenance-XXXXXX";
+    char directory[YVEX_PATH_CAP];
+    yvex_operator_paths paths = {0};
+    yvex_source_acquisition_provenance *records = calloc(4u, sizeof(*records));
+    yvex_source_acquisition_provenance *selected;
+    yvex_error err;
+    const char *payload = "{\"target_id\":\"checkpoint\",\"family\":\"mamba\","
+        "\"repo_id\":\"fixture/model\",\"provider\":\"huggingface\","
+        "\"revision\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\","
+        "\"local_source_dir\":\"/fixture/payload\","
+        "\"manifest_path\":\"/untrusted/redirect.json\"}";
+    const char *metadata = "{\"target_id\":\"checkpoint\",\"family\":\"mamba\","
+        "\"repo_id\":\"fixture/model\",\"local_source_dir\":\"/fixture/metadata\"}";
+    YVEX_TEST_ASSERT(records && mkdtemp(root), "allocate isolated provenance fixture");
+    selected = &records[3];
+    snprintf(paths.models_root, sizeof(paths.models_root), "%s", root);
+    snprintf(paths.registry_root, sizeof(paths.registry_root), "%s/registry", root);
+    snprintf(paths.reports_root, sizeof(paths.reports_root), "%s/reports", root);
+    YVEX_TEST_ASSERT(yvex_source_acquisition_provenance_paths("payload", "mamba", &paths,
+        &records[0], &err) &&
+        yvex_source_acquisition_provenance_paths("metadata", "mamba", &paths, &records[1], &err) &&
+        yvex_source_acquisition_provenance_paths("duplicate", "mamba", &paths, &records[2], &err),
+        "form provenance locations through the source owner");
+    YVEX_TEST_ASSERT(yvex_core_mkdir_parent(records[0].registry_path, "test", &err) == YVEX_OK &&
+        write_file(records[0].registry_path, payload) && write_file(records[1].registry_path, metadata),
+        "coexisting metadata and tensor acquisitions");
+    YVEX_TEST_ASSERT(yvex_source_acquisition_provenance_resolve(
+        "checkpoint", &paths, selected, &err) == -1 && !selected->found,
+        "ambiguous target must not choose by directory iteration order");
+    YVEX_TEST_ASSERT(yvex_source_acquisition_provenance_resolve(
+        "/fixture/payload", &paths, selected, &err) == 1 && selected->found &&
+        !strcmp(selected->manifest_path, records[0].manifest_path) &&
+        !strcmp(selected->repo_id, "fixture/model") &&
+        !strcmp(selected->revision, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        "exact catalog path selects payload and cannot redirect the canonical manifest");
+    YVEX_TEST_ASSERT(yvex_source_acquisition_provenance_resolve(
+        "/fixture/absent", &paths, selected, &err) == 0 && !selected->found &&
+        !selected->manifest_path[0], "absent exact selection clears previous provenance");
+    YVEX_TEST_ASSERT(write_file(records[2].registry_path, payload) &&
+        yvex_source_acquisition_provenance_resolve(
+            "/fixture/payload", &paths, selected, &err) == -1 && !selected->found,
+        "two provenance records for one exact source refuse rather than aliasing manifests");
+    for (unsigned int i = 0u; i < 3u; ++i)
+        YVEX_TEST_ASSERT(unlink(records[i].registry_path) == 0, "remove owned provenance fixture");
+    snprintf(directory, sizeof(directory), "%s/registry/mamba", root);
+    YVEX_TEST_ASSERT(rmdir(directory) == 0 && rmdir(paths.registry_root) == 0 && rmdir(root) == 0,
+        "release only the disposable provenance directories");
+    free(records);
+    return 0;
+}
+
 static int test_target_fact_population(void)
 {
     yvex_model_target_report *report = calloc(1u, sizeof(*report));
@@ -1163,6 +1216,7 @@ static int test_target_fact_population(void)
 int yvex_test_model_registry(void)
 {
     if (test_discovery_refusals() != 0) return 1;
+    if (test_exact_acquisition_provenance() != 0) return 1;
     if (test_target_fact_population() != 0) return 1;
     if (test_preparation_refusals() != 0) return 1;
     if (test_target_catalog_views() != 0) return 1;

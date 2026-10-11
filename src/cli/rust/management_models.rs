@@ -173,7 +173,7 @@ struct Cleanup {
     confirm: bool,
 }
 
-fn selected(selector: &str) -> Result<(ffi::Library, u64, ffi::ModelSnapshot)> {
+pub(crate) fn selected(selector: &str) -> Result<(ffi::Library, u64, ffi::ModelSnapshot)> {
     bounded(selector, 512)?;
     let library = ffi::Library::open(None, None)?;
     let mut selected = None;
@@ -328,6 +328,8 @@ fn storage(value: &Value) -> Result<Value> {
 pub(crate) fn read(operation: &str, value: &Value) -> Result<Value> {
     validate(operation, value)?;
     match operation {
+        "optimization.techniques" => crate::management_compilation::techniques(value),
+        "qualification.get" => crate::management_compilation::qualification(value),
         "model.list" => models(value, false),
         "model.get" => models(value, true),
         "model.search" => remote(value, false),
@@ -843,6 +845,7 @@ fn cleanup_source(value: &Value) -> Result<Value> {
 pub(crate) fn execute(operation: &str, value: &Value) -> Result<Value> {
     validate(operation, value)?;
     match operation {
+        "optimization.plan" => crate::management_compilation::plan(value),
         "profile.scan" => scan_profiles(),
         "profile.create" => create_profile(value),
         "profile.verify" => verify_profile(value),
@@ -933,6 +936,9 @@ fn validate_profile(operation: &str, value: &Value) -> Result<()> {
 
 // Called before receipt/journal admission. No catalog, network or filesystem effect.
 pub(crate) fn validate(operation: &str, value: &Value) -> Result<()> {
+    if operation.starts_with("optimization.") || operation == "qualification.get" {
+        return crate::management_compilation::validate(operation, value);
+    }
     if operation.starts_with("profile.") {
         return validate_profile(operation, value);
     }

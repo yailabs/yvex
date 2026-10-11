@@ -4,8 +4,8 @@ pub mod connections;
 pub mod discovery;
 pub mod local;
 pub mod network;
-pub mod read_state;
 mod network_types;
+pub mod read_state;
 mod types;
 pub use types::*;
 
@@ -395,14 +395,40 @@ mod tests {
         "submitted_at_unix_ms":10,"updated_at_unix_ms":11,"input":request.input,"result":null,"reason":null})
     }
     #[test]
+    fn optimization_plans_are_jobs_and_do_not_accept_compiler_paths() {
+        let input: OptimizationPlanInput = serde_json::from_value(json!({
+            "model":"exact-catalog-model", "expected_revision":"a".repeat(40),
+            "backend":"cpu", "goal":"memory", "context":32,
+            "prefill":8, "concurrency":1
+        }))
+        .unwrap();
+        let prepared = client().optimizations().prepare_plan(&input).unwrap();
+        assert_eq!(prepared.invocation().kind().unwrap(), OperationKind::Job);
+        assert_eq!(
+            prepared.invocation().input["expected_revision"],
+            "a".repeat(40)
+        );
+        assert!(client()
+            .read::<operations::OptimizationPlan>(&input)
+            .is_err());
+        let mut forbidden = prepared.invocation().input.clone();
+        forbidden["source"] = json!("/unowned");
+        assert!(Invocation::new("optimization.plan", forbidden).is_err());
+        let receipt = job(prepared.invocation());
+        let response = response(prepared.invocation(), receipt);
+        let observed = client()
+            .decode(&bytes(response), prepared.invocation())
+            .unwrap();
+        assert_eq!(observed.value["job_id"], prepared.request_id());
+        assert!(observed.value["result"].is_null());
+    }
+    #[test]
     fn typed_build_assessment_preserves_legacy_and_refuses_fabricated_evidence() {
         let legacy = json!({"schema":"yvex.model.prepare.v1", "model":"m", "state":"PLANNED", "changed":false});
-        assert!(
-            serde_json::from_value::<BuildResult>(legacy.clone())
-                .unwrap()
-                .planning
-                .is_none()
-        );
+        assert!(serde_json::from_value::<BuildResult>(legacy.clone())
+            .unwrap()
+            .planning
+            .is_none());
         let mut assessed = legacy;
         assessed["planning"] = json!({"schema":"yvex.build.planning.v1", "readiness":"blocked",
             "basis":"not_admitted", "reason":"missing input", "native_status":-10,

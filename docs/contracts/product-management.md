@@ -54,6 +54,8 @@ sending, and must not automatically retry after a transport failure.
 | `registry.accounts` | Safe observation of the Host's existing registry credential owner |
 | `acquisition.start/get/cancel/resume` | Existing Source delivery operation, identity and generation; resume is explicit and fenced |
 | `build.start` | Shared preparation owner, verification and immutable output; dry-run plans never claim a built package |
+| `optimization.techniques/plan` | Native technique inspection and bounded catalog-selected Program P planning Job; no artifact emission or Engine load |
+| `qualification.get` | Exact embedded publication ID; full target, claim planes and measurements; no local receipt paths or promotion |
 | `package.get/verify`, `source.verify` | Exact package/source identity and actual verifier, not inferred readiness |
 | `profile.scan/create/verify/remove` | Deployment specialization separate from package and live Engine |
 | `model.storage/evict`, `source.cleanup` | Owner-observed storage and explicitly confirmed/fenced lifecycle operations |
@@ -71,6 +73,78 @@ Host process configuration remains a local deployment responsibility. Explicitly
 configured managed Hosts support separately granted lifecycle control below;
 external operator services are never implicitly replaced. Engine load/unload
 never replaces the Host.
+
+## Physical compilation consumer handoff
+
+Management v2 adds capability-discovered `optimization.techniques` and
+`qualification.get` (reads), and `optimization.plan` (Job). Older producers lacking these operation IDs are
+unsupported. These operations retain the existing product-management grant, transport trust
+and peer-scoped Job store. Publishing the contract does not roll out a service.
+
+| Stage | Consumer operation | Qualified boundary |
+| --- | --- | --- |
+| Select source | `model.list/get` | Acquired model and exact revision; presence is not payload authentication. |
+| Inspect methods | `optimization.techniques` | `yvex.optimization.techniques.v1`: actual native producers and prerequisites, not research names. |
+| Prepare intent | SDK `OptimizationPlanInput` / `operations::OptimizationPlan` | Catalog model/revision, backend, goal, context, prefill, concurrency and search bounds. No filesystem paths. |
+| Submit once | `optimization.plan` | Persist invocation/request ID before dispatch. The same C planner as `compile optimize` owns candidate identities and costs. |
+| Recover | `job.get` with the original request ID | Accepted/running/succeeded/failed/indeterminate remain distinct; loss is not permission to resubmit with another ID. |
+| Inspect result | `yvex.optimization.plan.v1` | Semantic context, physical candidates, build identity, initial resource bounds and missing evidence; no fabricated qualified winner. |
+| Read related evidence | `qualification.get {"id":"exact-publication-id"}` | `yvex.qualification.record.v1` carries the full canonical receipt, content identity and publication authentication. Missing IDs and paths refuse; a read performs no experiment. |
+| Produce/evaluate | Local `compile optimize --select --out-policy`, `compile quant plan/emit`, qualification | Search-row production/evaluation remains local. `build.start` is a separate admitted preparation workflow, not arbitrary candidate execution. |
+| Deploy | Explicit profile/Engine operations | Actual binding, resource admission and operator intent are still required. Successful planning starts nothing. |
+
+Example input for an acquired catalog model:
+
+```json
+{
+  "model": "mamba-codestral-7b-v0.1",
+  "expected_revision": "4f086c08c1e0f07bdc50ca25125dbbf7475d21da",
+  "backend": "cpu", "goal": "memory",
+  "context": 32, "prefill": 4, "concurrency": 1,
+  "allow_approximation": true
+}
+```
+
+Context/prefill must be positive; prefill cannot exceed context. Concurrency and
+candidate population are bounded to 32. Optional `memory_limit` cannot weaken
+the native reserve. `technique` is `fixed-recipes-v1` or
+`source-retention-allocation-v1`; allocation requires `weight_budget` and permits
+at most 4096 `search_states` publicly. The expert local limit is separate.
+Unknown fields, source/output paths and reserve overrides refuse before Job
+persistence. Revision drift fails before compilation. Missing authentication,
+calibration or consumers retain native refusals rather than optimistic readiness.
+
+`publication` reports no artifact, binding or Engine publication. Unavailable
+quality, rate, workspace and state measurements are null. Static ordering is
+experiment priority, not measured ranking. Available memory is an observation,
+not immutable artifact identity or a reservation. There is no public planning
+cancellation operation: stopping observation does not stop native work.
+Interrupted workers retain uncertain outcomes instead of automatic replay.
+
+`qualification_evidence` contains metadata references to relevant embedded
+published records. `qualification.get` retrieves each full receipt separately,
+without duplicating raw sample populations in the planning Job. Association
+by policy and transformation is explicitly weaker than exact calibration,
+artifact and binding correspondence. Each row preserves authentication,
+association and claim planes; `selection_eligible` remains false. An empty
+collection means no related published records, not zero measured degradation.
+Caller-authored measurements do not enter this planning operation.
+
+The canonical [SDK contract](../../sdk/rust/contract/management.json) generates
+Rust and TypeScript records. Rust uses `client.optimizations().techniques(...)`
+and `prepare_plan(...)`, followed by `execute`/`jobs().get` and
+`client.qualifications().get(...)`. The
+[independent example](../../sdk/rust/examples/optimization.rs) retains an
+invocation, dispatches once through the public same-user companion, and reads
+the typed Job. HTTPS uses the same operations over an already approved
+connection; no enrollment or trust changes are part of planning. TypeScript
+owns safe records, not browser credential transport. Pin SDK `0.2.0` to the
+exact producer repository revision and discover operations before use.
+
+The real Mamba SDK/CLI control qualifies authenticated-source planning and
+recovery, not inference, model quality, arbitrary remote compilation or Studio.
+Source, candidate, artifact, specialization and resident generation remain
+separate objects. Consumers must retain unknown evidence and refused rows.
 
 ## Managed Host control
 

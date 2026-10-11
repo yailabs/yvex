@@ -6,7 +6,7 @@
       "operation": "compile.optimize",
       "class": "advanced_engineering",
       "public_operation": null,
-      "reason": "Native goal-driven compilation consumes a typed local optimization request and canonical compiler/evidence owners; no equivalent authenticated remote optimization operation is published."
+      "reason": "Full local compiler control remains engineering-only. A bounded catalog-selected planning subset is published as optimization.plan; source/output paths, policy emission, evaluation and deployment are not remotely promoted."
     },
     {
       "operation": "workbench.open",
