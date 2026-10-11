@@ -135,7 +135,7 @@ The ensuing corrections concern qualification infrastructure:
 | --- | --- |
 | Finite peer relinked with an old public struct layout | Include its generated header dependencies in canonical runner membership; an incremental build regression changes a transitive header. |
 | SDK test storage traversed Darwin's `/var` symlink | Canonicalize the fixture's temporary parent; production still refuses symlink profile roots, with a negative control. |
-| Synthetic catalog peer closed before the consumer drained its replies | Retain the connection until the consumer closes it, matching Host lifetime; no protocol or timeout policy change. |
+| Synthetic catalog peer closed before the consumer drained its replies | Retain catalog connections like the Host; finite trace subscriptions instead close after ACK and exercise queued-frame draining. |
 | Parallel sink failure selected a different terminal's poisoned-sink diagnosis | Test exact write diagnosis with one worker and abort/non-publication with four; numerical behavior and failure-selection policy are unchanged. |
 | SSH SDK fixtures placed trust under world-writable `/tmp` | Use owned private cache children, retain `StrictModes`, and qualify real isolated SSH/native Host and tiny-model sessions. |
 
@@ -143,6 +143,18 @@ The independent connection-enrollment examples additionally require the
 `native-credentials` feature and a usable native credential vault. A default
 example binary is not that prerequisite. Configured credential-vault lanes
 remain separate from typed SDK planning, local companion and SSH product tests.
+
+The `b03631be` hosted hermetic lane passed 135 controls; native macOS retained
+23 PASS, one real tiny-vertical FAIL and two unconfigured SDK-vault BLOCKED
+controls. The earlier trace-fixture retention did not fix the real transport:
+Darwin can reject timeout updates after shutdown while complete frames remain
+queued. The ensuing transport correction requires observed peer hangup before
+accepting that socket-option condition; invalid bounds, live errors and EOF
+still refuse. A real Host retirement regression drains its terminal ACK only
+after the peer has closed. The trace fixture again follows the production
+close-after-ACK lifecycle. Hosted native enrollment builds the actual
+`native-credentials` examples; a developer session without a usable vault
+cannot claim that lane from passing typed SDK tests.
 
 The complete journey still has open gates: pre-production full workspace/state
 costing, independently qualified candidate selection and an accepted dominant

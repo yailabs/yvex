@@ -1813,8 +1813,58 @@ static int test_host_stop_wait(void)
     return 0;
 }
 
+static int test_closed_peer_frames(void)
+{
+    char directory[] = "/tmp/yvex-closed-peer.XXXXXX";
+    char socket_path[YVEX_SERVER_SOCKET_PATH_CAP];
+    yvex_server_options options;
+    stop_wait_probe probe = {0};
+    pthread_t thread;
+    yvex_client *client = NULL;
+    yvex_client_request request = {0};
+    yvex_client_message reply = {0};
+    yvex_provider_sampling sampling;
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(mkdtemp(directory) != NULL, "closed peer private root");
+    (void)snprintf(socket_path, sizeof(socket_path), "%s/host.sock", directory);
+    test_options(&options);
+    options.socket_path = socket_path;
+    YVEX_TEST_ASSERT(yvex_server_create(&probe.server, &options, &err) == YVEX_OK &&
+                     yvex_server_start(probe.server, &err) == YVEX_OK &&
+                     pthread_create(&thread, NULL, stop_wait_serve, &probe) == 0,
+                     "closed peer actual Host starts");
+    YVEX_TEST_ASSERT(yvex_client_connect(&client, socket_path, &err) == YVEX_OK &&
+                     yvex_client_timeout_set(client, 2000ull, &err) == YVEX_OK,
+                     "live peer has a bounded timeout");
+    yvex_provider_sampling_default(&sampling);
+    request.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+    request.operation = YVEX_CLIENT_OP_RUNTIME_STOP;
+    request.request_number = 91ull;
+    request.temperature = sampling.temperature;
+    request.top_p = sampling.top_p;
+    request.typical_p = sampling.typical_p;
+    YVEX_TEST_ASSERT(yvex_client_send(client, &request, &err) == YVEX_OK &&
+                     pthread_join(thread, NULL) == 0 && probe.result == YVEX_OK,
+                     "peer retires completely with the terminal ACK still unread");
+    YVEX_TEST_ASSERT(yvex_client_timeout_set(client, 86400001ull, &err) == YVEX_ERR_INVALID_ARG,
+                     "closed peer does not relax timeout bounds");
+    YVEX_TEST_ASSERT(yvex_client_timeout_set(client, 1ull, &err) == YVEX_OK &&
+                     yvex_client_receive(client, &reply, &err) == YVEX_OK &&
+                     reply.kind == YVEX_CLIENT_MESSAGE_ACK && reply.status == YVEX_OK &&
+                     reply.request_number == request.request_number,
+                     "timeout update cannot discard a complete queued terminal frame");
+    YVEX_TEST_ASSERT(yvex_client_timeout_set(client, 0ull, &err) == YVEX_OK &&
+                     yvex_client_receive(client, &reply, &err) == YVEX_ERR_IO,
+                     "drained peer still refuses EOF rather than inventing a response");
+    yvex_client_close(&client);
+    YVEX_TEST_ASSERT(remove_retired_fixture_lock(socket_path) == 0 && rmdir(directory) == 0,
+                     "closed peer fixture retires its own resources");
+    return 0;
+}
+
 int yvex_test_server(void)
 {
+    if (test_closed_peer_frames() != 0) return 1;
     if (test_host_stop_wait() != 0) return 1;
     if (test_session_lifetime_fence() != 0) return 1;
     if (test_automatic_reasoning_policy() != 0) return 1;

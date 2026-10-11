@@ -51,9 +51,11 @@ jobs:
           # unit.platform still observes actual native memory independently.
           YVEX_TEST_FIXTURE_CAPACITY: '1'
           YVEX_SDK_PRODUCT_EXAMPLE: ${{ github.workspace }}/sdk/rust/target/debug/examples/management_product
+          YVEX_SDK_CONNECTIONS_EXAMPLE: ${{ github.workspace }}/sdk/rust/target/debug/examples/connections
         run: |
-          # Credential-vault enrollment remains a separate configured lane.
-          cargo build --manifest-path sdk/rust/Cargo.toml --locked --example management_product
+          # The hosted macOS keychain supplies this lane's real native vault.
+          # Tests retain isolated profiles and remove their generated entries.
+          cargo build --manifest-path sdk/rust/Cargo.toml --locked --features native-credentials --example management_product --example connections
           python3 tools/qa.py run native
       - name: Check ownership and build contracts
         run: >-

@@ -177,10 +177,9 @@ static int await_snapshot_consumer(int fd)
 {
     unsigned char next;
     ssize_t pending;
-    /* Like the Host, retain the connection until the consumer finishes the
-     * snapshot. Darwin rejects timeout updates after peer shutdown even when
-     * complete response frames remain unread. Do not manufacture that race
-     * by closing this one-operation fixture immediately after its final ACK. */
+    /* Engine catalogs, unlike finite trace subscriptions, retain the Host
+     * connection for further requests. This one-operation fixture waits for
+     * its consumer to finish. */
     do { pending = recv(fd, &next, 1u, MSG_PEEK); } while (pending < 0 && errno == EINTR && !stopped);
     return pending == 0 || stopped ? YVEX_OK : YVEX_ERR_IO;
 }
@@ -343,7 +342,6 @@ static int send_event_stream(int fd, const yvex_client_request *request,
     yvex_server_telemetry_close(&telemetry);
     if (rc == YVEX_OK && request->operation == YVEX_CLIENT_OP_RUNTIME_TRACE) {
         rc = send_ack(fd, request, err);
-        if (rc == YVEX_OK) rc = await_snapshot_consumer(fd);
     }
     return rc;
 }

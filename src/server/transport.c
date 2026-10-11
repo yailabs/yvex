@@ -10,6 +10,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,6 +85,20 @@ static int transfer_all(int fd, void *buffer, size_t count, int writing,
     return YVEX_OK;
 }
 
+static int timeout_peer_closed(int fd, int option_error)
+{
+    struct pollfd observation = {fd, POLLIN, 0};
+    int ready;
+    /* Darwin rejects socket options after peer shutdown, including while
+     * complete frames are still queued. Only an observed hangup makes a
+     * timeout immaterial: draining cannot wait for more peer bytes. Do not
+     * suppress option errors on a live socket or an invalid descriptor. */
+    if (option_error != EINVAL && option_error != ENOTCONN) return 0;
+    do { ready = poll(&observation, 1u, 0); } while (ready < 0 && errno == EINTR);
+    return ready == 1 && (observation.revents & POLLHUP) != 0 &&
+           (observation.revents & POLLNVAL) == 0;
+}
+
 int yvex_client_timeout_set(yvex_client *client,
                             unsigned long long milliseconds,
                             yvex_error *err)
@@ -97,9 +112,11 @@ int yvex_client_timeout_set(yvex_client *client,
     if (setsockopt(client->fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                    sizeof(timeout)) != 0 ||
         setsockopt(client->fd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
-                   sizeof(timeout)) != 0)
-        return transport_refuse(err, YVEX_ERR_IO,
-                                "local protocol timeout configuration failed");
+                   sizeof(timeout)) != 0) {
+        if (!timeout_peer_closed(client->fd, errno))
+            return transport_refuse(err, YVEX_ERR_IO,
+                                    "local protocol timeout configuration failed");
+    }
     yvex_error_clear(err);
     return YVEX_OK;
 }

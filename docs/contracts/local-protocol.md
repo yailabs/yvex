@@ -338,6 +338,14 @@ cannot make proposal state visible to a later request.
 Frame buffers, subscriber state, and connection resources are bounded and
 released on every exit path. No terminal success precedes model completion.
 
+Finite trace subscriptions close after their terminal ACK. Consumers may still
+have complete frames queued when observing that close. A bounded timeout update
+must not discard those frames: the native transport accepts a shutdown-related
+socket-option refusal only when a zero-wait poll establishes peer hangup.
+Invalid arguments and live-socket option errors still refuse; draining continues
+through the ordinary frame validator, and premature EOF remains an I/O failure.
+No retry or success is inferred from hangup alone.
+
 ## Compatibility policy
 
 This protocol is private, local, UID-scoped, and pre-v0.1. Schema changes bump
