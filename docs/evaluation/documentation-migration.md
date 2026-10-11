@@ -198,3 +198,58 @@ The unavailable second screenshot was not used as an invented visual oracle.
 
 `progression_decision=proceed`; `downstream_safe=true` for the documentation
 grammar and generated publication only.
+
+## Technical copy and mechanism diagrams — 2026-10-11
+
+The operator rejected the promotional tone of the preceding README and its
+generic diagram labels. This correction reopens and completes the same
+`DOCS.VISUAL.GRAMMAR.CONVERGENCE.0` boundary, without treating the earlier
+rendering tests as evidence of editorial acceptance.
+
+The README now describes implemented computational and parameter paths,
+backend legalization, state providers and measured qualification limits.
+Its compilation figure separates symbolic computation from parameter
+transformation and shows the terminal-resolution join, physical plans,
+authenticated binding and deployment resource checks. It explicitly preserves
+the distinction between native typed programs and DeepSeek's retained operator
+schedule. The request figure shows candidate state, accepted-prefix commit,
+uncommitted failure/cleanup and separate error publication. It does not imply
+that draft proposals are visible output or that all model families have the
+same state geometry.
+
+The shared SVG and optional Mermaid projections no longer print generic
+node-class badges or a taxonomy legend. Internal typed graph classes remain
+validated; the 13 other diagram sources are unchanged. Line styles still have
+legends. Root/documentation/architecture copy and the permanent editorial rules
+are reconciled. Legacy README anchors remain addressable. Benchmark receipts,
+generated values and Status capability rows are unchanged.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Publication/refusal | Canonical owner links and renderer tests | All documents; valid and malformed graphs | Deterministic projection, join and publication gate retained | 35 tests | Exact assertions | PASS | Documentation tooling, not runtime correctness |
+| Structure | Documentation registry and project-control validator | Repository, figures, benchmark projections | Links/counts/projections consistent | 395 owners, 13 planes, 15 figures, 6 observation projections | No drift/orphans; controlled Task counts | PASS | Canonical documentation closure |
+| Reader | Chromium 149 / CDP | 10 pages × 2 widths × 2 themes | Local assets load; page width bounded | 40 views | 390 / 1280 CSS px; no page overflow | PASS | Responsive offline HTML; not every browser |
+| SVG geometry | Chromium text bounds and rendered inspection | 15 figures × 2 themes | Text fits nodes; themes remain readable | 30 views | No node-text overflow; both new figures inspected | PASS | Rendered geometry, not human acceptance |
+| Preservation | Git comparison with parent | Runtime, headers, configuration, benchmark evidence, Status | No changes | Unchanged | Exact diff | PASS | Editorial/projection scope only |
+
+The source-stable browser run used commit
+`573adc4c65f62cfa2590eb653d0103343755028a`, tree
+`130a0d292ebf82867c6ca167d99dfd53401019aa`, with no working-tree delta.
+The local `build/docs/visual-grammar-receipt.json` has SHA-256
+`034623a30ad66c4f3068fd5251cb34dabe2285c817238e368f986cb47ab3a1c6`.
+Screenshots and the disposable CDP runner remain ignored build output in the
+`yvex-docs-technical` worktree. Reproduce structure/tests with `make docs-check`
+using the documented documentation dependencies; `make docs-site` rebuilds the
+395-page reader. The closing record changes no tested figure or renderer.
+
+The supplied screenshot path was not present on the Spark and was not used as
+a visual oracle. PDF was not requalified in this correction. The repository-wide
+CI run for the parent `0f15bcb5` failed in both the hermetic and macOS-native
+lanes before this edit; local documentation results do not claim those broader
+failures repaired. No inference, service mutation, source-package regeneration,
+ABI change, architectural ownership change or sibling-repository work occurred.
+Program P and the DeepSeek quality/performance gates remain open.
+
+`progression_decision=proceed`; `downstream_safe=true` for this documentation
+correction only. Integration of older unqualified working-tree experiments is
+not a consequence of this editorial closure.

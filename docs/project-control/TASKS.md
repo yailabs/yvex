@@ -156,10 +156,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 57 | 41 | 5 | 1 | 10 |
+| 57 | 42 | 4 | 1 | 10 |
 <!-- task-counts:end -->
 
-**41/57 selected Tasks complete.** This denominator includes the significant
+**42/57 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -568,7 +568,7 @@ Metal primitive claims only. No successor implementation Task is selected.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `DOCS.VISUAL.GRAMMAR.CONVERGENCE.0` | Unify the public README, architecture figures and documentation reading paths | Current | 🔵 IN PROGRESS | Reopened by operator review on 2026-10-11: remove promotional copy and generic node-category labels; make the entry diagrams explain parameter resolution and request/state publication from canonical contracts. Preserve the earlier rendering evidence, benchmark records and capability states. [Prior evidence and limits](../evaluation/documentation-migration.md#visual-grammar-and-receipt-bound-readme-2026-10-10). No runtime or capability promotion. |
+| `DOCS.VISUAL.GRAMMAR.CONVERGENCE.0` | Unify the public README, architecture figures and documentation reading paths | Closed | ✅ COMPLETE | Operator-requested technical correction on 2026-10-11 removes promotional copy and category badges; the entry diagrams now describe parameter resolution and transactional output with refusal paths. 35 publication tests, 40 page views and 30 SVG views pass. [Correction evidence](../evaluation/documentation-migration.md#technical-copy-and-mechanism-diagrams-2026-10-11) preserves prior rendering evidence, benchmark records and capability states. No runtime or capability promotion; human acceptance remains separate. |
 
 Explicitly selected by the operator after the bounded README delivery below.
 This replaces the presentation of existing diagrams, not their architectural
