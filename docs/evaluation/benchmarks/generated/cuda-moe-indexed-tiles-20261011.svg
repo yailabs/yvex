@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 624" role="img" aria-labelledby="title desc">
+<title id="title">Encoded MoE: scanned versus indexed column-major tiles</title>
+<desc id="desc">characterization; Component characterization only: no DeepSeek checkpoint, artifact, binding, TTFT, committed decode or 2K/8K result is measured by this fixture.. Values are printed beside each bar.</desc>
+<style>text{fill:#292434}.bar{fill:#7541ba}@media(prefers-color-scheme:dark){text{fill:#ede8f5}.bar{fill:#ba97f2}}</style>
+<g font-family="Arial, sans-serif">
+<text x="30" y="38" font-size="23" font-weight="700">Encoded MoE: scanned versus indexed column-major tiles</text>
+<text x="30" y="67" font-size="16">CHARACTERIZATION · ms · not an automatic capability promotion</text>
+<text x="30" y="129" font-size="18">512 gate-up scan</text>
+<rect class="bar" x="330" y="110" width="470.000" height="27" rx="4"/>
+<text x="820.000" y="129" font-size="17">30.3702</text>
+<text x="30" y="187" font-size="18">512 gate-up indexed</text>
+<rect class="bar" x="330" y="168" width="436.412" height="27" rx="4"/>
+<text x="786.412" y="187" font-size="17">28.1999</text>
+<text x="30" y="245" font-size="18">512 down scan</text>
+<rect class="bar" x="330" y="226" width="200.666" height="27" rx="4"/>
+<text x="550.666" y="245" font-size="17">12.9666</text>
+<text x="30" y="303" font-size="18">512 down indexed</text>
+<rect class="bar" x="330" y="284" width="173.336" height="27" rx="4"/>
+<text x="523.336" y="303" font-size="17">11.2006</text>
+<text x="30" y="361" font-size="18">64 gate-up scan</text>
+<rect class="bar" x="330" y="342" width="71.029" height="27" rx="4"/>
+<text x="421.029" y="361" font-size="17">4.58973</text>
+<text x="30" y="419" font-size="18">64 gate-up indexed</text>
+<rect class="bar" x="330" y="400" width="67.503" height="27" rx="4"/>
+<text x="417.503" y="419" font-size="17">4.36188</text>
+<text x="30" y="477" font-size="18">64 down scan</text>
+<rect class="bar" x="330" y="458" width="30.730" height="27" rx="4"/>
+<text x="380.730" y="477" font-size="17">1.9857</text>
+<text x="30" y="535" font-size="18">64 down indexed</text>
+<rect class="bar" x="330" y="516" width="27.769" height="27" rx="4"/>
+<text x="377.769" y="535" font-size="17">1.79439</text>
+</g></svg>

@@ -131,6 +131,15 @@ artifact/binding/32K configuration at generation 3; Host `337e7e73`, listeners
 and grants were not replaced. The candidate is not installed and 32K execution
 of the new artifact remains unqualified.
 
+The next indexed MoE tile realization is implemented under the existing admitted
+CUDA matrix class, not a new quantization or prepared-weight package. Its
+workspace cost is included by the backend capacity owner. Component numerical,
+refusal, graph/lifetime and repeated timing evidence are separate from the still
+unexecuted new complete-model comparison. No target-only decode improvement,
+20/700 acceptance or independently qualified recommendation follows from this
+candidate; the operator Host and generation remain protected. See
+[compiler evidence](../evaluation/compiler-evidence.md#indexed-moe-tile-realization).
+
 ## Retained computational architecture reconstruction
 
 The separate operator-authorized

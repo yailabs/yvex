@@ -311,10 +311,12 @@ extern "C" __global__ void yvex_expert_worklist_build_cuda(
     unsigned long long supported_width_mask,
     unsigned long long prefill_maximum_width, unsigned int phase,
     unsigned long long tensor_core_minimum,
-    unsigned long long admitted_width, unsigned int provenance, int *status)
+    unsigned long long admitted_width, unsigned int provenance, int *status,
+    unsigned long long *matrix_tiles)
 {
     __shared__ unsigned long long counts[256];
     __shared__ unsigned long long offsets[256];
+    __shared__ unsigned int tile_offsets[256], bucket_ordinals[256];
     __shared__ int active;
     unsigned int thread = threadIdx.x;
     unsigned long long pairs;
@@ -322,7 +324,7 @@ extern "C" __global__ void yvex_expert_worklist_build_cuda(
     if (thread == 0u) {
         active = *status == 0;
         if (active && (!selected || !row_count || !topk || !expert_count ||
-            expert_count > blockDim.x || !order || !expert_ids || !bucket_offsets ||
+            blockDim.x != 256u || expert_count > blockDim.x || !order || !expert_ids || !bucket_offsets ||
             !bucket_populations || !source_rows || !destination_rows || !summary ||
             !(supported_width_mask & 2ull) || supported_width_mask & 1ull ||
             (row_count < 63ull ? !(supported_width_mask & (1ull << row_count)) :
@@ -355,6 +357,7 @@ extern "C" __global__ void yvex_expert_worklist_build_cuda(
     if (!active) return;
     if (thread == 0u) {
         unsigned long long emitted = 0ull, unique = 0ull;
+        unsigned int tiles = 0u;
         summary->schema_version = YVEX_EXPERT_WORKLIST_OBSERVATION_SCHEMA_V1;
         summary->worklist_count = 1ull;
         summary->pair_count = pairs;
@@ -390,6 +393,12 @@ extern "C" __global__ void yvex_expert_worklist_build_cuda(
                     ? counts[expert] : YVEX_EXPERT_WORKLIST_HISTOGRAM_CAP - 1u;
             summary->population_histogram[histogram]++;
             if (tensor_core_minimum && counts[expert] >= tensor_core_minimum) {
+                tile_offsets[expert] = tiles;
+                bucket_ordinals[expert] = (unsigned int)unique;
+                if (counts[expert] > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH) {
+                    atomicCAS(status, 0, 2);
+                    active = 0;
+                } else tiles += (unsigned int)((counts[expert] + 7ull) / 8ull);
                 summary->matrix_tile_eligible_pairs += counts[expert];
                 if (counts[expert] % admitted_width)
                     summary->tail_rows += admitted_width - counts[expert] % admitted_width;
@@ -402,10 +411,18 @@ extern "C" __global__ void yvex_expert_worklist_build_cuda(
         } else {
             bucket_offsets[unique] = emitted;
             summary->bucket_count = unique;
+            if (matrix_tiles) matrix_tiles[0] = tiles;
         }
     }
     __syncthreads();
     if (!active || (unsigned long long)thread >= expert_count) return;
+    /* One descriptor per real matrix column tile, shared by every output
+     * row tile of gate/up and down. Header is the exact tile population;
+     * conservative launch padding never reads an uninitialized descriptor. */
+    if (matrix_tiles && tensor_core_minimum && counts[thread] >= tensor_core_minimum)
+        for (unsigned int column = 0u; column < counts[thread]; column += 8u)
+            matrix_tiles[1u + tile_offsets[thread] + column / 8u] =
+                ((unsigned long long)bucket_ordinals[thread] << 32u) | column;
     unsigned long long cursor = offsets[thread];
     for (unsigned long long pair = 0ull; pair < pairs; ++pair)
         if (selected[pair] == (unsigned long long)thread) {

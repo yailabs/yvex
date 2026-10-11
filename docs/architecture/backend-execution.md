@@ -185,13 +185,29 @@ physical stride, while index rows retain their own Hadamard/FP8 layout.
 State staging, causal selection and transaction completion are unchanged.
 
 Routed encoded MoE matrix execution maps each real expert population to
-independent eight-column tiles. Warps own independent output tiles; a
-cooperative bucket-prefix scan resolves the compact tile ordinal against the
-canonical worklist. Conservative launch padding performs no selected work.
+independent eight-column tiles. The device worklist producer emits a compact
+`(bucket ordinal, column offset)` index once; gate/up and down reuse it rather
+than repeating a bucket-prefix scan for every output-row tile. Bucket ordinals
+are not expert IDs. Adjacent warps visit column tiles before advancing the
+output-row tile, allowing reuse of the same expert's encoded weight rows.
+Conservative launch padding performs no selected work. A null index retains
+the prior scanned realization as an exact control, not a new product mode.
 The change retains expert associations, activation encoding, exact integer
 products, the admitted F32 reduction tree, BF16 publication and exceptional
 source-ordered F64 recovery. It introduces no prepared weight layout or
 different routing policy.
+
+The index belongs to the existing phase workspace and is rebuilt on its owning
+stream with each worklist. The backend capacity owner charges an aligned
+eight-byte header plus a conservative `ceil(selected_pairs / 8) +
+min(selected_pairs, expert_count)` entries; runtime preparation and admission
+consume that same owner. The worklist kernel additionally uses two 256-entry
+shared-memory integer arrays. There is no extra launch, device allocation,
+weight copy or host readback. Existing deployment-selected matrix eligibility
+and scalar fallback retain their thresholds and numerical classes. Backend-local
+tile scheduling changes executable/kernel identity, not artifact, binding or
+public schema identity. Component evidence is linked from
+[compiler evaluation](../evaluation/compiler-evidence.md#indexed-moe-tile-realization).
 
 The gate/up matrix consumer accepts homogeneous IQ2_XXS or Q2_K pairs, with
 Q2_K down operands. The Q2_K gate/up path reuses the existing encoded integer

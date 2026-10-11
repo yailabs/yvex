@@ -223,3 +223,80 @@ Continuation used observed successful unload state, not an uncertain retry.
 The same operator profile/artifact/binding/context 32768 was restored after
 each isolated lane group, ending at generation 3. Installed Host `337e7e73`,
 listeners and grants were unchanged. Generation identity was not reused.
+
+## Indexed MoE tile realization
+
+Program P's next executable candidate addresses the routed matrix population
+identified in the retained complete-request profiles. Previously every output
+tile rediscovered its expert through a prefix scan. The existing device worklist
+producer now emits a compact tile index shared by gate/up and down, and the
+matrix consumers traverse column tiles before output rows. No encoded weight,
+source operation, expert selection, reduction tree or publication rule changes.
+
+| Owner | Implemented decision / boundary |
+| --- | --- |
+| Semantic graph and deployment | Existing sealed routed operation, operand compatibility, admitted widths and `DEVICE_MATRIX_TILE` class; the minimum population remains four. No family-name selector or new numerical class. |
+| CUDA worklist | Derived `(bucket ordinal, column offset)` descriptors over actual eligible populations, including sparse expert IDs and tails; produced on the same execution stream. |
+| Matrix consumers | Direct descriptor lookup and column-major task order, with the previous null-index scan retained as an exact control. Conservative padding creates no new rows. |
+| Capacity / lifetime | Existing backend workspace calculation and arena use the same checked bound. The index is phase-local, not a prepared weight copy or persistent model allocation; existing runtime maximum/overlap accounting still applies. |
+| Program P / product | Equivalent implementation under an already admitted class. Source/build/kernel identity changes; source, parameter artifact, binding, public schema and CLI/SDK grammar do not. This is not an independently qualified automatic recommendation. |
+
+### Component comparison and correctness
+
+[Generated component comparison](benchmarks/generated/cuda-moe-indexed-tiles-20261011.md)
+owns the measurements, exact geometry, sample count, dispersion, binary/kernel
+hashes and frozen source delta. It uses CUDA events around the worklist builder
+plus one projection, with alternating control/candidate order and a separate
+warmup. Both arms use the same binary. Warm synthetic allocations are not the
+complete model's mapped weights or routing distribution; cache locality is the
+mechanism being tested, not a measured cache-hit or bandwidth claim.
+
+| Evidence plane / control | Authority and result | Claim earned |
+| --- | --- | --- |
+| Backend numerics | `cuda.moe_rows`: independent decoded-weight scalar F64 reference under the existing tolerance; exact comparison against prior scan and Q2 row execution | Bounded IQ2/Q2 arithmetic, BF16/exceptional recovery and output-bit preservation; not checkpoint logits or model quality |
+| Derived populations | Real device builder versus independently enumerated host worklist, sparse expert IDs, mixed scalar/matrix populations, poisoned storage, malformed descriptors and canaries | Correct pair association, bounds and fail-closed consumption, not fabricated batching |
+| Runtime composition | `cuda.info`: complete bounded encoded MoE, graph capture/replay, workspace reuse, cancellation, incompatible-kernel refusal and caller-owned results | Changed path composes with existing resource/lifecycle owners; not DeepSeek inference |
+| Device safety | Compute Sanitizer memcheck: zero errors; racecheck: zero hazards/errors/warnings | Device accesses and shared-memory synchronization in the bounded fixture |
+| Component performance | Repeated warm control/candidate samples in the generated observation | Characterized builder/projection benefit only |
+| Family / checkpoint / representation quality | No new independent checkpoint oracle, NLL/PPL, KL or held-out task evidence | UNQUALIFIED / BLOCKED; no inherited quality promotion |
+| Complete-model deployment / native product | New 0731 comparison not executed; the prior exclusive window has expired | UNQUALIFIED; no new decode, prefill, TTFT, request-latency or model-memory claim |
+
+The frozen component source is main `683ee840` plus delta
+`91d44be3aae8ed7ded52e9a8ffbc103f6699f13bf93167082db25a3cd7d509a8`.
+Focused QA receipts are `aedc91a4…` (`cuda.moe_rows`) and `e43c2d5d…`
+(`cuda.info`) under `build/qa/evidence/`; device safety logs are
+`build/program-p-mainline/tile-column-{memcheck,racecheck}.log`.
+Raw experiments, exact harness, patch and executable hashes are retained under
+`/home/dgmothx/lab/models/evidence/program-p-tile-dispatch-20261011.xw7JkaVr`.
+These observations precede documentation publication and retain their original
+source delta rather than claiming a later clean source identity.
+
+### Rejected or deferred alternatives
+
+| Alternative | Experimental reason / scope |
+| --- | --- |
+| Compact index without column-major scheduling | Only marginal component improvement; retained as a causal control, not the selected mechanism alone. |
+| Fixed-Q2/block-count template specialization | Gate/up component regressed and generated register usage increased; rejected. |
+| Packed integer minimum products | Down improved but gate/up regressed in the tested generic variant; not integrated. |
+| Shortened zero-leaf reduction | Modest component gain with additional arithmetic proof obligations; not integrated into this candidate. |
+| Lower matrix eligibility to one | Single-row gate/up and down regressed against scalar execution; retain deployment's existing threshold. No invented width or replicated inputs. |
+
+The associated raw `component-*` files retain these exploratory observations;
+they are not final full-model selections. No archived prepared-IQ2 experiment
+was reactivated. Warming and managed-prefetch negatives remain unchanged.
+
+### Remaining acceptance
+
+The operator Host `337e7e73` and original DeepSeek generation 3 were observed
+idle and preserved during the bounded tests. No unload, model-sized duplicate,
+cache eviction or installed executable replacement occurred. Sampled idle
+observations and the advisory device lock are not an exclusive reservation.
+
+A fresh authorized window is required to compare the existing authenticated
+0731 artifact/binding at 4K coding and 16K-context uncached 2K/8K prefill,
+target-only and DSpark separately, then restore the original operator profile.
+The new candidate's 32K admission is not established. Small-population decode,
+wide projections and long-history attention retain material costs outside this
+matrix scheduling correction. Their profile durations are not additive wall
+shares or a hardware ceiling. Program P and the 20/700 exit remain open;
+component improvement is not the requested complete-model result.

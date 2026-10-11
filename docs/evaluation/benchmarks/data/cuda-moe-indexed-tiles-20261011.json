@@ -1,0 +1,338 @@
+{
+  "schema": "yvex.evaluation.observation.v1",
+  "id": "cuda-moe-indexed-tiles-20261011",
+  "title": "Encoded MoE: scanned versus indexed column-major tiles",
+  "kind": "characterization",
+  "context": {
+    "source_commit": "683ee8406a764335ff0c7dd112e557be25b8f4de",
+    "source_tree": "e365d51b1925a64048bff4735a6c18397a747668",
+    "source_stability": "frozen",
+    "date": "2026-10-11",
+    "run_id": "program-p-tile-dispatch-20261011.xw7JkaVr/final",
+    "model": "Synthetic encoded MoE component, not DeepSeek inference",
+    "model_revision": null,
+    "artifact_identity": null,
+    "binding_identity": null,
+    "representation": "Q2_K encoded expert weights; Q8_K activations; unchanged exact integer products, F32 32-leaf reduction, BF16 publication and source-ordered F64 exceptional recovery",
+    "backend": "cuda",
+    "device": "NVIDIA GB10; one device, coherent unified-memory domain; driver 580.159.03; CUDA toolkit 13.0.88; sm_121",
+    "runtime_configuration": {
+      "source_delta": "91d44be3aae8ed7ded52e9a8ffbc103f6699f13bf93167082db25a3cd7d509a8",
+      "patch_sha256": "91d44be3aae8ed7ded52e9a8ffbc103f6699f13bf93167082db25a3cd7d509a8",
+      "qa_build_identity": "90bed4442689409151e3690b6dabcfe4ef11768353a65a4734e63c41cdb661b1",
+      "native_library_sha256": "0b4edc9e615e51a38572177d5bf45a8fbf4c579eb29509990fb1f6021ea0682f",
+      "executable_sha256": "9794d068b2d6323c2004d4377511b6f159c6f1d2f122d2d110f354a23f9a44f9",
+      "harness_sha256": "b2219eb802d822c6579e399381baea27d59674cc4772daca5fa2e418d4a39b52",
+      "kernels": {
+        "moe": "be93dede7a72e6cbaddba9183f2ea6b5bab880459fe558965648a5cc6a490b40",
+        "tensorcore": "8c9da17e6effc9dacab7d98eb7c1bad3289fe3bef9dc6c29dd0a3659b583fb62"
+      },
+      "arms": {
+        "scan": "Null compact-index pointer, retained prefix scan and output-row-major order",
+        "indexed": "Worklist-built compact tile index, column-major order; same kernel binary and arithmetic"
+      },
+      "sampling_policy": "12 rounds alternating AB/BA; discard first warmup round; 16 repetitions per GPU-event sample; 11 timed samples per arm",
+      "timer": "CUDA events on owning stream, no CUPTI; builder plus one projection; setup and final downloads excluded",
+      "matrix_minimum": 4,
+      "block_threads": 128,
+      "distributions": {
+        "rows-512-gate-up-scan": {
+          "count": 11,
+          "median": 30.3702145,
+          "minimum": 30.0496368,
+          "maximum": 30.9907322,
+          "median_absolute_deviation": 0.11443900000000085,
+          "samples": [
+            30.0496368,
+            30.8356285,
+            30.3226585,
+            30.9907322,
+            30.2557755,
+            30.6770687,
+            30.5135441,
+            30.3544998,
+            30.3702145,
+            30.3945465,
+            30.3420868
+          ]
+        },
+        "rows-512-gate-up-indexed": {
+          "count": 11,
+          "median": 28.1998501,
+          "minimum": 28.1108532,
+          "maximum": 29.0457115,
+          "median_absolute_deviation": 0.07416539999999827,
+          "samples": [
+            28.3364582,
+            28.2466106,
+            28.1108532,
+            28.1998501,
+            28.1256847,
+            28.3584518,
+            28.1259537,
+            28.8905067,
+            28.1799889,
+            29.0457115,
+            28.1396751
+          ]
+        },
+        "rows-512-down-scan": {
+          "count": 11,
+          "median": 12.9665604,
+          "minimum": 12.9036522,
+          "maximum": 13.6300402,
+          "median_absolute_deviation": 0.05250460000000068,
+          "samples": [
+            12.9665604,
+            12.9771481,
+            13.6300402,
+            12.9036522,
+            13.0829077,
+            12.9647379,
+            12.963912,
+            12.9240103,
+            13.0607901,
+            12.9140558,
+            13.1383657
+          ]
+        },
+        "rows-512-down-indexed": {
+          "count": 11,
+          "median": 11.2005558,
+          "minimum": 11.0959282,
+          "maximum": 11.8329964,
+          "median_absolute_deviation": 0.06437209999999993,
+          "samples": [
+            11.3134356,
+            11.2713184,
+            11.1361837,
+            11.2005558,
+            11.1271677,
+            11.2320461,
+            11.0959282,
+            11.8329964,
+            11.1846876,
+            11.2430496,
+            11.1863804
+          ]
+        },
+        "rows-64-gate-up-scan": {
+          "count": 11,
+          "median": 4.58973408,
+          "minimum": 4.56028986,
+          "maximum": 4.81532192,
+          "median_absolute_deviation": 0.011194230000000083,
+          "samples": [
+            4.56859016,
+            4.56028986,
+            4.81532192,
+            4.59041595,
+            4.58978987,
+            4.58556604,
+            4.58838177,
+            4.58973408,
+            4.57853985,
+            4.62121201,
+            4.60481787
+          ]
+        },
+        "rows-64-gate-up-indexed": {
+          "count": 11,
+          "median": 4.36188412,
+          "minimum": 4.33247995,
+          "maximum": 4.8712101,
+          "median_absolute_deviation": 0.024191850000000237,
+          "samples": [
+            4.4587059,
+            4.33247995,
+            4.8712101,
+            4.40723419,
+            4.40540981,
+            4.36059809,
+            4.38607597,
+            4.35830021,
+            4.36188412,
+            4.35663414,
+            4.3592
+          ]
+        },
+        "rows-64-down-scan": {
+          "count": 11,
+          "median": 1.98570204,
+          "minimum": 1.93488801,
+          "maximum": 2.25571799,
+          "median_absolute_deviation": 0.036010019999999976,
+          "samples": [
+            2.00231409,
+            1.93488801,
+            1.93667805,
+            1.94480002,
+            1.94095397,
+            1.98570204,
+            1.98833394,
+            1.99112403,
+            2.25571799,
+            1.97484803,
+            2.02171206
+          ]
+        },
+        "rows-64-down-indexed": {
+          "count": 11,
+          "median": 1.79439402,
+          "minimum": 1.74072194,
+          "maximum": 2.21388412,
+          "median_absolute_deviation": 0.04927205999999984,
+          "samples": [
+            1.84352195,
+            1.74072194,
+            1.84868598,
+            1.74210203,
+            1.79439402,
+            1.74160802,
+            1.79479802,
+            1.74512196,
+            2.21388412,
+            1.757586,
+            1.808092
+          ]
+        }
+      },
+      "raw_sha256": "34f57da009a17063f87a1b7604bf6f23a8c1a00d5b60011fc0df53cd2636cae1",
+      "output_bits_sha256": "ab08b6c5eed957431bbc501a26d920e93008d60dae0c62c6b070a76207384f2e",
+      "resource_observation": "Advisory cuda-device lock; no QA build/test running during final timings; installed Host observed idle before/after, generation 3 preserved; not an uninterrupted exclusive operator reservation"
+    },
+    "workload": "Real expert-major populations from (row*17 + rank*41) mod experts; top-k 6; gate/up 4096 -> 2048 with two packs; down 2048 -> 4096; no repeated-input population fabrication",
+    "warm_state": "warm",
+    "concurrency": 1,
+    "sequence_lengths": {
+      "active_rows": [
+        512,
+        64
+      ],
+      "selected_pairs": [
+        3072,
+        384
+      ],
+      "experts": [
+        256,
+        65
+      ],
+      "top_k": 6,
+      "model_context": null,
+      "generation_strategy": null,
+      "reasoning": null,
+      "sampling": null
+    },
+    "memory": {
+      "component_allocation_bytes": {
+        "512-gate-up": 1436967168,
+        "512-down": 762274048,
+        "64-gate-up": 361289216,
+        "64-down": 186119680
+      },
+      "tile_index_raw_bytes": {
+        "64": 912,
+        "512": 5128
+      },
+      "tile_index_aligned_bytes": {
+        "64": 1024,
+        "512": 5376
+      },
+      "worklist_shared_memory_delta_bytes": 2048,
+      "prepared_weight_bytes": 0,
+      "scope": "Fixture CUDA allocation plus separate host buffers; not a model working-set observation. Phase index is already charged by workspace_required; do not add to RSS or overlapping capacity maxima."
+    },
+    "limitations": [
+      "Component characterization only: no DeepSeek checkpoint, artifact, binding, TTFT, committed decode or 2K/8K result is measured by this fixture.",
+      "Both arms execute the same frozen candidate binary; the control is the retained null-index scan. This is not a full-model before/after against an older executable.",
+      "Repeated synthetic encoded weights are warm and may be cache-hot; model mappings and actual model routing can change the benefit. No DRAM traffic, occupancy or cache hit rate was measured.",
+      "Independent decoded-weight F64 references and exact prior-kernel controls qualify bounded operations, not checkpoint conformance or held-out representation quality.",
+      "Target-only width-one execution retains the scalar path; this optimization does not establish a decode improvement or the 20/700 goals.",
+      "The installed operator Host and model stayed available. Sampled idle observations and an advisory lock do not establish a dedicated uninterrupted reservation.",
+      "All samples, dispersion, harness, source patch and raw hashes are retained. No universal optimum, automatic qualified recommendation or installed deployment follows."
+    ],
+    "recorded_from": "/home/dgmothx/lab/models/evidence/program-p-tile-dispatch-20261011.xw7JkaVr/component-final.jsonl; reproduction source dispatch_bench.c; frozen patch tile-column-candidate.patch; build hashes tile-column-build.sha256"
+  },
+  "measurements": [
+    {
+      "id": "rows-512-gate-up-scan",
+      "label": "512 gate-up scan",
+      "metric": "component.builder-plus-matrix.device",
+      "unit": "ms",
+      "value": 30.3702145,
+      "samples": 11,
+      "statistic": "median",
+      "scope": "CUDA events, builder plus one gate-up projection; 3072 real selected pairs, 256 experts; 16 iterations/sample; min 30.0496368, max 30.9907322, MAD 0.11443900000000085; not full-model latency"
+    },
+    {
+      "id": "rows-512-gate-up-indexed",
+      "label": "512 gate-up indexed",
+      "metric": "component.builder-plus-matrix.device",
+      "unit": "ms",
+      "value": 28.1998501,
+      "samples": 11,
+      "statistic": "median",
+      "scope": "CUDA events, builder plus one gate-up projection; 3072 real selected pairs, 256 experts; 16 iterations/sample; min 28.1108532, max 29.0457115, MAD 0.07416539999999827; not full-model latency"
+    },
+    {
+      "id": "rows-512-down-scan",
+      "label": "512 down scan",
+      "metric": "component.builder-plus-matrix.device",
+      "unit": "ms",
+      "value": 12.9665604,
+      "samples": 11,
+      "statistic": "median",
+      "scope": "CUDA events, builder plus one down projection; 3072 real selected pairs, 256 experts; 16 iterations/sample; min 12.9036522, max 13.6300402, MAD 0.05250460000000068; not full-model latency"
+    },
+    {
+      "id": "rows-512-down-indexed",
+      "label": "512 down indexed",
+      "metric": "component.builder-plus-matrix.device",
+      "unit": "ms",
+      "value": 11.2005558,
+      "samples": 11,
+      "statistic": "median",
+      "scope": "CUDA events, builder plus one down projection; 3072 real selected pairs, 256 experts; 16 iterations/sample; min 11.0959282, max 11.8329964, MAD 0.06437209999999993; not full-model latency"
+    },
+    {
+      "id": "rows-64-gate-up-scan",
+      "label": "64 gate-up scan",
+      "metric": "component.builder-plus-matrix.device",
+      "unit": "ms",
+      "value": 4.58973408,
+      "samples": 11,
+      "statistic": "median",
+      "scope": "CUDA events, builder plus one gate-up projection; 384 real selected pairs, 65 experts; 16 iterations/sample; min 4.56028986, max 4.81532192, MAD 0.011194230000000083; not full-model latency"
+    },
+    {
+      "id": "rows-64-gate-up-indexed",
+      "label": "64 gate-up indexed",
+      "metric": "component.builder-plus-matrix.device",
+      "unit": "ms",
+      "value": 4.36188412,
+      "samples": 11,
+      "statistic": "median",
+      "scope": "CUDA events, builder plus one gate-up projection; 384 real selected pairs, 65 experts; 16 iterations/sample; min 4.33247995, max 4.8712101, MAD 0.024191850000000237; not full-model latency"
+    },
+    {
+      "id": "rows-64-down-scan",
+      "label": "64 down scan",
+      "metric": "component.builder-plus-matrix.device",
+      "unit": "ms",
+      "value": 1.98570204,
+      "samples": 11,
+      "statistic": "median",
+      "scope": "CUDA events, builder plus one down projection; 384 real selected pairs, 65 experts; 16 iterations/sample; min 1.93488801, max 2.25571799, MAD 0.036010019999999976; not full-model latency"
+    },
+    {
+      "id": "rows-64-down-indexed",
+      "label": "64 down indexed",
+      "metric": "component.builder-plus-matrix.device",
+      "unit": "ms",
+      "value": 1.79439402,
+      "samples": 11,
+      "statistic": "median",
+      "scope": "CUDA events, builder plus one down projection; 384 real selected pairs, 65 experts; 16 iterations/sample; min 1.74072194, max 2.21388412, MAD 0.04927205999999984; not full-model latency"
+    }
+  ]
+}

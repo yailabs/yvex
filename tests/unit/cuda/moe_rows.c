@@ -23,6 +23,8 @@ typedef struct {
     unsigned long long selected[MOE_ROWS_PAIRS], order[MOE_ROWS_PAIRS];
     unsigned long long expert_ids[MOE_ROWS_EXPERTS], offsets[MOE_ROWS_EXPERTS + 1];
     unsigned long long populations[MOE_ROWS_EXPERTS];
+    unsigned long long matrix_tiles[1 + (MOE_ROWS_PAIRS + 7) / 8 + MOE_ROWS_EXPERTS];
+    unsigned long long source_rows[MOE_ROWS_PAIRS], destination_rows[MOE_ROWS_PAIRS];
     float route_weights[MOE_ROWS_PAIRS];
     float before_canary, outputs[MOE_ROWS_PAIRS * MOE_ROWS_WIDTH], after_canary;
     int status;
@@ -130,12 +132,72 @@ static void moe_rows_input(moe_rows_storage *s, unsigned int qtype,
         }
     }
     for (unsigned long long pair = 0ull; pair < pairs; ++pair) {
-        s->selected[pair] = pair % experts;
+        s->selected[pair] = scenario == 13u ? (pair % ((experts + 1ull) / 2ull)) * 2ull : pair % experts;
         s->order[pair] = pairs - 1ull - pair;
     }
     if (scenario == 1u) s->status = 1;
     if (scenario == 2u) s->selected[0] = experts;
     s->before_canary = s->after_canary = 12345.0f;
+}
+
+static int moe_rows_build(yvex_backend *backend, CUdeviceptr base,
+                          unsigned long long pairs, unsigned long long experts,
+                          unsigned long long buckets, unsigned long long tile_count)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_error err = {0};
+    unsigned long long topk = 2ull, rows = pairs / topk, minimum = 4ull;
+    unsigned long long mask = 0x7ffffffffffffffeull, maximum = YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH;
+    unsigned int phase = YVEX_EXECUTION_PHASE_PREFILL, provenance = YVEX_EXECUTION_BATCH_PREFILL;
+#define FIELD(name_) CUdeviceptr name_ = base + offsetof(moe_rows_storage, name_)
+    FIELD(selected); FIELD(order); FIELD(expert_ids); FIELD(offsets); FIELD(populations);
+    FIELD(source_rows); FIELD(destination_rows); FIELD(summary); FIELD(status); FIELD(matrix_tiles);
+#undef FIELD
+    CUstream stream = yvex_cuda_launch_stream(backend);
+#define POISON(field_, count_) \
+    YVEX_TEST_ASSERT(state->driver.cuMemsetD8Async(field_, 0xcd, (size_t)(count_) * 8u, stream) == 0, \
+        "poison derived worklist before real producer writes it")
+    POISON(order, pairs); POISON(expert_ids, buckets); POISON(offsets, buckets + 1ull);
+    POISON(populations, buckets); POISON(source_rows, pairs); POISON(destination_rows, pairs);
+    POISON(matrix_tiles, tile_count + 1ull);
+#undef POISON
+    void *params[] = {&selected, &rows, &topk, &experts, &order, &expert_ids, &offsets,
+        &populations, &source_rows, &destination_rows, &summary, &mask, &maximum, &phase,
+        &minimum, &maximum, &provenance, &status, &matrix_tiles};
+    YVEX_TEST_ASSERT(yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        state->expert_worklist_build_cuda_function, 1u, 256u, 0u, params,
+        "cuda.test.moe-worklist-tiles", &err) == YVEX_OK,
+        "construct exact expert-major worklist and compact tiles on device");
+    return 0;
+}
+
+static int moe_rows_matrix_reference(yvex_backend *backend, yvex_device_tensor *arena,
+                                     moe_rows_storage *host, const moe_rows_storage *observed,
+                                     int up_stage, int matrix, unsigned int grid,
+                                     unsigned long long experts, void **params, void **scalar)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_error err = {0};
+    int device_wide = 0;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, host, sizeof(*host), &err) == YVEX_OK,
+        "reset legacy matrix mapping control");
+    int rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        up_stage ? state->moe_grouped_up_tensorcore_function : state->moe_grouped_down_tensorcore_function,
+        grid, 128u, 0u, params, "cuda.test.moe-matrix-mapping-reference", &err);
+    if (rc == YVEX_OK && matrix == 2)
+        rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            up_stage ? state->moe_grouped_up_rows_function : state->moe_grouped_down_rows_function,
+            (unsigned int)(experts * ((MOE_ROWS_WIDTH + 7u) / 8u)), 256u, 0u, scalar,
+            "cuda.test.moe-small-buckets-reference", &err);
+    if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        &device_wide, "cuda.test.moe-matrix-mapping-reference", &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(backend, arena, host,
+        sizeof(*host), &err) == YVEX_OK, "read legacy mapping reference");
+    YVEX_TEST_ASSERT(host->status == observed->status &&
+        !memcmp(host->outputs, observed->outputs, sizeof(host->outputs)) &&
+        host->summary.matrix_tile_executed_pairs == observed->summary.matrix_tile_executed_pairs,
+        "indexed and scanned matrix mapping preserve every output bit and committed pair");
+    return 0;
 }
 
 static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
@@ -161,25 +223,38 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
     moe_rows_input(host, qtype, blocks, bytes, scenario, pairs, experts);
     memcpy(host->up_weights + 2u, host->weights, sizeof(host->weights));
     if (matrix) {
-        unsigned long long cursor = 0ull;
+        unsigned long long cursor = 0ull, bucket = 0ull;
         minimum = 4ull;
         host->summary.schema_version = YVEX_EXPERT_WORKLIST_OBSERVATION_SCHEMA_V1;
-        host->summary.bucket_count = experts;
         for (unsigned long long expert = 0ull; expert < experts; ++expert) {
-            host->expert_ids[expert] = expert;
-            host->offsets[expert] = cursor;
-            for (unsigned long long pair = expert; pair < pairs; pair += experts) {
+            unsigned long long first = cursor;
+            for (unsigned long long pair = 0ull; pair < pairs; ++pair) {
+                unsigned long long expected = scenario == 13u ? host->selected[pair] : pair % experts;
+                if (expected != expert) continue;
+                host->source_rows[cursor] = pair / topk;
+                host->destination_rows[cursor] = pair;
                 host->order[cursor++] = pair;
                 host->route_weights[pair] = 1.0f;
-                host->populations[expert]++;
             }
+            if (cursor == first) continue;
+            host->expert_ids[bucket] = expert;
+            host->offsets[bucket] = first;
+            host->populations[bucket++] = cursor - first;
         }
-        host->offsets[experts] = cursor;
-        for (unsigned long long expert = 0ull; expert < experts; ++expert)
-            if (host->populations[expert] >= minimum)
+        host->summary.bucket_count = bucket;
+        host->offsets[bucket] = cursor;
+        for (unsigned long long expert = 0ull; expert < bucket; ++expert)
+            if (host->populations[expert] >= minimum) {
                 host->summary.matrix_tile_eligible_pairs += host->populations[expert];
+                for (unsigned int column = 0u; column < host->populations[expert]; column += 8u)
+                    host->matrix_tiles[++host->matrix_tiles[0]] = (expert << 32u) | column;
+            }
         if (scenario == 8u)
             host->populations[experts - 1ull] = YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH + 1ull;
+        if (scenario == 9u) host->matrix_tiles[1] = experts << 32u;
+        if (scenario == 10u) host->matrix_tiles[1] |= 1ull;
+        if (scenario == 11u) host->matrix_tiles[0] = pairs / 8ull + experts + 2ull;
+        if (scenario == 12u) host->matrix_tiles[1] = (host->populations[0] + 7ull) & ~7ull;
     }
     descriptor.bytes = descriptor.dims[0] = sizeof(*host);
     YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &descriptor, &arena, &err) == YVEX_OK &&
@@ -193,6 +268,7 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
     CUdeviceptr offsets = matrix ? base + offsetof(moe_rows_storage, offsets) : 0;
     CUdeviceptr populations = matrix ? base + offsetof(moe_rows_storage, populations) : 0;
     CUdeviceptr summary = matrix ? base + offsetof(moe_rows_storage, summary) : 0;
+    CUdeviceptr matrix_tiles = matrix ? base + offsetof(moe_rows_storage, matrix_tiles) : 0;
     void *params[] = {&weights, &row_bytes, &expert_bytes, &qtype, &selected, &order,
         &offsets, &populations, &summary, &minimum, &pairs, &topk, &experts, &input, &blocks, &q8_input, &width, &output, &status};
     void *up_params[] = {&weights, &row_bytes, &expert_bytes, &qtype,
@@ -204,10 +280,14 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
     void *matrix_up[] = {&weights, &row_bytes, &expert_bytes, &qtype,
         &up_weights, &row_bytes, &expert_bytes, &qtype, &selected, &route_weights, &order,
         &ids, &offsets, &populations, &summary, &pairs, &topk, &experts, &minimum,
-        &input, &input_width, &width, &limit, &output, &status};
+        &input, &input_width, &width, &limit, &output, &status, &matrix_tiles};
     void *matrix_down[] = {&weights, &row_bytes, &expert_bytes, &qtype, &selected, &order,
         &ids, &offsets, &populations, &summary, &pairs, &topk, &experts, &minimum,
-        &input, &input_width, &width, &output, &status};
+        &input, &input_width, &width, &output, &status, &matrix_tiles};
+    if (matrix && (scenario == 0u || scenario == 13u))
+        YVEX_TEST_ASSERT(!moe_rows_build(backend, base, pairs, experts,
+            host->summary.bucket_count, host->matrix_tiles[0]),
+            "real worklist producer precedes indexed matrix consumption");
     rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
         matrix ? (up_stage ? state->moe_grouped_up_tensorcore_function : state->moe_grouped_down_tensorcore_function) :
         up_stage ? state->moe_grouped_up_rows_function : state->moe_grouped_down_rows_function,
@@ -227,7 +307,7 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
         &device_wide, "cuda.test.moe-encoded-rows", &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(
         backend, arena, observed, sizeof(*observed), &err) == YVEX_OK, "read expert row result");
-    if ((scenario >= 1u && scenario <= 3u) || scenario >= 5u) {
+    if ((scenario >= 1u && scenario <= 3u) || (scenario >= 5u && scenario <= 12u)) {
         YVEX_TEST_ASSERT(observed->status != 0, "prior error/invalid expert/nonfinite input prevents publication");
     } else {
         YVEX_TEST_ASSERT(observed->status == 0, "valid expert row or exceptional exact recovery succeeds");
@@ -271,7 +351,15 @@ static int moe_rows_check_impl(yvex_backend *backend, unsigned int qtype,
         "expert execution preserves weights, inputs and worklist");
     YVEX_TEST_ASSERT(observed->before_canary == 12345.0f && observed->after_canary == 12345.0f,
         "partial row groups preserve output canaries");
-    if (matrix && qtype == YVEX_GGUF_QTYPE_Q2_K && (scenario == 0u || scenario == 4u)) {
+    if (matrix && (scenario == 0u || scenario == 4u || scenario == 13u)) {
+        matrix_tiles = 0;
+        unsigned int grid = (unsigned int)((((pairs + 7ull) / 8ull + experts) *
+            ((width + 15ull) / 16ull) + 3ull) / 4ull);
+        YVEX_TEST_ASSERT(!moe_rows_matrix_reference(backend, arena, host, observed,
+            up_stage, matrix, grid, experts, up_stage ? matrix_up : matrix_down,
+            up_stage ? up_params : params), "compare equivalent matrix implementations bitwise");
+    }
+    if (matrix && qtype == YVEX_GGUF_QTYPE_Q2_K && (scenario == 0u || scenario == 4u || scenario == 13u)) {
         YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, host, sizeof(*host), &err) == YVEX_OK,
             "reset independent Q2 matrix versus encoded-row comparison");
         offsets = populations = summary = 0; minimum = 0ull;
@@ -440,8 +528,12 @@ int yvex_cuda_test_moe_rows(void)
         for (size_t i = 0u; i < sizeof(blocks) / sizeof(blocks[0]); ++i)
             if (moe_rows_check_impl(backend, qtype, blocks[i], 0u,
                     up_stage, 512ull, 2, 65ull)) return 1;
-        if (moe_rows_check_impl(backend, qtype, 17ull, 8u,
-                up_stage, 512ull, 1, 65ull)) return 1;
+        for (unsigned int scenario = 8u; scenario <= 12u; ++scenario)
+            if (moe_rows_check_impl(backend, qtype, 17ull, scenario,
+                    up_stage, 512ull, 1, 65ull)) return 1;
+        for (unsigned long long pairs = 64ull; pairs <= 512ull; pairs *= 2ull)
+            if (moe_rows_check_impl(backend, qtype, 17ull, 13u,
+                    up_stage, pairs, 2, 65ull)) return 1;
     }
     yvex_backend_close(backend);
     return 0;

@@ -214,6 +214,16 @@ at generation 3 without replacing its Host. Exact samples and non-claims belong
 to [compiler evidence](../evaluation/compiler-evidence.md#mainline-native-0731-window),
 not manually maintained benchmark values in this Task record.
 
+The subsequent computational continuation qualifies an indexed, column-major
+MoE matrix realization at component scope, using the existing deployment class
+and authoritative workspace costing. It does not change encoded weights or
+numerical reduction. Repeated component timings, independent decoded-weight
+references and exact old/new controls do not close complete-model performance
+or quality gates. A fresh exclusive window is required for the new 0731
+before/after comparison; the previous unload permission is not reused.
+Program P remains IN PROGRESS and no installed rollout is implied. See
+[candidate evidence](../evaluation/compiler-evidence.md#indexed-moe-tile-realization).
+
 The computational-graph continuation uses sealed operator/program facts to
 select executable alternatives, not just weight policies. Its first bounded
 candidate is input-backed, read-only physical view lowering: eliminate redundant

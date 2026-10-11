@@ -34,7 +34,7 @@ typedef struct {
     CUdeviceptr status, normalized, post, combination;
     CUdeviceptr logits, scores, selected, weights, tokens, order;
     CUdeviceptr expert_ids, bucket_offsets, bucket_populations;
-    CUdeviceptr source_rows, destination_rows, worklist_summary;
+    CUdeviceptr source_rows, destination_rows, worklist_summary, matrix_tiles;
     CUdeviceptr routed_intermediate, routed_pairs, routed;
     CUdeviceptr q8_normalized;
     CUdeviceptr q8_routed_intermediate;
@@ -60,6 +60,18 @@ static int moe_cuda_refuse(yvex_error *err, yvex_status status, const char *reas
 {
     yvex_error_set(err, status, "cuda.moe", reason);
     return status;
+}
+
+/* Header plus conservative compact eight-column tile population. This is
+ * backend-local workspace, not a new expert population or weight layout. */
+static int moe_cuda_matrix_tile_capacity(unsigned long long pairs,
+                                         unsigned long long experts,
+                                         unsigned long long *entries)
+{
+    unsigned long long buckets = pairs < experts ? pairs : experts;
+    unsigned long long columns = pairs / 8ull + (pairs % 8ull != 0ull);
+    return yvex_core_u64_add(columns, buckets, entries) &&
+           yvex_core_u64_add(*entries, 1ull, entries);
 }
 
 /* The operation owns result geometry; the transfer owner admits storage. */
@@ -137,13 +149,14 @@ static int moe_cuda_rows_workspace_required(const yvex_moe_layer_plan *layer,
                                              yvex_error *err)
 {
     unsigned long long total = 0ull, pairs, hidden, post, combination;
-    unsigned long long logits, routed_intermediate;
+    unsigned long long logits, routed_intermediate, matrix_tiles;
     unsigned long long pair_outputs, q8_normalized, q8_routed, token_intermediate;
     if (bytes) *bytes = 0ull;
     if (!layer || !bytes || !row_count || !layer->hidden_width || !layer->residual_streams ||
         !layer->expanded_width || !layer->routed_experts ||
         !layer->experts_per_token || !layer->expert_intermediate_width ||
         !yvex_core_u64_mul(row_count, layer->experts_per_token, &pairs) ||
+        !moe_cuda_matrix_tile_capacity(pairs, layer->routed_experts, &matrix_tiles) ||
         !yvex_core_u64_mul(row_count, layer->hidden_width, &hidden) ||
         !yvex_core_u64_mul(row_count, layer->residual_streams, &post) ||
         !yvex_core_u64_mul(post, layer->residual_streams, &combination) ||
@@ -172,6 +185,7 @@ static int moe_cuda_rows_workspace_required(const yvex_moe_layer_plan *layer,
     ADD(pairs, sizeof(unsigned long long));
     ADD(pairs, sizeof(unsigned long long));
     ADD(1ull, sizeof(yvex_expert_worklist_observation));
+    ADD(matrix_tiles, sizeof(unsigned long long));
     ADD(routed_intermediate, sizeof(float));
     ADD(pair_outputs, sizeof(float));
     ADD(hidden, sizeof(float));
@@ -960,9 +974,10 @@ static int moe_cuda_batch_ranges(moe_cuda_batch *batch,
     const yvex_moe_layer_plan *layer = job->layer;
     unsigned long long hidden, post, combination, logits;
     unsigned long long routed_intermediate, pair_outputs;
-    unsigned long long q8_normalized, q8_routed;
+    unsigned long long q8_normalized, q8_routed, matrix_tiles;
     int rc;
-    if (!yvex_core_u64_mul(rows->row_count, layer->hidden_width, &hidden) ||
+    if (!moe_cuda_matrix_tile_capacity(pairs, layer->routed_experts, &matrix_tiles) ||
+        !yvex_core_u64_mul(rows->row_count, layer->hidden_width, &hidden) ||
         !yvex_core_u64_mul(rows->row_count, layer->residual_streams, &post) ||
         !yvex_core_u64_mul(post, layer->residual_streams, &combination) ||
         !yvex_core_u64_mul(rows->row_count, layer->routed_experts, &logits) ||
@@ -1006,6 +1021,8 @@ static int moe_cuda_batch_ranges(moe_cuda_batch *batch,
           "cuda.moe.rows.worklist-destination-rows");
     RANGE(worklist_summary, 1ull, sizeof(yvex_expert_worklist_observation), 0,
           "cuda.moe.rows.worklist-summary");
+    RANGE(matrix_tiles, matrix_tiles, sizeof(unsigned long long), 0,
+          "cuda.moe.rows.matrix-tiles");
     RANGE(routed_intermediate, routed_intermediate, sizeof(float), 0,
           "cuda.moe.rows.routed-intermediate");
     RANGE(routed_pairs, pair_outputs, sizeof(float), 0, "cuda.moe.rows.routed-pairs");
@@ -1125,7 +1142,7 @@ static int moe_cuda_batch_route(moe_cuda_batch *batch,
             &batch->bucket_populations, &batch->source_rows,
             &batch->destination_rows, &batch->worklist_summary,
             &width_mask, &prefill_maximum, &phase, &tensor_core_minimum,
-            &admitted_width, &provenance, &batch->status};
+            &admitted_width, &provenance, &batch->status, &batch->matrix_tiles};
         rc = batch->ops->launch(
             &batch->work, batch->state->expert_worklist_build_cuda_function,
             1u, MOE_CUDA_BLOCK, 0u,
@@ -1257,7 +1274,7 @@ static int moe_cuda_batch_experts(moe_cuda_batch *batch,
             &batch->bucket_offsets, &batch->bucket_populations,
             &batch->worklist_summary, &count, &topk, &experts,
             &tensor_core_minimum, &input, &input_width, &intermediate_width,
-            (void *)&layer->activation_limit, &intermediate, &batch->status};
+            (void *)&layer->activation_limit, &intermediate, &batch->status, &batch->matrix_tiles};
         rc = batch->ops->launch(
             &batch->work, batch->state->moe_grouped_up_tensorcore_function,
             tensor_up_grid, MOE_CUDA_TENSORCORE_BLOCK, 0u, params,
@@ -1297,7 +1314,7 @@ static int moe_cuda_batch_experts(moe_cuda_batch *batch,
             &batch->bucket_populations, &batch->worklist_summary,
             &count, &topk, &experts, &tensor_core_minimum,
             &down_input, &intermediate_width, (void *)&layer->hidden_width,
-            &pair_outputs, &batch->status};
+            &pair_outputs, &batch->status, &batch->matrix_tiles};
         rc = batch->ops->launch(
             &batch->work, batch->state->moe_grouped_down_tensorcore_function,
             tensor_down_grid, MOE_CUDA_TENSORCORE_BLOCK, 0u, params,
