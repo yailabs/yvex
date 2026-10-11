@@ -101,7 +101,7 @@ owns request/result schemas and authorization boundaries.
 | Real Mamba planning | Authenticated `mamba-codestral-7b-v0.1`, revision `4f086c08c1e0f07bdc50ca25125dbbf7475d21da`; CPU, context 32, prefill 4, concurrency 1, memory objective | Seven native candidates; 64 sequence-mixer layers, zero attention; no Engine or payload production |
 | Independent Rust SDK | Disposable public same-user companion; persisted invocation, one dispatch, `job.get`, then exact CLI context/candidate comparison | Job recovery and native planning equivalence, not SSH enrollment, remote GPU execution or model quality |
 | Published evidence association | Bounded metadata references by policy/transformation, followed by public `qualification.get`; same canonical records as CLI inspection | Related evidence is visible; unknown calibration/artifact correspondence cannot earn a recommendation |
-| 0731 capacity | Existing authenticated MXFP4/Q2 artifact/binding; target-only, widths 512/1, independent 4K/16K/32K assessments | All observed peak envelopes refused before residency; available memory is volatile, not reserved |
+| 0731 capacity before the exclusive window | Existing authenticated MXFP4/Q2 artifact/binding; target-only, widths 512/1, independent 4K/16K/32K assessments | All observed peak envelopes refused before residency while the operator engine remained resident; available memory is volatile, not reserved |
 
 Reproduce the independent consumer control against an isolated candidate binary:
 
@@ -120,9 +120,9 @@ model or stops the operator Host. The source must already be authenticated.
 
 The consumer test retains the exact CLI and SDK JSON, including native context,
 candidate, source/tree/delta/build and Job identities. Capacity observations
-remain separate from timed inference. No new load, TTFT, decode, prefill or
-held-out quality result is inferred from these controls. Historical model
-execution receipts remain the authority for their original configurations.
+remain separate from timed inference. No load, TTFT, decode, prefill or held-out
+quality result is inferred from these planning controls. The subsequent
+authorized execution has separate [receipts and scope](#mainline-native-0731-window).
 
 ### Qualification fixture corrections
 
@@ -145,8 +145,8 @@ example binary is not that prerequisite. Configured credential-vault lanes
 remain separate from typed SDK planning, local companion and SSH product tests.
 
 The complete journey still has open gates: pre-production full workspace/state
-costing, independently qualified candidate selection, an accepted dominant
-execution correction, and comparable complete-model DeepSeek measurements.
+costing, independently qualified candidate selection and an accepted dominant
+execution correction.
 The operator-owned old-checkpoint generation is not a disposable 0731 fixture.
 
 The inherited `2de077e9` hosted `integration.repl` failure was reproduced locally:
@@ -154,3 +154,60 @@ the fixture expected automatic session reuse after a different Host incarnation.
 The current client correctly fences that session. The corrected regression
 requires refusal, no prompt dispatch, unsuccessful stale detach and explicit
 new-client recovery; it changes no runtime or terminal implementation.
+
+## Mainline native 0731 window
+
+The operator explicitly authorized temporary unloading of only DeepSeek after
+software QA. Source `3c73c2a5`, tree `7fcc485fbaba0f5fb7d72e472d8e7ed2fc8a354d`,
+and the captured executable were stable throughout the native samples and the
+separate CUPTI diagnostics. The existing authenticated MXFP4/Q2 artifact
+`25d29155…` and binding `091f933e…` were reused: no model recompilation, cache
+eviction, reduced reserve, Host replacement or model-sized duplicate allocation.
+
+| Lane | Exact control | Result authority |
+| --- | --- | --- |
+| Coding target-only | Context 4096, chunk 512, greedy/none, 31 new input positions, 256 committed output tokens, three fresh sessions after separate warmup | [Native target-only receipt](benchmarks/generated/qualification-deepseek-0731-program-p-mainline-target-only-coding-hash-table-20261011.md) |
+| Uncached 2K | Context 16384, chunk 512, exactly 2048 new positions, 16 output tokens, three fresh sessions | [Native 2K receipt](benchmarks/generated/qualification-deepseek-0731-program-p-mainline-target-only-prefill-promessi-2048-20261011.md) |
+| Uncached 8K | Same context/chunk, exactly 8192 new positions, 16 output tokens, three fresh sessions | [Native 8K receipt](benchmarks/generated/qualification-deepseek-0731-program-p-mainline-target-only-prefill-promessi-8192-20261011.md) |
+| Coding DSpark | Same coding case, context, sampling and output population; three fresh sessions | [Native speculative receipt](benchmarks/generated/qualification-deepseek-0731-program-p-mainline-speculative-coding-hash-table-20261011.md) |
+| Device attribution | Separate instrumented complete requests: coding with 64 output tokens, 2K/8K with 16 | [Coding](benchmarks/generated/qualification-deepseek-0731-program-p-mainline-critical-path-20261011.md), [2K](benchmarks/generated/qualification-deepseek-0731-program-p-mainline-critical-path-prefill-promessi-2048-20261011.md), [8K](benchmarks/generated/qualification-deepseek-0731-program-p-mainline-critical-path-prefill-promessi-8192-20261011.md) |
+
+The generated receipts own all benchmark values, sample distributions, server
+and client TTFT, arrival gaps, complete-request time, load observations and
+speculative economics. Client content arrival is not terminal painting.
+Coding reports committed tokens after the first divided by post-first decode
+wall time; proposals and discarded tokens are not counted as output.
+
+Both 4K and 16K admitted and executed after the authorized unload. This does not
+invalidate the earlier resource refusals: their available-memory observations
+differ. It does not qualify 32K for this artifact. Post-load smaps and runtime
+placement are retained separately; RSS/PSS/file pages and CUDA addressability
+are overlapping descriptions, not additive model copies. No whole-model physical
+residency or pinning claim follows from a pointer or `Locked=0`.
+
+All ordered fragment channels, byte lengths and SHA-256 values matched the
+retained same-artifact native controls. This is an internal regression control,
+not an independent 0731 reference or representation-quality certificate. The
+single chat-short warmup showed a speculative slowdown, separately from the
+repeated coding advantage. High/maximum, HTTP, concurrent and installed-product
+performance are not qualified by this window.
+
+The profiles identify substantial encoded-matrix/expert execution in coding;
+long prefill additionally spends material device time on attention reduction
+and candidate scores. Kernel population durations, host scopes and transfer
+counters have different meanings: attention/MoE host scopes overlap, logical
+bytes are not physical DRAM traffic, and no bandwidth or hardware ceiling has
+been established. No new numerical class, prepared layout or kernel is accepted
+from those observations alone. Mainline throughput is consistent with the
+retained baseline, not a competitive acceleration; 20/700 remains unearned.
+
+Raw authority is
+`/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg`:
+`source/` retains source/build/executable bytes, `attempt-3/` native runs, and
+`diagnostic/` CUPTI runs. Earlier adapter refusals remain alongside the successful
+window: unsupported unload syntax did not mutate the service; a subsequent
+observer initially confused an unloaded catalog record with a resident engine.
+Continuation used observed successful unload state, not an uncertain retry.
+The same operator profile/artifact/binding/context 32768 was restored after
+each isolated lane group, ending at generation 3. Installed Host `337e7e73`,
+listeners and grants were unchanged. Generation identity was not reused.

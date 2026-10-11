@@ -1,0 +1,461 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native performance has separate receipts",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native performance has separate receipts",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native performance has separate receipts",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-mainline-critical-path-prefill-promessi-2048-20261011",
+  "limitations": [
+    "Profiled diagnostic only; exact argv, context and bounded output population are retained. No performance samples or model quality promotion.",
+    "Host attention and MoE scopes overlap/asynchronously include waits; do not add them or call them disjoint GPU costs.",
+    "Logical transfer/active-weight counters are not physical DRAM traffic. Kernel duration alone cannot establish bandwidth, occupancy or a hardware ceiling.",
+    "No retained numerical/layout change or speedup follows from profiling. Independent quality and competitive goals remain open."
+  ],
+  "measurements": [],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": true,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/source",
+    "diagnostics": [
+      {
+        "id": "prefill.promessi-2048.kernel-sum",
+        "case": "prefill.promessi-2048",
+        "value": 22.285740595,
+        "unit": "s",
+        "definition": "Sum of CUPTI kernel durations over this complete profiled request, including prefill and bounded decode; not additive host wall time or sustained throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-2048.yvex_moe_grouped_up_tensorcore",
+        "case": "prefill.promessi-2048",
+        "value": 3.888475615,
+        "unit": "s",
+        "definition": "CUPTI kernel population duration, includes prefill and bounded decode; denominator is complete trace kernel sum, not host wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-2048.yvex_mxfp4_tensorcore_wide_rows",
+        "case": "prefill.promessi-2048",
+        "value": 3.498066108,
+        "unit": "s",
+        "definition": "CUPTI kernel population duration, includes prefill and bounded decode; denominator is complete trace kernel sum, not host wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-2048.yvex_qtype_matvec",
+        "case": "prefill.promessi-2048",
+        "value": 2.601902813,
+        "unit": "s",
+        "definition": "CUPTI kernel population duration, includes prefill and bounded decode; denominator is complete trace kernel sum, not host wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-2048.yvex_attention_reduce_native_warp",
+        "case": "prefill.promessi-2048",
+        "value": 2.326335988,
+        "unit": "s",
+        "definition": "CUPTI kernel population duration, includes prefill and bounded decode; denominator is complete trace kernel sum, not host wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-2048.yvex_decoded_rows",
+        "case": "prefill.promessi-2048",
+        "value": 1.710694517,
+        "unit": "s",
+        "definition": "CUPTI kernel population duration, includes prefill and bounded decode; denominator is complete trace kernel sum, not host wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-2048.yvex_moe_grouped_down_tensorcore",
+        "case": "prefill.promessi-2048",
+        "value": 1.601645152,
+        "unit": "s",
+        "definition": "CUPTI kernel population duration, includes prefill and bounded decode; denominator is complete trace kernel sum, not host wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-2048.yvex_moe_grouped_up_rows",
+        "case": "prefill.promessi-2048",
+        "value": 0.930598798,
+        "unit": "s",
+        "definition": "CUPTI kernel population duration, includes prefill and bounded decode; denominator is complete trace kernel sum, not host wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-2048.yvex_q8_row_matrix",
+        "case": "prefill.promessi-2048",
+        "value": 0.891368405,
+        "unit": "s",
+        "definition": "CUPTI kernel population duration, includes prefill and bounded decode; denominator is complete trace kernel sum, not host wall",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv"
+      }
+    ],
+    "traces": [
+      {
+        "case": "prefill.promessi-2048",
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/identity.json",
+          "sha256": "a32780140c559fb12808e512b5de7f187809b8aa018907901ac9c03c2c4764be",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/closed.json",
+          "sha256": "1233b927e9a89d42cbe09f133a2c412ef746420f22059153a60d60b617e0ca03",
+          "result": "PASS"
+        },
+        "trace": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/cupti.tsv",
+          "sha256": "a4bbc8e5c3fbac631dc8fa43c3d716f6ed089342d4e74850600fe289e58668d9",
+          "result": "PASS"
+        },
+        "result": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/prefill.promessi-2048/result.json",
+          "sha256": "38807ec26210b985a25dee415d20b3fc467fa08f3bd84d7dde19c0f896bab2aa",
+          "result": "PASS"
+        },
+        "context": 16384,
+        "prompt_tokens": 2048,
+        "generated_tokens": 16,
+        "kernel_sum_ns": 22285740595,
+        "kernels": [
+          {
+            "name": "yvex_moe_grouped_up_tensorcore",
+            "nanoseconds": 3888475615,
+            "count": 172
+          },
+          {
+            "name": "yvex_mxfp4_tensorcore_wide_rows",
+            "nanoseconds": 3498066108,
+            "count": 600
+          },
+          {
+            "name": "yvex_qtype_matvec",
+            "nanoseconds": 2601902813,
+            "count": 9044
+          },
+          {
+            "name": "yvex_attention_reduce_native_warp",
+            "nanoseconds": 2326335988,
+            "count": 172
+          },
+          {
+            "name": "yvex_decoded_rows",
+            "nanoseconds": 1710694517,
+            "count": 580
+          },
+          {
+            "name": "yvex_moe_grouped_down_tensorcore",
+            "nanoseconds": 1601645152,
+            "count": 172
+          },
+          {
+            "name": "yvex_moe_grouped_up_rows",
+            "nanoseconds": 930598798,
+            "count": 860
+          },
+          {
+            "name": "yvex_q8_row_matrix",
+            "nanoseconds": 891368405,
+            "count": 516
+          },
+          {
+            "name": "yvex_attention_yarn_rope",
+            "nanoseconds": 768459010,
+            "count": 3416
+          },
+          {
+            "name": "yvex_attention_candidate_scores",
+            "nanoseconds": 730821493,
+            "count": 1680
+          },
+          {
+            "name": "yvex_moe_grouped_down_rows",
+            "nanoseconds": 622580640,
+            "count": 860
+          },
+          {
+            "name": "yvex_attention_rolling_rows",
+            "nanoseconds": 343664947,
+            "count": 248
+          },
+          {
+            "name": "yvex_residual_mhc_pre",
+            "nanoseconds": 293464010,
+            "count": 1720
+          },
+          {
+            "name": "yvex_attention_reduce_native",
+            "nanoseconds": 268613209,
+            "count": 688
+          },
+          {
+            "name": "yvex_attention_unit_norm",
+            "nanoseconds": 259330895,
+            "count": 860
+          },
+          {
+            "name": "yvex_qtype_tensorcore_rows",
+            "nanoseconds": 248460832,
+            "count": 344
+          },
+          {
+            "name": "yvex_residual_mhc_post",
+            "nanoseconds": 226947295,
+            "count": 1720
+          },
+          {
+            "name": "yvex_q8_quantize",
+            "nanoseconds": 211657288,
+            "count": 8332
+          },
+          {
+            "name": "yvex_decoded_mxfp4_rows",
+            "nanoseconds": 126386713,
+            "count": 688
+          },
+          {
+            "name": "yvex_attention_activation_quantize",
+            "nanoseconds": 111251309,
+            "count": 1696
+          },
+          {
+            "name": "yvex_mxfp4_q8_rows",
+            "nanoseconds": 110650587,
+            "count": 1024
+          },
+          {
+            "name": "yvex_decoded_prepare",
+            "nanoseconds": 86907785,
+            "count": 1848
+          },
+          {
+            "name": "yvex_attention_weighted_norm",
+            "nanoseconds": 80367281,
+            "count": 3856
+          },
+          {
+            "name": "yvex_expert_worklist_build_cuda",
+            "nanoseconds": 74809662,
+            "count": 860
+          },
+          {
+            "name": "yvex_attention_bf16_round",
+            "nanoseconds": 63730375,
+            "count": 1781
+          },
+          {
+            "name": "yvex_moe_swiglu",
+            "nanoseconds": 57637943,
+            "count": 860
+          },
+          {
+            "name": "yvex_moe_reduce_rows",
+            "nanoseconds": 44564931,
+            "count": 860
+          },
+          {
+            "name": "yvex_attention_topk",
+            "nanoseconds": 42626279,
+            "count": 1680
+          },
+          {
+            "name": "yvex_moe_route_rows",
+            "nanoseconds": 21339238,
+            "count": 860
+          },
+          {
+            "name": "yvex_moe_combine_rows",
+            "nanoseconds": 17537754,
+            "count": 860
+          },
+          {
+            "name": "yvex_transformer_final",
+            "nanoseconds": 9947243,
+            "count": 20
+          },
+          {
+            "name": "yvex_encoded_row_decode",
+            "nanoseconds": 6993873,
+            "count": 3592
+          },
+          {
+            "name": "yvex_attention_rolling_state",
+            "nanoseconds": 5047796,
+            "count": 992
+          },
+          {
+            "name": "yvex_argmax_f32",
+            "nanoseconds": 2854811,
+            "count": 16
+          }
+        ],
+        "profile": {
+          "counters": {
+            "accelerated_matrix_launches": 1868,
+            "accepted_draft_tokens": 0,
+            "cache_evictions": 0,
+            "cache_hits": 3440,
+            "cache_misses": 0,
+            "d2d_bytes": 34407801488,
+            "d2h_bytes": 455502000,
+            "device_allocations": 0,
+            "device_synchronizations": 20,
+            "discarded_candidate_rows": 0,
+            "downloads": 2600,
+            "draft_forwards": 0,
+            "draft_rows": 0,
+            "event_synchronizations": 0,
+            "expert_bytes": 309591972384,
+            "expert_subviews": 0,
+            "full_array_host_scan_bytes": 0,
+            "generated_tokens": 16,
+            "graph_captures": 256,
+            "graph_launches": 1720,
+            "graph_replays": 1720,
+            "h2d_bytes": 698118208,
+            "host_allocations": 0,
+            "host_payload_reads": 0,
+            "kernel_launches": 53436,
+            "logits_d2d_bytes": 0,
+            "logits_d2h_bytes": 384,
+            "logits_h2d_bytes": 0,
+            "managed_prefetch_bytes": 0,
+            "mapped_bytes_touched": 0,
+            "new_prefill_tokens": 2048,
+            "output_head_rows": 16,
+            "promoted_target_rows": 0,
+            "prompt_tokens": 2048,
+            "queue_synchronizations": 2636,
+            "replayed_accepted_target_rows": 0,
+            "reused_tokens": 0,
+            "row_expert_pairs": 532512,
+            "target_extensions": 0,
+            "target_forwards": 20,
+            "target_rows": 2064,
+            "target_verifications": 0,
+            "unique_experts": 33941,
+            "uploads": 880,
+            "verified_rows": 0,
+            "workspace_resets": 0
+          },
+          "identity": "491da602f2e77de2c0cadd645e0a5e41d5d2e5bb30349be8dc4f019346f8191b",
+          "mode": "summary",
+          "phases_ns": {
+            "attention": 23316887530,
+            "detokenization": 65328,
+            "embedding": 124224509,
+            "final_normalization": 10319081,
+            "first_decode": 126574813,
+            "kv_commit": 0,
+            "logits_publication": 37776,
+            "moe_ingress": 0,
+            "moe_post": 0,
+            "moe_total": 22653829802,
+            "output_head": 109351284,
+            "prompt_rendering": 0,
+            "provider_publication": 0,
+            "queue": 0,
+            "routed_experts": 0,
+            "router_projection": 0,
+            "router_topk": 0,
+            "sampling": 3741545,
+            "selected_expert_preparation": 0,
+            "shared_experts": 0,
+            "state_validation": 0,
+            "subsequent_decode": 1800610056,
+            "synchronization_wait": 0,
+            "tokenizer": 711102,
+            "total_generation": 23671811033,
+            "total_prefill": 21630518891
+          },
+          "schema": 4
+        },
+        "execution_profile": "c158b590f8c4d0b81522c7ef6cb65b159304b691388cf7503916fe3a48c129f5"
+      }
+    ]
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted candidate",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "build": "16a312112794861fc6e444b68e26f1a14b4fd88e189af533af9bcef4ef1b01fa",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 16384,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "5ea780c3f3c6b07f1822944059a03ae56b3190ad80537f41b68340eed5dc6c8e",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "fe4eac599c25a7a6fbb33b904383569c73993118496fc264e6f24c6a2aaf13f2",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "controlled-engine CUPTI diagnostic",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "controlled fresh engine; no repeated steady samples; instrumented",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "3c73c2a5a295cb8c3022effc4395441a75cd8f3c",
+    "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_tree": "7fcc485fbaba0f5fb7d72e472d8e7ed2fc8a354d",
+    "specialization": null,
+    "strategy": "target-only",
+    "suite": "ba06670744e623b715778ff9f208f54da79ac0d9899184436ca4b7b229c04c1e",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "3c8fefecdc0546bcaf6035257ddf12b8ff6acdccaf93e5c1cd6dff878ed1e386",
+  "title": "0731 MXFP4/Q2 mainline CUPTI attribution: prefill.promessi-2048 (profiled; not throughput evidence)"
+}

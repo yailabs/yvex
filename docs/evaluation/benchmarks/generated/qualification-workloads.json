@@ -783,6 +783,14 @@
       "workload_class": "representative",
       "targets": [
         {
+          "id": "deepseek-0731-program-p-mainline-target-only-coding-hash-table-20261011",
+          "target_identity": "66e91317ead2841833feba37d7f57860e28a6bac91de445be28cb9a1c2897ca3",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-0731-program-p-native-baseline-coding-hash-table-20261010",
           "target_identity": "1aa7cc1937b362785501c38109dcf92540026c6b879f0a9ddca7772f38470a93",
           "path": "product-native-v25",
@@ -841,6 +849,14 @@
       "state": "UNQUALIFIED",
       "workload_class": "representative",
       "targets": [
+        {
+          "id": "deepseek-0731-program-p-mainline-speculative-coding-hash-table-20261011",
+          "target_identity": "4d73a1efdc3b91a14c4317913833637c42e6f15f181d534ae74c2947a504d2a4",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
         {
           "id": "deepseek-0731-program-p-native-mxfp4-publication-speculative-coding-hash-table-20261010",
           "target_identity": "6a768a1d2b306c2d47f788e7d54394d27bff4c1e18d035a0c9c81268fafbaac6",
@@ -988,6 +1004,14 @@
       "workload_class": "representative",
       "targets": [
         {
+          "id": "deepseek-0731-program-p-mainline-target-only-prefill-promessi-2048-20261011",
+          "target_identity": "c70a5dea2b2c79ab8f38de3efa06584e58e0bb1e41aeebcc5adf8e57a15098cf",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-0731-program-p-native-baseline-prefill-promessi-2048-20261010",
           "target_identity": "68e25053d76ba9ab98bf32dc91bef8a1ea97677b7fe0e75c59e62da16f256b83",
           "path": "product-native-v25",
@@ -1096,6 +1120,14 @@
       "state": "UNQUALIFIED",
       "workload_class": "representative",
       "targets": [
+        {
+          "id": "deepseek-0731-program-p-mainline-target-only-prefill-promessi-8192-20261011",
+          "target_identity": "c70a5dea2b2c79ab8f38de3efa06584e58e0bb1e41aeebcc5adf8e57a15098cf",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
         {
           "id": "deepseek-0731-program-p-native-baseline-prefill-promessi-8192-20261010",
           "target_identity": "68e25053d76ba9ab98bf32dc91bef8a1ea97677b7fe0e75c59e62da16f256b83",

@@ -204,6 +204,16 @@ independent qualification remain separate gates. Archived prepared-IQ2 work is
 not reselected. Installed Host/model generations and the divergent Metal branch
 remain protected; this continuation selects neither a new branch nor a Task.
 
+The authorized 2026-10-11 exclusive window completes clean-mainline native
+0731 MXFP4/Q2 characterization at 4K coding and 16K-context 2K/8K prefill,
+separately from instrumented CUDA attribution. The earlier resource refusal
+with an operator engine resident is not generalized to the unloaded host.
+No competitive gain or independent model-quality gate is earned; Program P
+remains IN PROGRESS. The same old-checkpoint 32K operator profile was restored
+at generation 3 without replacing its Host. Exact samples and non-claims belong
+to [compiler evidence](../evaluation/compiler-evidence.md#mainline-native-0731-window),
+not manually maintained benchmark values in this Task record.
+
 The computational-graph continuation uses sealed operator/program facts to
 select executable alternatives, not just weight policies. Its first bounded
 candidate is input-backed, read-only physical view lowering: eliminate redundant

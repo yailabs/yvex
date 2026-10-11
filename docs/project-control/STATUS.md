@@ -117,11 +117,19 @@ manufacturing selection.
 The real Mamba source planning control preserves its 64 state-space layers and
 zero attention layers, with identical candidate/context identities across CLI
 and independent SDK. This is not another complete-model execution result.
-The 0731 produced-binding checks at 4K, 16K and 32K each refuse their observed
-full initial capacity envelope; no loaded Engine or GPU reservation follows.
+The 0731 produced-binding checks at 4K, 16K and 32K refused their observed
+full initial capacity envelope with the operator model resident. In the separately
+authorized exclusive window, the same authenticated MXFP4/Q2 artifact admitted
+4K coding and 16K prefill with no reserve reduction. Clean `3c73c2a5` completed
+three native samples per coding target-only/DSpark and uncached 2K/8K case,
+plus separate complete-model CUPTI attribution. Ordered output fragment hashes
+match the retained same-artifact controls; that is not an independent oracle.
 See [compiler evidence](../evaluation/compiler-evidence.md#mainline-public-planning-and-source-handoff).
 Integrated qualified selection, stronger executable optimization and 20/700
-remain open. No installed service or model generation is replaced.
+remain open. The old-checkpoint operator model was restored with the same
+artifact/binding/32K configuration at generation 3; Host `337e7e73`, listeners
+and grants were not replaced. The candidate is not installed and 32K execution
+of the new artifact remains unqualified.
 
 ## Retained computational architecture reconstruction
 

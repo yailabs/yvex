@@ -1,0 +1,674 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Exact isolated native-v25 configuration; three deterministic completed requests, not installed-service or independent quality qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "90cc4de259674ca8fef53504d5b266b4f3bcbd792b56a3976202a348cb9ba925",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "8ef3ce6ec303e4885c3a0f2632e5011df1244f51b3581a3a57852187bc3f92bf",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/source/manifest.json",
+          "sha256": "ef2e866ae8c20077ae26488e886eec5702b632328eac75944f154180b42588bb",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/coding.hash-table/identity.json",
+          "sha256": "388857f49f4af6952da7f0a1467850ac4564ae67cbff8929683a7d5acede7395",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/closed.json",
+          "sha256": "c911e6cba670db7f6703729fb997492894010287733f972b17a43d49d3924462",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/operator-restored.json",
+          "sha256": "bff55335619b5f80db104e10266875fc905a123602351b011ddb2b524288bdf3",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "0e7c27c20158fd7a6b932980b675859dca7dabc039648983a8bffd0c4860de3b",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/loaded-16384.json",
+          "sha256": "a2efcc799f9de9b6d3b7e84247371c3db013d833f2ff64d890a5b433c0e16c59",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Exact isolated native-v25 configuration; three deterministic completed requests, not installed-service or independent quality qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "90cc4de259674ca8fef53504d5b266b4f3bcbd792b56a3976202a348cb9ba925",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "8ef3ce6ec303e4885c3a0f2632e5011df1244f51b3581a3a57852187bc3f92bf",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/source/manifest.json",
+          "sha256": "ef2e866ae8c20077ae26488e886eec5702b632328eac75944f154180b42588bb",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/coding.hash-table/identity.json",
+          "sha256": "388857f49f4af6952da7f0a1467850ac4564ae67cbff8929683a7d5acede7395",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/closed.json",
+          "sha256": "c911e6cba670db7f6703729fb997492894010287733f972b17a43d49d3924462",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/operator-restored.json",
+          "sha256": "bff55335619b5f80db104e10266875fc905a123602351b011ddb2b524288bdf3",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "0e7c27c20158fd7a6b932980b675859dca7dabc039648983a8bffd0c4860de3b",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/loaded-16384.json",
+          "sha256": "a2efcc799f9de9b6d3b7e84247371c3db013d833f2ff64d890a5b433c0e16c59",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Exact isolated native-v25 configuration; three deterministic completed requests, not installed-service or independent quality qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "90cc4de259674ca8fef53504d5b266b4f3bcbd792b56a3976202a348cb9ba925",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "8ef3ce6ec303e4885c3a0f2632e5011df1244f51b3581a3a57852187bc3f92bf",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/source/manifest.json",
+          "sha256": "ef2e866ae8c20077ae26488e886eec5702b632328eac75944f154180b42588bb",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/diagnostic/coding.hash-table/identity.json",
+          "sha256": "388857f49f4af6952da7f0a1467850ac4564ae67cbff8929683a7d5acede7395",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/closed.json",
+          "sha256": "c911e6cba670db7f6703729fb997492894010287733f972b17a43d49d3924462",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/operator-restored.json",
+          "sha256": "bff55335619b5f80db104e10266875fc905a123602351b011ddb2b524288bdf3",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "0e7c27c20158fd7a6b932980b675859dca7dabc039648983a8bffd0c4860de3b",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/loaded-16384.json",
+          "sha256": "a2efcc799f9de9b6d3b7e84247371c3db013d833f2ff64d890a5b433c0e16c59",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-mainline-target-only-prefill-promessi-2048-20261011",
+  "limitations": [
+    "Three uninstrumented samples; no confidence interval, controlled-clock equivalence or speedup claim.",
+    "Source/build/executable and kernel digest authenticated from the frozen same executable. Profiled diagnostic times are excluded.",
+    "No independent checkpoint-matched representation quality; high/maximum reasoning, HTTP and installed-product performance unqualified here.",
+    "Client content arrival is not PTY painting; server and client metrics have different denominators.",
+    "Sampled clear GPU-process lists and advisory locks do not prove uninterrupted exclusivity.",
+    "All ordered fragment channels, byte lengths and SHA-256 values equal the retained same-artifact control; not independent numerical evidence.",
+    "Successful 4K/16K admission follows authorized old-engine unload, not a weaker reserve or evidence for 32K.",
+    "Retained historical MXFP4 native records lack a kernel bundle digest: descriptive context only; strict automatic cross-build comparison must refuse, not fill missing identity by inference."
+  ],
+  "measurements": [
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.516363481,
+        0.506020236,
+        0.510938067
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.516363481,
+        "median": 0.510938067,
+        "median_absolute_deviation": 0.004917830999999984,
+        "minimum": 0.506020236
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        22.008684947,
+        22.018301522,
+        22.026751722
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 22.026751722,
+        "median": 22.018301522,
+        "median_absolute_deviation": 0.008450199999998631,
+        "minimum": 22.008684947
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        20.268481783,
+        20.270767712,
+        20.277414841
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 20.277414841,
+        "median": 20.270767712,
+        "median_absolute_deviation": 0.0022859290000027954,
+        "minimum": 20.268481783
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.12347638700000019,
+        0.1249609129999989,
+        0.12658569599999936
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.12658569599999936,
+        "median": 0.1249609129999989,
+        "median_absolute_deviation": 0.0014845259999987093,
+        "minimum": 0.12347638700000019
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.11600637200000014,
+        0.11649519266666648,
+        0.11661524486666673
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.11661524486666673,
+        "median": 0.11649519266666648,
+        "median_absolute_deviation": 0.00012005220000024797,
+        "minimum": 0.11600637200000014
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        19.751846702,
+        19.764865188,
+        19.766426198
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 19.766426198,
+        "median": 19.764865188,
+        "median_absolute_deviation": 0.0015610099999996407,
+        "minimum": 19.751846702
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        19.751846702,
+        19.764865188,
+        19.766426198
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 19.766426198,
+        "median": 19.764865188,
+        "median_absolute_deviation": 0.0015610099999996407,
+        "minimum": 19.751846702
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        20.268481783,
+        20.270767712,
+        20.277414841
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 20.277414841,
+        "median": 20.270767712,
+        "median_absolute_deviation": 0.0022859290000027954,
+        "minimum": 20.268481783
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        8.598280627187908,
+        8.567859366453794,
+        8.560670384599701
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 8.598280627187908,
+        "median": 8.567859366453794,
+        "median_absolute_deviation": 0.007188981854092447,
+        "minimum": 8.560670384599701
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        104.32704667833187,
+        104.25525831055144,
+        104.2461435929254
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 104.32704667833187,
+        "median": 104.25525831055144,
+        "median_absolute_deviation": 0.009114717626033553,
+        "minimum": 104.2461435929254
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        19.630575821,
+        19.644093096,
+        19.645810669
+      ],
+      "scope": "native-v25 client to isolated resident host; controlled selected configuration, not installed-product defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 19.645810669,
+        "median": 19.644093096,
+        "median_absolute_deviation": 0.0017175730000005274,
+        "minimum": 19.630575821
+      },
+      "unit": "s",
+      "warm_state": "resident engine after explicit separate warmup; fresh session; file cache uncontrolled"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/source",
+    "build": {
+      "build_commit": "3c73c2a5a295cb8c3022effc4395441a75cd8f3c",
+      "build_identity": "16a312112794861fc6e444b68e26f1a14b4fd88e189af533af9bcef4ef1b01fa",
+      "local_protocol_version": 25,
+      "registry_identity": "1762b4b32baa550b8396af6d786439189efa80ebfcf0580186ff4451a8040de2",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "1e79208a210dd6f4f20760cf921364ee99964199769217923089eca78736326e",
+      "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_state": "clean",
+      "source_tree": "7fcc485fbaba0f5fb7d72e472d8e7ed2fc8a354d",
+      "version": "0.1.0"
+    },
+    "installed_product": false,
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048-resources.jsonl",
+      "allowed_pids": [
+        2619573
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 67,
+      "probe_seconds": 1.469419439919875,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 2658046,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "client_build": "16a312112794861fc6e444b68e26f1a14b4fd88e189af533af9bcef4ef1b01fa",
+    "checkpoint_relationship": {
+      "claims_inherited": false,
+      "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+      "source": "explicit-local-record",
+      "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+    },
+    "engine_record": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/loaded-16384.json",
+      "sha256": "a2efcc799f9de9b6d3b7e84247371c3db013d833f2ff64d890a5b433c0e16c59",
+      "result": "PASS"
+    },
+    "device_uuid": "GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc",
+    "observation_notes": "Device UUID witnessed in every resource sample; driver/toolkit observed before and after the same-boot window. Clocks not controlled.",
+    "reproduction": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048-command.json",
+      "sha256": "b33045807161f2aee72ec894954c09465a43c9cd0951de082f0058b245a7ca4b",
+      "result": "PASS"
+    },
+    "continuation_control": {
+      "baseline": {
+        "locator": "/home/dgmothx/lab/models/evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-native-target-catalog/16384-prefill.promessi-2048/events.jsonl",
+        "sha256": "abd4d879c5a5e973177ae5f29b99d33c15d9dfa057c2a02542abcfad3db0f643",
+        "result": "PASS"
+      },
+      "equal_ordered_fragment_channels_lengths_hashes": true,
+      "scope": "Internal byte-stream regression; not an upstream oracle, quality proof or cross-build token identity"
+    },
+    "diagnostics": [
+      {
+        "id": "post-load.rss",
+        "case": "prefill.promessi-2048",
+        "value": 104330178560,
+        "unit": "byte",
+        "definition": "OS smaps_rollup post-load; overlapping classes, not additive CUDA allocations or proof of pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss",
+        "case": "prefill.promessi-2048",
+        "value": 104319251456,
+        "unit": "byte",
+        "definition": "OS smaps_rollup post-load; overlapping classes, not additive CUDA allocations or proof of pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss_file",
+        "case": "prefill.promessi-2048",
+        "value": 103815758848,
+        "unit": "byte",
+        "definition": "OS smaps_rollup post-load; overlapping classes, not additive CUDA allocations or proof of pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss_anon",
+        "case": "prefill.promessi-2048",
+        "value": 459255808,
+        "unit": "byte",
+        "definition": "OS smaps_rollup post-load; overlapping classes, not additive CUDA allocations or proof of pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.locked",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "byte",
+        "definition": "OS smaps_rollup post-load; overlapping classes, not additive CUDA allocations or proof of pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "load.client",
+        "case": "prefill.promessi-2048",
+        "value": 5.620973871,
+        "unit": "s",
+        "definition": "One native load command to ready, including connection; artifact authentication already read file pages, not cold storage",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/load-16384.json"
+      },
+      {
+        "id": "native.prompt_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Server count per completed request; identical in three samples",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.reused_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server count per completed request; identical in three samples",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.prefill_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Server count per completed request; identical in three samples",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.generated_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 16,
+        "unit": "count",
+        "definition": "Server count per completed request; identical in three samples",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-mainline-20261011.WAxMHFPg/attempt-3/target-only/16384-prefill.promessi-2048/events.jsonl"
+      }
+    ]
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted candidate",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "build": "16a312112794861fc6e444b68e26f1a14b4fd88e189af533af9bcef4ef1b01fa",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 16384,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "5ea780c3f3c6b07f1822944059a03ae56b3190ad80537f41b68340eed5dc6c8e",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "fe4eac599c25a7a6fbb33b904383569c73993118496fc264e6f24c6a2aaf13f2",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v25",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "3c73c2a5a295cb8c3022effc4395441a75cd8f3c",
+    "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_tree": "7fcc485fbaba0f5fb7d72e472d8e7ed2fc8a354d",
+    "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+    "strategy": "target-only",
+    "suite": "ba06670744e623b715778ff9f208f54da79ac0d9899184436ca4b7b229c04c1e",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "c70a5dea2b2c79ab8f38de3efa06584e58e0bb1e41aeebcc5adf8e57a15098cf",
+  "title": "0731 MXFP4 / routed Q2_K native mainline: target-only / prefill.promessi-2048 / three fresh sessions"
+}

@@ -23,7 +23,7 @@ LOCAL receipts are not YVEX-published qualification. Each plane stands alone; mi
 
 | Source / checkpoint | Exact targets | Representation quality | Performance |
 | --- | ---: | --- | --- |
-| [deepseek-ai/DeepSeek-V4-Flash-0731 · `7872f01b1d1f`](#checkpoint-1) | 38 | BLOCKED: 38 | BLOCKED: 3; CHARACTERIZED: 31; UNQUALIFIED: 4 |
+| [deepseek-ai/DeepSeek-V4-Flash-0731 · `7872f01b1d1f`](#checkpoint-1) | 45 | BLOCKED: 45 | BLOCKED: 3; CHARACTERIZED: 35; UNQUALIFIED: 7 |
 | [deepseek-ai/DeepSeek-V4-Flash-DSpark · `62af8fffb2f7`](#checkpoint-2) | 223 | BLOCKED: 210; UNQUALIFIED: 13 | CHARACTERIZED: 199; UNQUALIFIED: 24 |
 | [convaiinnovations/laya-typed-decisions · `1a793eb568e6`](#checkpoint-3) | 2 | BLOCKED: 2 | CHARACTERIZED: 2 |
 | [mistralai/Mamba-Codestral-7B-v0.1 · `4f086c08c1e0`](#checkpoint-4) | 5 | BLOCKED: 5 | UNQUALIFIED: 5 |
@@ -35,13 +35,20 @@ LOCAL receipts are not YVEX-published qualification. Each plane stands alone; mi
 Counts describe independent records, not a percentage of model support.
 
 <details>
-<summary>Inspect 38 exact targets, variants and experiments</summary>
+<summary>Inspect 45 exact targets, variants and experiments</summary>
 
 | Target / full context | Execution | Quality | Performance | Origin |
 | --- | --- | --- | --- | --- |
 | [DeepSeek 0731: protected-service memory audit and operator reboot barrier](qualification-deepseek-0731-memory-audit-20261010.md) | cuda × 1; isolated Rust host / native protocol v25 load admission; target-only | BLOCKED | BLOCKED | yvex-published |
 | [DeepSeek 0731 native artifact and binding; inference unqualified](qualification-deepseek-0731-native-admission-20261009.md) | NOT RETAINED × NOT RETAINED; native offline preparation and artifact-bound tokenizer; no inference; NOT RETAINED | BLOCKED | UNQUALIFIED | yvex-published |
 | [DeepSeek 0731 Q8/Q2: native load blocked by memory admission](qualification-deepseek-0731-native-load-refusal-20261009.md) | cuda × 1; isolated Rust host / native protocol v25 load admission; target-only | BLOCKED | BLOCKED | yvex-published |
+| [0731 MXFP4/Q2 mainline CUPTI attribution: coding.hash-table (profiled; not throughput evidence)](qualification-deepseek-0731-program-p-mainline-critical-path-20261011.md) | cuda × 1; controlled-engine CUPTI diagnostic; target-only | BLOCKED | UNQUALIFIED | yvex-published |
+| [0731 MXFP4/Q2 mainline CUPTI attribution: prefill.promessi-2048 (profiled; not throughput evidence)](qualification-deepseek-0731-program-p-mainline-critical-path-prefill-promessi-2048-20261011.md) | cuda × 1; controlled-engine CUPTI diagnostic; target-only | BLOCKED | UNQUALIFIED | yvex-published |
+| [0731 MXFP4/Q2 mainline CUPTI attribution: prefill.promessi-8192 (profiled; not throughput evidence)](qualification-deepseek-0731-program-p-mainline-critical-path-prefill-promessi-8192-20261011.md) | cuda × 1; controlled-engine CUPTI diagnostic; target-only | BLOCKED | UNQUALIFIED | yvex-published |
+| [0731 MXFP4 / routed Q2_K native mainline: speculative / coding.hash-table / three fresh sessions](qualification-deepseek-0731-program-p-mainline-speculative-coding-hash-table-20261011.md) | cuda × 1; product-native-v25; speculative | BLOCKED | CHARACTERIZED | yvex-published |
+| [0731 MXFP4 / routed Q2_K native mainline: target-only / coding.hash-table / three fresh sessions](qualification-deepseek-0731-program-p-mainline-target-only-coding-hash-table-20261011.md) | cuda × 1; product-native-v25; target-only | BLOCKED | CHARACTERIZED | yvex-published |
+| [0731 MXFP4 / routed Q2_K native mainline: target-only / prefill.promessi-2048 / three fresh sessions](qualification-deepseek-0731-program-p-mainline-target-only-prefill-promessi-2048-20261011.md) | cuda × 1; product-native-v25; target-only | BLOCKED | CHARACTERIZED | yvex-published |
+| [0731 MXFP4 / routed Q2_K native mainline: target-only / prefill.promessi-8192 / three fresh sessions](qualification-deepseek-0731-program-p-mainline-target-only-prefill-promessi-8192-20261011.md) | cuda × 1; product-native-v25; target-only | BLOCKED | CHARACTERIZED | yvex-published |
 | [Program P 0731 MXFP4 with routed Q2: authenticated artifact and native load](qualification-deepseek-0731-program-p-mxfp4-admission-20261010.md) | cuda × 1; native protocol v25 isolated host; load only; target-only | BLOCKED | UNQUALIFIED | yvex-published |
 | [0731 MXFP4/Q2 complete-model projection geometry including CUDA graph replay: coding.hash-table](qualification-deepseek-0731-program-p-mxfp4-graph-coding-hash-table-20261010.md) | cuda × 1; controlled-engine native benchmark; CUPTI-instrumented; not local protocol; target-only | BLOCKED | CHARACTERIZED | yvex-published |
 | [0731 MXFP4/Q2 complete-model projection geometry including CUDA graph replay: prefill.promessi-2048](qualification-deepseek-0731-program-p-mxfp4-graph-prefill-promessi-2048-20261010.md) | cuda × 1; controlled-engine native benchmark; CUPTI-instrumented; not local protocol; target-only | BLOCKED | CHARACTERIZED | yvex-published |
