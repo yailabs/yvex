@@ -491,6 +491,7 @@ impl Drop for ProfileLock {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
     struct NoCredentials;
     impl CredentialStore for NoCredentials {
         fn put(&self, _: &str, _: &[u8]) -> Result<(), Error> {
@@ -504,7 +505,8 @@ mod tests {
         }
     }
     fn manager() -> (tempfile::TempDir, Arc<ConnectionManager>, String) {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = tempfile::Builder::new()
+            .permissions(fs::Permissions::from_mode(0o700)).tempdir().unwrap();
         let manager = Arc::new(
             ConnectionManager::with_store(
                 directory.path().join("profiles"),
