@@ -124,6 +124,26 @@ remain separate from timed inference. No new load, TTFT, decode, prefill or
 held-out quality result is inferred from these controls. Historical model
 execution receipts remain the authority for their original configurations.
 
+### Qualification fixture corrections
+
+The `22329d17` hosted hermetic lane passed 135 controls. Its native macOS lane
+reported 20 PASS, 2 FAIL and 4 BLOCKED; the local changed-owner matrix reported
+133 PASS, 2 FAIL and 7 BLOCKED. These original receipts are retained, not relabeled.
+The ensuing corrections concern qualification infrastructure:
+
+| Defect | Correction / retained obligation |
+| --- | --- |
+| Finite peer relinked with an old public struct layout | Include its generated header dependencies in canonical runner membership; an incremental build regression changes a transitive header. |
+| SDK test storage traversed Darwin's `/var` symlink | Canonicalize the fixture's temporary parent; production still refuses symlink profile roots, with a negative control. |
+| Synthetic catalog peer closed before the consumer drained its replies | Retain the connection until the consumer closes it, matching Host lifetime; no protocol or timeout policy change. |
+| Parallel sink failure selected a different terminal's poisoned-sink diagnosis | Test exact write diagnosis with one worker and abort/non-publication with four; numerical behavior and failure-selection policy are unchanged. |
+| SSH SDK fixtures placed trust under world-writable `/tmp` | Use owned private cache children, retain `StrictModes`, and qualify real isolated SSH/native Host and tiny-model sessions. |
+
+The independent connection-enrollment examples additionally require the
+`native-credentials` feature and a usable native credential vault. A default
+example binary is not that prerequisite. Configured credential-vault lanes
+remain separate from typed SDK planning, local companion and SSH product tests.
+
 The complete journey still has open gates: pre-production full workspace/state
 costing, independently qualified candidate selection, an accepted dominant
 execution correction, and comparable complete-model DeepSeek measurements.

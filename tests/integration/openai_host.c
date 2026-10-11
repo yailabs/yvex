@@ -177,11 +177,20 @@ static int send_engine_list(int fd, const yvex_client_request *request,
                             yvex_error *err)
 {
     yvex_client_message message;
+    unsigned char next;
+    ssize_t pending;
     message_base(&message, YVEX_CLIENT_MESSAGE_ENGINE, request);
     fixture_engine(&message.engine);
     if (yvex_server_protocol_send(fd, &message, err) != YVEX_OK)
         return yvex_error_code(err);
-    return send_ack(fd, request, err);
+    if (send_ack(fd, request, err) != YVEX_OK)
+        return yvex_error_code(err);
+    /* Like the Host, retain the connection until the consumer finishes the
+     * catalog. Darwin rejects timeout updates after peer shutdown even when
+     * complete response frames remain unread. Do not manufacture that race
+     * by closing this one-operation fixture immediately after its final ACK. */
+    do { pending = recv(fd, &next, 1u, MSG_PEEK); } while (pending < 0 && errno == EINTR && !stopped);
+    return pending == 0 || stopped ? YVEX_OK : YVEX_ERR_IO;
 }
 
 static int send_console_status(int fd, const yvex_client_request *request,

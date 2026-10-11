@@ -50,7 +50,11 @@ jobs:
           # Admission fixtures use declared capacity on the hosted runner;
           # unit.platform still observes actual native memory independently.
           YVEX_TEST_FIXTURE_CAPACITY: '1'
-        run: python3 tools/qa.py run native
+          YVEX_SDK_PRODUCT_EXAMPLE: ${{ github.workspace }}/sdk/rust/target/debug/examples/management_product
+        run: |
+          # Credential-vault enrollment remains a separate configured lane.
+          cargo build --manifest-path sdk/rust/Cargo.toml --locked --example management_product
+          python3 tools/qa.py run native
       - name: Check ownership and build contracts
         run: >-
           make check-qa-registry test-source-ownership test-layout

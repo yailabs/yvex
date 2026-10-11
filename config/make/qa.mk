@@ -1253,7 +1253,7 @@ test-terminal-flow: rust-client $(OPENAI_FAKE_HOST) $(TERMIOS_PROBE) $(TERMINAL_
 		python3 tests/rust_chat_pty.py --binary '$(RUST_SHELL_BIN)' \
 		--fixture '$(OPENAI_FAKE_HOST)' --output '$(TEST_DIR)/terminal-flow'
 	node '$(TERMINAL_FLOW_OBSERVER)/reflow.cjs' '$(TEST_DIR)/terminal-flow'
-$(TEST_DIR)/finite-remote-peer: $(OBJ_DIR)/tests/integration/finite_remote_peer.o $(LIBYVEX)
+$(TEST_DIR)/finite-remote-peer: $(FINITE_REMOTE_PEER_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 

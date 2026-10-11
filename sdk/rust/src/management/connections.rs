@@ -505,8 +505,11 @@ mod tests {
         }
     }
     fn manager() -> (tempfile::TempDir, Arc<ConnectionManager>, String) {
+        // Darwin's temporary root may traverse /var -> /private/var. Resolve
+        // that fixture root; production still rejects supplied symlink paths.
         let directory = tempfile::Builder::new()
-            .permissions(fs::Permissions::from_mode(0o700)).tempdir().unwrap();
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
         let manager = Arc::new(
             ConnectionManager::with_store(
                 directory.path().join("profiles"),
@@ -529,6 +532,13 @@ mod tests {
             })
             .unwrap();
         (directory, manager, id)
+    }
+    #[test]
+    fn profile_root_aliases_still_refuse() {
+        let (directory, _, _) = manager();
+        let alias = directory.path().join("alias");
+        std::os::unix::fs::symlink(directory.path().join("profiles"), &alias).unwrap();
+        assert!(ConnectionManager::with_store(alias, Arc::new(NoCredentials)).is_err());
     }
     #[test]
     fn parallel_snapshot_reads_share_the_registry_lock() {

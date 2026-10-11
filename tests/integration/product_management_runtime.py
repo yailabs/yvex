@@ -34,7 +34,12 @@ def wait(predicate):
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='yvex-product-runtime-') as directory:
+    # OpenSSH StrictModes checks authorized-key ancestors; /tmp is writable
+    # by other users even when our leaf is private. Keep the short fixture
+    # below the user's cache, never disable StrictModes to admit it.
+    cache = Path.home().resolve() / '.cache'
+    cache.mkdir(mode=0o700, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='yvex-pr-', dir=cache) as directory:
         tmp = Path(directory)
         for name in ['runtime', 'data', 'config', 'models', 'xdg']:
             (tmp / name).mkdir(mode=0o700)
@@ -85,7 +90,8 @@ def main():
                 result = subprocess.run([str(SDK), str(tmp / 'pins'), str(tmp / key), '127.0.0.1', str(port), user,
                                          device, identity(tmp / f'{key}.pub'), str(tmp / 'request.json'), '5000'], capture_output=True, text=True, timeout=8)
                 value = json.loads(result.stdout)
-                assert (result.returncode == 0) == expected, (operation, value, result.stderr)
+                assert (result.returncode == 0) == expected, (operation, value, result.stderr,
+                                                            (tmp / 'ssh.log').read_text())
                 if expected:
                     assert value['request_id'] == req['request_id']
                     assert value['authenticated_peer'] == identity(tmp / f'{key}.pub')

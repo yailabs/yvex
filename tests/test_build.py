@@ -90,6 +90,17 @@ class BuildContract(unittest.TestCase):
         self.assertIn("-fsanitize=undefined", flags.split(), output)
         self.assertIn("-fno-sanitize-recover=undefined", flags.split())
 
+    def test_finite_peer_tracks_transitive_protocol_headers(self):
+        header, target = self.fixture()
+        # Exercise the runner dependency include, not CORE_OBJS. Otherwise an
+        # old public struct layout can be relinked against a newly built core.
+        self.inputs = ["CORE_SRCS=", f"FINITE_REMOTE_PEER_OBJ={target}"]
+        args = ("CPPFLAGS=-DPACKAGER_FLAG=1", target)
+        self.assertIn(" -c ", self.make(*args))
+        self.assertNotIn(" -c ", self.make(*args))
+        header.write_text("#define FIXTURE_VALUE 9\n")
+        self.assertIn(" -c ", self.make(*args))
+
     def test_structural_archive_identity_follows_build_layout(self):
         archive = self.root / "alternate/libyvex.a"
         objects = self.root / "alternate/objects"

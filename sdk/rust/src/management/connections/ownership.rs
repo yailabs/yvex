@@ -537,7 +537,8 @@ mod tests {
     #[test]
     fn native_import_keeps_owner_secrets_out_of_profiles_and_separate_from_product_clients() {
         let temp = tempfile::Builder::new()
-            .permissions(fs::Permissions::from_mode(0o700)).tempdir().unwrap();
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
         let path = temp.path().join("invite.json");
         let secret = invite(&path);
         let store = Arc::new(MemoryStore::default());
@@ -563,7 +564,8 @@ mod tests {
     #[test]
     fn invitation_integrity_expiry_permissions_and_invalid_action_refuse_locally() {
         let temp = tempfile::Builder::new()
-            .permissions(fs::Permissions::from_mode(0o700)).tempdir().unwrap();
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
         let path = temp.path().join("invite.json");
         invite(&path);
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
@@ -598,7 +600,8 @@ mod tests {
     #[test]
     fn incomplete_owner_action_cannot_be_redispatched_or_reassigned_after_restart() {
         let temp = tempfile::Builder::new()
-            .permissions(fs::Permissions::from_mode(0o700)).tempdir().unwrap();
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
         let path = temp.path().join("invite.json");
         invite(&path);
         let manager = ConnectionManager::with_store(
@@ -724,7 +727,8 @@ mod tests {
             }
         });
         let temp = tempfile::Builder::new()
-            .permissions(fs::Permissions::from_mode(0o700)).tempdir().unwrap();
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
         let path = temp.path().join("invite.json");
         invite(&path);
         let mut value: serde_json::Value =

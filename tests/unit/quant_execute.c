@@ -1942,24 +1942,36 @@ int yvex_test_gguf_writer_artifact(void)
                          !file_sink && access(fault_path, F_OK) != 0,
                      "prefix write failure must remove its owned temp");
     file_options.injected_write_failure_call = 2u;
-    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
-                         &file_sink, writer, fixture.plan, &file_options,
-                         &file_failure, &err) == YVEX_OK,
-                     "payload-write-failure sink must pass structural prefix");
-    (void)snprintf(temp_path, sizeof(temp_path), "%s",
-                   yvex_gguf_file_sink_temporary_path(file_sink));
-    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
-    YVEX_TEST_ASSERT(yvex_quant_execute(
-                         fixture.plan, &output_sink, &executor_options,
-                         &execution, &quant_failure, &err) != YVEX_OK &&
-                         quant_failure.code ==
-                             YVEX_QUANT_FAILURE_SINK_SHORT_WRITE &&
-                         !execution.complete,
-                     "hard positioned payload write failure must abort execution");
-    yvex_gguf_file_sink_release(&file_sink);
-    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
-                         access(fault_path, F_OK) != 0,
-                     "payload write failure must remove its owned temporary file");
+    /* Single-worker diagnosis must identify the exact failed write. With
+     * peers, a lower-ordinal terminal can observe the poisoned sink first;
+     * the executor deliberately selects by ordinal, not wall-clock order.
+     * Qualify both root diagnosis and parallel abort/non-publication. */
+    for (unsigned int workers = 1u; workers <= 4u; workers += 3u) {
+        executor_options.worker_count = workers;
+        YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                             &file_sink, writer, fixture.plan, &file_options,
+                             &file_failure, &err) == YVEX_OK,
+                         "payload-write-failure sink must pass structural prefix");
+        (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                       yvex_gguf_file_sink_temporary_path(file_sink));
+        yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+        YVEX_TEST_ASSERT(yvex_quant_execute(
+                             fixture.plan, &output_sink, &executor_options,
+                             &execution, &quant_failure, &err) != YVEX_OK &&
+                             (quant_failure.code == YVEX_QUANT_FAILURE_SINK_SHORT_WRITE ||
+                              (workers == 4u &&
+                               quant_failure.code == YVEX_QUANT_FAILURE_SINK_PROTOCOL)) &&
+                             execution.sink_failures > 0u && !execution.complete &&
+                             yvex_gguf_file_sink_finalize(
+                                 file_sink, &emission, &file_failure, &err) != YVEX_OK &&
+                             file_failure.code == YVEX_GGUF_FILE_INCOMPLETE,
+                         "hard positioned payload write failure must abort execution");
+        yvex_gguf_file_sink_release(&file_sink);
+        YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                             access(fault_path, F_OK) != 0,
+                         "payload write failure must remove its owned temporary file");
+    }
+    executor_options.worker_count = 4u;
     file_options.injected_write_failure_call = 0u;
     YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
                          &file_sink, writer, fixture.plan, &file_options,
