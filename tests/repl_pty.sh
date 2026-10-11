@@ -423,7 +423,8 @@ printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/bare.typescript"
 
-# A transport loss leaves the draft loop alive; the next request reconnects to a restarted host.
+# Transport loss keeps the editor alive, but a different Host incarnation may
+# not inherit the old session/generation. A new explicit client is the recovery.
 start_console reconnect 24 100 'chat --session reconnect' nocolor
 stop_host
 expect_next_editor
@@ -433,12 +434,33 @@ wait_next_editor
 start_host
 expect_next_editor
 printf 'hello after restart\r' >&3
-wait_for "$root/reconnect.typescript" 'RECONNECTED'
-wait_for "$root/reconnect.typescript" 'hello from yvex'
+wait_for "$root/reconnect.typescript" 'host lifetime changed; session operation not dispatched'
+! grep -F 'RECONNECTED' "$root/reconnect.typescript" >/dev/null
+! grep -F 'hello from yvex' "$root/reconnect.typescript" >/dev/null
+! grep -F 'replai-input reconnect ' "$root/host.err" >/dev/null
+kill -0 "$host_pid"
+wait_next_editor
+printf '/quit\r' >&3
+exec 3>&-
+set +e
+wait "$console_job"
+reconnect_status=$?
+set -e
+console_job=
+client_pid=
+test "$reconnect_status" -ne 0 # Detach of the stale identity cannot report success.
+kill -0 "$host_pid"
+grep -F 'connection.closed-before-operation' "$root/host.err" >/dev/null
+assert_linear_terminal "$root/reconnect.typescript"
+
+start_console recovered 24 100 'chat --session recovered' nocolor
+expect_next_editor
+printf 'hello after explicit reopen\r' >&3
+wait_for "$root/recovered.typescript" 'hello from yvex'
 wait_next_editor
 printf '/quit\r' >&3
 finish_console
-assert_linear_terminal "$root/reconnect.typescript"
+assert_linear_terminal "$root/recovered.typescript"
 
 # Active generation Ctrl-C crosses the canonical cancellation operation.
 start_console cancel 24 100 'chat --session cancel' nocolor

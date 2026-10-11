@@ -915,6 +915,18 @@ static int serve_connection(int fd, yvex_error *err)
     yvex_content_parts_close(
         &content, content ? request.content_part_count : 0u);
     yvex_provider_request_close(&provider);
+    /* Identity-fenced clients may inspect the handshake and refuse dispatch
+     * to a different Host lifetime. Clean EOF before an operation is not a
+     * fixture-server failure; malformed/partial frames still use the ordinary
+     * decoder refusal below. The probe does not consume any protocol bytes. */
+    unsigned char next;
+    ssize_t pending;
+    do { pending = recv(fd, &next, 1u, MSG_PEEK); } while (pending < 0 && errno == EINTR && !stopped);
+    if (pending == 0) {
+        fprintf(stderr, "connection.closed-before-operation\n");
+        rc = YVEX_OK;
+        goto done;
+    }
     rc = yvex_server_protocol_receive(fd, &request, &prompt, &content,
                                       &provider, err);
     if (rc != YVEX_OK) goto done;
