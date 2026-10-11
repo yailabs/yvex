@@ -10,14 +10,16 @@ publication: {html: true, pdf: true, index: true}
 
 # YVEX System Architecture
 
-**Verified source, compiled meaning and isolated computational execution.**
+Model interpretation, parameter derivation, physical programs, state providers
+and backend execution.
 
 [Documentation](../README.md)
 
-YVEX turns exact upstream model sources into admitted computational execution.
-Its compiler seals meaning and physical work; its runtime owns engine/session
-lifetimes; its backends execute admitted operations. Evidence observes these
-boundaries without becoming an execution owner.
+Family interpretation supplies topology, parameter roles, operator equations and
+numerical obligations. The compiler resolves symbolic parameters against
+authenticated package terminals and builds executable plans. Runtime state
+providers stage and commit sequence updates; backends execute the admitted
+operations with their required arithmetic and storage geometry.
 
 The single Rust product shell calls the native computational library through
 typed FFI. CPU and CUDA realize admitted model execution; Metal is integrated

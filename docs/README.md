@@ -10,7 +10,8 @@ publication: {html: true, pdf: true, index: true}
 
 # YVEX Documentation
 
-**Run a model. Understand its execution. Follow the evidence.**
+Build and operation guides, computational architecture, public contracts and
+configuration-specific evaluation records.
 
 [YVEX](../README.md)
 

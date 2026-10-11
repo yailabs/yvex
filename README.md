@@ -15,12 +15,12 @@ publication: {html: true, pdf: true, index: true}
   </picture>
 </p>
 
-<h1 align="center">Open weights. Native execution.</h1>
+<h1 align="center">Compiler and runtime for neural model inference</h1>
 
 <p align="center">
-  <strong>Compile the model. Own the execution. Know what ran.</strong><br>
-  A native model compiler and stateful runtime.<br>
-  Rust at the product boundary. C and hardware backends at the computational core.
+  Model interpretation, parameter transformation and physical execution.<br>
+  C11 computational library, Rust command-line client, CPU and CUDA backends;<br>
+  early Metal primitives with separate qualification.
 </p>
 
 <p align="center">
@@ -40,26 +40,31 @@ publication: {html: true, pdf: true, index: true}
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8D5CF5?style=flat&amp;labelColor=211a2d" alt="MIT license"></a>
 </p>
 
-YVEX is a native compiler and runtime for open-weight models. It turns exact
-checkpoints into authenticated executable artifacts, admits them against real
-hardware constraints, and runs isolated, stateful sessions through one host.
+YVEX compiles authenticated model sources into parameter artifacts and runtime
+bindings. Family interpretation supplies operator semantics, tensor roles,
+routing rules and state equations. The compiler resolves these against an
+exact parameter representation; deployment checks the selected numerical
+implementation, backend operations and resource requirements before loading.
 
-**Built for people who want control below the API.** Inspect what you acquired,
-what you compiled, what is actually loaded, and what the evidence proves.
+Execution covers admitted attention, hybrid and state-space programs. The
+implementation paths differ by family; neither a readable weight format nor an
+available backend establishes that a particular model can execute.
 
-## Why YVEX
+<a id="why-yvex"></a>
 
-| Design choice | What it gives you |
+## Implementation boundaries
+
+| Boundary | Mechanism |
 | --- | --- |
-| **Compile before execution** | Model semantics and parameter lineage become explicit programs and bindings, rather than topology rediscovered while serving. |
-| **Separate model from representation** | A checkpoint, a quantization, an executable layout and a resident engine keep distinct identities. |
-| **Make state a first-class resource** | Attention, recurrent and speculative state retain their own geometry, isolation and transactional lifetime. |
-| **Keep the host alive** | Load and unload engine generations without replacing the transport. Inspect the service even with no model loaded. |
-| **Measure the complete path** | Preparation, memory, prefill, committed decode and client-visible latency are separate evidence—not one unexplained speed number. |
+| Computational program | Typed operations or a retained operator schedule carry parameter references, data dependencies, state effects and numerical obligations. |
+| Parameter representation | Transformation IR tracks source-to-terminal derivation; the artifact fixes encoded tensor geometry, qtype and byte ranges. |
+| Executable specialization | Parameter resolution and backend legalization determine compatible operations, buffers, workspace and state capacity. |
+| Session transaction | Attention/recurrent state, draft state, token ledger, decoder and RNG participate in accepted-prefix commit or abort. |
+| Measurement | Receipts distinguish preparation, newly executed prefill, committed decode, server TTFT and client-visible delivery for an exact configuration. |
 
 ## Source to execution
 
-![YVEX compilation lifecycle: authenticated source, native compiler, artifact and binding, deployment admission, engine generation, isolated session.](docs/assets/diagrams/product_pipeline.svg)
+![Computation and parameter compilation: model operators and source-to-terminal transformations join through exact parameter resolution before physical planning, binding and deployment admission.](docs/assets/diagrams/product_pipeline.svg)
 
 <p align="center">
   <a href="docs/architecture/compiler-ir.md">Compiler architecture</a> ·
@@ -67,19 +72,41 @@ what you compiled, what is actually loaded, and what the evidence proves.
   <a href="docs/assets/diagrams/product_pipeline.json">Editable diagram source</a>
 </p>
 
-The compiler preserves **what the model means**. Deployment decides **which
-implementation can run here**. The engine owns executable resources; a session
-owns mutable state. Backends execute admitted operations and numerical classes.
+The join resolves a symbolic parameter to its authenticated terminal, encoded
+range and layout. It is not a runtime lookup by tensor filename. The resulting
+binding retains compiled model plans; deployment specialization adds the
+device-specific implementation and resource envelope without rewriting the
+artifact's parameter identity.
 
-## One host. Your models. Independent sessions.
+Qwen, MiniMax and Mamba2 retain native typed programs. DeepSeek retains a
+canonical operator schedule with derived attention, MoE and transformer plans;
+it is not represented as one uniform full-model SSA program. The
+[consumer map](docs/architecture/compiler-ir.md#current-consumer-cutover)
+records the actual lowering and execution paths.
 
-![Native and HTTP clients reach a persistent host, which routes by model and engine generation. Sessions have independent mutable state; the host can stay available with zero engines.](docs/assets/diagrams/product_runtime.svg)
+<a id="one-host-your-models-independent-sessions"></a>
+
+## Request execution and state publication
+
+![A generation request resolves an engine generation and session; compiled prefill, decode or verification stages candidate state. Accepted-prefix commit publishes state and token fragments; cancellation or failure discards uncommitted work.](docs/assets/diagrams/product_runtime.svg)
 
 <p align="center">
   <a href="docs/architecture/runtime-lifecycle.md">Runtime lifecycle</a> ·
   <a href="docs/architecture/computational-state.md">State ownership</a> ·
   <a href="docs/assets/diagrams/product_runtime.json">Editable diagram source</a>
 </p>
+
+Prefill executes input positions not supplied by compatible reused state.
+Incremental decode extends the committed sequence; speculative execution first
+verifies draft proposals with the target model. Proposed tokens are not output:
+the accepted prefix must commit across the participating state providers before
+publication. Cancellation preserves already committed progress and discards
+uncommitted work. Failed cleanup can invalidate continuity and require reset.
+
+The host routes requests by model and engine generation. Sessions and leases
+retain that generation; unload refuses while they own it. Closing a transport
+connection is distinct from closing a session, and replacing an engine cannot
+make an old session valid against the new generation.
 
 | Connect through | Use it for | Contract |
 | --- | --- | --- |
@@ -129,7 +156,9 @@ Weights are acquired separately; `model load` does not download them.
 [Acquisition and preparation](docs/guides/quickstart.md)
 · [Published representations](docs/guides/model-lifecycle.md#published-representations)
 
-### See what is happening
+<a id="see-what-is-happening"></a>
+
+### Runtime inspection
 
 ```sh
 ./yvex model list
@@ -221,14 +250,17 @@ These records do not establish high/maximum reasoning, other models, HTTP latenc
 
 ## Inside the computational core
 
-**The hard part is the join between model meaning, physical weights and legal
-execution.** YVEX makes that join explicit before the first request runs.
+Compilation separates the model's equations from parameter encoding and from
+the algorithms that execute them. These contracts constrain which physical
+alternatives an optimization may select.
 
-### Two compilation lanes. One authenticated binding.
+<a id="two-compilation-lanes-one-authenticated-binding"></a>
+
+### Parameter resolution and operation lowering
 
 | Boundary | What becomes explicit | Canonical owner |
 | --- | --- | --- |
-| **Computation** | Family semantics → typed programs → execution dependencies, state and effects | [Compiler IR](docs/architecture/compiler-ir.md) |
+| **Computation** | Family semantics → typed programs or retained operator schedules → execution dependencies, state and effects | [Compiler IR](docs/architecture/compiler-ir.md) |
 | **Parameters** | Source ranges → transformations → quantization/layout → authenticated package terminals | [Weight layouts](docs/architecture/representation-artifacts.md) |
 | **Parameter join** | Symbolic operands resolve to exact terminal lineage; physical operations and the compiled plan enter the runtime binding | [Artifact admission](docs/architecture/artifacts-admission.md) |
 | **Deployment** | Numerical implementation, backend compatibility, workspace and resource envelope are admitted for the target | [Specialization](docs/architecture/deployment-specialization.md) |
@@ -266,7 +298,9 @@ realization needs explicit admission and independent evidence—not a looser tes
 · [Backend execution](docs/architecture/backend-execution.md)
 · [Independent references](docs/evaluation/benchmarks/generated/qualification-references.md)
 
-### Active frontier: goal-driven physical compilation
+<a id="active-frontier-goal-driven-physical-compilation"></a>
+
+### Physical optimization: implemented scope and remaining gates
 
 **Program P is in progress.** `compile optimize` exposes bounded, deterministic
 candidate planning through the native compiler. Goals constrain hardware,
@@ -278,17 +312,19 @@ workload, memory and quality; recipes must have an executable consumer.
 | Candidate ordering versus measured ranking | An independently qualified, workload-specific recommendation |
 | Produced artifact versus installed engine | Explicit deployment and complete-model evidence, never automatic rollout |
 
-This is the research and engineering surface: representation economics,
-quantized operators, MoE execution, state lifetimes and reproducible evaluation.
-The planner coordinates existing owners; it does not replace them.
+The current planner resolves model/workload constraints, synthesizes fixed and
+role-allocated parameter policies, and inspects bound computational programs.
+The allocation objective maximizes source-retained elements under an encoded
+weight budget; that objective is neither a quality metric nor a throughput
+prediction. Equivalent input-view lowering removes eligible intermediate
+materialization in physical programs. Component qualification of that pass does
+not establish a complete-model speedup or a qualified recipe recommendation.
 
 [Current Program P implementation](docs/architecture/compiler-ir.md#goal-constrained-physical-search-partial-implementation)
 · [Research target](docs/research/physical-model-compiler.md)
 · [Selected delivery](docs/project-control/TASKS.md)
 
 ## Evidence you can inspect
-
-**A model name is not a qualification. A tok/s number is not a benchmark.**
 
 YVEX keeps family conformance, checkpoint references, representation quality,
 backend execution, deployment performance and product behavior separate. A
@@ -309,18 +345,15 @@ and qualification boundaries stay attached to each source and variant.
 
 <a id="documentation"></a>
 
-## Go deeper
+<a id="go-deeper"></a>
+
+## Technical documentation
 
 | Use YVEX | Build with YVEX | Work on YVEX |
 | --- | --- | --- |
 | [Quickstart](docs/guides/quickstart.md) | [Architecture](docs/architecture/README.md) | [Contributing](CONTRIBUTING.md) |
 | [Model lifecycle](docs/guides/model-lifecycle.md) | [Public contracts](docs/contracts/README.md) | [Build guide](docs/guides/build.md) |
 | [Operator reference](docs/reference/README.md) | [Product vision](docs/product/VISION.md) | [Roadmap](ROADMAP.md) |
-
-<p align="center">
-  <strong>Trace the source. Inspect the execution. Keep the evidence.</strong><br>
-  <a href="docs/README.md">Explore the documentation →</a>
-</p>
 
 ---
 

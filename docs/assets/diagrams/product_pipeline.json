@@ -1,31 +1,411 @@
 {
   "schema": 1,
   "number": 8,
-  "presentation": "product",
-  "title": "From open weights to live execution.",
-  "description": "Read the top row from left to right: authenticated source, compiler, artifact and binding. Deployment on the lower right admits the backend and resources, creating an engine generation in the center. The session on the lower left owns independent mutable state. This is a lifecycle overview, not a claim that every source or backend is admitted.",
-  "size": [1200, 760],
+  "presentation": "technical",
+  "title": "Parameter resolution and physical program construction",
+  "description": "Family interpretation derives computation and parameter transformations from an authenticated source. Typed programs or retained operator schedules carry symbolic parameters; Transformation IR produces encoded package terminals. Parameter resolution joins computation with exact terminal lineage, shape and layout. Physical programs and model plans enter the runtime binding. Deployment separately checks numerical implementation, backend operations, workspace and state capacity. DeepSeek's retained operator schedule is not uniform full-model SSA execution.",
+  "size": [
+    1200,
+    1080
+  ],
   "owner": "README.md",
-  "authority": ["docs/architecture/compiler-ir.md", "docs/architecture/representation-artifacts.md", "docs/architecture/deployment-specialization.md", "docs/architecture/runtime-lifecycle.md"],
+  "authority": [
+    "docs/architecture/compiler-ir.md",
+    "docs/architecture/representation-artifacts.md",
+    "docs/architecture/deployment-specialization.md",
+    "include/yvex/internal/operator_graph.h",
+    "include/yvex/internal/program_physical.h",
+    "src/graph/compiled_plan.c",
+    "src/runtime/binding.c"
+  ],
   "panels": [],
   "nodes": [
-    {"id": "source", "box": [40, 160, 340, 154], "kind": "external", "title": "Authenticated source", "lines": ["Checkpoint + tokenizer", "Exact parameter lineage"]},
-    {"id": "compiler", "box": [430, 160, 340, 154], "kind": "semantic", "title": "Native compiler", "lines": ["Model semantics → program", "Transforms + physical plan"]},
-    {"id": "artifact", "box": [820, 160, 340, 154], "kind": "physical", "title": "Artifact + binding", "lines": ["Weights in a chosen layout", "Verified executable plan"]},
-    {"id": "deployment", "box": [820, 418, 340, 154], "kind": "runtime", "title": "Deployment", "lines": ["Backend + numerical class", "Device + resource admission"]},
-    {"id": "engine", "box": [430, 418, 340, 154], "kind": "runtime", "title": "Engine generation", "lines": ["Executable resources", "Load / unload lifetime"]},
-    {"id": "session", "box": [40, 418, 340, 154], "kind": "mutable", "title": "Live session", "lines": ["Independent mutable state", "Committed generation"]}
+    {
+      "id": "source",
+      "box": [
+        40,
+        110,
+        340,
+        130
+      ],
+      "kind": "external",
+      "title": "Authenticated source",
+      "lines": [
+        "Revision + tensor ranges",
+        "Configuration + tokenizer",
+        "Verified payload identities"
+      ]
+    },
+    {
+      "id": "family",
+      "box": [
+        430,
+        110,
+        340,
+        130
+      ],
+      "kind": "semantic",
+      "title": "Family interpretation",
+      "lines": [
+        "Operator equations + topology",
+        "Tensor roles + state geometry",
+        "Routing + numerical obligations"
+      ]
+    },
+    {
+      "id": "computation",
+      "box": [
+        40,
+        330,
+        340,
+        140
+      ],
+      "kind": "semantic",
+      "title": "Computational program",
+      "lines": [
+        "Typed IR / operator schedule",
+        "Dataflow + state effects",
+        "Symbolic parameter references"
+      ]
+    },
+    {
+      "id": "transform",
+      "box": [
+        430,
+        330,
+        340,
+        140
+      ],
+      "kind": "semantic",
+      "title": "Transformation IR",
+      "lines": [
+        "Source ranges → terminal lineage",
+        "Quantization + layout policy",
+        "Deterministic artifact encoding"
+      ]
+    },
+    {
+      "id": "terminals",
+      "box": [
+        820,
+        330,
+        340,
+        140
+      ],
+      "kind": "physical",
+      "title": "Package terminals / PEIR",
+      "lines": [
+        "Encoded shape + qtype + layout",
+        "Authenticated byte ranges",
+        "Sharing and derivation identities"
+      ]
+    },
+    {
+      "id": "join",
+      "box": [
+        40,
+        590,
+        340,
+        140
+      ],
+      "kind": "semantic",
+      "title": "Parameter resolution",
+      "lines": [
+        "Symbolic operand ↔ terminal",
+        "Check lineage, shape and layout",
+        "Reject unresolved parameters"
+      ]
+    },
+    {
+      "id": "physical",
+      "box": [
+        430,
+        590,
+        340,
+        140
+      ],
+      "kind": "physical",
+      "title": "Physical programs / plans",
+      "lines": [
+        "Operation implementations",
+        "Value storage + dependencies",
+        "Numerical and state contracts"
+      ]
+    },
+    {
+      "id": "binding",
+      "box": [
+        820,
+        590,
+        340,
+        140
+      ],
+      "kind": "physical",
+      "title": "Runtime binding",
+      "lines": [
+        "Compiled model plans",
+        "Exact artifact / parameter join",
+        "Authenticated executable basis"
+      ]
+    },
+    {
+      "id": "deployment",
+      "box": [
+        430,
+        830,
+        730,
+        130
+      ],
+      "kind": "runtime",
+      "title": "Deployment specialization and capacity admission",
+      "lines": [
+        "Backend operations + numerical implementation + device capabilities",
+        "Weight resources + preparation + workspace + sequence state + reserve",
+        "Missing implementation or insufficient resources → refuse execution"
+      ]
+    }
   ],
   "edges": [
-    {"kind": "flow", "source": "source", "target": "compiler", "points": [[380, 237], [430, 237]]},
-    {"kind": "flow", "source": "compiler", "target": "artifact", "points": [[770, 237], [820, 237]]},
-    {"kind": "lifecycle", "source": "artifact", "target": "deployment", "points": [[990, 314], [990, 418]]},
-    {"kind": "lifecycle", "source": "deployment", "target": "engine", "points": [[820, 495], [770, 495]]},
-    {"kind": "lifecycle", "source": "engine", "target": "session", "points": [[430, 495], [380, 495]]}
+    {
+      "kind": "flow",
+      "source": "source",
+      "target": "family",
+      "points": [
+        [
+          380,
+          175
+        ],
+        [
+          430,
+          175
+        ]
+      ]
+    },
+    {
+      "kind": "flow",
+      "source": "family",
+      "target": "computation",
+      "points": [
+        [
+          530,
+          240
+        ],
+        [
+          530,
+          275
+        ],
+        [
+          210,
+          275
+        ],
+        [
+          210,
+          330
+        ]
+      ]
+    },
+    {
+      "kind": "flow",
+      "source": "family",
+      "target": "transform",
+      "points": [
+        [
+          665,
+          240
+        ],
+        [
+          665,
+          330
+        ]
+      ]
+    },
+    {
+      "kind": "flow",
+      "source": "transform",
+      "target": "terminals",
+      "points": [
+        [
+          770,
+          400
+        ],
+        [
+          820,
+          400
+        ]
+      ]
+    },
+    {
+      "kind": "flow",
+      "source": "computation",
+      "target": "join",
+      "points": [
+        [
+          210,
+          470
+        ],
+        [
+          210,
+          590
+        ]
+      ]
+    },
+    {
+      "kind": "bind",
+      "source": "terminals",
+      "target": "join",
+      "points": [
+        [
+          990,
+          470
+        ],
+        [
+          990,
+          535
+        ],
+        [
+          315,
+          535
+        ],
+        [
+          315,
+          590
+        ]
+      ]
+    },
+    {
+      "kind": "flow",
+      "source": "join",
+      "target": "physical",
+      "points": [
+        [
+          380,
+          660
+        ],
+        [
+          430,
+          660
+        ]
+      ]
+    },
+    {
+      "kind": "flow",
+      "source": "physical",
+      "target": "binding",
+      "points": [
+        [
+          770,
+          660
+        ],
+        [
+          820,
+          660
+        ]
+      ]
+    },
+    {
+      "kind": "lifecycle",
+      "source": "binding",
+      "target": "deployment",
+      "points": [
+        [
+          990,
+          730
+        ],
+        [
+          990,
+          830
+        ]
+      ]
+    }
   ],
   "labels": [
-    {"at": [40, 137], "text": "PREPARE · COMPILE · BIND", "style": "note"},
-    {"at": [40, 392], "text": "EXECUTE ← LOAD ← ADMIT", "style": "note"},
-    {"at": [40, 638], "text": "One lineage. Separate source, artifact, deployment and runtime identities.", "style": "note"}
+    {
+      "at": [
+        820,
+        140
+      ],
+      "text": "Lowering differs by family:",
+      "style": "note"
+    },
+    {
+      "at": [
+        820,
+        171
+      ],
+      "text": "Qwen / MiniMax / Mamba2: typed IR",
+      "style": "note"
+    },
+    {
+      "at": [
+        820,
+        202
+      ],
+      "text": "DeepSeek: operator schedule",
+      "style": "note"
+    },
+    {
+      "at": [
+        40,
+        308
+      ],
+      "text": "Operator semantics",
+      "style": "note"
+    },
+    {
+      "at": [
+        688,
+        287
+      ],
+      "text": "Parameter derivation",
+      "style": "note"
+    },
+    {
+      "at": [
+        40,
+        515
+      ],
+      "text": "Parameter references",
+      "style": "note"
+    },
+    {
+      "at": [
+        440,
+        520
+      ],
+      "text": "Exact terminal identities and encoded geometry",
+      "style": "note"
+    },
+    {
+      "at": [
+        40,
+        862
+      ],
+      "text": "Storage representation is fixed",
+      "style": "note"
+    },
+    {
+      "at": [
+        40,
+        891
+      ],
+      "text": "by the artifact; deployment",
+      "style": "note"
+    },
+    {
+      "at": [
+        40,
+        920
+      ],
+      "text": "adds device and workload constraints.",
+      "style": "note"
+    },
+    {
+      "at": [
+        822,
+        789
+      ],
+      "text": "Load-time admission",
+      "style": "note"
+    }
   ]
 }

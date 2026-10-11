@@ -32,27 +32,23 @@ text{fill:#292434}
 .title{font-size:26px;font-weight:700}.panel-title{font-size:19px;font-weight:700}
 .node-title{font-size:20px;font-weight:700}.body{font-size:18px}
 .note,.legend{font-size:16px;fill:#625a70}.code{font-size:16px}
-.tag{font-size:15px;font-weight:700;text-anchor:middle}
 .label{font-size:16px}
 .panel{fill:none;stroke:#aaa0b8;stroke-width:1;stroke-dasharray:3 6}
 .node{fill:none;stroke:#a69ab8;stroke-width:1.25}
 .semantic,.physical,.runtime{stroke:#8964bf}
 .external{stroke-dasharray:5 4}
-.tag,.kind,.eyebrow{fill:#7541ba}
 .rule{fill:none;stroke:#b9afc8;stroke-width:1}
 .edge{fill:none;stroke:#8863b6;stroke-width:1.7;stroke-linejoin:round}
 #solid path{fill:#8863b6}#open path{stroke:#8863b6}
-@media(prefers-color-scheme:dark){text{fill:#ede8f5}.note,.legend,.body,.code,.label{fill:#c0b8cd}.panel{stroke:#675a78}.node{stroke:#8f79aa}.tag,.kind,.eyebrow{fill:#ba97f2}.rule{stroke:#675a78}.edge{stroke:#ad8bd5}#solid path{fill:#ad8bd5}#open path{stroke:#ad8bd5}}
+@media(prefers-color-scheme:dark){text{fill:#ede8f5}.note,.legend,.body,.code,.label{fill:#c0b8cd}.panel{stroke:#675a78}.node{stroke:#8f79aa}.rule{stroke:#675a78}.edge{stroke:#ad8bd5}#solid path{fill:#ad8bd5}#open path{stroke:#ad8bd5}}
 """.strip()
 
 # One palette for all figures. Landing typography is larger; no themed canvas
 # or raster asset conceals the document background.
 PRODUCT_STYLE = STYLE + """
-.eyebrow{font-size:14px;font-weight:700;letter-spacing:2px}
 .title{font-size:36px;font-weight:700;letter-spacing:-1px}
 .node-title{font-size:25px;font-weight:700;letter-spacing:-.5px}
 .body{font-size:20px}.note,.label,.legend{font-size:17px}
-.kind{font-size:12px;font-weight:700;letter-spacing:1.5px}
 """.strip()
 
 
@@ -86,8 +82,8 @@ def validate(data):
     coordinate(data["size"], 2)
     width, height = data["size"]
     require(width == 1200 and 600 <= height <= 1200, "use the common publication canvas")
-    if product:
-        require(extent(data["title"], 40) <= width-80, "product title overflow")
+    require(extent(data["title"], 40 if product else 26) <= width-110,
+            "figure title overflow")
     require(data["description"] and data["authority"], "missing accessible description / authorities")
     for path in [data["owner"], *data["authority"]]:
         require(isinstance(path, str) and not Path(path).is_absolute() and
@@ -107,7 +103,7 @@ def validate(data):
         require(node["id"] not in ids, "duplicate node identity")
         ids.add(node["id"])
         require(node["kind"] in KINDS, "unknown semantic class")
-        require(extent(node["title"], 25 if product else 20) <= node["box"][2] - (48 if product else 58), f"title overflow: {node['id']}")
+        require(extent(node["title"], 25 if product else 20) <= node["box"][2] - (48 if product else 32), f"title overflow: {node['id']}")
         require(58 + max(0, len(node["lines"]) - 1) * 25 <= node["box"][3] - 12
                 if node["lines"] else node["box"][3] >= 48, f"vertical overflow: {node['id']}")
         if product:
@@ -186,7 +182,9 @@ def render(data):
         x, y, w, h = node["box"]
         kind = node["kind"]
         svg.append(f'<g id="{html.escape(node["id"], quote=True)}"><rect class="node {kind}" x="{x}" y="{y}" width="{w}" height="{h}" rx="10"/>')
-        svg += [text(x+23.5, y+31, KINDS[kind], "tag"), text(x+44, y+32, node["title"], "node-title")]
+        # Keep semantic classes in the source/style, not as generic badges that
+        # compete with the actual operation, record or resource name.
+        svg.append(text(x+16, y+32, node["title"], "node-title"))
         for index, line in enumerate(node["lines"]):
             svg.append(text(x+16, y+58+index*25, line, "code" if index in node.get("code", []) else "body"))
         svg.append('</g>')
@@ -196,8 +194,7 @@ def render(data):
                 text(x+10, y+22, band["text"])]
     for label in data["labels"]:
         svg.append(text(*label["at"], label["text"], label.get("style", "label")))
-    svg += [f'<path class="rule" d="M32 {height-95}H{width-32}"/>',
-            text(32, height-69, 'X external · I interface · S semantic · R runtime · M mutable · P physical · E evidence', 'legend')]
+    svg += [f'<path class="rule" d="M32 {height-80}H{width-32}"/>']
     for index, kind in enumerate(dict.fromkeys(edge["kind"] for edge in data["edges"])):
         dash, arrow, title = EDGES[kind]
         x, y = 32 + 228*index, height-38
@@ -218,7 +215,6 @@ def render_product(data, subject):
            '<defs><style>'+PRODUCT_STYLE+'</style>',
            '<marker id="solid" markerWidth="9" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1L8 5L1 9Z" fill="#ab89f5"/></marker>',
            '<marker id="open" markerWidth="9" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1L8 5L1 9" fill="none" stroke="#ab89f5" stroke-width="2"/></marker></defs>',
-           text(40, 40, f'YVEX / {data["number"]:02d} / EXECUTION ARCHITECTURE', 'eyebrow'),
            text(40, 94, data["title"], 'title')]
     for panel in data["panels"]:
         x, y, w, h = panel["box"]
@@ -232,8 +228,6 @@ def render_product(data, subject):
     for node in data["nodes"]:
         x, y, w, h = node["box"]
         svg += [f'<g id="{html.escape(node["id"], quote=True)}"><rect class="node" x="{x}" y="{y}" width="{w}" height="{h}" rx="14"/>',
-                f'<path class="edge" d="M{x+24} {y+27}h16"/>',
-                text(x+52, y+31, node["kind"].upper(), 'kind'),
                 text(x+24, y+66, node["title"], 'node-title')]
         for index, line in enumerate(node["lines"]):
             svg.append(text(x+24, y+99+index*27, line, 'code' if index in node.get('code', []) else 'body'))
@@ -281,7 +275,7 @@ def mermaid(data):
     def node(n):
         # Mermaid is the orientation view; exact annotations remain in the
         # companion static figure and explanatory owner, from this same model.
-        body='<br/>'.join(label(t) for t in [n['kind'].upper(),n['title'],*n['lines'][:1]])
+        body='<br/>'.join(label(t) for t in [n['title'],*n['lines'][:1]])
         return f'  {identity(n["id"])}["{body}"]:::{n["kind"]}'
     def panel(i):
         out.append(f'  subgraph {identity("panel-"+str(i))}["{label(panels[i]["title"])}"]')

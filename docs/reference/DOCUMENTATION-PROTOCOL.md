@@ -113,13 +113,22 @@ spacing, not graph semantics.
 | --- | --- |
 | Canvas | Transparent. No full-page card, gradient, glow or decorative background. |
 | Color | Violet accents; neutral text and fine rules adapt to light/dark. Status is written, never inferred from color. |
-| Nodes | Short titles, bounded annotations, restrained outlines. Group by actual ownership, not decorative symmetry. |
+| Nodes | Name a concrete record, operation, representation or resource. Annotate relevant fields, shapes, arithmetic or state transitions. Generic category badges such as INTERFACE, RUNTIME or MUTABLE are not explanatory content. |
 | Edges | Explicit direction and typed line styles; no crossing node interiors. Preserve compiler forks, joins and lifetime boundaries. |
 | Density | One question per figure; overview first, exact owner next. A large dependency graph belongs in its dossier, not every landing page. |
-| Copy | State what the system does and why the boundary matters. Avoid generic taglines repeated on every reference page. |
+| Copy | Describe mechanisms, dependencies and limits directly. No slogans, sales framing or claims of control/depth in place of an explanation. Technical vocabulary must identify an actual contract, not decorate a box. |
 | Tables | Compare decisions, contracts, configurations or measured outcomes. Keep prose for reasoning; do not turn narrative into a wall of cells. |
 | Technical depth | A product README progresses from purpose and operation to compiler, numerical and state contracts with precise owner links. |
 | Benchmark display | Generate values from selected immutable receipts, including configuration, samples, dispersion and missing gates. Never transcribe headline speeds by hand. |
+
+A technical figure must answer a specific question: what is resolved, executed,
+allocated or committed, by which inputs, and under which constraints? Label the
+material edges with the data or condition they convey. Preserve separate
+computational and parameter paths, actual failure branches and family-specific
+lowering differences; do not imply that every model uses the same program IR.
+Link the canonical explanation and implementation authorities. Internal node
+classes may support validation and styling but are not a substitute for these
+details. The edge legend explains only the line styles present in that figure.
 
 Conceptual ASCII flows are replaced by a small table or an owned diagram when
 that improves comprehension. Actual commands, protocol grammars, code and

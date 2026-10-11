@@ -72,7 +72,7 @@ class PublicationTests(unittest.TestCase):
             data=copy.deepcopy(source)
             if field=='title':data['title']='Overflow '*60
             elif field=='node-title':data['nodes'][0]['title']='Overflow '*20
-            else:data['nodes'][0]['box'][3]=110
+            else:data['nodes'][0]['box'][3]=70
             with self.subTest(field=field),self.assertRaisesRegex(ValueError,'overflow'):
                 figures.render(data)
 
@@ -309,6 +309,46 @@ class PublicationTests(unittest.TestCase):
                 self.assertEqual(len(root.findall('.//{http://www.w3.org/2000/svg}polyline')),len(data['edges']))
                 self.assertEqual({g.get('id') for g in root.findall('./{http://www.w3.org/2000/svg}g')},
                                  {n['id'] for n in data['nodes']})
+
+    def test_figures_explain_nodes_without_generic_category_badges(self):
+        import xml.etree.ElementTree as ET
+        for path in (ROOT/'docs/assets/diagrams').glob('*.json'):
+            with self.subTest(figure=path.name):
+                data=json.loads(path.read_text())
+                root=ET.fromstring(figures.render(data))
+                texts=[e.text for e in root.iter() if e.tag.endswith('}text')]
+                self.assertFalse(set(texts) & set(figures.KINDS.values()))
+                self.assertFalse(set(texts) & {k.upper() for k in figures.KINDS})
+                self.assertNotIn('X external · I interface',figures.render(data))
+                for n in data['nodes']:
+                    self.assertIn(n['title'],texts)
+
+    def test_readme_diagrams_preserve_parameter_join_and_commit_gate(self):
+        directory=ROOT/'docs/assets/diagrams'
+        compile_data=json.loads((directory/'product_pipeline.json').read_text())
+        compile_edges={(e['source'],e['target']) for e in compile_data['edges']}
+        self.assertTrue({('family','computation'),('family','transform'),
+                         ('computation','join'),('terminals','join'),
+                         ('join','physical'),('physical','binding'),
+                         ('binding','deployment')} <= compile_edges)
+        runtime=json.loads((directory/'product_runtime.json').read_text())
+        edges={(e['source'],e['target']) for e in runtime['edges']}
+        self.assertTrue({('execute','state'),('state','commit'),('execute','abort'),
+                         ('commit','abort'),('abort','error'),('commit','output')} <= edges)
+        self.assertEqual({source for source,target in edges if target=='output'},
+                         {'commit'})
+
+    def test_editorial_projection_keeps_categories_internal(self):
+        data=json.loads((ROOT/'docs/assets/diagrams/product_pipeline.json').read_text())
+        data['presentation']='product'
+        data['title']='Parameter resolution'
+        data['nodes']=[dict(id='source',box=[40,160,520,190],kind='semantic',
+                            title='Transformation IR',lines=['Source ranges → terminals'])]
+        data['edges']=[];data['labels']=[]
+        svg=figures.render(data)
+        self.assertIn('Transformation IR',svg)
+        self.assertNotIn('SEMANTIC',svg)
+        self.assertNotIn('EXECUTION ARCHITECTURE',svg)
 
     def showcase_records(self):
         return [json.loads((ROOT/'docs/evaluation/benchmarks/qualification'/(identifier+'.json')).read_text())
