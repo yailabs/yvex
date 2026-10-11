@@ -3,6 +3,12 @@
   "scope": "published operator registry; management v2 classification",
   "operations": [
     {
+      "operation": "compile.optimize",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Native goal-driven compilation consumes a typed local optimization request and canonical compiler/evidence owners; no equivalent authenticated remote optimization operation is published."
+    },
+    {
       "operation": "workbench.open",
       "class": "cli_interaction",
       "public_operation": null,

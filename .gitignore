@@ -2,6 +2,7 @@
 *.log
 *.tmp
 build/
+/target/
 __pycache__/
 *.pyc
 /yvex

@@ -397,7 +397,7 @@ static int listener_open(yvex_server *server, yvex_error *err)
         !S_ISREG(lock_info.st_mode) || lock_info.st_uid != geteuid() ||
         flock(server->lock_fd, LOCK_EX | LOCK_NB) != 0)
         return server_refuse(err, YVEX_ERR_STATE,
-                             "another daemon instance owns the runtime lock");
+                             "another host owns the runtime lock (it may still be shutting down)");
     server->lock_owned = 1;
     if (fchmod(server->lock_fd, 0600) != 0 ||
         ftruncate(server->lock_fd, 0) != 0 ||
@@ -1605,9 +1605,6 @@ void yvex_server_close(yvex_server **server)
        listener owned by the process that holds the singleton lock. */
     if (owner->lock_owned && owner->socket_path[0])
         (void)unlink(owner->socket_path);
-    if (owner->lock_fd >= 0) (void)close(owner->lock_fd);
-    if (owner->lock_owned && owner->lock_path[0])
-        (void)unlink(owner->lock_path);
     yvex_server_openai_close(&owner->openai);
     yvex_server_telemetry_close(&owner->telemetry);
     if (owner->clients_condition_ready)
@@ -1617,6 +1614,10 @@ void yvex_server_close(yvex_server **server)
     if (owner->state_mutex_ready)
         (void)pthread_mutex_destroy(&owner->state_mutex);
     free(owner->clients);
+    /* Keep one stable lock inode across generations. Unlinking after unlock
+     * could remove a replacement host's lock and admit a second singleton.
+     * Release only after all listener/runtime ownership has been retired. */
+    if (owner->lock_fd >= 0) (void)close(owner->lock_fd);
     memset(owner, 0, sizeof(*owner));
     free(owner);
     *server = NULL;

@@ -368,7 +368,10 @@ static int prepared_case(yvex_backend *backend, unsigned width, unsigned tokens,
     float *input = (float *)(before + input_offset);
     for (unsigned row = 0u; row < ROWS; ++row)
         for (unsigned k = 0u; k < width; ++k) {
-            uint16_t value = yvex_quant_bf16_encode(certificate_weight(row, k));
+            float value_f32 = scenario >= 3 ?
+                (float)((int)((row + k) % 15u) - 7) / 8.0f : certificate_weight(row, k);
+            if (scenario == 5) value_f32 = 0.0f;
+            uint16_t value = yvex_quant_bf16_encode(value_f32);
             memcpy(before + (row * width + k) * 2u, &value, 2u);
         }
     for (unsigned t = 0u; t < tokens; ++t)
@@ -377,9 +380,18 @@ static int prepared_case(yvex_backend *backend, unsigned width, unsigned tokens,
             if (t % 4u == 1u) value = k % 3u ? 0.0f : -0.0f;
             if (t % 4u == 2u) value = ldexpf(value, -130);
             if (t % 4u == 3u) value = ldexpf(value, (int)(k % 150u) - 75);
+            /* Each block is exactly preparable, while the complete row either
+             * fits the integer lattice or exceeds it. Opposite signs and
+             * non-power-of-two widths exercise rebasing and cancellation. */
+            if (scenario >= 3) {
+                int span = scenario == 3 ? 40 : 10;
+                int exponent = ((int)((k / 32u + t) % 3u) - 1) * span;
+                value = ldexpf((float)((int)((k + t) % 31u) - 15) / 16.0f, exponent);
+            }
             input[t * width + k] = value;
         }
     if (scenario == 1) input[37] = NAN;
+    if (scenario == 5) input[37] = INFINITY;
     if (scenario == 2) *(int *)(before + status_offset) = 1;
     memcpy(before + output_offset - 4u, &canary, 4u);
     memcpy(before + output_offset + ROWS * tokens * 4u, &canary, 4u);
@@ -398,8 +410,9 @@ static int prepared_case(yvex_backend *backend, unsigned width, unsigned tokens,
             yvex_backend_tensor_read(backend, arena, after, bytes, &err) == YVEX_OK,
             "execute prepared-dot projection and completion");
         int actual_status = *(int *)(after + status_offset);
-        YVEX_TEST_ASSERT((actual_status != 0) == (scenario != 0), "prepared-dot finite status");
-        if (!scenario) for (unsigned t = 0u; t < tokens; ++t)
+        YVEX_TEST_ASSERT((actual_status != 0) == (scenario == 1 || scenario == 2 || scenario == 5),
+            "prepared-dot finite status, including zero times nonfinite");
+        if (!scenario || scenario == 3 || scenario == 4) for (unsigned t = 0u; t < tokens; ++t)
             for (unsigned row = 0u; row < ROWS; ++row) {
                 double reference = 0.0;
                 for (unsigned k = 0u; k < width; ++k) {
@@ -648,6 +661,9 @@ int yvex_cuda_test_dot_finiteness(void)
     for (int scenario = 0; scenario < 3; ++scenario)
         if (prepared_case(backend, 96u, 65u, scenario)) return 1;
     if (prepared_case(backend, 4096u, 33u, 0)) return 1;
+    for (int scenario = 3; scenario < 6; ++scenario)
+        if (prepared_case(backend, 96u, 65u, scenario) ||
+            prepared_case(backend, 4096u, 33u, scenario)) return 1;
     for (int scenario = 0; scenario < 4; ++scenario)
         if (prepared_mxfp4_case(backend, 96u, 5u, scenario, 2u)) return 1;
     if (prepared_mxfp4_case(backend, 4096u, 1u, 0, 2u) ||

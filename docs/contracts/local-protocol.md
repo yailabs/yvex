@@ -316,6 +316,15 @@ lease still owns the generation; no implicit eviction policy is introduced.
 
 ## Failure and cleanup
 
+`RUNTIME_STOP` acknowledges the shutdown request, not completed Host retirement.
+The native `yvex_client_host_stop` helper sends it once, validates its correlated
+ACK, then observes release of the same UID-private singleton lock. `yvex host
+stop` uses that helper and reports success only after retirement; timeout leaves
+completion unconfirmed and does not retry. The lock inode persists across Host
+lifetimes and is released after the local/HTTP listeners and runtime resources.
+Internal foreground signal handling keeps the request-only path so its own
+teardown can proceed. Wire fields and protocol version are unchanged.
+
 Failures preserve typed application, input, runtime, capability, resource,
 timeout, cancellation, transport, and internal classes. A malformed client,
 write failure, or disconnect closes only its connection and correlated work as

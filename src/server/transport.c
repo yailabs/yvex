@@ -9,15 +9,18 @@
 #include <yvex/internal/platform.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <time.h>
 
 #define FRAME_HEADER_BYTES 12u
 #define FRAME_KIND_REQUEST 1u
@@ -176,6 +179,93 @@ int yvex_server_socket_path(char output[YVEX_SERVER_SOCKET_PATH_CAP],
                                 "canonical socket path exceeds its bound");
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+static int host_stop_wait(int lock_fd, unsigned long long timeout_ms, yvex_error *err)
+{
+    struct timespec start, now, delay = {0, 10000000};
+    if (clock_gettime(CLOCK_MONOTONIC, &start) != 0)
+        return transport_refuse(err, YVEX_ERR_IO, "shutdown wait clock unavailable");
+    for (;;) {
+        unsigned long long elapsed;
+        if (flock(lock_fd, LOCK_EX | LOCK_NB) == 0) {
+            (void)flock(lock_fd, LOCK_UN);
+            yvex_error_clear(err);
+            return YVEX_OK;
+        }
+        if (errno != EWOULDBLOCK && errno != EAGAIN && errno != EINTR)
+            return transport_refuse(err, YVEX_ERR_IO,
+                                    "shutdown requested; host lock observation failed");
+        if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+            return transport_refuse(err, YVEX_ERR_IO,
+                                    "shutdown requested; wait clock unavailable");
+        elapsed = (unsigned long long)(now.tv_sec - start.tv_sec) * 1000ull;
+        if (now.tv_nsec >= start.tv_nsec)
+            elapsed += (unsigned long long)(now.tv_nsec - start.tv_nsec) / 1000000ull;
+        else
+            elapsed -= (unsigned long long)(start.tv_nsec - now.tv_nsec) / 1000000ull;
+        if (elapsed >= timeout_ms)
+            return transport_refuse(err, YVEX_ERR_TIMEOUT,
+                                    "shutdown requested; host lock not released before timeout; do not resend");
+        (void)nanosleep(&delay, NULL);
+    }
+}
+
+int yvex_client_host_stop(const char *socket_path, unsigned long long timeout_ms,
+                          yvex_error *err)
+{
+    char canonical[YVEX_SERVER_SOCKET_PATH_CAP], lock_path[YVEX_SERVER_SOCKET_PATH_CAP];
+    const char *path = socket_path;
+    struct stat before, current;
+    yvex_client *client = NULL;
+    yvex_client_request request = {0};
+    yvex_client_message reply = {0};
+    yvex_provider_sampling sampling;
+    int fd, length, rc;
+    if (!timeout_ms || timeout_ms > 86400000ull)
+        return transport_refuse(err, YVEX_ERR_INVALID_ARG,
+                                "shutdown wait must be between 1 and 86400000 milliseconds");
+    if (!path) {
+        rc = yvex_server_socket_path(canonical, err);
+        if (rc != YVEX_OK) return rc;
+        path = canonical;
+    }
+    length = snprintf(lock_path, sizeof(lock_path), "%s.lock", path);
+    if (length < 0 || (size_t)length >= sizeof(lock_path))
+        return transport_refuse(err, YVEX_ERR_BOUNDS, "host lock path exceeds its bound");
+    fd = open(lock_path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0)
+        return transport_refuse(err, YVEX_ERR_IO, "host lock is absent or inaccessible; no shutdown sent");
+    if (fstat(fd, &before) != 0 || !S_ISREG(before.st_mode) ||
+        before.st_uid != geteuid() || (before.st_mode & 0077u) != 0u) {
+        (void)close(fd);
+        return transport_refuse(err, YVEX_ERR_IO, "host lock is not private to this user; no shutdown sent");
+    }
+    rc = yvex_client_connect(&client, path, err);
+    if (rc == YVEX_OK && (lstat(lock_path, &current) != 0 ||
+        current.st_dev != before.st_dev || current.st_ino != before.st_ino))
+        rc = transport_refuse(err, YVEX_ERR_STATE,
+                              "host lock identity changed during connect; no shutdown sent");
+    if (rc == YVEX_OK) rc = yvex_client_timeout_set(client, timeout_ms, err);
+    if (rc == YVEX_OK) {
+        yvex_provider_sampling_default(&sampling);
+        request.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+        request.operation = YVEX_CLIENT_OP_RUNTIME_STOP;
+        request.request_number = 1ull;
+        request.temperature = sampling.temperature;
+        request.top_p = sampling.top_p;
+        request.typical_p = sampling.typical_p;
+        rc = yvex_client_send(client, &request, err);
+        if (rc == YVEX_OK) rc = yvex_client_receive(client, &reply, err);
+        if (rc == YVEX_OK && (reply.request_number != request.request_number ||
+            reply.kind != YVEX_CLIENT_MESSAGE_ACK || reply.status != YVEX_OK))
+            rc = transport_refuse(err, YVEX_ERR_STATE,
+                                  "shutdown acknowledgement invalid; completion unconfirmed; do not resend");
+    }
+    yvex_client_close(&client);
+    if (rc == YVEX_OK) rc = host_stop_wait(fd, timeout_ms, err);
+    (void)close(fd);
+    return rc;
 }
 
 int yvex_client_connect(yvex_client **out, const char *socket_path,

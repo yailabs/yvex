@@ -47,6 +47,9 @@ ADRs own structural selections; Memory is derived context.
 ## Shared development
 
 The branch is a shared integration line, not an agent or family identity.
+Work on `main` unless the operator explicitly selects another branch. Create
+branches only at the operator's explicit request, including recovery branches;
+an instruction to commit and push does not authorize creating one.
 Before changing an affected owner, inspect the live branch, HEAD, staged and
 unstaged work, and the region to edit; check remote relationship before
 publishing. Preserve legitimate concurrent work, including compatible

@@ -575,21 +575,21 @@ const char *yvex_server_event_kind_name(yvex_server_event_kind kind);
 const char *yvex_server_session_state_name(yvex_server_session_state state);
 void yvex_server_close(yvex_server **server);
 int yvex_client_connect(yvex_client **out, const char *socket_path, yvex_error *err);
+/* Send shutdown once, then await singleton retirement; NULL socket selects the default. */
+int yvex_client_host_stop(const char *socket_path, unsigned long long timeout_ms, yvex_error *err);
 int yvex_client_timeout_set(yvex_client *client, unsigned long long milliseconds, yvex_error *err);
 /* Host-authored lifetime nonce. Device identity remains the approved SSH host key. */
 int yvex_client_host_identity(yvex_client *client, char out[YVEX_SHA256_HEX_CAP], yvex_error *err);
 int yvex_client_send(yvex_client *client, const yvex_client_request *request, yvex_error *err);
 int yvex_client_receive(yvex_client *client, yvex_client_message *message, yvex_error *err);
 void yvex_client_close(yvex_client **client);
-int yvex_protocol_request_encode(const yvex_client_request *request,
-                                 unsigned char *output, unsigned long long capacity,
+int yvex_protocol_request_encode(const yvex_client_request *request, unsigned char *output, unsigned long long capacity,
                                  unsigned long long *byte_count, yvex_error *err);
 int yvex_protocol_request_decode(const unsigned char *input, unsigned long long byte_count,
                                  yvex_client_request *request, unsigned char **owned_prompt,
                                  yvex_content_part **owned_content,
                                  yvex_provider_request **owned_provider, yvex_error *err);
-int yvex_protocol_message_encode(const yvex_client_message *message,
-                                 unsigned char *output, unsigned long long capacity,
+int yvex_protocol_message_encode(const yvex_client_message *message, unsigned char *output, unsigned long long capacity,
                                  unsigned long long *byte_count, yvex_error *err);
 int yvex_protocol_message_decode(const unsigned char *input, unsigned long long byte_count,
                                  yvex_client_message *message, yvex_error *err);

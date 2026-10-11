@@ -173,6 +173,20 @@ class BuildContract(unittest.TestCase):
         self.make("RUSTFLAGS=-C debuginfo=0", "RUST_PROFILE=dev", str(stamp))
         self.assertNotEqual(identity, stamp.read_text().splitlines()[0])
 
+    def test_build_provenance_reuses_qa_source_identity(self):
+        snapshot = json.loads(subprocess.check_output(
+            [sys.executable, "tools/qa.py", "source-identity"], cwd=ROOT, text=True))
+        stamp = self.build / "generated/build_commit.h"
+        self.make(str(stamp))
+        text = stamp.read_text()
+        self.assertIn(f'#define YVEX_BUILD_SOURCE_DELTA_IDENTITY "{snapshot["delta_identity"]}"', text)
+        self.assertIn(f'#define YVEX_BUILD_SOURCE_STATE "{snapshot["state"]}"', text)
+        before = stamp.stat().st_mtime_ns
+        self.make(str(stamp))
+        self.assertEqual(before, stamp.stat().st_mtime_ns)
+        self.make("YVEX_BUILD_SOURCE_DELTA_IDENTITY=unknown", str(stamp))
+        self.assertIn('#define YVEX_BUILD_SOURCE_STATE "unknown"', stamp.read_text())
+
     def test_rust_product_publication_keeps_previous_on_cargo_failure(self):
         product = self.root / "bin/yvex"
         product.parent.mkdir()

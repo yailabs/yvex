@@ -114,7 +114,9 @@ python3 tests/support/human_field.py "$OUT_DIR/unknown-target.err" \
 expect_rc 2 "$YVEX_BIN" compile quant nope > "$OUT_DIR/bad-action.out" 2> "$OUT_DIR/bad-action.err"
 
 expect_rc 1 "$YVEX_BIN" compile quant emit --json --target unknown-physical-target \
-    --source /does/not/exist --plan /does/not/exist --out "$OUT_DIR/refused.gguf" \
+    --source /does/not/exist --models-root "$OUT_DIR/models" \
+    --source-manifest /does/not/exist --preset source-faithful \
+    --plan /does/not/exist --out "$OUT_DIR/refused.gguf" \
     > "$OUT_DIR/emit-refused.json" 2> "$OUT_DIR/emit-refused.err"
 test ! -e "$OUT_DIR/refused.gguf" || fail "refused emission created an artifact"
 python3 - "$OUT_DIR/emit-refused.json" <<'PY'

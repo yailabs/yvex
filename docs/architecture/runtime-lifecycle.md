@@ -58,6 +58,12 @@ package ancestry through every call.
 loopback OpenAI listener, telemetry, bounded external request capacity, and an
 empty engine manager. Host readiness does not require a loaded model.
 
+`yvex host stop` sends one shutdown request and waits for actual singleton
+retirement, including listener/resource teardown. Its ACK is not completion;
+a timeout reports an unconfirmed stop without resending. The private lock file
+remains as a stable inode after release; its existence alone is not a live Host.
+See the [local lifecycle contract](../contracts/local-protocol.md#failure-and-cleanup).
+
 Porcelain `model load` resolves one logical model and selected representation
 to an exact local registry profile and creates a new engine generation. A TTY
 can select model and variant from linear tables; automation supplies `MODEL`

@@ -405,6 +405,15 @@ done
 test "$ready" -eq 1 || fail 'continuous host log subscriber did not become ready'
 
 run_client host stop >"$OUT_DIR/stop.out" 2>"$OUT_DIR/stop.err"
+contains "$OUT_DIR/stop.out" 'HOST stopped'
+# Success denotes actual retirement before waiting for the old process.
+test ! -e "$SOCKET_PATH" || fail 'stop acknowledged before socket retirement'
+python3 - "$SOCKET_PATH.lock" <<'PY'
+import fcntl, os, sys
+fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW)
+fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+os.close(fd)
+PY
 wait "$server_pid"
 server_pid=
 wait "$logs_pid"

@@ -11,6 +11,8 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <sys/file.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -1134,6 +1136,19 @@ static int test_media_direct_prompt_routing(void)
     return 0;
 }
 
+static int remove_retired_fixture_lock(const char *socket_path)
+{
+    char path[YVEX_SERVER_SOCKET_PATH_CAP + 6u];
+    int fd, length = snprintf(path, sizeof(path), "%s.lock", socket_path);
+    YVEX_TEST_ASSERT(length > 0 && (size_t)length < sizeof(path), "fixture lock path bounded");
+    fd = open(path, O_RDONLY);
+    YVEX_TEST_ASSERT(fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) == 0,
+                     "retired host preserves an unlocked singleton inode");
+    YVEX_TEST_ASSERT(unlink(path) == 0, "remove only the isolated retired fixture lock");
+    YVEX_TEST_ASSERT(close(fd) == 0, "fixture lock descriptor closed");
+    return 0;
+}
+
 static int test_media_engine_lifecycle(void)
 {
     const char *fixture = "tests/fixtures/gguf/valid-tokenizer-simple.gguf";
@@ -1329,6 +1344,7 @@ static int test_media_engine_lifecycle(void)
     YVEX_TEST_ASSERT(yvex_server_finish(server, &err) == YVEX_OK,
                      "empty persistent host finishes separately");
     yvex_server_close(&server);
+    YVEX_TEST_ASSERT(remove_retired_fixture_lock(socket_path) == 0, "media fixture lock retired");
     YVEX_TEST_ASSERT(rmdir(root) == 0, "media host output root removed empty");
     return 0;
 }
@@ -1720,8 +1736,86 @@ static int test_session_lifetime_fence(void)
     return 0;
 }
 
+typedef struct {
+    yvex_server *server;
+    int result;
+} stop_wait_probe;
+
+static void *stop_wait_serve(void *opaque)
+{
+    stop_wait_probe *probe = opaque;
+    struct timespec delay = {0, 150000000};
+    yvex_error err = {0};
+    probe->result = yvex_server_serve(probe->server, &err);
+    /* Deterministic stand-in for slow engine retirement after request ACK. */
+    (void)nanosleep(&delay, NULL);
+    yvex_server_close(&probe->server);
+    return NULL;
+}
+
+static int test_host_stop_wait(void)
+{
+    char directory[] = "/tmp/yvex-stop-wait.XXXXXX";
+    char socket_path[YVEX_SERVER_SOCKET_PATH_CAP], lock_path[YVEX_SERVER_SOCKET_PATH_CAP];
+    yvex_server_options options;
+    yvex_error err = {0};
+    unsigned int index;
+    YVEX_TEST_ASSERT(mkdtemp(directory) != NULL, "stop wait isolated directory");
+    (void)snprintf(socket_path, sizeof(socket_path), "%s/host.sock", directory);
+    (void)snprintf(lock_path, sizeof(lock_path), "%s/host.sock.lock", directory);
+    test_options(&options);
+    options.socket_path = socket_path;
+    YVEX_TEST_ASSERT(yvex_client_host_stop(socket_path, 0ull, &err) == YVEX_ERR_INVALID_ARG,
+                     "zero shutdown deadline refuses before dispatch");
+    YVEX_TEST_ASSERT(yvex_client_host_stop(socket_path, 1ull, &err) == YVEX_ERR_IO,
+                     "missing host is not successful shutdown");
+    for (index = 0u; index < 2u; ++index) {
+        stop_wait_probe probe = {0};
+        pthread_t thread;
+        struct stat before, after;
+        unsigned long long begin, elapsed;
+        int rc, fd;
+        YVEX_TEST_ASSERT(yvex_server_create(&probe.server, &options, &err) == YVEX_OK &&
+                         yvex_server_start(probe.server, &err) == YVEX_OK,
+                         "host starts or restarts on the stable lock");
+        YVEX_TEST_ASSERT(stat(lock_path, &before) == 0, "capture lock identity");
+        YVEX_TEST_ASSERT(pthread_create(&thread, NULL, stop_wait_serve, &probe) == 0,
+                         "stop wait accept owner");
+        YVEX_TEST_ASSERT(chmod(lock_path, 0644) == 0, "make invalid lock fixture");
+        YVEX_TEST_ASSERT(yvex_client_host_stop(socket_path, 1000ull, &err) == YVEX_ERR_IO,
+                         "nonprivate lock refuses before shutdown");
+        YVEX_TEST_ASSERT(chmod(lock_path, 0600) == 0, "restore private fixture");
+        begin = yvex_core_monotonic_ns();
+        rc = yvex_client_host_stop(socket_path, index ? 25ull : 2000ull, &err);
+        elapsed = yvex_core_monotonic_ns() - begin;
+        if (!index) {
+            YVEX_TEST_ASSERT(rc == YVEX_OK && elapsed >= 100000000ull,
+                             "successful stop waits for retirement, not ACK");
+            fd = open(lock_path, O_RDONLY);
+            YVEX_TEST_ASSERT(fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) == 0,
+                             "success releases singleton before return");
+            (void)close(fd);
+            YVEX_TEST_ASSERT(access(socket_path, F_OK) != 0,
+                             "success retires socket before return");
+        } else {
+            YVEX_TEST_ASSERT(rc == YVEX_ERR_TIMEOUT &&
+                             strstr(yvex_error_message(&err), "shutdown requested") != NULL,
+                             "timeout preserves accepted but unconfirmed distinction");
+        }
+        YVEX_TEST_ASSERT(pthread_join(thread, NULL) == 0 && probe.result == YVEX_OK,
+                         "one accepted shutdown completes without redispatch");
+        YVEX_TEST_ASSERT(stat(lock_path, &after) == 0 && before.st_dev == after.st_dev &&
+                         before.st_ino == after.st_ino,
+                         "stable lock inode survives close");
+    }
+    (void)unlink(lock_path);
+    (void)rmdir(directory);
+    return 0;
+}
+
 int yvex_test_server(void)
 {
+    if (test_host_stop_wait() != 0) return 1;
     if (test_session_lifetime_fence() != 0) return 1;
     if (test_automatic_reasoning_policy() != 0) return 1;
     if (test_request_queue_serialization() != 0) return 1;

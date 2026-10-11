@@ -29,8 +29,10 @@ The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
 configuration search and the associated DeepSeek representation/backend work.
 `.5` retains its source, admission, numerical and performance evidence and is
 BLOCKED on this successor, not COMPLETE. No duplicate implementation is selected.
-The six retained experimental CUDA edits remain unaccepted until reconciled and
-qualified. The post-reboot Host initially had no loaded engines; service
+The inherited CUDA preparation candidate remains unaccepted. The
+[main reconciliation](../evaluation/retained-observations.md#main-worktree-reconciliation-2026-10-11)
+separates its reusable regression tests from its archived, unqualified kernel
+changes; no performance gate is promoted. The post-reboot Host initially had no loaded engines; service
 availability is not model admission. The separately authorized
 [previous DSpark 32K activation](../evaluation/dspark-32k-runtime-activation.md)
 subsequently loaded generation 1 without restarting that Host. Program P does
@@ -201,8 +203,9 @@ candidate is input-backed, read-only physical view lowering: eliminate redundant
 reshape/exact-widening materialization without changing parameter bytes,
 arithmetic, state effects or caller-owned publication. Numerical/lifetime,
 resource and complete-model gates remain independent; an eliminated copy is
-not a throughput certificate. The six inherited CUDA experiments remain
-unaccepted, separate work. Operator engines are protected during qualification.
+not a throughput certificate. The inherited CUDA preparation experiment remains
+unaccepted and recoverable outside the active tree after main reconciliation.
+Operator engines are protected during qualification.
 
 The authenticated Q8_0/Q2_K baseline remains a candidate, not a selected optimum.
 Initial-memory fit, qtype readability, coupled-kernel compatibility, full runtime

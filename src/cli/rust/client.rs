@@ -1387,7 +1387,10 @@ fn session_dispatch(
 ) -> Result<String, Error> {
     let operation = invocation.operation.operation_id.as_str();
     let native_operation = match operation {
-        "host.stop" => raw::yvex_client_operation_YVEX_CLIENT_OP_RUNTIME_STOP,
+        "host.stop" => {
+            ffi::stop_host_and_wait()?;
+            return Ok("HOST stopped · runtime closed and host lock released\n".into());
+        }
         "session.new" => raw::yvex_client_operation_YVEX_CLIENT_OP_SESSION_NEW,
         "session.list" => raw::yvex_client_operation_YVEX_CLIENT_OP_SESSION_LIST,
         "session.show" => raw::yvex_client_operation_YVEX_CLIENT_OP_SESSION_SHOW,
@@ -1926,7 +1929,7 @@ mod tests {
     }
     #[test]
     fn projection_does_not_invent_residency() {
-        let report = HostStatus {
+        let mut report = HostStatus {
             snapshot: Default::default(),
         };
         assert_eq!(
@@ -1938,5 +1941,22 @@ mod tests {
         let human = report.memory(160, false).unwrap();
         assert!(human.contains("not reported"));
         assert!(!human.contains("0 MiB physical"));
+        let resources = &mut report.snapshot.metrics.resources;
+        resources.available = u64::from(YVEX_EXECUTION_RESOURCE_MODEL_AVAILABLE);
+        resources.model_mapped_bytes = 8 * 1048576;
+        resources.model_device_addressable_bytes = resources.model_mapped_bytes;
+        resources.placement =
+            yvex_execution_resource_placement_YVEX_EXECUTION_PLACEMENT_ARTIFACT_MAPPED_DEVICE_ADDRESSABLE;
+        let human = report.memory(160, false).unwrap();
+        assert!(human.contains("8 MiB CUDA-addressable"));
+        assert!(human.contains("physical residency not measured (not zero)"));
+        assert_eq!(
+            report.memory_json()["resources"]["model_explicit_device_bytes"],
+            0
+        );
+        assert_eq!(
+            report.memory_json()["resources"]["physical_residency_known"],
+            false
+        );
     }
 }

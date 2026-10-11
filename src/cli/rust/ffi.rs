@@ -1,4 +1,15 @@
 // Only this module crosses native ownership. No argv dispatcher or C renderer is bound.
+pub(crate) fn stop_host_and_wait() -> Result<(), Error> {
+    let mut report = raw::yvex_error::default();
+    // Native transport owns one dispatch and bounded singleton observation.
+    let status = unsafe { raw::yvex_client_host_stop(std::ptr::null(), 60000, &mut report) };
+    if status == 0 {
+        Ok(())
+    } else {
+        Err(error(status, &report))
+    }
+}
+
 use std::{
     ffi::{CStr, CString},
     fmt,

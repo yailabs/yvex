@@ -122,9 +122,71 @@ Native build identity:
 `6b443b1fa6efe3ea9952d2699f7acb0fdf6c93c6a950504c53eb27a1730c7319`;
 inspected executable SHA-256:
 `8411f8d52118560605589ac39b562d46b3b37e0973f67facba7f31bca580b46a`.
-The six inherited experimental CUDA edits remain byte-for-byte preserved in
-their separate worktree, unaccepted by this checkpoint. Neither Program P nor
+At this checkpoint the six inherited experimental CUDA edits were byte-for-byte
+preserved in their separate worktree, unaccepted. Their subsequent preservation
+and selective integration are recorded in the
+[main reconciliation](#main-worktree-reconciliation-2026-10-11). Neither Program P nor
 the predecessor `.5` is promoted.
+
+## Main worktree reconciliation (2026-10-11)
+
+This maintenance operation integrates useful pending work on `main`; it does not
+select another implementation Task or qualify DeepSeek performance. The starting
+published source is `06f8adbeff1159f121888c4ebad5711619f72c0d`.
+
+| Pending source | Reconciliation |
+| --- | --- |
+| `b541a2df2fc14d8fc1a9c94a9e945bf778c6c797`, based on `803dd98d` | 131 tracked edits and 93 new files, 224 paths total. 119 exact file contents already occur in published `main` history; that byte match alone is not a semantic integration claim. Review the remaining differences against current owners, not by overwriting current files. |
+| Legacy qualification/adaptation ADRs | Already published as ADR 0012/0013; do not duplicate the old 0010/0011 names, which now identify other decisions. |
+| Legacy compiler/runtime/qualification work | Preserve current resource guards, scoped status, protocol 25, receipt authentication, flow output, Program P and later repairs. Do not replay earlier code that removes those controls or returns to protocol 24. |
+| Pending shutdown correction | Recover the native single-dispatch stop/wait helper, stable singleton inode and release-after-teardown ordering; wire fields/version stay unchanged. Rust porcelain reports completed retirement rather than ACK. Internal foreground signal dispatch remains request-only. |
+| `a5a949a276e363c9b35362853200bb2554e81833`, based on `6339606c` | Six-file CUDA experiment. Recover independent dot-finiteness regression cases; do not activate the phase-local prepared IQ2 layout without complete-model numerical, resource and performance qualification. Its four production files and layout-specific MoE test remain an archived candidate, not a product capability. |
+| Build and memory projection controls | Recover source-delta provenance/stable build-stamp tests and the distinction between CUDA-addressable mapped bytes and unknown physical residency. Ignore root Cargo `target/` outputs without deleting that cache. |
+
+The exact two original commits are preserved outside Git in a verified thin
+bundle at
+`/home/dgmothx/lab/models/evidence/repository-reconciliation-20261011.eNKjPu/local-work.bundle`,
+SHA-256 `f52aa36147680cf2f6794ba2cf7464bfa062c5173cb3bd068edbdaac154bfce5`.
+Its prerequisite commits `803dd98d` and `6339606c` are in published history.
+The bundle preserves every original blob, including unaccepted experiments and
+unpublished external benchmark drafts; none becomes a new benchmark claim.
+The two unsolicited local recovery branches are retired after successful main
+publication; no new branch, rebase, reset, force-push or service rollout is part
+of this reconciliation. The Metal development branch is not modified.
+
+Reproduction uses the existing QA identities `unit.server`, `unit.protocol`,
+`integration.cli`, `integration.rust-shell`, `cuda.dot_finiteness` and the
+structural lane, plus `python3 tests/test_build.py`. Build the test product at an
+explicit non-installed `YVEX_BIN`; no check should replace the operator's
+executable. The added stop fixture checks delayed retirement, missing/private
+lock refusals, timeout without redispatch, stable inode and immediate restart.
+This software evidence does not establish a model-quality or throughput result.
+
+| Check | Result and scope |
+| --- | --- |
+| Native lifecycle / protocol | `unit.server` and `unit.protocol` PASS; delayed teardown, bounded timeout, stable lock and immediate restart. Receipts `096b113c18cbfc6f5bcaf9fd62dd5fae043b9e64d61fb44faa5c353f599c5683` and `e4c041799ede7a89eb729906bb3137d6c00616cfb1e7884d7acdc590d5c94332`. |
+| Rust / PTY | 109 library tests PASS, two initially ignored; the protocol-cancellation test is then explicitly run and passes. Five structure tests, formatting, Clippy, three-width chat PTY and complete Rust CLI contracts PASS. These use isolated fixtures, not the operator engine. |
+| CLI | Full `make test-cli` and client cutover PASS after updating the stale physical-emission refusal fixture to supply the current required source/policy arguments; refusal code, JSON owner and absence of output remain asserted. |
+| CUDA dot numerics | `cuda.dot_finiteness` PASS; receipt `b7edd9c24e37d97e1434a3be6a800e263b4546ae1b04547d3c54757a5178d2a6`, stable delta `f03cda4ef2e19ab1f43729cb7260a7954162279864d5e964d1fba50f7970beaf`. No prepared-IQ2 production change or model benchmark. |
+| Structural | Initial receipt `2990d3651008590ad32eaf03be5219c86a9e02e9eafff5ff4b4bc6e5bf0409fc`: 18 PASS / 2 FAIL, source stable. Old README-heading assertions and absent `compile.optimize` remote disposition were repaired; both focused reruns PASS (`a2179e1caf0ab550638830ae03b001642a710703f3557e3ebf6aa0d39fb29a3c`, `405a0ac3ee531b73c1259c3816d479f8717398a184cc6b93d8690d0010b446c6`). This is a scoped repaired selection, not one all-green full-matrix receipt. |
+| Build / ABI / docs | Build contracts: 17 PASS / 1 Darwin-only SKIP. Public C/C++ ABI: 48 records PASS; documentation publication: 35 tests PASS. No new wire layout. |
+
+Raw logs accompany the bundle in the directory above; QA receipts remain under
+`build/qa/evidence/`. Rust qualification used delta `f03cda4e…`; the CLI rerun
+used `0734db3b45b818434df6cf0c2bf1b9f5264988f29ede26f268d95182962ebf4b`
+after the fixture correction. Subsequent evidence text does not change the
+tested implementation. This does not certify all 197 registered tests or
+macOS execution. The previously published `06f8adbe` CI was not green; fresh
+publication CI is a separate observation, not inferred from local checks.
+
+At reconciliation preflight the operator Host PID 2491, installed source
+`337e7e73057abd8a784a67eea58ad8a6f079869d`, retained DeepSeek generation 1
+(speculative, context 32768, chunk 512), zero sessions/requests/leases. The
+separate management process retained source `c0ccd7f1`. These are observations,
+not authorization to replace either service or a current-state promise for
+later consumers. Installed product bytes and engine generation are unchanged by
+source publication. Program P stays IN PROGRESS, `.5` stays BLOCKED, and 20/700
+and independent quality remain unearned.
 
 ## Terminal workbench consumer (2026-10-10)
 

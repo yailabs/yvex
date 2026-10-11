@@ -33,11 +33,13 @@ done
 
 # Inventory, links, protocol identity, assets and retired paths have one owner.
 "${DOCS_PYTHON:-python3}" tests/documentation_architecture.py
-require_text README.md '## Why YVEX'
+require_text README.md '## Implementation boundaries'
+require_text README.md '## Source to execution'
 require_text README.md '## Quick start'
-require_text README.md '## Product boundary'
-require_text README.md '## Documentation'
-require_text README.md '## Evidence and current limits'
+require_text README.md '## Request execution and state publication'
+require_text README.md '## Technical documentation'
+require_text README.md '## Evidence you can inspect'
+require_text README.md '## Measured performance'
 require_text README.md './yvex model list'
 require_text README.md './yvex serve'
 require_text README.md './yvex model load'
