@@ -390,47 +390,6 @@ static void decoder_leave(yvex_tokenizer_decoder *decoder)
                                     memory_order_release);
 }
 
-static int utf8_tail_valid(const unsigned char *bytes, unsigned long long count)
-{
-    unsigned int needed;
-    unsigned long long index;
-    if (!count || count > 3u)
-        return 0;
-    if (bytes[0] >= 0xc2u && bytes[0] <= 0xdfu)
-        needed = 2u;
-    else if (bytes[0] >= 0xe0u && bytes[0] <= 0xefu)
-        needed = 3u;
-    else if (bytes[0] >= 0xf0u && bytes[0] <= 0xf4u)
-        needed = 4u;
-    else
-        return 0;
-    if (count >= needed)
-        return 0;
-    for (index = 1u; index < count; ++index)
-        if ((bytes[index] & 0xc0u) != 0x80u)
-            return 0;
-    return 1;
-}
-
-static int utf8_prefix(const unsigned char *bytes, unsigned long long count,
-                       unsigned long long *prefix)
-{
-    unsigned long long offset = 0u, prior = 0u;
-    uint32_t point;
-    while (offset < count) {
-        prior = offset;
-        if (!yvex_tokenizer_utf8_next(bytes, count, &offset, &point)) {
-            if (utf8_tail_valid(bytes + prior, count - prior)) {
-                *prefix = prior;
-                return 1;
-            }
-            return 0;
-        }
-    }
-    *prefix = count;
-    return 1;
-}
-
 static int fragment_identity(yvex_tokenizer_fragment *fragment)
 {
     yvex_sha256 hash;
@@ -491,7 +450,7 @@ static int decoder_stage_token(
         if (piece_count)
             memcpy(combined + pending_count, piece + piece_offset,
                    (size_t)piece_count);
-        if (!utf8_prefix(combined, combined_count, &prefix)) {
+        if (!yvex_core_utf8_prefix(combined, combined_count, &prefix)) {
             yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.decoder.push",
                            "token produces malformed UTF-8 stream");
             rc = YVEX_ERR_FORMAT;

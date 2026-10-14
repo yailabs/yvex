@@ -224,6 +224,17 @@ an initial assistant-role delta, ordered `reasoning_content`, final-content, or
 tool-call deltas, the terminal finish reason, an optional usage chunk, and
 `data: [DONE]` only after successful completion.
 
+Native transport fragments may end within a UTF-8 scalar. The adapter validates
+and emits complete scalar prefixes, independently for final text, explicit
+reasoning and each correlated function call. At most three trailing bytes wait
+for that channel's next fragment; no timer or artificial output batch delays a
+complete prefix. Buffered and SSE results use the same validation. Malformed
+bytes or an unfinished scalar at turn completion refuse with `YVEX_ERR_FORMAT`
+at `server.openai.utf8`; neither replacement characters nor a successful finish
+are fabricated. This also applies to Responses. The local wire and v3 layouts
+are unchanged; the [fixture evidence](../evaluation/provider-output-recovery.md)
+does not qualify real model output or authorize rollout.
+
 ## Responses request profile
 
 Supported fields are:

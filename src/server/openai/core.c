@@ -657,64 +657,26 @@ static int response_stream_complete(openai_http_sink *sink, const char *id,
     return rc;
 }
 
-static int generation_message(openai_http_sink *sink, const char *id,
-                              const char *model, unsigned long long created,
-                              const yvex_client_message *message,
-                              openai_generation_result *result,
-                              yvex_error *err)
+static int generation_fragment_emit(openai_http_sink *sink, const char *id,
+                                    const char *model, unsigned long long created,
+                                    const yvex_client_message *message,
+                                    const openai_generation_result *result,
+                                    unsigned long long tool_index,
+                                    yvex_error *err)
 {
     unsigned char *json = NULL;
-    unsigned long long count = 0u, tool_index = 0u, output_index = 0u;
+    unsigned long long count = 0u;
+    unsigned long long output_index =
+        message->provider_output_kind == YVEX_PROVIDER_OUTPUT_FUNCTION_CALL
+            ? (result->text_count ? 1u : 0u) + tool_index : 0u;
     int rc = YVEX_OK;
-    if (message->kind == YVEX_CLIENT_MESSAGE_FRAGMENT) {
-        if (message->provider_output_kind == YVEX_PROVIDER_OUTPUT_FUNCTION_CALL) {
-            rc = generation_tool_call(result, message, &tool_index, err);
-            if (rc == YVEX_OK) {
-                openai_generation_tool_call *call = &result->tool_calls[tool_index];
-                rc = result_append(&call->arguments, &call->arguments_count,
-                                   &call->arguments_capacity, message->bytes,
-                                   message->byte_count, err);
-                output_index = (result->text_count ? 1u : 0u) + tool_index;
-            }
-        } else if (message->provider_output_kind ==
-                   YVEX_PROVIDER_OUTPUT_EXPLICIT_REASONING) {
-            rc = result_append(&result->reasoning, &result->reasoning_count,
-                               &result->reasoning_capacity, message->bytes,
-                               message->byte_count, err);
-        } else {
-            rc = result_append(&result->text, &result->text_count,
-                               &result->text_capacity, message->bytes,
-                               message->byte_count, err);
-        }
-    } else if (message->kind == YVEX_CLIENT_MESSAGE_TURN_COMPLETE) {
-        result->prompt_tokens = message->prompt_tokens;
-        result->completion_tokens = message->completion_tokens;
-        result->total_tokens = message->total_tokens;
-        result->reasoning_tokens = message->reasoning_tokens;
-        result->final_tokens = message->final_tokens;
-        result->first_reasoning_seconds = message->first_reasoning_seconds;
-        result->first_final_seconds = message->first_final_seconds;
-        result->reasoning_seconds = message->reasoning_seconds;
-        result->final_seconds = message->final_seconds;
-        result->total_completion_seconds = message->total_completion_seconds;
-        result->reasoning_rate = message->reasoning_rate;
-        result->final_rate = message->final_rate;
-        result->total_completion_rate = message->total_completion_rate;
-        result->finish = message->provider_finish;
-        yvex_core_text_copy(result->turn_identity,
-                            sizeof(result->turn_identity),
-                            message->turn_identity);
-        result->complete = 1;
-    }
-    if (rc == YVEX_OK && sink->stream &&
-        sink->endpoint == OPENAI_ENDPOINT_RESPONSES) {
-        if (message->kind == YVEX_CLIENT_MESSAGE_FRAGMENT &&
-            message->provider_output_kind ==
+    if (sink->endpoint == OPENAI_ENDPOINT_RESPONSES) {
+        if (message->provider_output_kind ==
                 YVEX_PROVIDER_OUTPUT_EXPLICIT_REASONING) {
             rc = response_event_emit(
                 sink, OPENAI_RESPONSE_EVENT_REASONING_DELTA, id, model,
                 created, message, result, 0u, err);
-        } else if (message->kind == YVEX_CLIENT_MESSAGE_FRAGMENT) {
+        } else {
             unsigned long long mask = 1ull << output_index;
             if (!(sink->response_item_mask & mask)) {
                 rc = response_event_emit(
@@ -737,8 +699,7 @@ static int generation_message(openai_http_sink *sink, const char *id,
                         : OPENAI_RESPONSE_EVENT_OUTPUT_TEXT_DELTA,
                     id, model, created, message, result, output_index, err);
         }
-    } else if (rc == YVEX_OK && sink->stream &&
-               message->kind == YVEX_CLIENT_MESSAGE_FRAGMENT) {
+    } else {
         rc = yvex_openai_json_stream_chunk(sink->endpoint, id, model, created,
                                       message, tool_index, 0, &json, &count,
                                       err);
@@ -750,6 +711,109 @@ static int generation_message(openai_http_sink *sink, const char *id,
         free(json);
     }
     return rc;
+}
+
+static int generation_fragment_append(openai_http_sink *sink, const char *id,
+                                      const char *model, unsigned long long created,
+                                      const yvex_client_message *message,
+                                      openai_generation_result *result,
+                                      yvex_error *err)
+{
+    unsigned char **bytes;
+    unsigned long long *count, *capacity, *validated;
+    unsigned long long prefix = 0u, tool_index = 0u;
+    int rc;
+    if (message->provider_output_kind == YVEX_PROVIDER_OUTPUT_FUNCTION_CALL) {
+        openai_generation_tool_call *call;
+        rc = generation_tool_call(result, message, &tool_index, err);
+        if (rc != YVEX_OK) return rc;
+        call = &result->tool_calls[tool_index];
+        bytes = &call->arguments;
+        count = &call->arguments_count;
+        capacity = &call->arguments_capacity;
+        validated = &call->arguments_utf8_count;
+    } else if (message->provider_output_kind ==
+               YVEX_PROVIDER_OUTPUT_EXPLICIT_REASONING) {
+        bytes = &result->reasoning;
+        count = &result->reasoning_count;
+        capacity = &result->reasoning_capacity;
+        validated = &result->reasoning_utf8_count;
+    } else {
+        bytes = &result->text;
+        count = &result->text_count;
+        capacity = &result->text_capacity;
+        validated = &result->text_utf8_count;
+    }
+    rc = result_append(bytes, count, capacity, message->bytes,
+                        message->byte_count, err);
+    if (rc != YVEX_OK) return rc;
+    if (!yvex_core_utf8_prefix(*bytes ? *bytes + *validated : NULL,
+                              *count - *validated, &prefix)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "server.openai.utf8",
+                       "runtime output contains malformed UTF-8");
+        return YVEX_ERR_FORMAT;
+    }
+    /* The local transport carries byte fragments. JSON deltas carry complete
+     * scalars. Reuse the bounded result buffer; retain at most three suffix
+     * bytes per output channel/call, never borrow another call's suffix. */
+    while (prefix && sink->stream) {
+        yvex_client_message fragment = *message;
+        unsigned long long width = prefix < sizeof(fragment.bytes)
+                                       ? prefix : sizeof(fragment.bytes);
+        if (!yvex_core_utf8_prefix(*bytes + *validated, width, &width) || !width)
+            return YVEX_ERR_STATE;
+        memcpy(fragment.bytes, *bytes + *validated, (size_t)width);
+        fragment.byte_count = width;
+        rc = generation_fragment_emit(sink, id, model, created, &fragment,
+                                       result, tool_index, err);
+        if (rc != YVEX_OK) return rc;
+        *validated += width;
+        prefix -= width;
+    }
+    *validated += prefix;
+    return YVEX_OK;
+}
+
+static int generation_message(openai_http_sink *sink, const char *id,
+                              const char *model, unsigned long long created,
+                              const yvex_client_message *message,
+                              openai_generation_result *result,
+                              yvex_error *err)
+{
+    unsigned long long index;
+    if (message->kind == YVEX_CLIENT_MESSAGE_FRAGMENT)
+        return generation_fragment_append(sink, id, model, created, message,
+                                           result, err);
+    if (message->kind != YVEX_CLIENT_MESSAGE_TURN_COMPLETE) return YVEX_OK;
+    for (index = 0u; index < result->tool_call_count; ++index)
+        if (result->tool_calls[index].arguments_utf8_count !=
+            result->tool_calls[index].arguments_count)
+            break;
+    if (index != result->tool_call_count ||
+        result->text_utf8_count != result->text_count ||
+        result->reasoning_utf8_count != result->reasoning_count) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "server.openai.utf8",
+                       "runtime output ends within a UTF-8 scalar");
+        return YVEX_ERR_FORMAT;
+    }
+    result->prompt_tokens = message->prompt_tokens;
+    result->completion_tokens = message->completion_tokens;
+    result->total_tokens = message->total_tokens;
+    result->reasoning_tokens = message->reasoning_tokens;
+    result->final_tokens = message->final_tokens;
+    result->first_reasoning_seconds = message->first_reasoning_seconds;
+    result->first_final_seconds = message->first_final_seconds;
+    result->reasoning_seconds = message->reasoning_seconds;
+    result->final_seconds = message->final_seconds;
+    result->total_completion_seconds = message->total_completion_seconds;
+    result->reasoning_rate = message->reasoning_rate;
+    result->final_rate = message->final_rate;
+    result->total_completion_rate = message->total_completion_rate;
+    result->finish = message->provider_finish;
+    yvex_core_text_copy(result->turn_identity, sizeof(result->turn_identity),
+                        message->turn_identity);
+    result->complete = 1;
+    return YVEX_OK;
 }
 
 static int generation_execute(openai_gateway *gateway,

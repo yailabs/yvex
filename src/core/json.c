@@ -1,7 +1,8 @@
 /*
  * Eliminate independent JSON cursors in source and quantization owners.
  *
- * Reads, recursion, copied keys, and allocated strings have explicit caps. Consumers assign
+ * Reads, recursion, copied keys, and allocated strings have explicit caps. Shared scalar
+ * UTF-8 syntax also bounds tokenizer/public JSON fragment completion. Consumers assign
  * meaning only after this owner accepts the byte syntax.
  */
 #include <yvex/internal/core.h>
@@ -17,6 +18,99 @@
 #include <unistd.h>
 
 #define YVEX_JSON_DEPTH_CAP 64u
+
+int yvex_core_utf8_next(const unsigned char *bytes, unsigned long long count,
+                        unsigned long long *offset, uint32_t *point)
+{
+    unsigned long long cursor;
+    uint32_t value;
+    unsigned int needed, index;
+    unsigned char first;
+
+    if (!bytes || !offset || !point || *offset >= count)
+        return 0;
+    cursor = *offset;
+    first = bytes[cursor++];
+    if (first <= 0x7fu) {
+        *point = first;
+        *offset = cursor;
+        return 1;
+    }
+    if (first >= 0xc2u && first <= 0xdfu) {
+        value = first & 0x1fu;
+        needed = 1u;
+    } else if (first >= 0xe0u && first <= 0xefu) {
+        value = first & 0x0fu;
+        needed = 2u;
+    } else if (first >= 0xf0u && first <= 0xf4u) {
+        value = first & 0x07u;
+        needed = 3u;
+    } else {
+        return 0;
+    }
+    if ((unsigned long long)needed > count - cursor)
+        return 0;
+    for (index = 0u; index < needed; ++index) {
+        unsigned char byte = bytes[cursor++];
+        if ((byte & 0xc0u) != 0x80u)
+            return 0;
+        value = (value << 6u) | (byte & 0x3fu);
+    }
+    if ((needed == 2u && value < 0x800u) || (needed == 3u && value < 0x10000u) ||
+        value > 0x10ffffu || (value >= 0xd800u && value <= 0xdfffu))
+        return 0;
+    *point = value;
+    *offset = cursor;
+    return 1;
+}
+
+static int utf8_tail_valid(const unsigned char *bytes, unsigned long long count)
+{
+    unsigned int needed;
+    unsigned long long index;
+    if (!count || count > 3u)
+        return 0;
+    if (bytes[0] >= 0xc2u && bytes[0] <= 0xdfu)
+        needed = 2u;
+    else if (bytes[0] >= 0xe0u && bytes[0] <= 0xefu)
+        needed = 3u;
+    else if (bytes[0] >= 0xf0u && bytes[0] <= 0xf4u)
+        needed = 4u;
+    else
+        return 0;
+    if (count >= needed)
+        return 0;
+    for (index = 1u; index < count; ++index)
+        if ((bytes[index] & 0xc0u) != 0x80u)
+            return 0;
+    if (count > 1u &&
+        ((bytes[0] == 0xe0u && bytes[1] < 0xa0u) ||
+         (bytes[0] == 0xedu && bytes[1] >= 0xa0u) ||
+         (bytes[0] == 0xf0u && bytes[1] < 0x90u) ||
+         (bytes[0] == 0xf4u && bytes[1] >= 0x90u)))
+        return 0;
+    return 1;
+}
+
+int yvex_core_utf8_prefix(const unsigned char *bytes, unsigned long long count,
+                          unsigned long long *prefix)
+{
+    unsigned long long offset = 0u, prior;
+    uint32_t point;
+    if ((!bytes && count) || !prefix)
+        return 0;
+    while (offset < count) {
+        prior = offset;
+        if (!yvex_core_utf8_next(bytes, count, &offset, &point)) {
+            if (!utf8_tail_valid(bytes + prior, count - prior))
+                return 0;
+            *prefix = prior;
+            return 1;
+        }
+    }
+    *prefix = count;
+    return 1;
+}
 
 void yvex_json_init(yvex_json *json, const char *data, size_t length)
 {

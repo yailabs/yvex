@@ -60,7 +60,8 @@ python3 - "$port" >"$root/source-completion.json" <<'PY'
 import http.client, json, sys
 port = int(sys.argv[1])
 tool = {"type": "function", "function": {"name": "inspect_fixture", "parameters": {
-    "type": "object", "properties": {}, "additionalProperties": False}, "strict": False}}
+    "type": "object", "properties": {"note": {"type": "string"}},
+    "additionalProperties": False}, "strict": False}}
 def run(marker, mode, stream, history=None):
     payload = {"model": "deepseek4-v4-flash-dspark", "temperature": 0,
         "messages": history or [{"role": "user", "content": marker}],
@@ -104,6 +105,19 @@ for mode in ("none", "high", "max"):
             assert continued["choices"][0]["message"]["content"] == "fixture feedback accepted"
         assert reasoning == ("" if mode == "none" else "fixture reasoning")
         count += 1
+        for marker, expected in (("SOURCE_COMPLETION_NONEMPTY", {"note": "fixture value"}),
+                                 ("SOURCE_COMPLETION_LONG_UNICODE", {"note": "a"*4085 + "é🌍"})):
+            status, nonempty = run(marker, mode, stream)
+            assert status == 200
+            if stream:
+                choices = [choice for event in nonempty for choice in event.get("choices", [])]
+                fragments = [call for choice in choices for call in choice.get("delta", {}).get("tool_calls", [])]
+                arguments = "".join(call["function"].get("arguments", "") for call in fragments)
+                assert [choice["finish_reason"] for choice in choices if choice.get("finish_reason")] == ["tool_calls"]
+            else:
+                arguments = nonempty["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+            assert json.loads(arguments) == expected
+            count += 1
         status, text = run("SOURCE_COMPLETION_TEXT", mode, stream)
         assert status == 200
         if stream:
@@ -128,6 +142,106 @@ print(json.dumps({"scope": "deterministic native-source/HTTP fixture; no model e
                   "cases": count, "feedback_continuations": 3, "result": "PASS"}))
 PY
 python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))))' "$root/source-completion.json"
+
+# Independent strict UTF-8 decoding and JSON parsing of actual HTTP bytes.
+# Byte-fragment fixtures deliberately bypass the tokenizer; source-completion
+# fixtures above do not. Neither fixture runs inference or a filesystem tool.
+python3 - "$port" >"$root/utf8-delivery.json" <<'PY'
+import http.client, json, sys
+port = int(sys.argv[1])
+function = {"name": "inspect_fixture", "parameters": {"type": "object",
+    "properties": {"note": {"type": "string"}}, "additionalProperties": False}, "strict": False}
+def run(marker, endpoint, stream, mode="none"):
+    payload = {"model": "deepseek4-v4-flash-dspark", "temperature": 0,
+               "stream": stream, "reasoning_effort": mode}
+    if endpoint == "chat/completions":
+        payload.update(messages=[{"role": "user", "content": marker}],
+                       tools=[{"type": "function", "function": function}])
+    else:
+        payload.update(input=marker, tools=[{"type": "function", **function}], store=False)
+    client = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    client.request("POST", "/v1/" + endpoint, json.dumps(payload), {"Content-Type": "application/json"})
+    reply = client.getresponse()
+    status, raw = reply.status, reply.read().decode("utf-8", "strict")
+    client.close()
+    events = [json.loads(line[6:]) for line in raw.splitlines()
+              if line.startswith("data: ") and line != "data: [DONE]"] if stream else [json.loads(raw)]
+    return status, raw, events
+def outputs(events, endpoint, stream):
+    if endpoint == "chat/completions":
+        if not stream:
+            message = events[0]["choices"][0]["message"]
+            return message.get("content") or "", message.get("reasoning_content", ""), {
+                i: (call["id"], call["function"]["name"], call["function"]["arguments"])
+                for i, call in enumerate(message.get("tool_calls", []))}
+        deltas = [choice.get("delta", {}) for event in events for choice in event.get("choices", [])]
+        calls = {}
+        for delta in deltas:
+            for call in delta.get("tool_calls", []):
+                old = calls.get(call["index"], ("", "", ""))
+                calls[call["index"]] = (call.get("id", old[0]), call["function"].get("name", old[1]),
+                                       old[2] + call["function"].get("arguments", ""))
+        return "".join(d.get("content", "") for d in deltas), "".join(d.get("reasoning_content", "") for d in deltas), calls
+    if not stream:
+        response = events[0]
+        text = "".join(part["text"] for item in response["output"] if item["type"] == "message" for part in item["content"])
+        return text, response.get("reasoning_content", ""), {
+            i: (item["call_id"], item["name"], item["arguments"])
+            for i, item in enumerate(item for item in response["output"] if item["type"] == "function_call")}
+    items, arguments = {}, {}
+    for event in events:
+        if event["type"] == "response.output_item.added" and event["item"]["type"] == "function_call":
+            items[event["output_index"]] = event["item"]
+        if event["type"] == "response.function_call_arguments.delta":
+            index = event["output_index"]
+            arguments[index] = arguments.get(index, "") + event["delta"]
+    return ("".join(e["delta"] for e in events if e["type"] == "response.output_text.delta"),
+            "".join(e["delta"] for e in events if e["type"] == "response.reasoning_content.delta"),
+            {i: (item["call_id"], item["name"], arguments.get(i, "")) for i, item in items.items()})
+count = 0
+for endpoint in ("chat/completions", "responses"):
+    for stream in (False, True):
+        for marker in ("UTF8_SPLIT_TEXT", "UTF8_SPLIT_REASONING", "UTF8_SPLIT_TOOLS"):
+            status, raw, events = run(marker, endpoint, stream, "high" if "REASONING" in marker else "none")
+            assert status == 200 and not any("error" in e for e in events), events
+            text, reasoning, calls = outputs(events, endpoint, stream)
+            if marker == "UTF8_SPLIT_TEXT": assert text == "é🌍" and not reasoning and not calls
+            elif marker == "UTF8_SPLIT_REASONING": assert reasoning == "é🌍" and text == "fixture final" and not calls
+            else:
+                assert [(v[0], v[1], json.loads(v[2])) for v in calls.values()] == [
+                    ("call_utf8_a", "inspect_fixture", {"note": "é🌍"}),
+                    ("call_utf8_b", "inspect_fixture", {"note": "✓"})]
+            count += 1
+        for marker in ("UTF8_INCOMPLETE_TEXT", "UTF8_INCOMPLETE_REASONING", "UTF8_INCOMPLETE_TOOL",
+                       "UTF8_MALFORMED_TEXT", "UTF8_MALFORMED_REASONING", "UTF8_MALFORMED_TOOL", "UTF8_CROSS_CALL"):
+            status, raw, events = run(marker, endpoint, stream, "high" if "REASONING" in marker else "none")
+            if stream:
+                assert status == 200 and "[DONE]" not in raw
+                if endpoint == "chat/completions":
+                    errors = [e["error"] for e in events if "error" in e]
+                    assert not any(c.get("finish_reason") for e in events for c in e.get("choices", []))
+                else:
+                    errors = [e["response"]["error"] for e in events if e["type"] == "response.failed"]
+                    assert not any(e["type"] in ("response.completed", "response.incomplete") for e in events)
+            else:
+                assert status == 400 and "choices" not in events[0] and "output" not in events[0]
+                errors = [events[0]["error"]]
+            assert len(errors) == 1 and "UTF-8" in errors[0]["message"], errors
+            count += 1
+for mode in ("none", "high", "max"):
+    for stream in (False, True):
+        for marker, expected in (("SOURCE_COMPLETION_EMPTY", {}), ("SOURCE_COMPLETION_LONG_UNICODE", {"note": "a"*4085 + "é🌍"})):
+            status, raw, events = run(marker, "responses", stream, mode)
+            assert status == 200
+            text, reasoning, calls = outputs(events, "responses", stream)
+            assert len(calls) == 1 and next(iter(calls.values()))[1] == "inspect_fixture"
+            assert json.loads(next(iter(calls.values()))[2]) == expected
+            assert reasoning == ("" if mode == "none" else "fixture reasoning") and not text
+            count += 1
+print(json.dumps({"scope": "UTF-8 transport/JSON and native-source fixtures; no model execution",
+                  "cases": count, "result": "PASS"}))
+PY
+python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))))' "$root/utf8-delivery.json"
 
 curl -fsS "$base/v1/models" >"$root/models.json"
 curl -fsS "$base/v1/models/deepseek4-v4-flash-dspark" >"$root/model.json"

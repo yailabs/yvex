@@ -20,6 +20,14 @@ extern "C" {
 int yvex_core_file_open_readonly(const char *path);
 int yvex_core_directory_open(const char *path);
 
+/* Scalar UTF-8 syntax, shared by token decoding and public JSON delivery.
+ * prefix accepts only a valid complete prefix and, at most, one unfinished
+ * scalar suffix. Neither function replaces malformed bytes. */
+int yvex_core_utf8_next(const unsigned char *bytes, unsigned long long count,
+                        unsigned long long *offset, uint32_t *point);
+int yvex_core_utf8_prefix(const unsigned char *bytes, unsigned long long count,
+                          unsigned long long *prefix);
+
 /* Bounded JSON parsing. */
 #define YVEX_JSON_KEY_CAP 1024u
 typedef struct {

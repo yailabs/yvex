@@ -673,21 +673,38 @@ static int send_source_completion(int fd, const yvex_client_request *request,
         "<" FIXTURE_DSML "parameter name=\"x\" string=\"false\">{"
         "</" FIXTURE_DSML "parameter>\n"
         "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
+    static const char nonempty[] =
+        "\n\n<" FIXTURE_DSML "tool_calls>\n"
+        "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n"
+        "<" FIXTURE_DSML "parameter name=\"note\" string=\"true\">fixture value"
+        "</" FIXTURE_DSML "parameter>\n"
+        "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
     yvex_tokenizer tokenizer = {0};
     yvex_tokenizer_provider_result parsed = {0};
     yvex_rendered_prompt prompt = {0};
     yvex_client_message message;
-    unsigned char raw[1024];
+    unsigned char raw[8192];
     const char *body = feedback ? "fixture feedback accepted" :
         request_contains(request->provider_request, "SOURCE_COMPLETION_TEXT")
             ? "fixture final \xe2\x9c\x93" :
         request_contains(request->provider_request, "SOURCE_COMPLETION_INCOMPLETE")
             ? incomplete :
         request_contains(request->provider_request, "SOURCE_COMPLETION_MALFORMED")
-            ? malformed : empty_call;
+            ? malformed :
+        request_contains(request->provider_request, "SOURCE_COMPLETION_NONEMPTY")
+            ? nonempty : empty_call;
     const char *prefix = fixture_reasoning_policy(request->provider_request->reasoning_policy)
         == YVEX_REASONING_DISABLED ? "" : "fixture reasoning</think>";
-    int length = snprintf((char *)raw, sizeof(raw), "%s%s", prefix, body);
+    int long_unicode = request_contains(request->provider_request, "SOURCE_COMPLETION_LONG_UNICODE");
+    int length;
+    if (long_unicode && !feedback) {
+        char padding[4086];
+        memset(padding, 'a', sizeof(padding) - 1u); padding[sizeof(padding) - 1u] = '\0';
+        length = snprintf((char *)raw, sizeof(raw), "%s\n\n<" FIXTURE_DSML "tool_calls>\n"
+            "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n"
+            "<" FIXTURE_DSML "parameter name=\"note\" string=\"true\">%s\xc3\xa9\xf0\x9f\x8c\x8d"
+            "</" FIXTURE_DSML "parameter>\n</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>", prefix, padding);
+    } else length = snprintf((char *)raw, sizeof(raw), "%s%s", prefix, body);
     int rc;
     tokenizer.plan.sealed = 1;
     tokenizer.plan.prompt_policy = YVEX_TOKENIZER_PROMPT_CONVERSATION;
@@ -728,10 +745,14 @@ static int send_source_completion(int fd, const yvex_client_request *request,
             YVEX_CLIENT_STREAM_FINAL_TEXT, parsed.content, (size_t)parsed.content_count,
             NULL, NULL, err);
     for (unsigned long long i = 0; rc == YVEX_OK && i < parsed.tool_call_count; ++i)
-        for (size_t byte = 0; rc == YVEX_OK && byte < parsed.tool_calls[i].arguments_json.count; ++byte)
+        for (size_t byte = 0; rc == YVEX_OK && byte < parsed.tool_calls[i].arguments_json.count;) {
+            size_t extent = long_unicode ? parsed.tool_calls[i].arguments_json.count - byte : 1u;
+            if (extent > YVEX_SERVER_FRAGMENT_CAP) extent = YVEX_SERVER_FRAGMENT_CAP;
             rc = send_fragment_bytes(fd, request, YVEX_PROVIDER_OUTPUT_FUNCTION_CALL,
                 YVEX_CLIENT_STREAM_TOOL_CALL, parsed.tool_calls[i].arguments_json.bytes + byte,
-                1u, parsed.tool_calls[i].call_id, parsed.tool_calls[i].name, err);
+                extent, parsed.tool_calls[i].call_id, parsed.tool_calls[i].name, err);
+            byte += extent;
+        }
     if (rc == YVEX_OK) {
         message_base(&message, YVEX_CLIENT_MESSAGE_TURN_COMPLETE, request);
         message.provider_finish = parsed.tool_call_count
@@ -747,6 +768,56 @@ static int send_source_completion(int fd, const yvex_client_request *request,
     }
     yvex_tokenizer_provider_result_clear(&parsed);
     return rc;
+}
+
+/* Deliberately split transport bytes independently of Unicode boundaries.
+ * Malformed fixtures bypass native completion parsing to test the adapter's
+ * refusal boundary, not to impersonate valid model-produced arguments. */
+static int send_utf8_fixture(int fd, const yvex_client_request *request,
+                             yvex_error *err)
+{
+    yvex_client_message message;
+    int tools = request_contains(request->provider_request, "UTF8_SPLIT_TOOLS");
+    int cross = request_contains(request->provider_request, "UTF8_CROSS_CALL");
+    int reasoning = request_contains(request->provider_request, "REASONING");
+    int tool = tools || cross || request_contains(request->provider_request, "_TOOL");
+    int incomplete = request_contains(request->provider_request, "INCOMPLETE");
+    int malformed = request_contains(request->provider_request, "MALFORMED");
+    const char *first = tools ? "{\"note\":\"\xc3\xa9\xf0\x9f\x8c\x8d\"}" :
+        cross ? "{\"note\":\"\xf0" : incomplete ? "safe\xf0\x9f\x8c" :
+        malformed ? "safe\xc0\xaf" : "\xc3\xa9\xf0\x9f\x8c\x8d";
+    const char *second = cross ? "\x9f\x8c\x8d\"}" : "{\"note\":\"\xe2\x9c\x93\"}";
+    size_t a = strlen(first), b = tools || cross ? strlen(second) : 0u;
+    yvex_provider_output_kind kind = tool ? YVEX_PROVIDER_OUTPUT_FUNCTION_CALL :
+        reasoning ? YVEX_PROVIDER_OUTPUT_EXPLICIT_REASONING : YVEX_PROVIDER_OUTPUT_ASSISTANT_TEXT;
+    yvex_client_stream_channel channel = tool ? YVEX_CLIENT_STREAM_TOOL_CALL :
+        reasoning ? YVEX_CLIENT_STREAM_EXPLICIT_REASONING : YVEX_CLIENT_STREAM_FINAL_TEXT;
+    int rc = YVEX_OK;
+    for (size_t i = 0u; rc == YVEX_OK && (i < a || i < b); ++i) {
+        if (i < a) rc = send_fragment_bytes(fd, request, kind, channel,
+            (const unsigned char *)first + i, 1u, tool ? "call_utf8_a" : NULL,
+            tool ? "inspect_fixture" : NULL, err);
+        if (rc == YVEX_OK && i < b) rc = send_fragment_bytes(fd, request, kind, channel,
+            (const unsigned char *)second + i, 1u, "call_utf8_b", "inspect_fixture", err);
+    }
+    if (rc == YVEX_OK && reasoning && !incomplete && !malformed)
+        rc = send_fragment(fd, request, YVEX_PROVIDER_OUTPUT_ASSISTANT_TEXT,
+                            "fixture final", NULL, NULL, err);
+    /* The adapter refuses malformed bytes immediately and closes this turn's
+     * native reader. That expected refusal must not retire the fixture Host;
+     * the HTTP assertions still require its exact FORMAT error. */
+    if (rc == YVEX_ERR_IO && (malformed || cross)) return YVEX_OK;
+    if (rc != YVEX_OK) return rc;
+    message_base(&message, YVEX_CLIENT_MESSAGE_TURN_COMPLETE, request);
+    message.provider_finish = tool ? YVEX_PROVIDER_FINISH_TOOL_CALLS : YVEX_PROVIDER_FINISH_STOP;
+    message.prompt_tokens = 5u; message.completion_tokens = 3u; message.total_tokens = 8u;
+    message.generated_tokens = 3u; message.final_position = message.context_used = 8u;
+    message.stop_reason = YVEX_CLIENT_STOP_EOS;
+    message.generation_phase = YVEX_CLIENT_PHASE_COMPLETE;
+    message.stream_channel = YVEX_CLIENT_STREAM_CONTROL_EVENT;
+    memset(message.turn_identity, 'e', 64u);
+    rc = yvex_server_protocol_send(fd, &message, err);
+    return rc == YVEX_ERR_IO && (incomplete || malformed || cross) ? YVEX_OK : rc;
 }
 
 static int send_generation(int fd, const yvex_client_request *request,
@@ -874,6 +945,8 @@ static int send_generation(int fd, const yvex_client_request *request,
                  provider->messages[index].reasoning_content.count)
             has_reasoning_history = 1;
     }
+    if (rc == YVEX_OK && provider && request_contains(provider, "UTF8_"))
+        return send_utf8_fixture(fd, request, err);
     if (rc == YVEX_OK && provider && request_contains(provider, "SOURCE_COMPLETION_"))
         return send_source_completion(fd, request, has_tool_result, err);
     if (rc == YVEX_OK && provider &&

@@ -362,44 +362,5 @@ unsigned int yvex_tokenizer_unicode_class(uint32_t point)
 int yvex_tokenizer_utf8_next(const unsigned char *bytes, unsigned long long count,
                              unsigned long long *offset, uint32_t *point)
 {
-    unsigned long long cursor;
-    uint32_t value;
-    unsigned int needed, index;
-    unsigned char first;
-
-    if (!bytes || !offset || !point || *offset >= count)
-        return 0;
-    cursor = *offset;
-    first = bytes[cursor++];
-    if (first <= 0x7fu) {
-        *point = first;
-        *offset = cursor;
-        return 1;
-    }
-    if (first >= 0xc2u && first <= 0xdfu) {
-        value = first & 0x1fu;
-        needed = 1u;
-    } else if (first >= 0xe0u && first <= 0xefu) {
-        value = first & 0x0fu;
-        needed = 2u;
-    } else if (first >= 0xf0u && first <= 0xf4u) {
-        value = first & 0x07u;
-        needed = 3u;
-    } else {
-        return 0;
-    }
-    if ((unsigned long long)needed > count - cursor)
-        return 0;
-    for (index = 0u; index < needed; ++index) {
-        unsigned char byte = bytes[cursor++];
-        if ((byte & 0xc0u) != 0x80u)
-            return 0;
-        value = (value << 6u) | (byte & 0x3fu);
-    }
-    if ((needed == 2u && value < 0x800u) || (needed == 3u && value < 0x10000u) ||
-        value > 0x10ffffu || (value >= 0xd800u && value <= 0xdfffu))
-        return 0;
-    *point = value;
-    *offset = cursor;
-    return 1;
+    return yvex_core_utf8_next(bytes, count, offset, point);
 }

@@ -37,6 +37,37 @@ matching, repair missing delimiters or promote prose into operations. Existing
 accepted empty-body spelling remains compatible. No public ABI, local wire,
 artifact, binding or conversation-policy identity changes.
 
+## UTF-8 transport defect
+
+A second deterministic witness uses a valid native DSML parameter containing
+4,085 ASCII characters followed by `é🌍`. Parsing succeeds. The session's
+4,096-byte argument fragments can bisect `é`; the former adapter serialized
+each raw fragment directly into an SSE JSON string. Buffered assembly was
+valid, but Python's independent strict UTF-8 decoder rejected the SSE bytes
+(`1155cd85…`). This is a public delivery defect, **not** proof of the historical
+r32 format failure.
+
+The adapter now validates complete scalar prefixes in its existing result
+buffers, independently for final text, reasoning and each call ID. It retains
+at most three unfinished bytes per channel, promptly emits complete prefixes
+and refuses malformed or terminally incomplete UTF-8 before successful finish.
+The tokenizer's scalar decoder and this boundary share a core syntax primitive;
+Unicode classification and source-output recognition retain their own owners.
+There is no new text store, replacement character, model allocation, public ABI
+or local wire change. Non-complete prefixes that already imply an overlong,
+surrogate or out-of-range scalar refuse rather than wait for more bytes.
+
+Expanded source-stable `integration.openai` receipt `f66b6841…` passes 36 native
+source/Chat cases, 52 independent UTF-8/Chat/Responses cases and three correlated
+feedback continuations. Controls include nonempty arguments, actual 4-KiB cuts,
+single-byte scalar splits, none/high/maximum source output, interleaved call IDs,
+malformed bytes and unfinished tails in all three output channels. Interleaved
+valid calls keep independent arguments; stray continuation bytes in a second
+call remain refused. The existing pinned
+Python/JavaScript OpenAI SDK controls also pass. Synthetic malformed-wire
+fixtures deliberately bypass native completion parsing; valid-source fixtures
+do not. No fixture claims model execution or model quality.
+
 ## Evidence boundary
 
 | Lane | Authority / fixture | Expected and observed | Supported claim |
@@ -44,7 +75,7 @@ artifact, binding or conversation-policy identity changes.
 | Regression witness | `unit.runtime_tokenizer`; exact empty-body completion and zero-parameter schema | Before correction FAIL (`b6fa2240…`); initial corrected control PASS (`54008bf4…`) | Reproducible false format rejection, independently of GPU inference |
 | Source serialization | Authenticated official template and empty argument encoder | Exact completion SHA-256 `477e41b5…` | Agreement with the source-authored empty-body bytes, not full-model quality |
 | Native tokenizer | DSpark and independently compiled 0731 policies; none/high/maximum; output/call identities and correlated feedback | Complete `{}` call and exact channel/identity preservation; malformed, incomplete, unoffered and duplicate controls refuse | Bounded native parsing and feedback semantics |
-| HTTP / SSE | Actual native parser, local protocol and production adapter against a disposable fixture Host | 24 text/tool/error cases and three feedback continuations; errors after opened SSE have no successful finish or accepted tool call | Buffered/SSE projection and terminal failure preservation, not real model execution |
+| HTTP / SSE | Actual native parser, local protocol and production adapter against a disposable fixture Host | Initial 24 cases and three feedback continuations; expanded 88 cases preserve Unicode and terminal failure, with no fabricated finish | Buffered/SSE projection and terminal failure preservation, not real model execution |
 | Compatibility regression | Existing protocol, provider, OpenAI and official pinned SDK fixtures | Canonical changed-owner QA and sanitizer receipts are retained below | Exact test scope only; missing or failed gates cannot be inferred PASS |
 
 Each local receipt binds its own source-stable snapshot. The broad code gates
@@ -64,6 +95,38 @@ not published by this repair:
 The remaining formatting failure is not a parser regression or a green global
 runtime claim. Publication must stage only the owned correction/tests/docs;
 published-main hosted QA remains a separately observed boundary.
+
+### Final byte-fragment regression controls
+
+The expanded implementation was tested at parent source `2e76c9ed…`, tree
+`6fe9fd9e…`, retained dirty delta
+`3aca754b777c15c9d63977654e8afe6110661be07c4cd30f5115efe6300e074d`.
+Every following receipt reports source stability as valid. The final editorial
+receipt additions do not change the tested C implementation. The replayable
+source and observed fixture binaries are retained in `source-capture-utf8/`
+under the same external evidence root. Capture authenticates observed bytes;
+the QA receipts separately bind build and execution.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `fast` | Canonical registered tests | CPU, tokenizer, provider, protocol and family controls | No changed-owner regression | 103 passed; `df2ca3be…` | FAIL/SKIP/BLOCKED/ERROR=0 | PASS | Exact registered software scope, not live model behavior |
+| HTTP source and UTF-8 | Official serialization plus Python strict UTF-8/JSON | 36 source/Chat and 52 byte-fragment/Chat/Responses cases; three feedback continuations | Exact valid bytes/identities; malformed output never succeeds | All passed; standalone `f66b6841…`, repeated in `07f8b176…` | Exact strings, call IDs, arguments and finish classes | PASS | Buffered/SSE producer projection and refusal, not inference |
+| `runtime` | Canonical lifecycle/adapter and pinned SDK tests | Disposable CPU/protocol services and owned Secret Service | Preserve lifecycle and compatibility | 47 passed, 1 failed; `07f8b176…` | Rust formatting failure in pre-existing `ffi/execution.rs` | FAIL | Passing individual controls only; no global runtime PASS |
+| `structural` | Canonical ownership, ABI, architecture and project control | Shared source with protected Program P work | No introduced structural violation | 20 passed; `21c14ce3…` | FAIL/SKIP/BLOCKED/ERROR=0 at QA gate level | PASS | Existing ownership and public contract preserved |
+| `sanitizer.runtime` | ASan/LSan and UBSan, halt on error | Native C, complete HTTP fixture, CPU lifecycle and PTY | No sanitizer finding or test failure | Complete rerun passed; `002d98a6…` | One canonical gate; FAIL/SKIP/BLOCKED/ERROR=0 | PASS | Instrumented software paths only, not CUDA or checkpoint quality |
+
+The first expanded sanitizer attempt (`891b5648…`) remains a FAIL receipt: a
+network read timed out while acquiring the pinned independent GGUF reader,
+before its HTTP portion. It is not relabeled PASS or erased. The unchanged
+source rerun completed both sanitizers and both HTTP fixture populations.
+The remaining Rust formatting failure has the same pre-repair file hash
+`bd34914f…`; this repair does not stage or format that Program P file.
+
+No model/backend numerical implementation, public schema, artifact/binding,
+SDK source, service configuration or YAI boundary changes. The structural
+correction reuses existing tokenizer, core syntax and adapter owners; no new
+subsystem or structural selection is introduced. Program P remains independent,
+and this producer Task's installed/real-model/YAI gates remain open.
 
 Raw receipts and the independent serialization script remain under
 `/home/dgmothx/lab/models/evidence/deepseek-output-recovery-20261014.BdBPreBo`;

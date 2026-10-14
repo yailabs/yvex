@@ -129,6 +129,15 @@ repair model output. The [empty-body correction](../evaluation/provider-output-r
 aligns completion recognition with the canonical renderer, without changing
 the wire layout, executing tools or altering installed Engine lifetimes.
 
+The local protocol carries bounded byte fragments, not independently complete
+UTF-8 strings. The adapter keeps a complete-scalar cursor in each existing
+result buffer (final, reasoning and per call ID) before JSON/SSE serialization.
+Shared core UTF-8 syntax serves tokenizer decoding and this transport boundary;
+no second completion parser or text store is introduced. Malformed or terminally
+incomplete bytes refuse without publishing a successful finish. The
+[transport regression controls](../evaluation/provider-output-recovery.md)
+cover both public endpoints without running model inference.
+
 The OpenAI transport forwards real session prefill/committed-decode observations.
 Its bounded frame timeout measures inactivity. Independent connection admission
 keeps discovery responsive and refuses saturation; external total deadlines

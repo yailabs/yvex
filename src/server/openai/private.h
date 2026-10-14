@@ -61,6 +61,7 @@ typedef struct {
 typedef struct {
     unsigned char *arguments;
     unsigned long long arguments_count, arguments_capacity;
+    unsigned long long arguments_utf8_count;
     char call_id[YVEX_PROVIDER_ID_CAP];
     char name[YVEX_PROVIDER_TOOL_NAME_CAP];
 } openai_generation_tool_call;
@@ -68,6 +69,7 @@ typedef struct {
     unsigned char *reasoning, *text;
     unsigned long long reasoning_count, reasoning_capacity;
     unsigned long long text_count, text_capacity;
+    unsigned long long reasoning_utf8_count, text_utf8_count;
     openai_generation_tool_call tool_calls[YVEX_PROVIDER_MAX_TOOLS];
     unsigned long long tool_call_count;
     unsigned long long prompt_tokens, completion_tokens, total_tokens;

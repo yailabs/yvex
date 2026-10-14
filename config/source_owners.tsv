@@ -447,7 +447,7 @@ src/source/catalog.c	source	source.catalog	generic	private	reusable-algorithm	so
 src/source/acquisition.c	source	source.acquisition	generic	private	file-serialization	cli,accounts,tests	implementation	none
 src/source/distribution.c	source	source.distribution	generic	private	file-serialization	model.catalog,cli	implementation	none
 src/source/inventory.c	source	source.inventory	generic	private	reusable-algorithm	model,compilation	implementation	none
-src/core/json.c	core	core.json	generic	private	bounded-parser	source,gguf	implementation	none
+src/core/json.c	core	core.json	generic	private	bounded-parser	source,gguf,tokenizer.decode,tokenizer.unicode,server.openai.lifecycle	implementation	none
 src/source/native_weights.c	source	source.native_weights	generic	private	reusable-algorithm	model,compilation	implementation	none
 src/source/payload.c	source	source.payload	generic	private	resource-lifecycle	model,compilation	implementation	none
 src/source/payload_identity.c	source	source.payload_identity	generic	private	canonical-identity	model,compilation	implementation	none

@@ -13,6 +13,33 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+static int test_utf8_delivery_prefix(void)
+{
+    static const unsigned char valid[] = "a\xc3\xa9\xe2\x9c\x93\xf0\x9f\x8c\x8d" "z";
+    static const unsigned long long expected[] = {0, 1, 1, 3, 3, 3, 6, 6, 6, 6, 10, 11};
+    static const unsigned char invalid[][4] = {
+        {0xc0, 0xaf}, {0xed, 0xa0}, {0xe0, 0x9f}, {0xf0, 0x8f},
+        {0xf4, 0x90}, {0xe2, 'x'}, {0x80}, {0xf5}
+    };
+    static const unsigned long long counts[] = {2, 2, 2, 2, 2, 2, 1, 1};
+    unsigned long long prefix, offset = 0u;
+    uint32_t point;
+    for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); ++i) {
+        prefix = 99u;
+        YVEX_TEST_ASSERT(yvex_core_utf8_prefix(valid, i, &prefix) && prefix == expected[i],
+                         "complete scalar prefix matches independent literal offsets");
+    }
+    for (size_t i = 0; i < sizeof(counts) / sizeof(counts[0]); ++i)
+        YVEX_TEST_ASSERT(!yvex_core_utf8_prefix(invalid[i], counts[i], &prefix),
+                         "invalid or impossible partial scalar is never repaired");
+    YVEX_TEST_ASSERT(yvex_core_utf8_prefix(NULL, 0u, &prefix) && prefix == 0u &&
+                     !yvex_core_utf8_prefix(NULL, 1u, &prefix), "bounded empty input");
+    YVEX_TEST_ASSERT(yvex_core_utf8_next(valid, 11u, &offset, &point) && point == 'a' &&
+                     yvex_core_utf8_next(valid, 11u, &offset, &point) && point == 0xe9u,
+                     "scalar decode retains the tokenizer's exact code points");
+    return 0;
+}
+
 static int admit_fixture(const char *json, openai_endpoint endpoint,
                          openai_admitted_request *admitted, yvex_error *err)
 {
@@ -525,6 +552,7 @@ static int test_capacity_projection(void)
 
 int yvex_test_openai(void)
 {
+    if (test_utf8_delivery_prefix() != 0) return 1;
     if (test_capacity_projection() != 0) return 1;
     if (test_chat_admission() != 0) return 1;
     if (test_request_refusals() != 0) return 1;
