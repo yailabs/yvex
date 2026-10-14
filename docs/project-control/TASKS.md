@@ -22,6 +22,7 @@ compiler/performance implementation authority and all its unearned exits.
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
 | `V010.TERMINAL.WORKBENCH.INTEGRATION.0` | Terminal-native operational workbench | P1 | ✅ COMPLETE | Linux inline Home/conversation, Models, Compile, contextual inspection and bounded Activity consume current registry/native owners through one REPLAI terminal owner. [Source-stable evidence](../evaluation/retained-observations.md#terminal-workbench-consumer-2026-10-10) qualifies PTY navigation, progressive output, Unicode, resize, cancellation, disconnection/recovery, host-incarnation refusal, restoration and real isolated CPU execution/retirement in dev and release builds. Linear CLI/protocol and operator engine remain unchanged. macOS rerun, full-screen UI, Program P quality and DeepSeek performance are not earned by this consumer delivery. |
+| `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0` | Source-faithful native output and tool-call recovery | P1 | 🔵 IN PROGRESS | Selected 2026-10-14: the canonical empty-argument invocation was falsely rejected; exact LF recognition now has independent source serialization, tokenizer/feedback, buffered/SSE and sanitizer controls. [Evidence](../evaluation/provider-output-recovery.md) retains the before/after witness and malformed-output refusals. Historical r32 output is unavailable; no causal closure or real-model/YAI acceptance follows. No GPU inference, service/model lifecycle mutation, historical Work replay or cross-repository changes. Program P retains compiler/performance ownership; only owned source is published, with explicit rollout/live gates still open. |
 
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
@@ -158,10 +159,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 57 | 42 | 4 | 1 | 10 |
+| 58 | 42 | 5 | 1 | 10 |
 <!-- task-counts:end -->
 
-**42/57 selected Tasks complete.** This denominator includes the significant
+**42/58 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research

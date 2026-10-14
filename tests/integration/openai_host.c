@@ -4,6 +4,9 @@
  */
 
 #include "src/server/private.h"
+#include "src/tokenizer/private.h"
+#include <yvex/internal/compiler.h>
+#include <yvex/internal/families/deepseek_v4.h>
 
 #include <errno.h>
 #include <poll.h>
@@ -650,6 +653,102 @@ static int send_slow_progress(int fd, const yvex_client_request *request,
     return rc;
 }
 
+#define FIXTURE_DSML "\xef\xbd\x9c" "DSML" "\xef\xbd\x9c"
+
+/* Drive the actual tokenizer completion owner before the real wire/HTTP
+ * adapters. No backend, model execution, application tool or source payload. */
+static int send_source_completion(int fd, const yvex_client_request *request,
+                                  int feedback, yvex_error *err)
+{
+    static const char empty_call[] =
+        "\n\n<" FIXTURE_DSML "tool_calls>\n"
+        "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n\n"
+        "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
+    static const char incomplete[] =
+        "\n\n<" FIXTURE_DSML "tool_calls>\n"
+        "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n\n";
+    static const char malformed[] =
+        "\n\n<" FIXTURE_DSML "tool_calls>\n"
+        "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n"
+        "<" FIXTURE_DSML "parameter name=\"x\" string=\"false\">{"
+        "</" FIXTURE_DSML "parameter>\n"
+        "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
+    yvex_tokenizer tokenizer = {0};
+    yvex_tokenizer_provider_result parsed = {0};
+    yvex_rendered_prompt prompt = {0};
+    yvex_client_message message;
+    unsigned char raw[1024];
+    const char *body = feedback ? "fixture feedback accepted" :
+        request_contains(request->provider_request, "SOURCE_COMPLETION_TEXT")
+            ? "fixture final \xe2\x9c\x93" :
+        request_contains(request->provider_request, "SOURCE_COMPLETION_INCOMPLETE")
+            ? incomplete :
+        request_contains(request->provider_request, "SOURCE_COMPLETION_MALFORMED")
+            ? malformed : empty_call;
+    const char *prefix = fixture_reasoning_policy(request->provider_request->reasoning_policy)
+        == YVEX_REASONING_DISABLED ? "" : "fixture reasoning</think>";
+    int length = snprintf((char *)raw, sizeof(raw), "%s%s", prefix, body);
+    int rc;
+    tokenizer.plan.sealed = 1;
+    tokenizer.plan.prompt_policy = YVEX_TOKENIZER_PROMPT_CONVERSATION;
+    tokenizer.plan.explicit_reasoning_supported = 1;
+    tokenizer.plan.maximum_reasoning_supported = 1;
+    if (length < 0 || (size_t)length >= sizeof(raw) ||
+        !yvex_compiler_family_deepseek_v4()->tokenizer_policy(&tokenizer.compiled_policy, err) ||
+        !yvex_tokenizer_family_policy_conversation(&tokenizer.compiled_policy,
+                                                  &tokenizer.conversation_view))
+        return YVEX_ERR_STATE;
+    tokenizer.conversation = &tokenizer.conversation_view;
+    rc = yvex_tokenizer_provider_prompt(&tokenizer, request->provider_request, &prompt, err);
+    yvex_rendered_prompt_free(&prompt);
+    if (rc == YVEX_OK)
+        rc = yvex_tokenizer_parse_provider_completion(&tokenizer, request->provider_request,
+            raw, (unsigned)length, &parsed, err);
+    if (rc != YVEX_OK) {
+        if (prefix[0]) {
+            yvex_error primary = *err;
+            int delivery = send_fragment(fd, request, YVEX_PROVIDER_OUTPUT_EXPLICIT_REASONING,
+                "fixture reasoning", NULL, NULL, err);
+            if (delivery != YVEX_OK) return delivery;
+            *err = primary;
+        }
+        message_base(&message, YVEX_CLIENT_MESSAGE_ERROR, request);
+        message.status = rc;
+        message.provider_finish = YVEX_PROVIDER_FINISH_FAILED;
+        snprintf(message.reason, sizeof(message.reason), "%s", yvex_error_message(err));
+        yvex_tokenizer_provider_result_clear(&parsed);
+        return yvex_server_protocol_send(fd, &message, err);
+    }
+    if (parsed.reasoning_content_count)
+        rc = send_fragment_bytes(fd, request, YVEX_PROVIDER_OUTPUT_EXPLICIT_REASONING,
+            YVEX_CLIENT_STREAM_EXPLICIT_REASONING, parsed.reasoning_content,
+            (size_t)parsed.reasoning_content_count, NULL, NULL, err);
+    if (rc == YVEX_OK && parsed.content_count)
+        rc = send_fragment_bytes(fd, request, YVEX_PROVIDER_OUTPUT_ASSISTANT_TEXT,
+            YVEX_CLIENT_STREAM_FINAL_TEXT, parsed.content, (size_t)parsed.content_count,
+            NULL, NULL, err);
+    for (unsigned long long i = 0; rc == YVEX_OK && i < parsed.tool_call_count; ++i)
+        for (size_t byte = 0; rc == YVEX_OK && byte < parsed.tool_calls[i].arguments_json.count; ++byte)
+            rc = send_fragment_bytes(fd, request, YVEX_PROVIDER_OUTPUT_FUNCTION_CALL,
+                YVEX_CLIENT_STREAM_TOOL_CALL, parsed.tool_calls[i].arguments_json.bytes + byte,
+                1u, parsed.tool_calls[i].call_id, parsed.tool_calls[i].name, err);
+    if (rc == YVEX_OK) {
+        message_base(&message, YVEX_CLIENT_MESSAGE_TURN_COMPLETE, request);
+        message.provider_finish = parsed.tool_call_count
+            ? YVEX_PROVIDER_FINISH_TOOL_CALLS : YVEX_PROVIDER_FINISH_STOP;
+        message.prompt_tokens = 5u; message.completion_tokens = 3u;
+        message.total_tokens = 8u; message.generated_tokens = 3u;
+        message.final_position = message.context_used = 8u;
+        message.stop_reason = YVEX_CLIENT_STOP_EOS;
+        message.generation_phase = YVEX_CLIENT_PHASE_COMPLETE;
+        message.stream_channel = YVEX_CLIENT_STREAM_CONTROL_EVENT;
+        memset(message.turn_identity, 'e', 64u);
+        rc = yvex_server_protocol_send(fd, &message, err);
+    }
+    yvex_tokenizer_provider_result_clear(&parsed);
+    return rc;
+}
+
 static int send_generation(int fd, const yvex_client_request *request,
                            yvex_error *err)
 {
@@ -775,6 +874,8 @@ static int send_generation(int fd, const yvex_client_request *request,
                  provider->messages[index].reasoning_content.count)
             has_reasoning_history = 1;
     }
+    if (rc == YVEX_OK && provider && request_contains(provider, "SOURCE_COMPLETION_"))
+        return send_source_completion(fd, request, has_tool_result, err);
     if (rc == YVEX_OK && provider &&
         fixture_reasoning_policy(provider->reasoning_policy) !=
             YVEX_REASONING_DISABLED)

@@ -292,6 +292,16 @@ control-token syntax.
 
 YVEX never executes application tools.
 
+The source-authored empty argument body is a complete call with arguments `{}`,
+not an unfinished structure: the canonical tokenizer renderer owns its LF before
+the closing invocation, and the completion parser consumes that exact empty-body
+separator. It does not skip arbitrary whitespace or synthesize missing closers.
+Buffered and SSE paths preserve the parsed function identity, argument bytes,
+call correlation and `tool_calls` finish. A malformed or incomplete native call
+still terminates in error; an already opened SSE stream does not turn that error
+into a successful completion. [Deterministic producer evidence](../evaluation/provider-output-recovery.md)
+does not qualify the installed model or a real application Work.
+
 `strict=true`, malformed or duplicate arguments, duplicate or unknown call
 IDs, and unmatched named choices refuse. A prose suggestion to call a tool is
 not promoted into a function-call object.

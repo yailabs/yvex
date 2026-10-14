@@ -54,6 +54,81 @@ while test "$attempt" -lt 100; do
 done
 test "$attempt" -lt 100
 
+# Actual compiled source grammar -> native completion parser -> protocol ->
+# buffered/SSE adapter. Fixture-only: never connects to the operator Host/GPU.
+python3 - "$port" >"$root/source-completion.json" <<'PY'
+import http.client, json, sys
+port = int(sys.argv[1])
+tool = {"type": "function", "function": {"name": "inspect_fixture", "parameters": {
+    "type": "object", "properties": {}, "additionalProperties": False}, "strict": False}}
+def run(marker, mode, stream, history=None):
+    payload = {"model": "deepseek4-v4-flash-dspark", "temperature": 0,
+        "messages": history or [{"role": "user", "content": marker}],
+        "tools": [tool], "reasoning_effort": mode, "stream": stream}
+    if stream: payload["stream_options"] = {"include_usage": True}
+    client = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    client.request("POST", "/v1/chat/completions", json.dumps(payload),
+                   {"Content-Type": "application/json"})
+    reply = client.getresponse()
+    status, raw = reply.status, reply.read().decode("utf-8")
+    client.close()
+    if not stream: return status, json.loads(raw)
+    events = [json.loads(line[6:]) for line in raw.splitlines()
+              if line.startswith("data: ") and line != "data: [DONE]"]
+    return status, events
+count = 0
+for mode in ("none", "high", "max"):
+    for stream in (False, True):
+        status, result = run("SOURCE_COMPLETION_EMPTY", mode, stream)
+        assert status == 200, (status, result)
+        if stream:
+            assert not any("error" in event for event in result)
+            choices = [choice for event in result for choice in event.get("choices", [])]
+            fragments = [call for choice in choices for call in choice.get("delta", {}).get("tool_calls", [])]
+            assert fragments and len({call.get("id") for call in fragments if call.get("id")}) == 1
+            assert "".join(call["function"].get("arguments", "") for call in fragments) == "{}"
+            assert next(call["function"]["name"] for call in fragments if call["function"].get("name")) == "inspect_fixture"
+            assert [choice["finish_reason"] for choice in choices if choice.get("finish_reason")] == ["tool_calls"]
+            reasoning = "".join(choice.get("delta", {}).get("reasoning_content", "") for choice in choices)
+        else:
+            choice = result["choices"][0]
+            assert choice["finish_reason"] == "tool_calls"
+            message = choice["message"]
+            call = message["tool_calls"][0]
+            assert call["function"] == {"name": "inspect_fixture", "arguments": "{}"} and call["id"]
+            reasoning = message.get("reasoning_content", "")
+            history = [{"role": "user", "content": "SOURCE_COMPLETION_EMPTY"}, message,
+                       {"role": "tool", "tool_call_id": call["id"], "content": "fixture observation"}]
+            status2, continued = run("unused", mode, False, history)
+            assert status2 == 200 and continued["choices"][0]["finish_reason"] == "stop"
+            assert continued["choices"][0]["message"]["content"] == "fixture feedback accepted"
+        assert reasoning == ("" if mode == "none" else "fixture reasoning")
+        count += 1
+        status, text = run("SOURCE_COMPLETION_TEXT", mode, stream)
+        assert status == 200
+        if stream:
+            choices = [choice for event in text for choice in event.get("choices", [])]
+            assert "".join(choice.get("delta", {}).get("content", "") for choice in choices) == "fixture final ✓"
+            assert [choice["finish_reason"] for choice in choices if choice.get("finish_reason")] == ["stop"]
+        else:
+            assert text["choices"][0]["finish_reason"] == "stop"
+            assert text["choices"][0]["message"]["content"] == "fixture final ✓"
+        count += 1
+        for marker in ("SOURCE_COMPLETION_INCOMPLETE", "SOURCE_COMPLETION_MALFORMED"):
+            status, error = run(marker, mode, stream)
+            if stream:
+                assert status == 200 and any("error" in event for event in error)
+                choices = [choice for event in error for choice in event.get("choices", [])]
+                assert not any(choice.get("finish_reason") for choice in choices)
+                assert not any(choice.get("delta", {}).get("tool_calls") for choice in choices)
+            else:
+                assert status == 400 and "error" in error and "choices" not in error
+            count += 1
+print(json.dumps({"scope": "deterministic native-source/HTTP fixture; no model execution",
+                  "cases": count, "feedback_continuations": 3, "result": "PASS"}))
+PY
+python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))))' "$root/source-completion.json"
+
 curl -fsS "$base/v1/models" >"$root/models.json"
 curl -fsS "$base/v1/models/deepseek4-v4-flash-dspark" >"$root/model.json"
 # Exercise external discovery without model execution, concurrent correlation,

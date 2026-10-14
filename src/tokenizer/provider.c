@@ -1538,6 +1538,12 @@ static int parse_invoke(const yvex_conversation_protocol *conversation,
         !(tool = tool_find(request, call->name)) ||
         literal(&arguments, "{", err) != YVEX_OK)
         rc = YVEX_ERR_FORMAT;
+    /* The canonical emitter separates an empty argument body from the closing
+       invoke with one LF. Consume only that exact empty-body spelling; never
+       skip whitespace inside parameters or repair an incomplete invocation. */
+    if (rc == YVEX_OK && cursor < end && cursor[0] == '\n' &&
+        starts_with(cursor + 1u, end, conversation->tool_invoke_end))
+        ++cursor;
     while (rc == YVEX_OK && cursor < end &&
            !starts_with(cursor, end, conversation->tool_invoke_end)) {
         const unsigned char *value, *close;

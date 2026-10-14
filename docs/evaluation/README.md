@@ -29,6 +29,7 @@ benchmark. Missing required evidence remains BLOCKED/SKIP, never PASS.
 | What compilation claims are earned? | [Compiler evidence](compiler-evidence.md) |
 | What happened in retained experiments? | [Execution observations](retained-observations.md) |
 | Which integration paths were qualified? | [Finite producer](finite-decision-remote.md) · [Product management](product-management-control-plane.md) |
+| Which DeepSeek output-format defect is reproduced? | [Native output recovery](provider-output-recovery.md) — source correction, fixture acceptance and unresolved live causality |
 | How was documentation checked? | [Documentation evidence](documentation-migration.md) |
 
 ## macOS and Apple Silicon evidence

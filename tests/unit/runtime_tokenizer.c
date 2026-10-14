@@ -984,6 +984,125 @@ static int provider_fixture(yvex_provider_request *request,
     return yvex_provider_request_seal(request, err);
 }
 
+static int test_provider_empty_arguments(void)
+{
+    /* Exact output of the authenticated source's tool_call_template with
+       arguments="": the name terminator and empty body each own one LF. */
+    static const unsigned char completion[] =
+        "\n\n<" TEST_DSML "tool_calls>\n"
+        "<" TEST_DSML "invoke name=\"get_match_context\">\n\n"
+        "</" TEST_DSML "invoke>\n</" TEST_DSML "tool_calls>";
+    static const unsigned char schema[] =
+        "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}";
+    yvex_tokenizer tokenizer;
+    yvex_token_info tokens[4];
+    yvex_provider_request request;
+    yvex_provider_message messages[1];
+    yvex_provider_function_tool tools[1];
+    yvex_tokenizer_provider_result result = {0};
+    yvex_error err;
+    fixture_open(&tokenizer, tokens);
+    YVEX_TEST_ASSERT(provider_fixture(&request, messages, tools, &err) == YVEX_OK,
+                     "empty-argument request seals");
+    tools[0].parameters_json = (yvex_provider_span){schema, sizeof(schema) - 1u};
+    YVEX_TEST_ASSERT(request_reseal(&request, &err) == YVEX_OK,
+                     "zero-parameter tool request reseals");
+    YVEX_TEST_ASSERT(yvex_tokenizer_parse_provider_completion(
+        &tokenizer, &request, completion, sizeof(completion) - 1u, &result,
+        &err) == YVEX_OK && result.completed && result.tool_call_count == 1u &&
+        result.kind == YVEX_PROVIDER_OUTPUT_FUNCTION_CALL &&
+        !strcmp(result.tool_calls[0].name, "get_match_context") &&
+        result.tool_calls[0].arguments_json.count == 2u &&
+        !memcmp(result.tool_calls[0].arguments_json.bytes, "{}", 2u),
+        "source-authored empty argument body is a complete native call");
+    {
+        yvex_provider_message feedback[3] = {messages[0], {0}, {0}};
+        yvex_rendered_prompt rendered = {0};
+        feedback[1].role = YVEX_PROVIDER_ROLE_ASSISTANT;
+        feedback[1].tool_calls = result.tool_calls;
+        feedback[1].tool_call_count = 1u;
+        feedback[2].role = YVEX_PROVIDER_ROLE_TOOL;
+        strcpy(feedback[2].tool_call_id, result.tool_calls[0].call_id);
+        feedback[2].content = text_span("fixture observation");
+        request.messages = feedback;
+        request.message_count = 3u;
+        YVEX_TEST_ASSERT(request_reseal(&request, &err) == YVEX_OK &&
+            yvex_tokenizer_provider_prompt(&tokenizer, &request, &rendered, &err) == YVEX_OK &&
+            strstr(rendered.text, (const char *)completion) &&
+            strstr(rendered.text, "<tool_result>fixture observation</tool_result>"),
+            "accepted empty call renders unchanged with correlated feedback");
+        yvex_rendered_prompt_free(&rendered);
+        request.messages = messages;
+        request.message_count = 1u;
+    }
+    yvex_tokenizer_provider_result_clear(&result);
+    for (int mode = YVEX_REASONING_DISABLED; mode <= YVEX_REASONING_MAXIMUM; ++mode) {
+        unsigned char input[1024];
+        char identity[YVEX_SHA256_HEX_CAP];
+        const char *prefix = mode == YVEX_REASONING_DISABLED ? "" : "fixture reasoning</think>";
+        int length = snprintf((char *)input, sizeof(input), "%s%s", prefix, completion);
+        YVEX_TEST_ASSERT(length > 0 && (size_t)length < sizeof(input),
+                         "source completion fits bounded fixture");
+        request.reasoning_policy = (yvex_reasoning_policy)mode;
+        YVEX_TEST_ASSERT(request_reseal(&request, &err) == YVEX_OK &&
+            yvex_tokenizer_parse_provider_completion(&tokenizer, &request,
+                input, (unsigned)length, &result, &err) == YVEX_OK &&
+            result.tool_call_count == 1u && !result.content_count &&
+            result.reasoning_content_count == (mode ? 17u : 0u),
+            "empty call preserves none/high/maximum channel separation");
+        strcpy(identity, result.output_identity);
+        yvex_tokenizer_provider_result_clear(&result);
+        YVEX_TEST_ASSERT(yvex_tokenizer_parse_provider_completion(&tokenizer, &request,
+            input, (unsigned)length, &result, &err) == YVEX_OK &&
+            !strcmp(result.output_identity, identity) && result.tool_calls[0].call_id[0],
+            "same request and source output reproduce exact output/call identity");
+        yvex_tokenizer_provider_result_clear(&result);
+    }
+    request.reasoning_policy = YVEX_REASONING_DISABLED;
+    YVEX_TEST_ASSERT(request_reseal(&request, &err) == YVEX_OK,
+                     "negative-control request seals");
+    {
+        static const char *const invalid[] = {
+            "\n\n<" TEST_DSML "tool_calls>\n<" TEST_DSML "invoke name=\"get_match_context\">\n\n\n"
+                "</" TEST_DSML "invoke>\n</" TEST_DSML "tool_calls>",
+            "\n\n<" TEST_DSML "tool_calls>\n<" TEST_DSML "invoke name=\"get_match_context\">\n \n"
+                "</" TEST_DSML "invoke>\n</" TEST_DSML "tool_calls>",
+            "\n\n<" TEST_DSML "tool_calls>\n<" TEST_DSML "invoke name=\"get_match_context\">\n\n",
+            "\n\n<" TEST_DSML "tool_calls>\n<" TEST_DSML "invoke name=\"get_match_context\">\n\n"
+                "</" TEST_DSML "invoke>\n",
+            "\n\n<" TEST_DSML "tool_calls>\n<" TEST_DSML "invoke name=\"unoffered\">\n\n"
+                "</" TEST_DSML "invoke>\n</" TEST_DSML "tool_calls>",
+            "\n\n<" TEST_DSML "tool_calls>\n<" TEST_DSML "invoke name=\"get_match_context\">\n"
+                "<" TEST_DSML "parameter name=\"x\" string=\"false\">{"
+                "</" TEST_DSML "parameter>\n</" TEST_DSML "invoke>\n</" TEST_DSML "tool_calls>",
+            "\n\n<" TEST_DSML "tool_calls>\n<" TEST_DSML "invoke name=\"get_match_context\">\n"
+                "<" TEST_DSML "parameter name=\"x\" string=\"true\">a</" TEST_DSML "parameter>\n"
+                "<" TEST_DSML "parameter name=\"x\" string=\"true\">b</" TEST_DSML "parameter>\n"
+                "</" TEST_DSML "invoke>\n</" TEST_DSML "tool_calls>"
+        };
+        for (unsigned i = 0u; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
+            YVEX_TEST_ASSERT(yvex_tokenizer_parse_provider_completion(&tokenizer, &request,
+                (const unsigned char *)invalid[i], strlen(invalid[i]), &result, &err) ==
+                YVEX_ERR_FORMAT && !result.completed && !result.tool_calls && !result.content,
+                "malformed/incomplete/foreign/duplicate source output publishes no result");
+        }
+    }
+    {
+        const yvex_graph_execution_binding *execution =
+            yvex_graph_execution_find(0u, 0u, "deepseek4-v4-flash-0731");
+        YVEX_TEST_ASSERT(execution && execution->compiler &&
+            execution->compiler->tokenizer_policy(&tokenizer.compiled_policy, &err) &&
+            yvex_tokenizer_family_policy_conversation(&tokenizer.compiled_policy,
+                                                     &tokenizer.conversation_view) &&
+            yvex_tokenizer_parse_provider_completion(&tokenizer, &request,
+                completion, sizeof(completion) - 1u, &result, &err) == YVEX_OK &&
+            result.tool_call_count == 1u,
+            "independently bound 0731 source policy admits the same empty argument grammar");
+        yvex_tokenizer_provider_result_clear(&result);
+    }
+    return 0;
+}
+
 static int test_provider_projection(void)
 {
     static const unsigned char completion[] =
@@ -1429,6 +1548,8 @@ int yvex_test_runtime_tokenizer(void)
     if (test_qwen_prompt_policy() != 0)
         return 1;
     if (test_qwen_tool_grammar() != 0)
+        return 1;
+    if (test_provider_empty_arguments() != 0)
         return 1;
     if (test_provider_projection() != 0)
         return 1;

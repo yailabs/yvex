@@ -123,6 +123,12 @@ consumer implementation and real Exon→DGX qualification are separate owners.
 
 ## Provider progress
 
+Completion recognition remains tokenizer/source-owned. The public adapter
+projects its typed text/reasoning/function result; it does not parse DSML or
+repair model output. The [empty-body correction](../evaluation/provider-output-recovery.md)
+aligns completion recognition with the canonical renderer, without changing
+the wire layout, executing tools or altering installed Engine lifetimes.
+
 The OpenAI transport forwards real session prefill/committed-decode observations.
 Its bounded frame timeout measures inactivity. Independent connection admission
 keeps discovery responsive and refuses saturation; external total deadlines
