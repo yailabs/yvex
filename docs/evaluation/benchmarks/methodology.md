@@ -248,6 +248,9 @@ cleanup cannot turn a contaminated sample into comparable performance evidence.
 The observer retains its cadence and probe time; OBSERVED_CLEAR means only that
 its sampled process lists were clear, never uninterrupted exclusive reservation.
 Observation gaps and thermal/clock changes remain separate measurement limits.
+Failures from composed resource/ownership probes also produce a sticky UNKNOWN
+observation; they must not terminate the watcher and leave prior clear samples
+authoritative. Retain only the exception type, not private probe diagnostics.
 
 `tools/qualification_run.py` owns the generic CUDA process-list observer used by
 native and HTTP adapters. A wrapper may cancel only its owned Rust qualification

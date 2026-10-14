@@ -11,6 +11,7 @@ import sys
 import tempfile
 import subprocess
 import tarfile
+import threading
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -524,6 +525,66 @@ class MeasurementTests(unittest.TestCase):
             self.assertEqual(len(path.read_text().splitlines()), 1)
             with self.assertRaises(FileExistsError):
                 with measurement.AcceleratorObservation(path, [42], probe=probe): pass
+
+    def test_accelerator_callback_failures_poison_the_interval_without_private_details(self):
+        for kind in (RuntimeError, AssertionError, TypeError, KeyError):
+            with self.subTest(kind=kind.__name__), tempfile.TemporaryDirectory() as directory:
+                probe = Mock(side_effect=[[], kind("private probe diagnostic"), []])
+                path = Path(directory) / "resource.jsonl"
+                with measurement.AcceleratorObservation(path, [42], interval=10,
+                                                       probe=probe) as observer:
+                    observer.sample()
+                rows = [json.loads(line) for line in path.read_text().splitlines()]
+                self.assertEqual([row["state"] for row in rows],
+                                 ["OBSERVED_CLEAR", "UNKNOWN", "OBSERVED_CLEAR"])
+                self.assertEqual(rows[1]["error"], kind.__name__)
+                self.assertIsNone(rows[1]["processes"])
+                self.assertIsNone(rows[1]["foreign"])
+                self.assertNotIn("private probe diagnostic", path.read_text())
+                self.assertEqual(observer.summary()["state"], "UNKNOWN")
+                with self.assertRaisesRegex(ValueError, "no performance admission"):
+                    observer.require_clear()
+
+    def test_accelerator_callback_refusal_at_entry_never_launches_a_child(self):
+        for kind in (RuntimeError, AssertionError):
+            with self.subTest(kind=kind.__name__), tempfile.TemporaryDirectory() as directory, \
+                    patch.object(measurement.subprocess, "Popen") as start:
+                path = Path(directory) / "resource.jsonl"
+                factory = lambda *args: measurement.AcceleratorObservation(
+                    *args, probe=Mock(side_effect=kind("private probe diagnostic")))
+                with self.assertRaisesRegex(ValueError, "no performance admission"):
+                    measurement.watch_owned_command(["never-dispatched-fixture"], path, [42],
+                                                    observer_factory=factory)
+                start.assert_not_called()
+                rows = [json.loads(line) for line in path.read_text().splitlines()]
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0]["state"], "UNKNOWN")
+                self.assertNotIn("private probe diagnostic", path.read_text())
+
+    def test_accelerator_watcher_survives_callback_failure_and_retains_refusal(self):
+        recovered = threading.Event()
+        calls = 0
+
+        def probe():
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("private probe diagnostic")
+            if calls >= 3:
+                recovered.set()
+            return []
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "resources.jsonl"
+            with measurement.AcceleratorObservation(path, [42], interval=.1,
+                                                   probe=probe) as observer:
+                self.assertTrue(recovered.wait(2), "watcher stopped after a failed probe")
+                self.assertTrue(observer.thread.is_alive())
+            self.assertFalse(observer.thread.is_alive())
+            self.assertEqual(observer.summary()["state"], "UNKNOWN")
+            with self.assertRaisesRegex(ValueError, "no performance admission"):
+                observer.require_clear()
+            self.assertNotIn("private probe diagnostic", path.read_text())
 
     def test_accelerator_observation_scope_is_explicit_not_exclusive_guarantee(self):
         with tempfile.TemporaryDirectory() as directory:

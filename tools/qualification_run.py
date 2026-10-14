@@ -101,7 +101,11 @@ class AcceleratorObservation:
                            and (not self.devices or p["device"] in self.devices)]
                 row = dict(state="CONTENDED" if foreign else "OBSERVED_CLEAR",
                            processes=processes, foreign=foreign, error=None)
-            except (OSError, ValueError, subprocess.SubprocessError) as error:
+            # A composed probe may also refuse through a runtime, ownership or
+            # assertion error. It must poison this interval, not kill the
+            # watcher and leave earlier clear samples looking authoritative.
+            # Keep only the bounded exception type, never private diagnostics.
+            except Exception as error:
                 row = dict(state="UNKNOWN", processes=None, foreign=None, error=type(error).__name__)
             row.update(started_monotonic=started, completed_monotonic=time.monotonic())
             self.rows.append(row)
