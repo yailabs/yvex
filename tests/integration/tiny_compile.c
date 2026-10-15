@@ -799,7 +799,9 @@ static int tiny_generation_capacity_refusal(
          !yvex_core_u64_add(baseline, transient, &baseline) ||
          snprintf(available_text, sizeof(available_text), "%llu", baseline) <= 0 ||
          setenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES", "137438953472", 1) != 0 ||
-         setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", available_text, 1) != 0)) {
+         setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", available_text, 1) != 0 ||
+         setenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES",
+                "18446744073709551615", 1) != 0)) {
         rc = YVEX_ERR_IO;
         yvex_error_set(err, rc, "tiny.capacity",
                        "startup capacity injection failed");

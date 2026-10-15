@@ -2674,7 +2674,9 @@ static int test_runtime_model_progress(
     YVEX_TEST_ASSERT(
         reserve == 16ull * 1024ull * 1024ull * 1024ull &&
             setenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES", "137438953472", 1) == 0 &&
-            setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "137438953472", 1) == 0,
+            setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "137438953472", 1) == 0 &&
+            setenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES",
+                   "18446744073709551615", 1) == 0,
         "model admission installs deterministic proportional reserve facts");
     baseline_required = fixture->admission.payload_bytes +
                         YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE + transient;
@@ -2705,13 +2707,19 @@ static int test_runtime_model_progress(
         "model open derives a proportional reserve from effective system capacity");
     YVEX_TEST_ASSERT(
         unsetenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES") == 0 &&
-            unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") == 0,
+            unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") == 0 &&
+            unsetenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES") == 0,
         "model admission clears deterministic proportional reserve facts");
     memset(&progress, 0, sizeof(progress));
-    YVEX_TEST_ASSERT(setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "1", 1) == 0,
+    /* These are deterministic system-capacity fixtures, not observations of
+     * the runner's cgroup. Keep the independent process-limit test below. */
+    YVEX_TEST_ASSERT(setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "1", 1) == 0 &&
+                         setenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES",
+                                "18446744073709551615", 1) == 0,
                      "inject system memory capacity refusal");
     capacity_rc = yvex_model_engine_open(&model, &request, &failure, &err);
-    YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") == 0,
+    YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") == 0 &&
+                         unsetenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES") == 0,
                      "clear system memory capacity refusal");
     YVEX_TEST_ASSERT(
         capacity_rc == YVEX_ERR_BOUNDS &&
@@ -2741,12 +2749,15 @@ static int test_runtime_model_progress(
     progress.restrict_memory_after_hash = 1;
     YVEX_TEST_ASSERT(
         setenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES", "137438953472", 1) == 0 &&
-            setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "137438953472", 1) == 0,
+            setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "137438953472", 1) == 0 &&
+            setenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES",
+                   "18446744073709551615", 1) == 0,
         "inject sufficient first-pass memory capacity");
     capacity_rc = yvex_model_engine_open(&model, &request, &failure, &err);
     YVEX_TEST_ASSERT(
         unsetenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES") == 0 &&
-            unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") == 0,
+            unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") == 0 &&
+            unsetenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES") == 0,
         "clear just-in-time memory-capacity injection");
     YVEX_TEST_ASSERT(
         capacity_rc == YVEX_ERR_BOUNDS && !model && progress.memory_restricted &&
