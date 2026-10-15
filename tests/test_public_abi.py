@@ -81,6 +81,15 @@ RECORDS = {
     "yvex_imatrix_data_summary": (
         "include/yvex/quant.h", "YVEX_IMATRIX_DATA_SCHEMA_VERSION", 1, 216,
         "0d034156e6add39bfea3f9b6b7aa8c71cec95b7fb77ff89b6780cfd2cfedfb4c"),
+    "yvex_imatrix_accumulator_options": (
+        "include/yvex/quant.h", "YVEX_IMATRIX_ACCUMULATOR_OPTIONS_SCHEMA_V1", 1, 40,
+        "03e61386c3397598d0860b2b464a55d9624a051c20c98a6668723f697f43cac3"),
+    "yvex_imatrix_observation_batch": (
+        "include/yvex/quant.h", "YVEX_IMATRIX_OBSERVATION_BATCH_SCHEMA_V1", 1, 72,
+        "3ec31abc0aa2dbc895a038de2dc3e2b852a081dbe6b4c6678b6f6ecef30ee459"),
+    "yvex_imatrix_accumulator_summary": (
+        "include/yvex/quant.h", "YVEX_IMATRIX_ACCUMULATOR_SUMMARY_SCHEMA_V1", 1, 72,
+        "1c1ba40e2e5d9781c12895da68f93eba813ca4b53ea8f0ab992b6cdde73243e0"),
     "yvex_quant_policy_rule": (
         "include/yvex/quant.h", "YVEX_QUANT_POLICY_SCHEMA_VERSION", 2, 128,
         "e1b749492c046976b5d5119fbdbf90732930245c787e6669a94e783f3cd20d74"),

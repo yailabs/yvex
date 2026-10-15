@@ -42,7 +42,7 @@ contains these installed domain headers:
 | `<yvex/catalog.h>` | remote-provider, acquired-source and local-package catalog records |
 | `<yvex/materialization.h>` | backend-owned materialized-weight lifecycle and views |
 | `<yvex/qtype.h>` | canonical GGUF qtype identity and storage geometry |
-| `<yvex/quant.h>` | quantization policy, job and calibration manifests |
+| `<yvex/quant.h>` | quantization policy, job, calibration manifests and bounded offline activation statistics |
 | `<yvex/optimization.h>` | bounded physical candidate requests, compiler facts, refusal and identity-bound policy selection |
 | `<yvex/graph.h>` | generic graph, planning and memory-plan contracts |
 | `<yvex/backend.h>` | backend admission, device tensors and primitive dispatch |
@@ -88,6 +88,20 @@ release function runs.
 
 
 ## Installed ABI Versioning
+
+### Offline activation statistics
+
+`yvex_imatrix_accumulator` is an opaque caller-owned CPU lifetime with explicit
+construction, observation, summary/count readout, reset and close. Its options,
+observation batch and summary each have a distinct schema-1 identity; they do
+not change existing importance-matrix records, local wire or management schemas.
+Rows and optional real sample/population associations are borrowed for one call.
+The caller serializes access, preserves immutable input and supplies only a
+cancellation observer. Missing populations, invalid samples and exhausted
+resource limits refuse rather than publishing substitute observations.
+See the [numerical and atomicity contract](numerical-abi.md#offline-activation-sufficient-statistics).
+This arithmetic API does not expose runtime activation capture, remote
+calibration authority, an authenticated producer or model-quality qualification.
 
 ### Physical optimization contracts
 

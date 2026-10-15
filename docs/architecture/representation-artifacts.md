@@ -35,6 +35,18 @@ tensor layout → deterministic artifact writer → admission.
 Calibration and importance matrices must retain their source identity. A prior
 from a different checkpoint is a prior, not calibration of the new checkpoint.
 
+The native importance-matrix owner also provides a bounded, population-aware
+activation accumulator through `quant.h`. It computes sufficient statistics
+from explicitly supplied real rows; its [numerical and atomicity contract](../contracts/numerical-abi.md#offline-activation-sufficient-statistics)
+does not capture model execution or authenticate a calibration producer.
+An experimental capture must separately bind the checkpoint, actual bootstrap
+representation/numerics, compiled operands, corpus, execution and completeness.
+Statistics observed through an existing quantized realization are not silently
+relabelled as unquantized-source activations. Complete expert coverage alone
+does not establish representative calibration or independent held-out quality.
+Producing an authenticated importance matrix and admitting its use in a new
+physical recipe remain distinct from this arithmetic primitive.
+
 ## Current machinery and target search
 
 Current quant planning, encoding, writer and admission machinery can construct

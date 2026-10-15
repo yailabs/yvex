@@ -33,6 +33,39 @@ not infer equivalence for operations requiring ordered F64 accumulation or
 other numerical classes. F16 conversion, matmul, normalization, attention and
 quantized variants remain explicitly unsupported by this Metal realization.
 
+## Offline activation sufficient statistics
+
+The additive `yvex_imatrix_accumulator` API in `quant.h` owns bounded CPU
+mean-square statistics, not activation capture, source authentication, an
+importance-matrix association or model-quality qualification. Each sample
+references one actual input row and one declared population. Dense input has
+one population; routed input retains its actual selected row/expert association.
+Unselected rows do not become observations and missing populations have no
+default statistic.
+
+Finite binary32 inputs are decoded literally, including subnormals. Their
+squares are exact binary64 products; binary64 additions follow observation
+order. Mean-square readout uses binary64 division and explicit nearest-even
+binary32 publication, including ties and representable subnormals, independently
+of host binary32 flush-to-zero behavior. Observation and readout require the
+caller's round-to-nearest mode and never change its floating environment.
+This is not a correctly rounded exact-sum promise: accumulation error remains
+bounded by `gamma_n * sum(x_i*x_i)`, with binary64 `u = 2^-53` and
+`gamma_n = n*u/(1-n*u)`, before division/publication rounding.
+
+Construction checks the declared owned-byte budget and overflow-safe
+`8*features*populations + 8*populations + sizeof(owner)` payload. This is
+allocation accounting, not measured process or physical residency. A lifetime
+admits at most `2^32` real observations and one batch at most 65,536; these
+bounds prevent binary64 sum overflow for finite binary32 inputs. Every selected
+index, population and value is validated before any sum/count changes.
+Cancellation during validation or immediately before commit leaves all previous
+statistics intact; no cancellation callback runs after accumulation begins.
+Callers serialize the lifetime and keep input/callback behavior immutable.
+Invalid schema, geometry, nonfinite values, exhausted limits and unobserved
+population reads refuse. Nonfinite binary32 readout is refused before writing
+any requested output or count. Reset clears both coverage and moments.
+
 ## Ordered encoded-F32 CPU projection
 
 Canonical encoded-F32 weights and F32 activations produce one literal

@@ -141,6 +141,57 @@ int yvex_imatrix_data_read(const yvex_imatrix_data *data,
                            size_t value_count,
                            yvex_error *err);
 
+/* Offline sufficient statistics, not source authentication or model quality.
+ * One caller serializes this lifetime. Selected samples reference real source
+ * rows and declared populations (one for dense input, multiple for routed work).
+ * F32 products are exact in F64; sums follow observation order. Readout is F32
+ * mean square under round-to-nearest. Unobserved populations never get defaults.
+ * Inputs remain immutable throughout a call; callbacks only observe cancellation.
+ */
+#define YVEX_IMATRIX_ACCUMULATOR_OPTIONS_SCHEMA_V1 1u
+#define YVEX_IMATRIX_OBSERVATION_BATCH_SCHEMA_V1 1u
+#define YVEX_IMATRIX_ACCUMULATOR_SUMMARY_SCHEMA_V1 1u
+typedef struct {
+    unsigned int schema_version;
+    unsigned long long feature_count, population_count, maximum_observations;
+    size_t maximum_owned_bytes;
+} yvex_imatrix_accumulator_options;
+typedef struct {
+    unsigned int schema_version;
+    const float *rows;
+    unsigned long long row_count, row_stride, sample_count;
+    /* NULL indices mean exactly one observation per contiguous source row.
+     * NULL populations are legal only for a single-population accumulator. */
+    const unsigned long long *row_indices, *population_ids;
+    /* Cancellation is checked during validation and before atomic accumulation;
+     * no callback is invoked after accumulation begins. */
+    int (*cancel_requested)(void *context);
+    void *cancel_context;
+} yvex_imatrix_observation_batch;
+typedef struct {
+    unsigned int schema_version;
+    unsigned long long feature_count, population_count, observed_populations;
+    unsigned long long value_count, observations, batches;
+    size_t owned_bytes;
+    int complete;
+} yvex_imatrix_accumulator_summary;
+typedef struct yvex_imatrix_accumulator yvex_imatrix_accumulator;
+int yvex_imatrix_accumulator_create(yvex_imatrix_accumulator **out,
+    const yvex_imatrix_accumulator_options *options, yvex_error *err);
+void yvex_imatrix_accumulator_close(yvex_imatrix_accumulator *accumulator);
+int yvex_imatrix_accumulator_reset(yvex_imatrix_accumulator *accumulator,
+    yvex_error *err);
+int yvex_imatrix_accumulator_observe(yvex_imatrix_accumulator *accumulator,
+    const yvex_imatrix_observation_batch *batch, yvex_error *err);
+int yvex_imatrix_accumulator_get_summary(const yvex_imatrix_accumulator *accumulator,
+    yvex_imatrix_accumulator_summary *out, yvex_error *err);
+int yvex_imatrix_accumulator_counts(const yvex_imatrix_accumulator *accumulator,
+    unsigned long long *out, size_t capacity, yvex_error *err);
+int yvex_imatrix_accumulator_read(const yvex_imatrix_accumulator *accumulator,
+    unsigned long long population, unsigned long long first_feature,
+    float *out, size_t value_count, unsigned long long *observations,
+    yvex_error *err);
+
 int yvex_imatrix_manifest_create(yvex_imatrix_manifest **out,
                                  const yvex_imatrix_manifest_options *options,
                                  yvex_error *err);

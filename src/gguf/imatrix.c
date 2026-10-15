@@ -6,6 +6,8 @@
  */
 #include <yvex/internal/platform.h>
 #include <fcntl.h>
+#include <fenv.h>
+#include <float.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -413,6 +415,234 @@ int yvex_imatrix_data_read(const yvex_imatrix_data *data, unsigned long long ent
                                              (value_offset + index) * 4u);
         memcpy(&out[index], &bits, sizeof(out[index]));
     }
+    return YVEX_OK;
+}
+
+struct yvex_imatrix_accumulator {
+    double *squares;
+    unsigned long long *counts, maximum_observations;
+    yvex_imatrix_accumulator_summary summary;
+};
+_Static_assert(sizeof(float) == 4u && sizeof(double) == 8u &&
+    FLT_RADIX == 2 && FLT_MANT_DIG == 24 && DBL_MANT_DIG == 53,
+    "imatrix statistics require IEEE binary32 and binary64");
+
+/* Decode magnitude by representation, not an F32 arithmetic conversion that
+ * could flush a real subnormal activation. Its square is always normal F64. */
+static double imatrix_activation_magnitude(const float *source)
+{
+    uint32_t bits;
+    uint64_t packed = 0ull;
+    double value;
+    memcpy(&bits, source, sizeof(bits));
+    unsigned exponent = (bits >> 23u) & 255u, fraction = bits & 0x7fffffu;
+    if (exponent) packed = ((uint64_t)(exponent + 896u) << 52u) | ((uint64_t)fraction << 29u);
+    else if (fraction) {
+        unsigned leading = 0u;
+        for (unsigned n = fraction; n >>= 1u;) ++leading;
+        packed = ((uint64_t)(leading + 874u) << 52u) |
+                 ((uint64_t)(fraction - (1u << leading)) << (52u - leading));
+    }
+    memcpy(&value, &packed, sizeof(value));
+    return value;
+}
+
+/* Nonnegative finite F64 mean -> literal IEEE F32, nearest-even including
+ * underflow/ties. Publishing integer bits does not inherit host F32 FTZ mode. */
+static uint32_t imatrix_mean_bits(double mean)
+{
+    uint64_t bits;
+    memcpy(&bits, &mean, sizeof(bits));
+    if (!bits) return 0u;
+    int exponent = (int)((bits >> 52u) & 2047u) - 1023;
+    uint64_t mantissa = (bits & 0xfffffffffffffull) | (1ull << 52u);
+    unsigned shift = exponent < -126 ? (unsigned)(-exponent - 97) : 29u;
+    if (shift > 53u) return 0u;
+    uint64_t result = mantissa >> shift;
+    uint64_t remainder = mantissa & ((1ull << shift) - 1ull), half = 1ull << (shift - 1u);
+    if (remainder > half || (remainder == half && (result & 1ull))) ++result;
+    if (exponent < -126) return (uint32_t)result;
+    if (result == (1ull << 24u)) { result >>= 1u; ++exponent; }
+    return ((uint32_t)(exponent + 127) << 23u) | ((uint32_t)result & 0x7fffffu);
+}
+
+static int imatrix_accumulator_refuse(yvex_error *err, yvex_status code,
+                                       const char *message)
+{
+    yvex_error_set(err, code, "imatrix.accumulator", message);
+    return code;
+}
+
+int yvex_imatrix_accumulator_create(yvex_imatrix_accumulator **out,
+    const yvex_imatrix_accumulator_options *options, yvex_error *err)
+{
+    yvex_imatrix_accumulator *accumulator;
+    unsigned long long values, squares, counts, owned;
+    if (out) *out = NULL;
+    if (!out || !options || options->schema_version != YVEX_IMATRIX_ACCUMULATOR_OPTIONS_SCHEMA_V1 ||
+        !options->feature_count || !options->population_count ||
+        !options->maximum_observations || options->maximum_observations > (1ull << 32u) ||
+        !options->maximum_owned_bytes)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_INVALID_ARG,
+            "bounded feature, population, observation and memory limits required");
+    if (!yvex_core_u64_mul(options->feature_count, options->population_count, &values) ||
+        !yvex_core_u64_mul(values, sizeof(double), &squares) ||
+        !yvex_core_u64_mul(options->population_count, sizeof(unsigned long long), &counts) ||
+        !yvex_core_u64_add(squares, counts, &owned) ||
+        !yvex_core_u64_add(owned, sizeof(*accumulator), &owned) || owned > SIZE_MAX)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_BOUNDS, "statistics geometry overflowed");
+    if (owned > options->maximum_owned_bytes)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_NOMEM,
+            "statistics exceed the declared owned-memory budget");
+    accumulator = calloc(1u, sizeof(*accumulator));
+    if (!accumulator)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_NOMEM, "statistics owner allocation failed");
+    accumulator->squares = calloc((size_t)values, sizeof(double));
+    accumulator->counts = calloc((size_t)options->population_count, sizeof(unsigned long long));
+    if (!accumulator->squares || !accumulator->counts) {
+        yvex_imatrix_accumulator_close(accumulator);
+        return imatrix_accumulator_refuse(err, YVEX_ERR_NOMEM, "statistics payload allocation failed");
+    }
+    accumulator->maximum_observations = options->maximum_observations;
+    accumulator->summary.schema_version = YVEX_IMATRIX_ACCUMULATOR_SUMMARY_SCHEMA_V1;
+    accumulator->summary.feature_count = options->feature_count;
+    accumulator->summary.population_count = options->population_count;
+    accumulator->summary.value_count = values;
+    accumulator->summary.owned_bytes = (size_t)owned;
+    *out = accumulator;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+void yvex_imatrix_accumulator_close(yvex_imatrix_accumulator *accumulator)
+{
+    if (!accumulator) return;
+    free(accumulator->counts);
+    free(accumulator->squares);
+    free(accumulator);
+}
+
+int yvex_imatrix_accumulator_reset(yvex_imatrix_accumulator *accumulator,
+    yvex_error *err)
+{
+    if (!accumulator)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_INVALID_ARG, "statistics owner required");
+    memset(accumulator->squares, 0, (size_t)accumulator->summary.value_count * sizeof(double));
+    memset(accumulator->counts, 0, (size_t)accumulator->summary.population_count * sizeof(unsigned long long));
+    accumulator->summary.observed_populations = 0ull;
+    accumulator->summary.observations = 0ull;
+    accumulator->summary.batches = 0ull;
+    accumulator->summary.complete = 0;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_imatrix_accumulator_observe(yvex_imatrix_accumulator *accumulator,
+    const yvex_imatrix_observation_batch *batch, yvex_error *err)
+{
+    unsigned long long extent, total, features;
+    if (!accumulator || !batch || batch->schema_version != YVEX_IMATRIX_OBSERVATION_BATCH_SCHEMA_V1 ||
+        !batch->rows || !batch->row_count || !batch->sample_count || batch->sample_count > 65536ull ||
+        (!batch->row_indices && batch->sample_count != batch->row_count) ||
+        (!batch->population_ids && accumulator->summary.population_count != 1ull))
+        return imatrix_accumulator_refuse(err, YVEX_ERR_INVALID_ARG,
+            "bounded real rows, sample references and population associations required");
+    features = accumulator->summary.feature_count;
+    if (batch->row_stride < features ||
+        !yvex_core_u64_mul(batch->row_count - 1ull, batch->row_stride, &extent) ||
+        !yvex_core_u64_add(extent, features, &extent) || extent > SIZE_MAX / sizeof(float) ||
+        !yvex_core_u64_add(accumulator->summary.observations, batch->sample_count, &total) ||
+        total > accumulator->maximum_observations)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_BOUNDS,
+            "row extent or statistics observation budget exceeded");
+    if (fegetround() != FE_TONEAREST)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_STATE, "statistics require round-to-nearest");
+    /* Validate every selected value and association before changing any sum or
+     * count. Unselected rows are not fabricated observations. Once committed,
+     * finite F32 squares and <=2^32 samples cannot overflow F64. */
+    for (unsigned long long sample = 0ull; sample < batch->sample_count; ++sample) {
+        unsigned long long row = batch->row_indices ? batch->row_indices[sample] : sample;
+        unsigned long long population = batch->population_ids ? batch->population_ids[sample] : 0ull;
+        if (row >= batch->row_count || population >= accumulator->summary.population_count)
+            return imatrix_accumulator_refuse(err, YVEX_ERR_BOUNDS, "selected row or population is out of range");
+        if (batch->cancel_requested && batch->cancel_requested(batch->cancel_context))
+            return imatrix_accumulator_refuse(err, YVEX_ERR_CANCELLED, "statistics cancelled before commit");
+        const float *source = batch->rows + row * batch->row_stride;
+        for (unsigned long long feature = 0ull; feature < features; ++feature) {
+            uint32_t bits;
+            memcpy(&bits, &source[feature], sizeof(bits));
+            if ((bits & 0x7f800000u) == 0x7f800000u)
+                return imatrix_accumulator_refuse(err, YVEX_ERR_FORMAT, "selected activation is non-finite");
+        }
+    }
+    if (batch->cancel_requested && batch->cancel_requested(batch->cancel_context))
+        return imatrix_accumulator_refuse(err, YVEX_ERR_CANCELLED, "statistics cancelled before commit");
+    if (fegetround() != FE_TONEAREST)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_STATE, "rounding mode changed before statistics commit");
+    for (unsigned long long sample = 0ull; sample < batch->sample_count; ++sample) {
+        unsigned long long row = batch->row_indices ? batch->row_indices[sample] : sample;
+        unsigned long long population = batch->population_ids ? batch->population_ids[sample] : 0ull;
+        const float *source = batch->rows + row * batch->row_stride;
+        double *squares = accumulator->squares + population * features;
+        for (unsigned long long feature = 0ull; feature < features; ++feature) {
+            double value = imatrix_activation_magnitude(&source[feature]);
+            squares[feature] += value * value;
+        }
+        if (!accumulator->counts[population]++) accumulator->summary.observed_populations++;
+    }
+    accumulator->summary.observations = total;
+    accumulator->summary.batches++;
+    accumulator->summary.complete = accumulator->summary.observed_populations == accumulator->summary.population_count;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_imatrix_accumulator_get_summary(const yvex_imatrix_accumulator *accumulator,
+    yvex_imatrix_accumulator_summary *out, yvex_error *err)
+{
+    if (!accumulator || !out)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_INVALID_ARG, "statistics owner and output required");
+    *out = accumulator->summary;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_imatrix_accumulator_counts(const yvex_imatrix_accumulator *accumulator,
+    unsigned long long *out, size_t capacity, yvex_error *err)
+{
+    if (!accumulator || !out || capacity < accumulator->summary.population_count)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_INVALID_ARG, "complete bounded population output required");
+    memcpy(out, accumulator->counts, (size_t)accumulator->summary.population_count * sizeof(*out));
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_imatrix_accumulator_read(const yvex_imatrix_accumulator *accumulator,
+    unsigned long long population, unsigned long long first_feature,
+    float *out, size_t value_count, unsigned long long *observations, yvex_error *err)
+{
+    unsigned long long count;
+    if (!accumulator || !out || !value_count || !observations ||
+        population >= accumulator->summary.population_count)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_INVALID_ARG, "bounded population readout required");
+    if (first_feature > accumulator->summary.feature_count ||
+        value_count > accumulator->summary.feature_count - first_feature)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_BOUNDS, "statistics feature interval is out of range");
+    count = accumulator->counts[population];
+    if (!count)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_STATE, "population has no observed activations");
+    if (fegetround() != FE_TONEAREST)
+        return imatrix_accumulator_refuse(err, YVEX_ERR_STATE, "statistics require round-to-nearest");
+    const double *squares = accumulator->squares + population * accumulator->summary.feature_count + first_feature;
+    for (size_t i = 0u; i < value_count; ++i)
+        if (squares[i] / (double)count > FLT_MAX)
+            return imatrix_accumulator_refuse(err, YVEX_ERR_FORMAT, "mean square cannot be published as finite F32");
+    for (size_t i = 0u; i < value_count; ++i) {
+        uint32_t bits = imatrix_mean_bits(squares[i] / (double)count);
+        memcpy(&out[i], &bits, sizeof(bits));
+    }
+    *observations = count;
+    yvex_error_clear(err);
     return YVEX_OK;
 }
 
