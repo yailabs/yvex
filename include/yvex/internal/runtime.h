@@ -201,6 +201,11 @@ int yvex_runtime_binding_compile_publish(
     const yvex_family_compiler_adapter *adapter,
     const struct yvex_compilation_runtime_binding_request *request,
     char path[YVEX_PATH_CAP], int *published, yvex_error *err);
+int yvex_runtime_binding_recompile_publish(
+    const yvex_family_compiler_adapter *adapter,
+    const struct yvex_compilation_runtime_binding_request *request,
+    const char *admitted_binding_path,
+    char path[YVEX_PATH_CAP], int *published, yvex_error *err);
 int yvex_runtime_binding_open(yvex_runtime_binding **out, const char *path,
     yvex_runtime_binding_summary *summary, yvex_complete_artifact_admission *admission,
     yvex_runtime_binding_failure *failure, yvex_error *err);

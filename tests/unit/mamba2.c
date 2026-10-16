@@ -1164,6 +1164,17 @@ static int mamba_acquired_contract(void)
                    summary.recurrent_layer_count, summary.artifact_identity,
                    summary.identity);
             yvex_runtime_binding_close(binding);
+            binding = NULL;
+            {
+                char repeated[YVEX_PATH_CAP] = {0};
+                rc = yvex_runtime_binding_recompile_publish(execution->compiler,
+                    &request, path, repeated, &published, &err);
+                if (rc != YVEX_OK)
+                    fprintf(stderr, "exact Mamba2 readmission: %s: %s\n",
+                        err.where, yvex_error_message(&err));
+                YVEX_TEST_ASSERT(rc == YVEX_OK && !strcmp(path, repeated),
+                    "pure-SSM recompilation reuses authenticated package admission and reproduces binding");
+            }
             (void)unlink(path);
             (void)rmdir(directory);
         }

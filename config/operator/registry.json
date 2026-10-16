@@ -1828,6 +1828,12 @@
     ],
     "cli_offline_graph_attention": [
       {
+        "description": "Reuse authenticated admission of this exact artifact when preparing a new executable binding; source, bytes, policy and numerical legality are revalidated, without inference or deployment.",
+        "name": "--admitted-binding",
+        "takes_value": true,
+        "value_type": "delegated"
+      },
+      {
         "description": "Set artifact.",
         "name": "--artifact",
         "takes_value": true,

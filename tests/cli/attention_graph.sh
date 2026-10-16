@@ -91,6 +91,15 @@ contains "$OUT_DIR/sample-help.out" "operation: execute.graph.transformer.sample
 contains "$OUT_DIR/generate-help.out" "operation: execute.graph.transformer.generate"
 contains "$OUT_DIR/generate-help.out" "--max-new-tokens"
 contains "$OUT_DIR/generate-help.out" "--generation-mode"
+"$YVEX_BIN" bench attention prepare --help >"$OUT_DIR/prepare-help.out" \
+    2>"$OUT_DIR/prepare-help.err"
+contains "$OUT_DIR/prepare-help.out" "--admitted-binding"
+
+expect_status 2 "$YVEX_BIN" bench attention execute --target deepseek4-v4-flash-dspark \
+    --backend cpu --admitted-binding /tmp/not-opened.yvex-runtime-binding \
+    >"$OUT_DIR/admission-wrong-action.out" 2>"$OUT_DIR/admission-wrong-action.err"
+contains "$OUT_DIR/admission-wrong-action.err" \
+    "source/physical-variant options require bench attention prepare"
 
 expect_status 2 "$YVEX_BIN" bench attention prepare --target deepseek4-v4-flash-dspark \
     --quant-preset deepseek-v4-flash-dspark-bootstrap-q2-v1 \

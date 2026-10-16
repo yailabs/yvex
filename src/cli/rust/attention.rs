@@ -286,6 +286,7 @@ fn validate(invocation: &Invocation<'_>, options: &Options<'_>) -> Result<()> {
         return unsupported("--quant-policy conflicts with --quant-preset");
     }
     let variant = [
+        "--admitted-binding",
         "--quant-policy",
         "--quant-preset",
         "--imatrix-manifest",
@@ -807,6 +808,10 @@ pub(crate) fn dispatch(invocation: &Invocation<'_>, width: usize, styled: bool) 
                 .value("--physical-variant-plan")
                 .map(expanded)
                 .transpose()?;
+            let admitted = invocation
+                .value("--admitted-binding")
+                .map(expanded)
+                .transpose()?;
             paths.binding = family.prepare([
                 Some(&paths.source),
                 Some(&paths.models),
@@ -817,6 +822,7 @@ pub(crate) fn dispatch(invocation: &Invocation<'_>, width: usize, styled: bool) 
                 invocation.value("--quant-preset"),
                 imatrix.as_deref(),
                 plan.as_deref(),
+                admitted.as_deref(),
             ])?;
         }
         let summary = execution::binding(&paths.binding)?;

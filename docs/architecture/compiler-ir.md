@@ -85,6 +85,17 @@ artifact it could produce. Program P's first Q2 experiment has a separate
 catalog row backed by native emission, roundtrip and independent reader facts;
 general receipt-driven admission remains an unfinished part of the optimizer.
 
+An already published runtime binding can supply authenticated package admission
+to a subsequent offline compilation through `bench attention prepare
+--admitted-binding FILE`. The binding publication owner reopens it against the
+exact family and logical transform. The compiler checks the newly authenticated source payload/transform,
+independently hashes the opened artifact, and rebuilds its quantization/writer
+compatibility and executable plans. It does not borrow the previous numerical
+program or inherit quality/performance evidence. This permits rebuilding the
+executable binding of an emitted out-of-catalog artifact without encoding
+all weights again. Production proof, prior admission and legacy representation
+rebinding are mutually exclusive authorities. No engine operation follows.
+
 `compile quant emit --json` projects the typed
 [physical production result](../contracts/artifacts.md#physical-production-result)
 without converting emission into admission or qualification evidence.

@@ -385,3 +385,30 @@ The final native unit controls and structural reruns retain source delta
 `1b5b4913…`; the preceding full sanitizer lane retains `b363911e…`.
 Between those snapshots, only fixture tracking and a policy-v3 diagnostic
 changed. Exact run identities remain in the canonical QA receipts.
+
+### Reusing package admission for executable compilation (2026-10-16)
+
+`bench attention prepare --admitted-binding FILE` composes existing binding
+authentication, source compilation, artifact hashing and physical compatibility
+owners. Runtime reopens the compatible binding; compilation consumes its copied
+package admission, reattaches the current file snapshot and independently hashes
+the artifact. It rebuilds numerical semantics and executable plans instead of
+borrowing them from the old binding. Production proof, prior admission and legacy
+representation rebinding remain mutually exclusive. No source weights are encoded
+again and no Engine is loaded or changed.
+
+| Evidence | Authority / fixture | Observed | Claim boundary |
+| --- | --- | --- | --- |
+| Typed bridge | Native unit fixture with authenticated binding and observing compiler callback | Requested preparation choice survives; foreign adapter/transform and ambiguous admission refuse before compiler entry | Ownership, copied admission and refusal, not actual model compilation |
+| Real package | Previously produced Mamba artifact `6038bca5…`, binding `bee48031…`, exact source and physical plan | Catalog-only control refuses; readmission succeeds; replay returns the identical new `544d7bf6…` binding | Offline real pure-SSM compilation, not inference or quality |
+| Filesystem lifetime | Source-stable first negative control followed by current-snapshot repair | Full file SHA remains unchanged; persisted package facts do not substitute for the current inode/timestamp snapshot | Fresh file authentication before compatibility; no byte-integrity bypass |
+| CLI and cleanup | Registered CLI and runtime-binding controls | Help, wrong-action refusal, no partial published result and deterministic replay exercised | No public management action, SDK schema change or installed rollout |
+
+Raw exact identities, source/build capture, commands and receipts are retained
+under the campaign root above in `admitted-mamba-cli-20261016-01` and `-02`.
+The real-package control uses frozen Program P source delta `001c14e6…` and
+binding v19; current-main interface compatibility is a separate software gate.
+The former retains the repaired snapshot-admission failure; the latter is the
+successful, source-stable control. Package production and executable numerical
+qualification remain independent: this mechanism transfers neither quality nor
+performance evidence to a different realization.

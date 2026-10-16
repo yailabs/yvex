@@ -20,6 +20,12 @@ One artifact may admit several deployments. A deployment binds real hardware,
 workload requirements, numerical classes and compatible physical implementations.
 The resulting engine owns executable resources for that admitted choice.
 
+Offline recompilation may reuse package admission from an exact compatible
+runtime binding while rebuilding the executable realization. It still verifies
+the source transformation, package bytes and physical policy. Prior numerical,
+quality and performance evidence is not transferred to the new realization;
+the resident engine is not modified. This is preparation, not deployment.
+
 ## Three decisions, three owners
 
 1. **Compiler/package:** legal operations, parameter representation and numerical obligations.

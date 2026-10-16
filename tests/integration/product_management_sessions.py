@@ -131,7 +131,8 @@ def main():
                 assert key not in env, 'Declared test capacity cannot override caller facts.'
             env['YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES'] = '137438953472'
             env['YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES'] = '137438953472'
-            print('Declared 128 GiB admission capacity fixture; not physical host memory evidence.', flush=True)
+            env['YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES'] = '18446744073709551615'
+            print('Declared 128 GiB capacity and unbounded process envelope; not physical host memory evidence.', flush=True)
         for name in ['SSH_TTY', 'SSH_ORIGINAL_COMMAND']:
             env.pop(name, None)
 

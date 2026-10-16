@@ -76,7 +76,7 @@ impl Family {
         Ok(key)
     }
 
-    pub(crate) fn prepare(&self, paths: [Option<&str>; 9]) -> Result<String, Error> {
+    pub(crate) fn prepare(&self, paths: [Option<&str>; 10]) -> Result<String, Error> {
         let inputs = paths
             .into_iter()
             .map(argument)
@@ -113,13 +113,24 @@ impl Family {
         let mut failure = raw::yvex_error::default();
         checked(
             unsafe {
-                raw::yvex_runtime_binding_compile_publish(
-                    adapter.compiler,
-                    &request,
-                    path.as_mut_ptr(),
-                    &mut published,
-                    &mut failure,
-                )
+                if pointer(9).is_null() {
+                    raw::yvex_runtime_binding_compile_publish(
+                        adapter.compiler,
+                        &request,
+                        path.as_mut_ptr(),
+                        &mut published,
+                        &mut failure,
+                    )
+                } else {
+                    raw::yvex_runtime_binding_recompile_publish(
+                        adapter.compiler,
+                        &request,
+                        pointer(9),
+                        path.as_mut_ptr(),
+                        &mut published,
+                        &mut failure,
+                    )
+                }
             },
             &failure,
         )?;

@@ -1791,6 +1791,7 @@ def native_pipeline_capacity(environment: dict[str, str]) -> dict[str, str]:
     assert not any(name in result for name in variables), (
         "native pipeline fixture cannot replace caller-injected capacity facts")
     result[variables[0]] = result[variables[1]] = "137438953472"
+    result[variables[2]] = "18446744073709551615"
     return result
 
 
@@ -1801,6 +1802,7 @@ def native_pipeline_capacity_controls() -> None:
     declared = native_pipeline_capacity(hosted)
     assert declared["YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES"] == "137438953472"
     assert declared["YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES"] == "137438953472"
+    assert declared["YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES"] == "18446744073709551615"
     assert "YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES" not in hosted
     for name in ("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES",
                  "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES",

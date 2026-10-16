@@ -2518,9 +2518,11 @@ static int runtime_fixture_capacity(void)
         getenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") ||
         getenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES")) return 1;
     if (setenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES", "137438953472", 1) != 0 ||
-        setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "137438953472", 1) != 0)
+        setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "137438953472", 1) != 0 ||
+        setenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES",
+               "18446744073709551615", 1) != 0)
         return 0;
-    fprintf(stderr, "binding fixture: declared 128 GiB admission capacity; "
+    fprintf(stderr, "binding fixture: declared 128 GiB admission capacity and unbounded process envelope; "
                     "not host memory evidence\n");
     return 1;
 }
@@ -2845,6 +2847,24 @@ static int test_runtime_family_neutrality(void)
             !rejected.published && !rejected.path[0],
             "incomplete production proof refuses before source I/O or binding publication");
         request.artifact_production = NULL;
+        YVEX_TEST_ASSERT(yvex_runtime_binding_recompile_publish(
+            compiler, &request, "", rejected.path, &rejected.published, &err) == YVEX_ERR_INVALID_ARG &&
+            !rejected.published && !rejected.path[0],
+            "empty admitted binding refuses before source I/O");
+        request.artifact_production = &production;
+        YVEX_TEST_ASSERT(yvex_runtime_binding_recompile_publish(
+            compiler, &request, "/not-opened/binding", rejected.path,
+            &rejected.published, &err) == YVEX_ERR_INVALID_ARG &&
+            !rejected.published && !rejected.path[0],
+            "ambiguous production and prior-admission authorities refuse before I/O");
+        request.artifact_production = NULL;
+        request.rebind_existing_artifact = 1;
+        YVEX_TEST_ASSERT(yvex_runtime_binding_recompile_publish(
+            compiler, &request, "/not-opened/binding", rejected.path,
+            &rejected.published, &err) == YVEX_ERR_INVALID_ARG &&
+            !rejected.published && !rejected.path[0],
+            "legacy representation rebinding cannot borrow prior exact-source admission");
+        request.rebind_existing_artifact = 0;
     }
     YVEX_TEST_ASSERT(yvex_graph_execution_find(
                          deepseek->adapter_id, deepseek->adapter_version, NULL) == NULL &&
@@ -2855,6 +2875,65 @@ static int test_runtime_family_neutrality(void)
                          0ull, 0ull, "not-a-runtime-family") == NULL &&
                          yvex_graph_execution_find(deepseek->adapter_id, 0ull, NULL) == NULL,
                      "unknown target and execution version are refused");
+    return 0;
+}
+
+static unsigned int binding_readmission_observed;
+
+static int binding_readmission_observe(const yvex_family_compiler_adapter *adapter,
+    const yvex_compilation_runtime_binding_request *request,
+    yvex_family_compilation_products *products, void **owner, yvex_error *err)
+{
+    (void)adapter;
+    (void)products;
+    *owner = NULL;
+    if (!request->admitted_artifact || !request->admitted_artifact->complete ||
+        !request->admitted_artifact->file_bytes || request->artifact_production ||
+        request->source_stream_count != 17u) return YVEX_ERR_STATE;
+    ++binding_readmission_observed;
+    yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "test.readmission-compiler",
+        "fixture observes copied admission only; no model compilation is claimed");
+    return YVEX_ERR_UNSUPPORTED;
+}
+
+static int test_binding_readmission(const binding_fixture *fixture,
+    const yvex_runtime_binding_prepare_result *prepared)
+{
+    yvex_family_compiler_adapter adapter = *yvex_compiler_family_deepseek_v4();
+    yvex_compilation_runtime_binding_request request = {0};
+    char path[YVEX_PATH_CAP];
+    int published = 1;
+    yvex_error err;
+    adapter.adapter_id = prepared->summary.family_adapter_id;
+    adapter.adapter_version = prepared->summary.family_adapter_version;
+    adapter.logical_transform_identity = prepared->summary.logical_transform_identity;
+    adapter.binding_compile = binding_readmission_observe;
+    request.artifact_path = yvex_artifact_path(fixture->artifact);
+    request.source_stream_count = 17u;
+    binding_readmission_observed = 0u;
+    YVEX_TEST_ASSERT(yvex_runtime_binding_recompile_publish(&adapter, &request,
+        prepared->path, path, &published, &err) == YVEX_ERR_UNSUPPORTED &&
+        binding_readmission_observed == 1u && !published && !path[0] &&
+        !strcmp(err.where, "test.readmission-compiler"),
+        "authenticated binding supplies admission, not the preceding numerical choices");
+    ++adapter.adapter_version;
+    YVEX_TEST_ASSERT(yvex_runtime_binding_recompile_publish(&adapter, &request,
+        prepared->path, path, &published, &err) == YVEX_ERR_STATE &&
+        binding_readmission_observed == 1u && !published && !path[0],
+        "foreign execution adapter refuses before compiler entry");
+    --adapter.adapter_version;
+    adapter.logical_transform_identity =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    YVEX_TEST_ASSERT(yvex_runtime_binding_recompile_publish(&adapter, &request,
+        prepared->path, path, &published, &err) == YVEX_ERR_STATE &&
+        binding_readmission_observed == 1u && !published && !path[0],
+        "foreign source transformation refuses before compiler entry");
+    adapter.logical_transform_identity = prepared->summary.logical_transform_identity;
+    request.admitted_artifact = &fixture->admission;
+    YVEX_TEST_ASSERT(yvex_runtime_binding_recompile_publish(&adapter, &request,
+        prepared->path, path, &published, &err) == YVEX_ERR_INVALID_ARG &&
+        binding_readmission_observed == 1u && !published && !path[0],
+        "nested caller-supplied admission cannot override authenticated binding");
     return 0;
 }
 
@@ -5515,6 +5594,7 @@ static int runtime_binding_suite(int cuda_only)
         if (test_runtime_cuda_execution_profile(&fixture, &prepared) != 0) goto done;
         if (test_runtime_cuda_workspace_transaction(&fixture, &prepared) != 0) goto done;
     } else {
+        if (test_binding_readmission(&fixture, &prepared) != 0) goto done;
         if (test_deployment_compatibility(&fixture, &prepared) != 0) goto done;
         if (test_corruption_refusals(&prepared, root) != 0) goto done;
         if (test_canonical_refusals(&prepared, root) != 0) goto done;
@@ -5543,6 +5623,7 @@ done:
     if (declared_capacity) {
         (void)unsetenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES");
         (void)unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES");
+        (void)unsetenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES");
     }
     yvex_runtime_binding_close(binding);
     fixture_close(&fixture);

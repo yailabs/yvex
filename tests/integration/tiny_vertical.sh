@@ -15,7 +15,8 @@ if test "${YVEX_TEST_FIXTURE_CAPACITY:-0}" = 1; then
     fi
     export YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES=137438953472
     export YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES=137438953472
-    printf '%s\n' 'tiny fixture: declared 128 GiB admission capacity; not host memory evidence' >&2
+    export YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES=18446744073709551615
+    printf '%s\n' 'tiny fixture: declared 128 GiB admission capacity and unbounded process envelope; not host memory evidence' >&2
 fi
 
 if test "$(uname -s)" = Darwin; then

@@ -28,6 +28,10 @@ independently checked IQ2 encoding producer. Complete real gate/up observations
 select 28 layers; other weights remain controls. Native planning succeeds, while
 experimental artifact completion, full execution, quality and throughput remain
 unfinished. Lower parameter reconstruction loss is not an inference speedup.
+The same continuation now supports offline reuse of exact package admission
+when compiling another executable realization. A real produced Mamba package
+recompiles and replays through the native CLI without a catalog bypass or model
+load.
 
 `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` now owns generic physical
 configuration search and the next DeepSeek implementation. `.5` retains its

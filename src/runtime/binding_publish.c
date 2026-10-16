@@ -8,6 +8,40 @@
 
 #include <string.h>
 
+/* Runtime owns binding authentication. The compiler receives only the copied
+ * package admission and rebuilds every physical/executable compatibility fact. */
+int yvex_runtime_binding_recompile_publish(
+    const yvex_family_compiler_adapter *adapter,
+    const yvex_compilation_runtime_binding_request *request,
+    const char *admitted_binding_path,
+    char path[YVEX_PATH_CAP], int *published, yvex_error *err)
+{
+    yvex_runtime_binding *binding = NULL;
+    yvex_complete_artifact_admission admission = {0};
+    yvex_compilation_runtime_binding_request resolved;
+    int rc;
+    if (path) memset(path, 0, YVEX_PATH_CAP);
+    if (published) *published = 0;
+    if (!adapter || adapter->schema_version != YVEX_FAMILY_COMPILER_SCHEMA_V3 ||
+        !adapter->adapter_id || !adapter->adapter_version || !request || !path || !published ||
+        !admitted_binding_path || !admitted_binding_path[0] ||
+        request->artifact_production || request->admitted_artifact || request->rebind_existing_artifact) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime.binding.recompile-publish",
+            "one exact compiler and unambiguous admitted binding are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = yvex_runtime_binding_open_compatible(&binding, admitted_binding_path,
+        adapter->adapter_id, adapter->adapter_version, adapter->logical_transform_identity,
+        NULL, &admission, NULL, err);
+    if (rc == YVEX_OK) {
+        resolved = *request;
+        resolved.admitted_artifact = &admission;
+        rc = yvex_runtime_binding_compile_publish(adapter, &resolved, path, published, err);
+    }
+    yvex_runtime_binding_close(binding);
+    return rc;
+}
+
 int yvex_runtime_binding_compile_publish(
     const yvex_family_compiler_adapter *adapter,
     const struct yvex_compilation_runtime_binding_request *request,

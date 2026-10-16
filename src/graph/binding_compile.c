@@ -114,6 +114,31 @@ static void binding_compiler_close(binding_compiler *compiler)
     memset(compiler, 0, sizeof(*compiler));
 }
 
+static int binding_compiler_admission_reuse(binding_compiler *compiler,
+    const yvex_compilation_runtime_binding_request *request,
+    const yvex_transform_ir_summary *transform, yvex_error *err)
+{
+    int rc = YVEX_OK;
+    compiler->admission = *request->admitted_artifact;
+    if (!compiler->admission.complete ||
+        memcmp(compiler->admission.transform_identity, transform->transform_identity,
+            YVEX_SHA256_HEX_CAP) ||
+        memcmp(compiler->admission.payload_identity, transform->required_payload_identity,
+            YVEX_SHA256_HEX_CAP)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "compilation.runtime-binding",
+            "admitted package does not identify this authenticated source transformation");
+        rc = YVEX_ERR_STATE;
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_artifact_snapshot_get(compiler->artifact, &compiler->admission.file_snapshot, err);
+    if (rc == YVEX_OK)
+        yvex_core_text_copy(compiler->admission.artifact_path,
+            sizeof(compiler->admission.artifact_path), yvex_artifact_path(compiler->artifact));
+    /* The caller independently hashes the opened artifact and then rebuilds
+     * representation compatibility, semantics and all executable plans. */
+    return rc;
+}
+
 static int binding_compiler_open(
     binding_compiler *compiler,
     const yvex_compilation_runtime_binding_request *request, yvex_error *err)
@@ -157,7 +182,9 @@ static int binding_compiler_open(
                            "production proof does not identify the authenticated source transformation");
             rc = YVEX_ERR_STATE;
         }
-    } else if (rc == YVEX_OK)
+    } else if (rc == YVEX_OK && request->admitted_artifact)
+        rc = binding_compiler_admission_reuse(compiler, request, transform, err);
+    else if (rc == YVEX_OK)
         rc = compiler->pipeline->artifact_admit(
             compiler->artifact, &compiler->admission, &compiler->admission_failure, err);
     if (rc == YVEX_OK)
@@ -541,6 +568,9 @@ int yvex_family_binding_compile(
     if (!pipeline_valid(adapter) || !request || !products || !owner ||
         !request->source_path || !request->models_root ||
         !request->source_manifest_path || !request->artifact_path ||
+        (request->admitted_artifact &&
+         (!request->admitted_artifact->complete || request->artifact_production ||
+          request->rebind_existing_artifact)) ||
         (request->artifact_production &&
          (request->rebind_existing_artifact ||
           !request->artifact_production->artifact_path ||

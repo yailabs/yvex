@@ -559,9 +559,7 @@ int yvex_transform_binding_payload_plan_build(
     yvex_error *err);
 /* Preparation-plane publication; runtime independently reopens the binding. */
 typedef struct yvex_compilation_runtime_binding_request {
-    const char *source_path;
-    const char *models_root;
-    const char *source_manifest_path;
+    const char *source_path, *models_root, *source_manifest_path;
     const char *artifact_path;
     const char *directory;
     const char *quant_policy_path;
@@ -574,6 +572,8 @@ typedef struct yvex_compilation_runtime_binding_request {
     int rebind_existing_artifact;
     /* Borrowed complete production proof; NULL retains family catalog admission. */
     const struct yvex_artifact_admission_request *artifact_production;
+    /* Reuse authenticated package admission, never its old numerical program. */
+    const struct yvex_complete_artifact_admission *admitted_artifact;
 } yvex_compilation_runtime_binding_request;
 typedef struct yvex_compilation_runtime_binding_result {
     char path[YVEX_PATH_CAP];
