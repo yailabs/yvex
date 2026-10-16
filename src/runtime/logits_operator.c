@@ -160,6 +160,68 @@ static int logits_operator_publish_raw(
     }
     return rc;
 }
+
+/* Resolve the same admitted backend, capacity and execution class used by the
+ * model/session owners. Raw-logit capture neither samples nor selects a second
+ * portable arithmetic path for a binding that requires native execution. */
+static int logits_operator_open(const yvex_logits_operator_request *request,
+    yvex_model_engine **model, yvex_runtime_execution_session **session,
+    yvex_runtime_cleanup_lease **cleanup,
+    yvex_runtime_execution_profile *profile,
+    unsigned long long *workspace_tokens, yvex_error *err)
+{
+    yvex_model_engine_open_request model_request = {
+        .artifact_path = request->artifact_path,
+        .runtime_binding_path = request->runtime_binding_path,
+        .target_id = request->target,
+        .residency_backend = request->backend,
+        .maximum_host_bytes = request->maximum_host_bytes,
+        .maximum_device_bytes = request->maximum_device_bytes,
+    };
+    yvex_runtime_session_open_request session_request = {
+        .backend = request->backend,
+        .maximum_host_bytes = request->maximum_host_bytes,
+        .maximum_device_bytes = request->maximum_device_bytes,
+    };
+    yvex_model_engine_failure failure = {0};
+    yvex_runtime_capacity_options options = {
+        .backend = request->backend,
+        .mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY,
+        .workload_kind = YVEX_EXECUTION_WORKLOAD_FULL_MODEL_RESEARCH,
+        .evidence_profile = YVEX_EXECUTION_EVIDENCE_PRODUCTION,
+        .sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED,
+        .context_capacity = request->context_capacity,
+        .prefill_chunk_tokens = request->prefill_chunk_tokens,
+        .concurrent_sequences = 1ull,
+        .maximum_host_bytes = request->maximum_host_bytes,
+        .maximum_device_bytes = request->maximum_device_bytes,
+    };
+    yvex_runtime_capacity capacity = {0};
+    yvex_graph_attention_capacity_plan *attention_capacity = NULL;
+    yvex_runtime_execution_profile_derivation derivation = {0};
+    int rc = yvex_runtime_cleanup_lease_acquire(cleanup, &model_request,
+        &session_request, model, session, &failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_capacity_derive(*model, *session, &options,
+                                         &capacity, &attention_capacity, err);
+    yvex_graph_attention_capacity_plan_close(&attention_capacity);
+    if (rc != YVEX_OK) return rc;
+    *workspace_tokens = capacity.physical_rows;
+    const yvex_runtime_session_view *view = yvex_runtime_session_view_get(*session);
+    if (view && view->attention_state_provider)
+        rc = yvex_runtime_session_configure_persistent_pages(
+            *session, &capacity.capacity_plan, &failure, err);
+    if (rc != YVEX_OK) return rc;
+    derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    derivation.model = *model;
+    derivation.session = *session;
+    derivation.workload = &capacity.workload_profile;
+    derivation.backend = request->backend;
+    derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+    derivation.sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
+    return yvex_runtime_execution_profile_derive(&derivation, profile, err);
+}
 /*
  * Execute one shared-context prefill/decode/logits operator workflow.
  *
@@ -170,12 +232,10 @@ int yvex_runtime_logits_operator_execute(
     yvex_logits_operator_result *result,
     yvex_runtime_cleanup_lease **retained_cleanup, yvex_error *err)
 {
-    yvex_model_engine_open_request model_request = {0};
-    yvex_runtime_session_open_request session_request = {0};
+    yvex_runtime_execution_profile profile = {0};
     yvex_runtime_transformer_options transformer_options = {0};
     yvex_runtime_decode_options decode_options = {0};
     yvex_runtime_logits_options logits_options = {0};
-    yvex_model_engine_failure failure = {0};
     yvex_runtime_cleanup_lease *cleanup = NULL;
     yvex_model_engine *model = NULL;
     yvex_runtime_execution_session *session = NULL;
@@ -197,7 +257,9 @@ int yvex_runtime_logits_operator_execute(
     yvex_runtime_logits_source *sources = NULL;
     yvex_runtime_decode_step_result *decode_steps = NULL;
     float *prefill_hidden = NULL, *decode_hidden = NULL, *raw_logits = NULL;
-    unsigned long long prefill_count, decode_count, hidden_count, row_count, logits_count;
+    unsigned long long prefill_count = 0ull, decode_count = 0ull, hidden_count = 0ull;
+    unsigned long long row_count = 0ull, logits_count = 0ull;
+    unsigned long long workspace_tokens = 0ull;
     yvex_error primary = {0}, cleanup_error;
     int adopted = 0, rc, close_rc;
     if (result) memset(result, 0, sizeof(*result));
@@ -214,15 +276,8 @@ int yvex_runtime_logits_operator_execute(
     yvex_core_text_copy(result->target, sizeof(result->target), request->target);
     yvex_core_text_copy(result->backend, sizeof(result->backend),
                         request->backend == YVEX_BACKEND_KIND_CUDA ? "cuda" : "cpu");
-    model_request.artifact_path = request->artifact_path;
-    model_request.runtime_binding_path = request->runtime_binding_path;
-    model_request.target_id = request->target;
-    model_request.maximum_host_bytes = request->maximum_host_bytes;
-    session_request.backend = request->backend;
-    session_request.maximum_host_bytes = request->maximum_host_bytes;
-    session_request.maximum_device_bytes = request->maximum_device_bytes;
-    rc = yvex_runtime_cleanup_lease_acquire(
-        &cleanup, &model_request, &session_request, &model, &session, &failure, err);
+    rc = logits_operator_open(request, &model, &session, &cleanup, &profile,
+                              &workspace_tokens, err);
     limits.maximum_file_bytes = request->maximum_host_bytes
                                     ? request->maximum_host_bytes : 1ull << 30u;
     if (rc == YVEX_OK)
@@ -231,6 +286,8 @@ int yvex_runtime_logits_operator_execute(
     transformer_options.maximum_host_bytes = request->maximum_host_bytes;
     transformer_options.maximum_device_bytes = request->maximum_device_bytes;
     transformer_options.context_capacity = request->context_capacity;
+    transformer_options.workspace_token_capacity = workspace_tokens;
+    transformer_options.execution_profile = &profile;
     if (rc == YVEX_OK)
         rc = yvex_runtime_transformer_context_open(
             &transformer, model, session, &transformer_options, NULL, err);
@@ -305,6 +362,7 @@ int yvex_runtime_logits_operator_execute(
     logits_options.maximum_rows = row_count;
     logits_options.maximum_host_bytes = request->maximum_host_bytes;
     logits_options.maximum_device_bytes = request->maximum_device_bytes;
+    logits_options.execution_profile = &profile;
     if (rc == YVEX_OK)
         rc = yvex_runtime_logits_context_open(
             &logits_context, model, session,

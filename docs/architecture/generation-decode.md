@@ -88,6 +88,12 @@ Audit and forensic profiles may request bounded host evidence
 or full reference intermediates. Those adapters are explicit and are not
 reachable as a silent production fallback.
 
+The raw-logits operator preserves the requested backend and both memory limits
+when acquiring its model and session. It derives capacity and an admitted
+execution profile through the same runtime owners as generation, with sampling
+explicitly absent. Transformer and readout consume that profile; diagnostic
+capture does not substitute portable arithmetic for a native-only binding.
+
 
 ## Implementation and evidence
 
