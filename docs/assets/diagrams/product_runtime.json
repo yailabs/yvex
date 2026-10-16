@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "number": 9,
-  "presentation": "technical",
-  "title": "Generation request, candidate state and committed output",
+  "presentation": "product",
+  "title": "Generation: staged state and committed output",
   "description": "Native and OpenAI-compatible generation requests resolve a model, current engine generation and session. The engine supplies compiled plans and backend resources. Execution uses newly prefilled positions or incremental decode and, when speculative, target verification. Session providers stage candidate attention, recurrent, draft, token, decoder and RNG state as applicable. The transaction publishes an accepted prefix only after participant preparation succeeds. Cancellation or failure aborts uncommitted work; failed cleanup may invalidate state. Committed fragments are delivered by native events or the separately defined HTTP stream, not by publishing draft proposals.",
   "size": [
     1200,
-    1110
+    1200
   ],
   "owner": "README.md",
   "authority": [
@@ -24,144 +24,135 @@
       "id": "request",
       "box": [
         40,
-        110,
-        340,
-        130
+        120,
+        520,
+        150
       ],
       "kind": "interface",
       "title": "Generation request",
       "lines": [
-        "Native protocol / HTTP adapter",
-        "Model + session + input",
-        "Sampling policy + output bound"
-      ]
-    },
-    {
-      "id": "resolve",
-      "box": [
-        430,
-        110,
-        340,
-        130
-      ],
-      "kind": "runtime",
-      "title": "Route and admit",
-      "lines": [
-        "Resolve engine generation",
-        "Validate session / capacity",
-        "Refuse stale or unavailable state"
+        "Model alias + input + sampling policy",
+        "Native request / HTTP compatibility adapter"
       ]
     },
     {
       "id": "engine",
       "box": [
-        820,
-        110,
-        340,
-        130
+        640,
+        120,
+        520,
+        150
       ],
       "kind": "physical",
       "title": "Loaded engine resources",
       "lines": [
-        "Artifact, binding, specialization",
-        "Compiled plans + weight buffers",
-        "Retained by sessions and leases"
+        "Artifact + binding + specialization",
+        "Generation-bound plans and resources"
       ]
     },
     {
-      "id": "execute",
+      "id": "resolve",
       "box": [
-        430,
-        355,
-        340,
-        155
+        40,
+        315,
+        520,
+        150
       ],
-      "kind": "physical",
-      "title": "Compiled model execution",
+      "kind": "runtime",
+      "title": "Route and admit",
       "lines": [
-        "Prefill: newly executed positions",
-        "Decode: incremental target step",
-        "DSpark: target verifies drafts",
-        "Device buffers, kernels and waits"
+        "Generation + session + capacity checks",
+        "Unavailable / stale / incompatible → refuse"
       ]
     },
     {
       "id": "state",
       "box": [
-        820,
-        355,
-        340,
-        155
+        640,
+        315,
+        520,
+        150
       ],
       "kind": "mutable",
       "title": "Session candidate state",
       "lines": [
-        "Attention / recurrent providers",
-        "Draft state when admitted",
-        "Token ledger + decoder + RNG",
-        "Staged separately from commit"
+        "Attention / recurrent / draft providers",
+        "Token ledger + decoder + RNG"
+      ]
+    },
+    {
+      "id": "execute",
+      "box": [
+        40,
+        510,
+        520,
+        150
+      ],
+      "kind": "physical",
+      "title": "Compiled model execution",
+      "lines": [
+        "Prefill / target decode / draft verification",
+        "Logits + staged selection; no draft output"
       ]
     },
     {
       "id": "commit",
       "box": [
-        430,
-        645,
-        340,
-        140
+        640,
+        510,
+        520,
+        150
       ],
       "kind": "runtime",
-      "title": "Accepted-prefix transaction",
+      "title": "Accepted-prefix commit",
       "lines": [
-        "Prepare state participants",
-        "Publish one accepted prefix",
-        "Discard unaccepted suffix state"
+        "Prepare participants; commit accepted prefix",
+        "Discard unaccepted suffix; publish atomically"
       ]
     },
     {
       "id": "abort",
       "box": [
         40,
-        645,
-        340,
-        140
+        705,
+        520,
+        150
       ],
       "kind": "mutable",
       "title": "Abort / cleanup",
       "lines": [
-        "Discard uncommitted candidates",
-        "Preserve committed progress",
-        "Failed cleanup → reset required"
+        "Discard uncommitted state; keep prior commits",
+        "Failed cleanup invalidates continuity → reset"
       ]
     },
     {
       "id": "output",
       "box": [
-        430,
-        880,
-        730,
-        110
+        640,
+        705,
+        520,
+        150
       ],
       "kind": "interface",
-      "title": "Committed token fragments and terminal result",
+      "title": "Committed output",
       "lines": [
-        "Native generation events / separately specified HTTP streaming",
-        "Request ID + committed progress + finish / error; no unverified drafts"
+        "Committed fragments + terminal finish",
+        "Native events / distinct HTTP stream framing"
       ]
     },
     {
       "id": "error",
       "box": [
         40,
-        880,
-        340,
-        110
+        900,
+        520,
+        150
       ],
       "kind": "interface",
       "title": "Failure result",
       "lines": [
-        "Error + committed progress",
-        "No candidate token publication"
+        "Terminal error + committed progress",
+        "No fabricated result or unverified tokens"
       ]
     }
   ],
@@ -172,27 +163,35 @@
       "target": "resolve",
       "points": [
         [
-          380,
-          175
+          300,
+          270
         ],
         [
-          430,
-          175
+          300,
+          315
         ]
       ]
     },
     {
       "kind": "bind",
-      "source": "resolve",
-      "target": "engine",
+      "source": "engine",
+      "target": "resolve",
       "points": [
         [
-          770,
-          175
+          900,
+          270
         ],
         [
-          820,
-          175
+          900,
+          290
+        ],
+        [
+          480,
+          290
+        ],
+        [
+          480,
+          315
         ]
       ]
     },
@@ -202,35 +201,12 @@
       "target": "execute",
       "points": [
         [
-          600,
-          240
+          300,
+          465
         ],
         [
-          600,
-          355
-        ]
-      ]
-    },
-    {
-      "kind": "bind",
-      "source": "engine",
-      "target": "execute",
-      "points": [
-        [
-          930,
-          240
-        ],
-        [
-          930,
-          295
-        ],
-        [
-          725,
-          295
-        ],
-        [
-          725,
-          355
+          300,
+          510
         ]
       ]
     },
@@ -240,12 +216,20 @@
       "target": "state",
       "points": [
         [
-          770,
-          435
+          560,
+          570
         ],
         [
-          820,
-          435
+          600,
+          570
+        ],
+        [
+          600,
+          390
+        ],
+        [
+          640,
+          390
         ]
       ]
     },
@@ -255,20 +239,12 @@
       "target": "commit",
       "points": [
         [
-          990,
+          900,
+          465
+        ],
+        [
+          900,
           510
-        ],
-        [
-          990,
-          570
-        ],
-        [
-          710,
-          570
-        ],
-        [
-          710,
-          645
         ]
       ]
     },
@@ -278,12 +254,12 @@
       "target": "commit",
       "points": [
         [
-          555,
-          510
+          560,
+          620
         ],
         [
-          555,
-          645
+          640,
+          620
         ]
       ]
     },
@@ -293,16 +269,12 @@
       "target": "abort",
       "points": [
         [
-          430,
-          475
+          300,
+          660
         ],
         [
-          210,
-          475
-        ],
-        [
-          210,
-          645
+          300,
+          705
         ]
       ]
     },
@@ -312,12 +284,20 @@
       "target": "abort",
       "points": [
         [
-          430,
-          715
+          760,
+          660
         ],
         [
-          380,
-          715
+          760,
+          682
+        ],
+        [
+          480,
+          682
+        ],
+        [
+          480,
+          705
         ]
       ]
     },
@@ -327,12 +307,12 @@
       "target": "output",
       "points": [
         [
-          600,
-          785
+          900,
+          660
         ],
         [
-          600,
-          880
+          900,
+          705
         ]
       ]
     },
@@ -342,12 +322,12 @@
       "target": "error",
       "points": [
         [
-          210,
-          785
+          300,
+          855
         ],
         [
-          210,
-          880
+          300,
+          900
         ]
       ]
     }
@@ -356,97 +336,73 @@
     {
       "at": [
         40,
-        331
+        298
       ],
-      "text": "One request within one session.",
+      "text": "Identity + capacity",
       "style": "note"
     },
     {
       "at": [
         40,
-        361
+        493
       ],
-      "text": "Other sessions have distinct",
+      "text": "Admitted model work",
+      "style": "note"
+    },
+    {
+      "at": [
+        640,
+        493
+      ],
+      "text": "Staged state",
       "style": "note"
     },
     {
       "at": [
         40,
-        391
-      ],
-      "text": "state providers and workspace.",
-      "style": "note"
-    },
-    {
-      "at": [
-        435,
-        285
-      ],
-      "text": "Admitted work",
-      "style": "note"
-    },
-    {
-      "at": [
-        760,
-        280
-      ],
-      "text": "Plans + resources",
-      "style": "note"
-    },
-    {
-      "at": [
-        55,
-        542
+        688
       ],
       "text": "Cancel / failure",
       "style": "note"
     },
     {
       "at": [
-        430,
-        560
+        940,
+        688
       ],
-      "text": "Verified prefix",
-      "style": "note"
-    },
-    {
-      "at": [
-        802,
-        551
-      ],
-      "text": "Candidate state",
-      "style": "note"
-    },
-    {
-      "at": [
-        823,
-        685
-      ],
-      "text": "Publication requires successful",
-      "style": "note"
-    },
-    {
-      "at": [
-        823,
-        715
-      ],
-      "text": "preparation by every participant.",
-      "style": "note"
-    },
-    {
-      "at": [
-        440,
-        833
-      ],
-      "text": "After atomic commit",
+      "text": "After commit",
       "style": "note"
     },
     {
       "at": [
         40,
-        830
+        883
       ],
-      "text": "Preparation refusal also aborts.",
+      "text": "Cleanup result",
+      "style": "note"
+    },
+    {
+      "at": [
+        640,
+        935
+      ],
+      "text": "Only a successful commit can reach output.",
+      "style": "note"
+    },
+    {
+      "at": [
+        640,
+        972
+      ],
+      "text": "Cancellation does not retract committed output.",
+      "style": "note"
+    },
+    {
+      "at": [
+        640,
+        1009
+      ],
+      "text": "Sessions and leases retain the engine generation.",
       "style": "note"
     }
   ]

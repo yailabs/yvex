@@ -85,6 +85,15 @@ class PublicationTests(unittest.TestCase):
                     self.assertIn(f'id="{node["id"]}"',svg)
                 self.assertEqual(svg,figures.render(copy.deepcopy(data)))
 
+    def test_readme_figures_keep_large_type_and_bounded_annotations(self):
+        for name in ('product_pipeline','product_runtime'):
+            with self.subTest(figure=name):
+                data=json.loads((ROOT/'docs/assets/diagrams'/f'{name}.json').read_text())
+                self.assertEqual(data['presentation'],'product')
+                self.assertTrue(all(n['box'][2]>=520 for n in data['nodes']))
+                self.assertTrue(all(len(n['lines'])<=2 for n in data['nodes']))
+                self.assertIn('.node-title{font-size:25px',figures.render(data))
+
     def test_product_figures_refuse_editorial_overflow(self):
         source=json.loads((ROOT/'docs/assets/diagrams/product_pipeline.json').read_text())
         for field in ('title','node-title','node-height'):

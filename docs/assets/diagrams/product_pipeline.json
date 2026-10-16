@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "number": 8,
-  "presentation": "technical",
-  "title": "Parameter resolution and physical program construction",
+  "presentation": "product",
+  "title": "Computation, parameters and executable plans",
   "description": "Family interpretation derives computation and parameter transformations from an authenticated source. Typed programs or retained operator schedules carry symbolic parameters; Transformation IR produces encoded package terminals. Parameter resolution joins computation with exact terminal lineage, shape and layout. Physical programs and model plans enter the runtime binding. Deployment separately checks numerical implementation, backend operations, workspace and state capacity. DeepSeek's retained operator schedule is not uniform full-model SSA execution.",
   "size": [
     1200,
-    1080
+    1200
   ],
   "owner": "README.md",
   "authority": [
@@ -24,144 +24,135 @@
       "id": "source",
       "box": [
         40,
-        110,
-        340,
-        130
+        120,
+        520,
+        150
       ],
       "kind": "external",
-      "title": "Authenticated source",
+      "title": "Verified model source",
       "lines": [
-        "Revision + tensor ranges",
-        "Configuration + tokenizer",
-        "Verified payload identities"
+        "Immutable revision, config and tokenizer",
+        "Authenticated tensor ranges"
       ]
     },
     {
       "id": "family",
       "box": [
-        430,
-        110,
-        340,
-        130
+        640,
+        120,
+        520,
+        150
       ],
       "kind": "semantic",
       "title": "Family interpretation",
       "lines": [
-        "Operator equations + topology",
-        "Tensor roles + state geometry",
-        "Routing + numerical obligations"
+        "Equations, topology and tensor roles",
+        "State effects and numerical obligations"
       ]
     },
     {
       "id": "computation",
       "box": [
         40,
-        330,
-        340,
-        140
+        315,
+        520,
+        150
       ],
       "kind": "semantic",
       "title": "Computational program",
       "lines": [
-        "Typed IR / operator schedule",
-        "Dataflow + state effects",
-        "Symbolic parameter references"
+        "Typed program / retained operator graph",
+        "Symbolic operands + data dependencies"
       ]
     },
     {
       "id": "transform",
       "box": [
-        430,
-        330,
-        340,
-        140
+        640,
+        315,
+        520,
+        150
       ],
       "kind": "semantic",
       "title": "Transformation IR",
       "lines": [
-        "Source ranges → terminal lineage",
-        "Quantization + layout policy",
-        "Deterministic artifact encoding"
-      ]
-    },
-    {
-      "id": "terminals",
-      "box": [
-        820,
-        330,
-        340,
-        140
-      ],
-      "kind": "physical",
-      "title": "Package terminals / PEIR",
-      "lines": [
-        "Encoded shape + qtype + layout",
-        "Authenticated byte ranges",
-        "Sharing and derivation identities"
+        "Source ranges → encoded tensor lineage",
+        "Quantization + layout policy"
       ]
     },
     {
       "id": "join",
       "box": [
         40,
-        590,
-        340,
-        140
+        510,
+        520,
+        150
       ],
       "kind": "semantic",
       "title": "Parameter resolution",
       "lines": [
-        "Symbolic operand ↔ terminal",
-        "Check lineage, shape and layout",
-        "Reject unresolved parameters"
+        "operand → terminal, offset, shape, layout",
+        "Unresolved or incompatible → refuse"
+      ]
+    },
+    {
+      "id": "terminals",
+      "box": [
+        640,
+        510,
+        520,
+        150
+      ],
+      "kind": "physical",
+      "title": "Encoded package / PEIR",
+      "lines": [
+        "Shape, qtype, byte range and sharing",
+        "Authenticated artifact terminals"
       ]
     },
     {
       "id": "physical",
       "box": [
-        430,
-        590,
-        340,
-        140
+        40,
+        705,
+        520,
+        150
       ],
       "kind": "physical",
-      "title": "Physical programs / plans",
+      "title": "Physical program / plans",
       "lines": [
-        "Operation implementations",
-        "Value storage + dependencies",
-        "Numerical and state contracts"
+        "Bound operations and value lifetimes",
+        "Family-specific execution plans"
       ]
     },
     {
       "id": "binding",
       "box": [
-        820,
-        590,
-        340,
-        140
+        640,
+        705,
+        520,
+        150
       ],
       "kind": "physical",
       "title": "Runtime binding",
       "lines": [
-        "Compiled model plans",
-        "Exact artifact / parameter join",
-        "Authenticated executable basis"
+        "Exact artifact + compiled plans",
+        "Tokenizer + numerical identities"
       ]
     },
     {
       "id": "deployment",
       "box": [
-        430,
-        830,
-        730,
-        130
+        40,
+        900,
+        1120,
+        150
       ],
       "kind": "runtime",
-      "title": "Deployment specialization and capacity admission",
+      "title": "Deployment admission",
       "lines": [
-        "Backend operations + numerical implementation + device capabilities",
-        "Weight resources + preparation + workspace + sequence state + reserve",
-        "Missing implementation or insufficient resources → refuse execution"
+        "Legal kernels + numerical class; absent consumer → refuse",
+        "Weights + preparation + workspace + state + reserve; insufficient capacity → refuse"
       ]
     }
   ],
@@ -172,12 +163,12 @@
       "target": "family",
       "points": [
         [
-          380,
-          175
+          560,
+          195
         ],
         [
-          430,
-          175
+          640,
+          195
         ]
       ]
     },
@@ -187,20 +178,24 @@
       "target": "computation",
       "points": [
         [
-          530,
+          640,
           240
         ],
         [
-          530,
-          275
+          600,
+          240
         ],
         [
-          210,
-          275
+          600,
+          290
         ],
         [
-          210,
-          330
+          300,
+          290
+        ],
+        [
+          300,
+          315
         ]
       ]
     },
@@ -210,12 +205,12 @@
       "target": "transform",
       "points": [
         [
-          665,
-          240
+          900,
+          270
         ],
         [
-          665,
-          330
+          900,
+          315
         ]
       ]
     },
@@ -225,12 +220,12 @@
       "target": "terminals",
       "points": [
         [
-          770,
-          400
+          900,
+          465
         ],
         [
-          820,
-          400
+          900,
+          510
         ]
       ]
     },
@@ -240,12 +235,12 @@
       "target": "join",
       "points": [
         [
-          210,
-          470
+          300,
+          465
         ],
         [
-          210,
-          590
+          300,
+          510
         ]
       ]
     },
@@ -255,20 +250,12 @@
       "target": "join",
       "points": [
         [
-          990,
-          470
+          640,
+          585
         ],
         [
-          990,
-          535
-        ],
-        [
-          315,
-          535
-        ],
-        [
-          315,
-          590
+          560,
+          585
         ]
       ]
     },
@@ -278,12 +265,12 @@
       "target": "physical",
       "points": [
         [
-          380,
+          300,
           660
         ],
         [
-          430,
-          660
+          300,
+          705
         ]
       ]
     },
@@ -293,12 +280,12 @@
       "target": "binding",
       "points": [
         [
-          770,
-          660
+          560,
+          780
         ],
         [
-          820,
-          660
+          640,
+          780
         ]
       ]
     },
@@ -308,12 +295,12 @@
       "target": "deployment",
       "points": [
         [
-          990,
-          730
+          900,
+          855
         ],
         [
-          990,
-          830
+          900,
+          900
         ]
       ]
     }
@@ -321,40 +308,16 @@
   "labels": [
     {
       "at": [
-        820,
-        140
-      ],
-      "text": "Lowering differs by family:",
-      "style": "note"
-    },
-    {
-      "at": [
-        820,
-        171
-      ],
-      "text": "Qwen / MiniMax / Mamba2: typed IR",
-      "style": "note"
-    },
-    {
-      "at": [
-        820,
-        202
-      ],
-      "text": "DeepSeek: operator schedule",
-      "style": "note"
-    },
-    {
-      "at": [
         40,
-        308
+        298
       ],
-      "text": "Operator semantics",
+      "text": "Computational lowering",
       "style": "note"
     },
     {
       "at": [
-        688,
-        287
+        640,
+        298
       ],
       "text": "Parameter derivation",
       "style": "note"
@@ -362,49 +325,41 @@
     {
       "at": [
         40,
-        515
+        493
       ],
-      "text": "Parameter references",
+      "text": "Exact parameter join",
       "style": "note"
     },
     {
       "at": [
-        440,
-        520
+        640,
+        493
       ],
-      "text": "Exact terminal identities and encoded geometry",
-      "style": "note"
-    },
-    {
-      "at": [
-        40,
-        862
-      ],
-      "text": "Storage representation is fixed",
+      "text": "Physical artifact",
       "style": "note"
     },
     {
       "at": [
         40,
-        891
+        688
       ],
-      "text": "by the artifact; deployment",
+      "text": "Executable realization",
+      "style": "note"
+    },
+    {
+      "at": [
+        640,
+        688
+      ],
+      "text": "Authenticated runtime basis",
       "style": "note"
     },
     {
       "at": [
         40,
-        920
+        883
       ],
-      "text": "adds device and workload constraints.",
-      "style": "note"
-    },
-    {
-      "at": [
-        822,
-        789
-      ],
-      "text": "Load-time admission",
+      "text": "Device / workload specialization",
       "style": "note"
     }
   ]

@@ -77,11 +77,12 @@ already finds the fastest or highest-quality one automatically.
 
 ## Source to execution
 
-![Computation and parameter compilation: model operators and source-to-terminal transformations join through exact parameter resolution before physical planning, binding and deployment admission.](docs/assets/diagrams/product_pipeline.svg)
+![Computational lowering and parameter derivation join through exact terminal resolution, then produce physical plans and an authenticated runtime binding for deployment admission.](docs/assets/diagrams/product_pipeline.svg)
 
 <p align="center">
   <a href="docs/architecture/compiler-ir.md">Compiler architecture</a> ·
   <a href="docs/architecture/representation-artifacts.md">Physical representations</a> ·
+  <a href="docs/assets/diagrams/product_pipeline.svg">Full-size SVG</a> ·
   <a href="docs/assets/diagrams/product_pipeline.json">Editable diagram source</a>
 </p>
 
@@ -332,11 +333,12 @@ over those terminals. Neither is a resident engine.
 
 ### Transactional generation and state
 
-![A generation request resolves an engine generation and session; compiled prefill, decode or verification stages candidate state. Accepted-prefix commit publishes state and token fragments; cancellation or failure discards uncommitted work.](docs/assets/diagrams/product_runtime.svg)
+![Generation stages session state before accepted-prefix commit. Only commit reaches output; cancellation, execution failure or commit refusal follow abort and cleanup.](docs/assets/diagrams/product_runtime.svg)
 
 <p align="center">
   <a href="docs/architecture/runtime-lifecycle.md">Runtime lifecycle</a> ·
   <a href="docs/architecture/computational-state.md">State ownership</a> ·
+  <a href="docs/assets/diagrams/product_runtime.svg">Full-size SVG</a> ·
   <a href="docs/assets/diagrams/product_runtime.json">Editable diagram source</a>
 </p>
 

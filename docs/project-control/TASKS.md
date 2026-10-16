@@ -624,12 +624,19 @@ Metal primitive claims only. No successor implementation Task is selected.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `DOCS.PRODUCT.README.PHYSICAL.COMPILER.0` | Present the Physical Model Compiler and Inference Runtime through a concise technical entry point | Closed | ✅ COMPLETE | Source-backed compiler/runtime narrative, implemented versus unfinished Program P scope, verified CLI entry points and checkpoint-specific model/backend tables. Existing brand, editable technical figures and receipt-generated benchmark showcase remain intact. [Publication evidence](../evaluation/documentation-migration.md#physical-model-compiler-readme-2026-10-16) covers 36 publication tests, canonical link/drift checks and 12 responsive light/dark views. No inference, deployment, public model-ID migration or Program P performance promotion. |
+| `DOCS.PRODUCT.README.PHYSICAL.COMPILER.0` | Present the Physical Model Compiler and Inference Runtime through a concise technical entry point | Closed | ✅ COMPLETE | Source-backed compiler/runtime narrative, implemented versus unfinished Program P scope, verified CLI entry points and checkpoint-specific model/backend tables. Brand and receipt-generated benchmark showcase remain intact; the operator's immediate follow-up redraws both technical entry figures from canonical JSON. [Publication evidence](../evaluation/documentation-migration.md#physical-model-compiler-readme-2026-10-16) retains the initial copy result and 37 publication tests, canonical link/drift checks, 12 responsive light/dark views and four standalone SVG views. No inference, deployment, public model-ID migration or Program P performance promotion. |
 
 Selected independently by the operator on 2026-10-16. The completed README
 presentation and visual-grammar Tasks below retain their earned history. This
 bounded editorial delivery reuses their brand assets and technical figures;
 Program P retains compiler/performance ownership and its unearned 20/700 exits.
+
+The operator's immediate SVG follow-up stays in this README boundary: redraw
+the two canonical entry figures for the new positioning, preserving their
+parameter join, deployment refusal and commit/abort semantics. Editable JSON,
+generated SVG and publication/visual controls change together. The initial
+copy-only publication remains historical evidence; no compiler Task or service
+operation is selected by this figure revision.
 
 ## Documentation visual grammar — 2026-10-10
 

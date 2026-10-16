@@ -61,6 +61,39 @@ performance or quality result follows, and Program P remains IN PROGRESS with
 20/700 unearned. Hosted CI remains a separate source checkpoint; local
 documentation passes do not relabel inherited integration failures as green.
 
+### Source-backed SVG follow-up
+
+The operator's immediate follow-up redraws both README figures from their
+canonical JSON at baseline `1e42d5e243a38bd95b3c8cac184f59952707e614`.
+The earlier copy-only result above remains a separate historical checkpoint.
+This revision uses the existing transparent, theme-aware SVG renderer; it adds
+no raster illustration, diagram engine or computational capability.
+
+| Figure | Material change | Semantic control retained |
+| --- | --- | --- |
+| `product_pipeline` | Two wide computational/parameter lanes; explicit terminal join, bound plans, binding and capacity admission | Family interpretation forks into computation and parameter derivation; exact terminals participate in resolution; unresolved operands and absent kernels/resources refuse |
+| `product_runtime` | Generation, staged state and commit on distinct paths; abort/cleanup and failure separated from committed output | Only commit reaches output; execution/commit failure can abort; state providers, generation retention and unverified-draft refusal remain explicit |
+
+Titles use the existing 25-pixel node typography, annotations 20 pixels, with
+two lines per node and at least 520 source pixels of width. The README links
+both full-size SVGs and editable sources. All 37 publication tests pass,
+including unchanged join/commit graph controls, transparency, safe escaping,
+determinism, overflow refusal and the new bounded-annotation test. The 15-figure
+drift check, canonical link/control checks and unchanged benchmark generation
+also pass.
+
+Chromium with GPU disabled verifies 12 reader/plain-Markdown views at
+390/768/1440 pixels in light/dark, plus four standalone SVG views. All 108 node
+text bounds remain inside their rectangles; canvases remain transparent and
+theme-aware. Mobile overviews intentionally require the existing figure
+explorer or full-size link for detailed labels, rather than claiming that a
+full technical graph is readable at thumbnail scale. Local receipts and 64
+captures are retained in `yvex-readme-physical-compiler-svg-20261016.DCT0LPpO`.
+These controls do not establish GitHub-hosted or human visual acceptance.
+
+The benchmark showcase, brand assets, compiler/runtime implementation, model
+identities, numerical contracts, services and Program P work remain unchanged.
+
 ## Preserved and separated
 
 - All 149 capability names/states migrate unchanged to [Status](../project-control/STATUS.md).
