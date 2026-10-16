@@ -48,6 +48,17 @@ def main():
                     assert value["generated_tokens"] == 3, value
                     assert value["server_first_token_seconds"] == 2.5, value
                     assert value["prefill_tokens"] == 4 and value["reused_tokens"] == 1, value
+                # Carry real protocol populations through the canonical receipt
+                # adapter, not just an independently constructed metrics dict.
+                captured = [dict(repetition=0, input_identity=f"fixture-turn-{index}",
+                    configuration={"turn_index":index}, metrics=value)
+                    for index, value in enumerate(observations)]
+                projected, _ = measurement.native_measurements(
+                    dict(case="native-fixture", output_bound=3, warm_state="fixture"),
+                    captured, "protocol fixture only", "fixture", 0)
+                reused = [row for row in projected if row["metric"] == "prefill.prefix-reused"]
+                assert len(reused) == 2 and all(row["samples"] == [2.0] for row in reused), reused
+                assert not any(row["metric"] == "prefill.uncached" for row in projected), projected
                 assert host.poll() is None and socket.exists()
             finally:
                 if host.poll() is None:
@@ -56,7 +67,8 @@ def main():
         log = (root / "host.log").read_text()
         assert "session.summary created=1 closed=1" in log, log
         print("native observer: typed TURN_STARTED/fragment/terminal correlation; "
-              "two turns; malformed arguments refused before session mutation; "
+              "two turns; prefix-reused rate excludes uncached qualification; "
+              "malformed arguments refused before session mutation; "
               "session cleanup exact; no model or performance claim")
 
 
