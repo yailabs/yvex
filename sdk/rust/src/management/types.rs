@@ -541,6 +541,8 @@ pub struct ResourceObservation {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Engine {
     pub alias: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_name: Option<Option<String>>,
     pub generation: u64,
     pub state: String,
     pub backend: u64,

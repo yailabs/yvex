@@ -113,7 +113,7 @@ placeholder.
 | Method and path | Profile status | YVEX mapping |
 | --- | --- | --- |
 | `GET /health` | supported, YVEX extension | host/listener readiness |
-| `GET /v1/models` | supported | currently loaded engine aliases |
+| `GET /v1/models` | supported | currently loaded engine aliases as compatibility `id`; source-catalog display `name` when known, otherwise the alias |
 | `GET /v1/models/{id}` | supported | exact loaded-engine lookup |
 | `POST /v1/chat/completions/preflight` | supported, YVEX extension | exact tokenizer and token-capacity qualification; no session or model execution |
 | `POST /v1/chat/completions` | supported subset | ephemeral YVEX session and typed turn |

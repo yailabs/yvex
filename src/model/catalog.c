@@ -775,6 +775,20 @@ struct yvex_model_library {
     unsigned long long count, capacity;
 };
 
+const char *yvex_model_target_display_name(const char *target_id)
+{
+    const yvex_source_target_identity *source =
+        yvex_source_target_identity_find(target_id);
+    const char *leaf;
+    if (!source) return NULL;
+    if (source->logical_model) return source->logical_model->display_name;
+    /* A target's friendly label may describe a component (e.g. FL2VA).
+     * The official model name belongs to its source repository instead. */
+    if (!source->upstream_repo_id) return NULL;
+    leaf = strrchr(source->upstream_repo_id, '/');
+    return leaf && leaf[1] ? leaf + 1 : NULL;
+}
+
 static const char *library_text(const char *text)
 {
     return text ? text : "";
@@ -858,6 +872,9 @@ static int library_identity_registry(const yvex_model_registry_entry *entry,
     local_copy(summary->runtime_target, sizeof(summary->runtime_target), target);
     local_copy(summary->display_name, sizeof(summary->display_name),
                target[0] ? target : model[0] ? model : alias);
+    if (yvex_model_target_display_name(target))
+        local_copy(summary->display_name, sizeof(summary->display_name),
+                   yvex_model_target_display_name(target));
     if (relation) {
         local_copy(summary->family, sizeof(summary->family), relation->family);
         local_copy(summary->model, sizeof(summary->model), relation->model);

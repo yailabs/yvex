@@ -1,6 +1,36 @@
 // Provider classification stays native; all records are copied before catalog retirement.
 use super::{Account, Error, Library, argument, copied, error, extent_error, pointer, raw};
 
+pub(crate) fn target_display_name(target: &str) -> Option<String> {
+    let target = argument(Some(target)).ok()??;
+    // The C catalog owns the source-qualified naming relationship. Unknown
+    // targets remain unknown; no prefix/family/path heuristic is used here.
+    let name = unsafe { raw::yvex_model_target_display_name(target.as_ptr()) };
+    unsafe { super::borrowed_text(name) }.ok()
+}
+
+#[cfg(test)]
+mod naming_tests {
+    use super::*;
+    #[test]
+    fn exact_native_target_names_keep_checkpoint_and_aliases_separate() {
+        assert_eq!(
+            target_display_name("deepseek4-v4-flash-dspark").as_deref(),
+            Some("DeepSeek-V4-Flash")
+        );
+        assert_eq!(
+            target_display_name("deepseek4-v4-flash-0731").as_deref(),
+            Some("DeepSeek-V4-Flash-0731")
+        );
+        assert_eq!(
+            target_display_name("mamba-codestral-7b-v0.1").as_deref(),
+            Some("Mamba-Codestral-7B-v0.1")
+        );
+        assert!(target_display_name("unregistered-model-cuda").is_none());
+        assert!(target_display_name("deepseek4-v4-flash-0731\0foreign").is_none());
+    }
+}
+
 #[derive(serde::Serialize)]
 pub(crate) struct ArtifactDiscovery {
     pub target_id: String,

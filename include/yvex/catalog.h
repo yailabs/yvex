@@ -218,6 +218,12 @@ const yvex_local_package_record *yvex_local_catalog_package_at(
  * their existing owners and lifetimes. */
 typedef struct yvex_model_library yvex_model_library;
 
+/* Borrowed process-lifetime official display name for an exact source target,
+ * or NULL when the catalog has no such target. This is naming metadata, not
+ * checkpoint authentication, deployment selection or execution qualification.
+ * Existing deployment aliases and package identities are unchanged. */
+const char *yvex_model_target_display_name(const char *target_id);
+
 typedef enum {
     YVEX_MODEL_IDENTITY_ALIAS = 0,
     YVEX_MODEL_IDENTITY_TARGET,

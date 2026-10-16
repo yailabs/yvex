@@ -66,6 +66,18 @@ Producer and consumer evidence remain separately qualified.
 
 ## Native operator facts
 
+Official display names are resolved by the native model catalog from an exact
+source target. CLI Engine observations expose `model_name` separately from
+`alias`, target, generation, artifact, binding and specialization; unknown names
+remain unavailable. The OpenAI catalog adds `name` while retaining its existing
+`id` as the compatibility deployment alias. Naming metadata is not authenticated
+checkpoint evidence. In particular, the earlier Flash/DSpark logical source is
+not renamed to Flash-0731. No active Session or installed Engine is migrated by
+this projection. Concise public routing-ID migration remains a separate open
+boundary: display-name publication does not silently retarget an existing ID.
+Canonical Rust/TypeScript SDK Engine projections expose optional/nullable
+`model_name`; absent legacy observations and unknown targets remain supported.
+
 Operator projections consume the native identity-verification result and typed
 materialization outcome, not human output or failure-injection environment
 variables. A private diagnostic boundary retains failed-work phase, byte counts

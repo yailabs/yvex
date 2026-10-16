@@ -208,6 +208,23 @@ mod tests {
             "preflight":"/v1/chat/completions/preflight"}})
     }
 
+    #[test]
+    fn display_name_does_not_retarget_the_advertised_deployment() {
+        let legacy = row();
+        let before = advertised(&legacy, "model:one").unwrap();
+        for name in [
+            Value::Null,
+            json!("DeepSeek-V4-Flash"),
+            json!("DeepSeek-V4-Flash-0731"),
+        ] {
+            let mut named = legacy.clone();
+            named["name"] = name;
+            // Display metadata is never a substitute for the selected model
+            // ID, generation, binding or resource-capacity observation.
+            assert_eq!(advertised(&named, "model:one").unwrap(), before);
+        }
+    }
+
     fn preflight() -> Value {
         let mut value = row();
         value.as_object_mut().unwrap().extend(

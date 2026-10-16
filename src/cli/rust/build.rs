@@ -263,6 +263,7 @@ fn native_bindings(root: &std::path::Path) -> bindgen::Builder {
             "backend_kind_name|server_session_state_name)"
         ))
         .allowlist_function("yvex_model_library_.*")
+        .allowlist_function("yvex_model_target_display_name")
         .allowlist_function("yvex_model_preparation_.*")
         .allowlist_function("yvex_optimization_.*")
         .allowlist_function("yvex_runtime_binding_compiled_plan")

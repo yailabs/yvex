@@ -746,6 +746,27 @@ static int test_logical_model_library(void)
     return 0;
 }
 
+static int test_target_display_names(void)
+{
+    static const struct { const char *target, *name; } cases[] = {
+        {"deepseek4-v4-flash-dspark", "DeepSeek-V4-Flash"},
+        {"deepseek4-v4-flash-0731", "DeepSeek-V4-Flash-0731"},
+        {"qwen3.5-0.8b", "Qwen3.5-0.8B"},
+        {"mamba-codestral-7b-v0.1", "Mamba-Codestral-7B-v0.1"},
+        {"minimax-h3-fl2va", "MiniMax-H3"},
+    };
+    for (size_t index = 0u; index < sizeof(cases) / sizeof(cases[0]); ++index)
+        YVEX_TEST_ASSERT(yvex_model_target_display_name(cases[index].target) &&
+            !strcmp(yvex_model_target_display_name(cases[index].target), cases[index].name),
+            "display names come from the exact source catalog, not physical recipes");
+    YVEX_TEST_ASSERT(!yvex_model_target_display_name(NULL) &&
+        !yvex_model_target_display_name("") &&
+        !yvex_model_target_display_name("deepseek4-v4-flash-0731-cuda") &&
+        !yvex_model_target_display_name("DEEPSEEK4-V4-FLASH-0731"),
+        "unknown targets remain unknown; naming never guesses a checkpoint");
+    return 0;
+}
+
 static int test_source_logical_relationship(void)
 {
     const char *path = "build/tests/model-library-root/registry/relation.source.json";
@@ -1231,6 +1252,7 @@ int yvex_test_model_registry(void)
     if (test_finite_profile() != 0) return 1;
     if (test_legacy_startup_axes() != 0) return 1;
     if (test_logical_model_library() != 0) return 1;
+    if (test_target_display_names() != 0) return 1;
     if (test_source_logical_relationship() != 0) return 1;
     if (test_working_set_policy() != 0) return 1;
     if (test_publication_identity() != 0) return 1;

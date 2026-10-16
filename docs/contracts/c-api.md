@@ -23,6 +23,13 @@ selection. Null returns zero, not an admitted producer. Existing installed
 policy record layouts and schema-v2 identities are unchanged. This observation
 does not establish calibration quality, executable fit or an inference result.
 
+`yvex_model_target_display_name` in `<yvex/catalog.h>` returns a borrowed,
+process-lifetime official display name for an exact catalog source target, or
+`NULL` when unknown. It performs no I/O, model load, fuzzy matching or admission.
+The existing logical relation supplies the earlier Flash/DSpark display name;
+the separately pinned 0731 target retains its distinct name. This additive
+function changes no installed record layout, package identity or local wire.
+
 [Runtime ABI](runtime-abi.md) · [Numerical ABI](numerical-abi.md) ·
 [Benchmark publication](benchmark-publication.md)
 

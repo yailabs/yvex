@@ -1152,6 +1152,7 @@ pub(crate) fn engine_json(engine: &raw::yvex_server_engine_summary) -> Value {
             .collect::<Vec<_>>()
     };
     json!({ "alias": ffi::text(&engine.alias), "generation": engine.generation,
+        "model_name": ffi::catalog::target_display_name(&ffi::text(&engine.target_id)),
         "state": engine_state(engine.state), "backend": engine.backend,
         "engine_kind": engine_kind(engine.engine_kind), "execution_strategy": strategy(engine.execution_strategy),
         "execution_ready": engine.execution_ready != 0, "continuous_batching": engine.continuous_batching_ready != 0,
@@ -1184,7 +1185,9 @@ pub(crate) fn engine_json(engine: &raw::yvex_server_engine_summary) -> Value {
 fn engine_human(engine: &raw::yvex_server_engine_summary) -> String {
     format!(
         "{}  {} · {} · {} · generation {} · sessions {} · work {}",
-        ffi::text(&engine.alias),
+        ffi::catalog::target_display_name(&ffi::text(&engine.target_id))
+            .map(|name| format!("{name} [alias: {}]", ffi::text(&engine.alias)))
+            .unwrap_or_else(|| ffi::text(&engine.alias)),
         engine_state(engine.state),
         ffi::backend_name(engine.backend),
         engine_kind(engine.engine_kind),

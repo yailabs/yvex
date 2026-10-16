@@ -6,6 +6,7 @@
  */
 
 #include "src/server/openai/private.h"
+#include <yvex/catalog.h>
 
 #include <stdio.h>
 #include <limits.h>
@@ -256,6 +257,14 @@ int yvex_openai_json_models(const yvex_server_engine_summary *engines,
         if (rc == YVEX_OK)
         rc = render_literal(&builder, "{\"id\":", err);
         if (rc == YVEX_OK) rc = render_text(&builder, engines[index].alias, err);
+        /* Compatibility IDs continue routing the exact existing deployment.
+         * Source-owned display metadata never retargets an alias or claims
+         * that this engine's checkpoint/quality was independently verified. */
+        if (rc == YVEX_OK) rc = render_literal(&builder, ",\"name\":", err);
+        if (rc == YVEX_OK) {
+            const char *name = yvex_model_target_display_name(engines[index].target_id);
+            rc = render_text(&builder, name ? name : engines[index].alias, err);
+        }
         if (rc == YVEX_OK)
             rc = render_literal(
                 &builder,

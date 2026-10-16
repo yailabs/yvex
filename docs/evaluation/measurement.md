@@ -57,6 +57,39 @@ residency claim.
 
 ## Evidence plane
 
+### Source-to-output qualification coverage
+
+Program P joins the existing authorities below; these are not independent
+telemetry stores or a new sum of request costs. Each observation retains its
+own target, clock, workload population and availability. Resource classes and
+host/device intervals may overlap. An unavailable measurement is not zero.
+
+| Boundary | Canonical authority / observation | Claim boundary |
+| --- | --- | --- |
+| Source, compilation, artifact and binding | Authenticated source, compiler/quant production receipts and independent reader | Production time and structural validity do not establish model quality |
+| Specialization and admission | Deployment/resource-capacity owners | Live availability is volatile; encoded artifact size alone is not execution fit |
+| Loading and weight preparation | Engine lifecycle and resource catalog | Mapped, explicit and prepared bytes remain distinct; addressability is not physical residency |
+| Request, tokenization and prefix | Generation profile and exact prompt/reused/new-position counters | Prefix reuse is not prefetch; only newly executed positions enter the prefill denominator |
+| Prefill, forward and decode | Typed execution measurements and exact committed populations | Autoregressive, recurrent, finite-forward and iterative workloads retain different applicable metrics |
+| Logits, sampling, verification and commit | Existing scoped generation profile and speculative terminal counters | Nested/enclosing/overlapping phases cannot be added indiscriminately |
+| Detokenization and producer publication | Scoped generation profile | Producer publication is not transport receive or terminal paint |
+| Client delivery | Native/HTTP adapters, monotonic fragment observations | Fragments are not token events; missing individual token correspondence prevents token-ITL claims |
+
+The native qualification runner retains received completed profile events in
+each observation's `execution_phases`. It copies the producer's scope, clock,
+composition, work unit and availability; no second profiler is enabled. Durations,
+denominators and rates without their native availability bit are `null`.
+Duplicate completed phases, foreign Session/turn lineage and unsupported typed
+measurement versions refuse. Untyped diagnostic counters remain only in the raw
+journal. No received typed phase means `execution_phase_status=unavailable`;
+it does not imply all phases were measured at zero cost. The runner does not
+request a higher producer trace level to fill this gap.
+
+These observations are retained in the existing qualification receipt, not
+automatically promoted to comparable performance rows or independent model
+evidence. The additional client projection/journaling work belongs to the
+measurement adapter's exact build; old timing samples are not silently upgraded.
+
 Production execution publishes lightweight counters, typed events, physical
 facts, and compact lineage handles. Audit, numerical conformance, profiling, and
 benchmark owners assemble richer records outside the ordinary execution ABI.

@@ -22,6 +22,15 @@ publication: {html: true, pdf: true, index: true}
 
 ## Active goal-driven Physical Model Compiler
 
+The end-to-end qualification/model-identity extension is selected inside the
+same Program P Task. Native phase observations preserve producer clock,
+composition and availability instead of synthesizing an additive timeline.
+Source-owned display names are projected separately from retained deployment
+aliases. Concise public routing-ID migration, unobserved lifecycle metrics,
+independent model quality and competitive performance remain open. These source
+changes do not update the installed Host or consumer bindings. The operator's
+YAI window owns the GPU; independent CPU work continues.
+
 The selective 2026-10-15 representation continuation admits a source/file/context-
 bound calibration profile through the existing CLI and an explicitly versioned,
 independently checked IQ2 encoding producer. Complete real gate/up observations

@@ -382,6 +382,7 @@ export interface ResourceObservation {
 }
 export interface Engine {
   alias: string;
+  model_name?: string | null;
   generation: number;
   state: string;
   backend: number;

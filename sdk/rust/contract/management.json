@@ -342,6 +342,7 @@
     },
     "Engine": {
       "alias": "string",
+      "model_name": "optional:nullable:string",
       "generation": "u64",
       "state": "string",
       "backend": "u64",

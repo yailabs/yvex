@@ -358,6 +358,15 @@ static int test_model_catalog_rendering(void)
     YVEX_TEST_ASSERT(yvex_openai_json_models(engines, 2ull, 0, &json, &count, &err) ==
                          YVEX_ERR_INVALID_ARG,
                      "an ambiguous singular model projection must refuse");
+    strcpy(engines[0].target_id, "deepseek4-v4-flash-dspark");
+    strcpy(engines[1].target_id, "deepseek4-v4-flash-0731");
+    YVEX_TEST_ASSERT(yvex_openai_json_models(engines, 2ull, 1, &json, &count, &err) ==
+        YVEX_OK && strstr((char *)json, "\"id\":\"deepseek\",\"name\":\"DeepSeek-V4-Flash\"") &&
+        strstr((char *)json, "\"id\":\"minimax\",\"name\":\"DeepSeek-V4-Flash-0731\"") &&
+        yvex_provider_json_value_validate(json, count, 1, &err) == YVEX_OK &&
+        !strcmp(engines[0].alias, "deepseek") && !strcmp(engines[1].alias, "minimax"),
+        "official names do not retarget compatibility aliases or collapse distinct checkpoints");
+    free(json);
     return 0;
 }
 

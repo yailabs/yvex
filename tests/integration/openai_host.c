@@ -458,6 +458,38 @@ static int send_native_reasoning(int fd, const yvex_client_request *request,
     return rc;
 }
 
+static int send_native_profile_fixture(int fd, const yvex_client_request *request,
+                                       yvex_error *err)
+{
+    yvex_client_message message;
+    server_telemetry *telemetry = NULL;
+    server_event_scope scope = {
+        .engine_kind = YVEX_SERVER_ENGINE_TEXT,
+        .execution_strategy = YVEX_SERVER_EXECUTION_TARGET_ONLY,
+    };
+    yvex_execution_measurement measurement = {
+        .schema_version = YVEX_EXECUTION_MEASUREMENT_SCHEMA_V1,
+        .scope = YVEX_EXECUTION_SCOPE_SAMPLING,
+        .clock = YVEX_EXECUTION_CLOCK_HOST_WALL,
+        .composition = YVEX_EXECUTION_COMPOSITION_NESTED,
+        .work_unit = YVEX_EXECUTION_WORK_OPERATIONS,
+        .available = YVEX_EXECUTION_MEASUREMENT_DURATION_AVAILABLE,
+        .duration_ns = 123ull, .completed_units = 3ull,
+    };
+    int rc = yvex_server_telemetry_open(&telemetry, 8u, err);
+    message_base(&message, YVEX_CLIENT_MESSAGE_EVENT, request);
+    message.stream_channel = YVEX_CLIENT_STREAM_CONTROL_EVENT;
+    if (rc == YVEX_OK)
+        rc = yvex_server_telemetry_emit_provider(telemetry, &scope,
+            YVEX_SERVER_EVENT_GENERATION_PROFILE, YVEX_SERVER_SEVERITY_DEBUG,
+            request->session_name, "fixture-request", "fixture-turn", "sampling",
+            3ull, 0ull, 0ull, 0.000000123, 0.0, NULL, NULL, &measurement,
+            &message.event, err);
+    if (rc == YVEX_OK) rc = yvex_server_protocol_send(fd, &message, err);
+    yvex_server_telemetry_close(&telemetry);
+    return rc;
+}
+
 static int send_native_progressive(int fd, const yvex_client_request *request,
                                    yvex_error *err)
 {
@@ -475,6 +507,7 @@ static int send_native_progressive(int fd, const yvex_client_request *request,
     if (rc == YVEX_OK)
         rc = send_fragment(fd, request, YVEX_PROVIDER_OUTPUT_ASSISTANT_TEXT,
                            "** and finish later.", NULL, NULL, err);
+    if (rc == YVEX_OK) rc = send_native_profile_fixture(fd, request, err);
     return rc;
 }
 

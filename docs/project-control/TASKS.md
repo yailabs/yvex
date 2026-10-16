@@ -198,6 +198,17 @@ The existing Mamba proof remains the non-Transformer control. Technique referenc
 are not implemented capabilities; 20/700 and independent quality remain unearned.
 No second implementation Task or installed-engine replacement is selected.
 
+The operator's 2026-10-16 end-to-end qualification extension remains in this
+Task. Extend the existing typed measurement and qualification owners across
+production, loading, request preparation, compute, sampling/state and delivery;
+unobserved phases remain unavailable and overlapping intervals are not added.
+Resolve official model names independently of physical recipes and retained
+deployment aliases. Preserve the older public checkpoint versus 0731, active
+Sessions and exact artifact/binding identities. Naming, source publication and
+installed migration are separate gates. The competitive 20/700 exits are
+unchanged. GPU campaigns yield to the operator's YAI test window; independent
+CPU engineering continues without installing or renaming the resident service.
+
 The 2026-10-15 calibrated-representation continuation adds an explicitly
 versioned IQ2 producer and source-bound numeric-calibration admission to the
 existing physical-variant pipeline. Real complete observations select only 28

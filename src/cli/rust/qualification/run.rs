@@ -259,6 +259,60 @@ impl VisibleDelivery {
     }
 }
 
+// A bounded projection of completed producer profile events, not a second
+// profiler. Preserve composition and clock; never sum nested/overlapping spans
+// or turn a missing availability bit into an observed zero.
+#[derive(Default)]
+struct ExecutionPhases(Vec<Value>);
+
+impl ExecutionPhases {
+    fn observe(&mut self, event: &raw::yvex_server_event, session: &str) -> Result<()> {
+        use raw::*;
+        if event.kind != yvex_server_event_kind_YVEX_SERVER_EVENT_GENERATION_PROFILE {
+            return Ok(());
+        }
+        let m = &event.measurement;
+        if m.schema_version == 0 {
+            return Ok(()); // Untyped diagnostic counters remain in the journal.
+        }
+        require(
+            m.schema_version == YVEX_EXECUTION_MEASUREMENT_SCHEMA_V1,
+            "unsupported producer phase measurement",
+        )?;
+        let request = ffi::text(&event.request_id);
+        let turn = ffi::text(&event.turn_id);
+        require(
+            ffi::text(&event.session_id) == session
+                && !request.is_empty()
+                && !turn.is_empty()
+                && self
+                    .0
+                    .first()
+                    .is_none_or(|row| row["request"] == request && row["turn"] == turn),
+            "foreign producer phase lineage",
+        )?;
+        let phase = ffi::text(&event.phase);
+        require(
+            !phase.is_empty()
+                && self.0.len() < 128
+                && !self.0.iter().any(|row| row["phase"] == phase),
+            "duplicate or excessive completed producer phases",
+        )?;
+        let has = |flag| m.available & u64::from(flag) != 0;
+        self.0.push(json!({"phase":phase,"session":session,"request":request,"turn":turn,
+            "event_identity":ffi::text(&event.event_identity),
+            "measurement_schema":m.schema_version,"scope":m.scope,"clock":m.clock,
+            "composition":m.composition,"work_unit":m.work_unit,"available":m.available,
+            "completed_units":(m.work_unit != yvex_execution_work_unit_YVEX_EXECUTION_WORK_NONE)
+                .then_some(m.completed_units),
+            "total_units":has(YVEX_EXECUTION_MEASUREMENT_DENOMINATOR_AVAILABLE).then_some(m.total_units),
+            "duration_ns":has(YVEX_EXECUTION_MEASUREMENT_DURATION_AVAILABLE).then_some(m.duration_ns),
+            "cumulative_rate":has(YVEX_EXECUTION_MEASUREMENT_CUMULATIVE_RATE_AVAILABLE)
+                .then_some(m.cumulative_rate)}));
+        Ok(())
+    }
+}
+
 fn turn(
     session: &Session,
     prompt: &str,
@@ -300,6 +354,7 @@ fn turn(
     let mut first_final = None;
     let mut admitted = None;
     let mut delivery = VisibleDelivery::default();
+    let mut phases = ExecutionPhases::default();
     loop {
         let reply = connection.receive()?;
         require(
@@ -322,6 +377,7 @@ fn turn(
                 return Ok(terminal_refusal(&reply, session));
             }
             raw::yvex_client_message_kind_YVEX_CLIENT_MESSAGE_EVENT => {
+                phases.observe(&reply.event, &session.name)?;
                 journal(
                     log,
                     &json!({"kind":"server-event","event":client::event_json(&reply.event)}),
@@ -364,6 +420,8 @@ fn turn(
                 return Ok(
                     json!({"kind":"turn","session":session.name,"client_complete_seconds":complete,
                     "client_admitted_seconds":admitted,"sampling":sampling,
+                    "execution_phase_status":if phases.0.is_empty(){"unavailable"}else{"observed"},
+                    "execution_phases":phases.0,
                     "client_first_visible_seconds":first_visible,"client_first_reasoning_seconds":first_reasoning,
                     "client_first_final_seconds":first_final,"server_first_token_seconds":reply.first_token_seconds,
                     "client_visible_fragments":delivery.fragments,
@@ -923,6 +981,7 @@ fn receipt(
         "limitations":["Not YVEX-published qualification or a model-quality claim.",
             "Host source/build/checkpoint/hardware provenance unavailable; unknown fields refuse comparison.",
             "First fragment publication and reasoning-to-final transition not measured.",
+            "Producer phase events retain native clock/composition/availability; absent phases are unavailable, never zero or an additive wall-time breakdown.",
             concat!("Delivery gaps measure consecutive nonempty native content fragments, ",
                 "not GPU token intervals, transport-only delay or terminal paint; observer work is included."),
             concat!("Different generated histories are separate input groups, ",
@@ -935,6 +994,58 @@ fn receipt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn completed_phases_preserve_clock_composition_and_unknowns() {
+        use raw::*;
+        let mut phases = ExecutionPhases::default();
+        let mut event = yvex_server_event {
+            kind: yvex_server_event_kind_YVEX_SERVER_EVENT_GENERATION_PROGRESS,
+            ..Default::default()
+        };
+        phases.observe(&event, "bench-phase").unwrap();
+        assert!(phases.0.is_empty());
+        event.kind = yvex_server_event_kind_YVEX_SERVER_EVENT_GENERATION_PROFILE;
+        phases.observe(&event, "bench-phase").unwrap(); // Untyped raw diagnostic is not timing.
+        assert!(phases.0.is_empty());
+        ffi::put_text(&mut event.phase, "forward").unwrap();
+        ffi::put_text(&mut event.session_id, "bench-phase").unwrap();
+        ffi::put_text(&mut event.request_id, "request-1").unwrap();
+        ffi::put_text(&mut event.turn_id, "turn-1").unwrap();
+        event.measurement = yvex_execution_measurement {
+            schema_version: YVEX_EXECUTION_MEASUREMENT_SCHEMA_V1,
+            scope: yvex_execution_measurement_scope_YVEX_EXECUTION_SCOPE_MODEL_FORWARD,
+            clock: yvex_execution_measurement_clock_YVEX_EXECUTION_CLOCK_DEVICE,
+            composition:
+                yvex_execution_measurement_composition_YVEX_EXECUTION_COMPOSITION_OVERLAPPING,
+            work_unit: yvex_execution_work_unit_YVEX_EXECUTION_WORK_EVALUATIONS,
+            completed_units: 1,
+            ..Default::default()
+        };
+        assert!(phases.observe(&event, "foreign").is_err());
+        phases.observe(&event, "bench-phase").unwrap();
+        assert_eq!(phases.0[0]["completed_units"], 1);
+        assert!(phases.0[0]["duration_ns"].is_null());
+        assert!(phases.0[0]["cumulative_rate"].is_null());
+        assert!(phases.0[0]["total_units"].is_null());
+        assert_eq!(
+            phases.0[0]["composition"],
+            yvex_execution_measurement_composition_YVEX_EXECUTION_COMPOSITION_OVERLAPPING
+        );
+        assert!(phases.observe(&event, "bench-phase").is_err()); // No duplicated completed span.
+        ffi::put_text(&mut event.phase, "readout").unwrap();
+        event.measurement.available = u64::from(YVEX_EXECUTION_MEASUREMENT_DURATION_AVAILABLE);
+        event.measurement.duration_ns = 123;
+        phases.observe(&event, "bench-phase").unwrap();
+        assert_eq!(phases.0[1]["duration_ns"], 123);
+        assert_eq!(
+            phases.0[1]["clock"],
+            yvex_execution_measurement_clock_YVEX_EXECUTION_CLOCK_DEVICE
+        );
+        assert!(!phases.0.iter().any(|row| row["phase"] == "prefill"));
+        event.measurement.schema_version += 1;
+        assert!(phases.observe(&event, "bench-phase").is_err());
+    }
 
     #[test]
     fn local_relationship_requires_exact_binding_artifact_and_checkpoint() {
@@ -1238,6 +1349,10 @@ mod tests {
             let result = result.unwrap();
             if prompt == "PROGRESSIVE_STREAM" {
                 assert_eq!(result["kind"], "turn");
+                assert_eq!(result["execution_phase_status"], "observed");
+                assert_eq!(result["execution_phases"][0]["phase"], "sampling");
+                assert_eq!(result["execution_phases"][0]["duration_ns"], 123);
+                assert!(result["execution_phases"][0]["total_units"].is_null());
                 assert_eq!(result["client_visible_fragments"], 2);
                 assert!(result["client_visible_gap_max_seconds"].as_f64().unwrap() >= 0.6);
                 assert_eq!(
