@@ -711,7 +711,7 @@ python3 - "$ROOT/library-friendly.out" <<'PY'
 from pathlib import Path
 import re, sys
 text = Path(sys.argv[1]).read_text()
-for name in ('v4-flash', 'minimax-h3-fl2va'):
+for name in ('DeepSeek-V4-Flash', 'MiniMax-H3'):
     assert re.search(r'^' + re.escape(name) + r'\s+BLOCKED · not current ·', text, re.M)
 PY
 ! grep 'provider:huggingface' "$ROOT/library-friendly.out"
@@ -741,12 +741,28 @@ artifacts = json.load(open(sys.argv[2], encoding="utf-8"))["artifacts"]
 profiles = json.load(open(sys.argv[3], encoding="utf-8"))["profiles"]
 assert {model["name"] for model in models} == {
     "DeepSeek-V4-Flash",
-    "minimax-h3-fl2va",
+    "MiniMax-H3",
 }
+by_identity = {model["identity"]: model for model in models}
+assert set(by_identity) == {"family:deepseek4/model:v4-flash", "target:minimax-h3-fl2va"}
+assert by_identity["family:deepseek4/model:v4-flash"]["selector"] == "v4-flash"
+assert by_identity["target:minimax-h3-fl2va"]["profiles"][0]["identity"] == \
+    "minimax-h3-fl2va-runtime-media"
 assert all(artifact["profile_count"] == 1 for artifact in artifacts)
 assert all(artifact["launchable_profile_count"] == 0 for artifact in artifacts)
 assert all(profile["deployment_class"] for profile in profiles)
 assert all("runtime_binding" in profile for profile in profiles)
+PY
+# Display-name publication does not retire the exact target selector or change
+# the native object selected by a read-only product operation.
+"$YVEX_BIN" model storage MiniMax-H3 --models-root "$CATALOG_ROOT" --registry "$REG" \
+  --json > "$ROOT/storage-official-name.json"
+"$YVEX_BIN" model storage minimax-h3-fl2va --models-root "$CATALOG_ROOT" --registry "$REG" \
+  --json > "$ROOT/storage-legacy-target.json"
+python3 - "$ROOT/storage-official-name.json" "$ROOT/storage-legacy-target.json" <<'PY'
+import json, sys
+official, legacy = [json.load(open(path, encoding="utf-8")) for path in sys.argv[1:]]
+assert official == legacy
 PY
 "$YVEX_BIN" profile show minimax-h3-fl2va-runtime-media --registry "$REG" --audit \
   > "$ROOT/show-composite.out"

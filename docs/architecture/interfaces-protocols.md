@@ -78,6 +78,15 @@ boundary: display-name publication does not silently retarget an existing ID.
 Canonical Rust/TypeScript SDK Engine projections expose optional/nullable
 `model_name`; absent legacy observations and unknown targets remain supported.
 
+Native model-list and interactive deployment-choice labels use that same
+catalog-owned display name, with the existing selector as a fallback when no
+name is available. This is a human projection: JSON `selector`, logical
+`identity`, deployment aliases and native selection rules remain unchanged.
+Storage/eviction/export headings follow the same title rule without changing
+the objects those operations resolve or authorize. The bounded
+[product identity controls](../evaluation/retained-observations.md#program-p-native-model-titles-and-retained-selectors-2026-10-16)
+retain compatibility selectors, unknown-target fallback and refusal posture.
+
 Operator projections consume the native identity-verification result and typed
 materialization outcome, not human output or failure-injection environment
 variables. A private diagnostic boundary retains failed-work phase, byte counts

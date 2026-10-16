@@ -19,6 +19,67 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Program P native model titles and retained selectors (2026-10-16)
+
+The existing Program P model-identity extension now makes native human model
+headings and interactive deployment-choice labels consume the existing
+source-owned display-name query. This is a product projection, not a model
+rename, new compiler realization or changed public routing ID. The
+[interface owner](../architecture/interfaces-protocols.md) defines the boundary.
+
+At source `93599f335b7b6b8ea1dc7bb653f6ca42213c1d0e`, tree
+`31c25983a51fb2dc59acc957667fc2ccbedcaaa1`, the native catalog already published
+`DeepSeek-V4-Flash` and `MiniMax-H3`. Human model-list titles could still use a
+legacy model key instead. Two CLI test oracles also expected retired display
+labels. The retained before binary, SHA-256
+`d5a42f617a155e2add3ab13552834915afae0ff2e6f7cb568a2ba9a80a7c7485`,
+reproduces those stale-oracle failures in the model fixture and client cutover.
+Its recorded source is `1e42d5e243a38bd95b3c8cac184f59952707e614`, tree
+`b42d06b6fb273000792c2e1ec20aca7dd0656737`, dirty delta
+`e11985dfee52858390dd1fb441e56a080c9a14071e783f6bf586391369e96a47`.
+The affected catalog and fixture owners are unchanged between that commit and
+`93599f33`; the intervening change redraws documentation figures, not code.
+The model fixture fails before its later source-reconciliation section; this
+observation does not establish a source-reconciliation defect.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Rust title/selector unit | Existing native exact-target display-name query | Official 0731 target, retained logical key, unknown target with a nonempty fallback label | Official title only for a recognized target; unchanged JSON selector/identity | Exact assertions, including unknown-target fallback | Exact strings and JSON fields | PASS | Human title publication does not retarget model selection |
+| CLI catalog and cutover | Native typed model/profile facts | Disposable DeepSeek/MiniMax packages, invalid binding and artifact controls | Official titles; original BLOCKED posture, profile identities and strategy | Model-list and read-only storage controls preserve selected objects; malformed packages remain blocked | Exact names, identities, equal storage JSON and existing refusals | PASS | Product identity/refusal behavior, not executable-model qualification |
+| Rust shell / PTY | Existing registered protocol and terminal fixtures | Three widths, Unicode, plain/styled output, resize, cancellation and restoration | Preserve shell and protocol behavior | Registered Rust-shell lane passes on stable source | Existing assertions, unchanged | PASS | Software and terminal behavior only |
+
+The frozen corrected shell used for direct before/after controls has SHA-256
+`1325e44d38a989307a4f074ca884de668b37da07cd1ebf85fa7fc0a5cd0bf0c0`,
+native build identity
+`44341ef2b92ed906908c90db8bd43ecf75e621303e700f05fc825d742da0e90f`
+and dirty source-delta identity
+`58bcbc42c380d8aad48926974db910c515115a0cfa529a53bcb3d7dd0fe2b72d`.
+The stable Rust-shell receipt is
+`388873cd877dfb7661ce68e576de223957f40d9d7c0d8f3e259fbed995451771`.
+After correcting the stale cutover oracle, 104 fast checks (including full CLI
+acceptance), 20 structural checks and the Rust-shell lane all pass on frozen
+delta `344feca315e3f6011cdc56916abb1662d9e207ca0893cb1a48badef52ee81fdc`.
+Their receipts are `995badf4…`, `f6ab89b3…` and `1c28d329…`, respectively;
+each source-stability result is valid. The subsequent documentation-only
+provenance clarification is checked separately. Raw
+before/after controls, registered receipts and binary identities are
+retained outside Git under
+`/home/dgmothx/lab/models/evidence/program-p-model-identity-20261016.lqlZBZzI/`.
+
+An intermediate Rust projection trusted the library label without checking
+whether it was an official source name. The broader workflow fixture caught a
+regression for an unknown target. That variant is rejected: the retained
+implementation queries the existing native owner and falls back to the original
+selector. Another initial cutover assertion used the wrong JSON field spelling;
+it is corrected to the existing `strategy` field, without changing the producer
+schema or relaxing the expected value.
+
+No native ABI, wire/schema, physical policy, binding, runtime alias, backend
+arithmetic or service is changed by this correction. Existing Program P and
+Status remain IN PROGRESS with their quality and 20/700 gates open; this
+projection does not promote them. No inference or YAI Work is dispatched, and
+fixture results are not independent checkpoint-quality or performance evidence.
+
 ## Program P graph-derived input views (2026-10-10)
 
 `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` retains implementation

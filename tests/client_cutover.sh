@@ -277,10 +277,22 @@ cat >"$registry" <<EOF
 EOF
 HOME="$home_root" XDG_RUNTIME_DIR="$root/absent-runtime" \
     "$YVEX_BIN" model list >"$root/out"
-grep -F 'v4-flash-dspark' "$root/out" >/dev/null
+grep -E '^DeepSeek-V4-Flash[[:space:]]+BLOCKED' "$root/out" >/dev/null
 grep -F 'BLOCKED' "$root/out" >/dev/null
 grep -F 'not current' "$root/out" >/dev/null
 ! grep -F 'READY' "$root/out" >/dev/null
+HOME="$home_root" XDG_RUNTIME_DIR="$root/absent-runtime" \
+    "$YVEX_BIN" model list --json >"$root/models.json"
+python3 - "$root/models.json" <<'PY'
+import json, sys
+models = json.load(open(sys.argv[1], encoding="utf-8"))["models"]
+assert len(models) == 1
+model = models[0]
+assert model["name"] == "DeepSeek-V4-Flash"
+assert model["state"] == "BLOCKED"
+assert model["profiles"][0]["identity"] == "current-model-runtime-profile"
+assert model["profiles"][0]["strategy"] == "speculative"
+PY
 HOME="$home_root" "$YVEX_BIN" profile list >"$root/profiles"
 grep -F 'current-model-runtime-profile' "$root/profiles" >/dev/null
 python3 tests/support/human_field.py "$root/profiles" 'backend: cuda'

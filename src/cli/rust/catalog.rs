@@ -36,6 +36,12 @@ pub(crate) fn selector(model: &ModelSnapshot) -> String {
     .unwrap_or_default()
 }
 
+fn display_name(model: &ModelSnapshot) -> String {
+    // Library labels can be fallback keys, not authenticated source names.
+    ffi::catalog::target_display_name(&ffi::text(&model.entry.runtime_target))
+        .unwrap_or_else(|| selector(model))
+}
+
 fn precision(value: &str) -> String {
     match value.to_ascii_lowercase().as_str() {
         "iq2xxs-q2k-mxfp4" => "IQ2_XXS/Q2_K/MXFP4",
@@ -474,7 +480,7 @@ pub(crate) fn select_runtime(
     } else {
         let labels: Vec<_> = candidates
             .iter()
-            .map(|(model, _)| selector(model))
+            .map(|(model, _)| display_name(model))
             .collect();
         let index = interactive_choice(&labels, "Select model", width, styled)?;
         candidates.swap_remove(index)
@@ -1017,6 +1023,7 @@ pub(crate) fn dispatch(
     // Working-set selection controls deployment intent, not catalog membership.
     for model in &models {
         let view = facts(model, &engines);
+        let name = display_name(model);
         let facts = view.contract;
         let state = facts["state"].as_str().unwrap();
         let state_role = match state {
@@ -1034,7 +1041,7 @@ pub(crate) fn dispatch(
         output.push_str(
             &presentation::spans(
                 &[
-                    (replai::Role::Accent, facts["selector"].as_str().unwrap()),
+                    (replai::Role::Accent, &name),
                     (replai::Role::Default, "  "),
                     (state_role, state),
                     (replai::Role::Dim, &metadata),
@@ -1179,7 +1186,7 @@ fn model_storage(
     let mut output = presentation::lines(
         &[format!(
             "STORAGE  {} · logical {} · allocated {}",
-            selector(&model),
+            display_name(&model),
             size(Some(facts.logical_bytes)),
             size(Some(facts.allocated_bytes))
         )],
@@ -1273,7 +1280,7 @@ fn model_evict(
         ));
     }
     Ok(presentation::record(
-        &format!("MODEL  {}", selector(&model)),
+        &format!("MODEL  {}", display_name(&model)),
         &[
             ("location", &ffi::text(&result.path)),
             (
@@ -1402,7 +1409,7 @@ fn model_push(
         )
     } else {
         presentation::record(
-            &format!("MODEL  {}", selector(&model)),
+            &format!("MODEL  {}", display_name(&model)),
             &[
                 ("representation", &format),
                 ("bytes", &result.bytes.to_string()),
@@ -1725,6 +1732,35 @@ pub(crate) fn discover(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn model_title_does_not_retarget_compatibility_selector() {
+        let mut model = ModelSnapshot {
+            entry: Default::default(),
+            working_set: false,
+            sources: Vec::new(),
+            artifacts: Vec::new(),
+            profiles: Vec::new(),
+            publications: Vec::new(),
+        };
+        ffi::put_text(&mut model.entry.model, "legacy-model-key").unwrap();
+        ffi::put_text(&mut model.entry.display_name, "DeepSeek-V4-Flash-0731").unwrap();
+        ffi::put_text(&mut model.entry.runtime_target, "deepseek4-v4-flash-0731").unwrap();
+        ffi::put_text(&mut model.entry.identity, "target:exact-control").unwrap();
+        assert_eq!(display_name(&model), "DeepSeek-V4-Flash-0731");
+        assert_eq!(selector(&model), "legacy-model-key");
+        let contract = facts(&model, &[]).contract;
+        assert_eq!(contract["name"], "DeepSeek-V4-Flash-0731");
+        assert_eq!(contract["selector"], "legacy-model-key");
+        assert_eq!(contract["identity"], "target:exact-control");
+        assert!(contract["selected_profile"].is_null());
+        ffi::put_text(&mut model.entry.runtime_target, "unknown-target").unwrap();
+        ffi::put_text(&mut model.entry.display_name, "fallback-target-label").unwrap();
+        assert_eq!(display_name(&model), "legacy-model-key");
+        ffi::put_text(&mut model.entry.display_name, "").unwrap();
+        ffi::put_text(&mut model.entry.model, "").unwrap();
+        assert_eq!(display_name(&model), "target:exact-control");
+    }
+
     #[test]
     fn source_metadata_is_not_execution_support() {
         let mut model = ModelSnapshot {
