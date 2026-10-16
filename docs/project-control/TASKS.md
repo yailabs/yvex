@@ -165,10 +165,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 58 | 42 | 5 | 1 | 10 |
+| 59 | 43 | 5 | 1 | 10 |
 <!-- task-counts:end -->
 
-**42/58 selected Tasks complete.** This denominator includes the significant
+**43/59 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -619,6 +619,17 @@ Metal, unsupported Mac leak instrumentation and external live/release gates
 retain their separate limits. `progression_decision=proceed`,
 `downstream_safe=true` for the bounded integration, native CPU, Qwen CPU and
 Metal primitive claims only. No successor implementation Task is selected.
+
+## README physical compiler positioning — 2026-10-16
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `DOCS.PRODUCT.README.PHYSICAL.COMPILER.0` | Present the Physical Model Compiler and Inference Runtime through a concise technical entry point | Closed | ✅ COMPLETE | Source-backed compiler/runtime narrative, implemented versus unfinished Program P scope, verified CLI entry points and checkpoint-specific model/backend tables. Existing brand, editable technical figures and receipt-generated benchmark showcase remain intact. [Publication evidence](../evaluation/documentation-migration.md#physical-model-compiler-readme-2026-10-16) covers 36 publication tests, canonical link/drift checks and 12 responsive light/dark views. No inference, deployment, public model-ID migration or Program P performance promotion. |
+
+Selected independently by the operator on 2026-10-16. The completed README
+presentation and visual-grammar Tasks below retain their earned history. This
+bounded editorial delivery reuses their brand assets and technical figures;
+Program P retains compiler/performance ownership and its unearned 20/700 exits.
 
 ## Documentation visual grammar — 2026-10-10
 

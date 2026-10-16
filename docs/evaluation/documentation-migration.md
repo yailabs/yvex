@@ -20,6 +20,47 @@ classification, source digest and destination before retirement. Another 35
 paragraph records map the mixed execution/evidence sequence individually. It is evidence,
 not a navigation database or architecture authority.
 
+## Physical Model Compiler README — 2026-10-16
+
+`DOCS.PRODUCT.README.PHYSICAL.COMPILER.0` refounds the public entry point as
+**Physical Model Compiler & Inference Runtime**. Its source baseline is main
+`697b21a7ac78d7566110988669dd5db9ef8b435b`, tree
+`423063b109d13c0bb5bee2b112cbe8d7798ab14c`. Existing Program P modifications
+remain a separate, unpublished implementation; this is documentation evidence,
+not a qualification of that working tree's model execution.
+
+The reading path now introduces semantics, representation, executable realization
+and deployment before the CLI, then proceeds through model/backend scope,
+published measurements and computational internals. Program P's implemented
+planning/production foundation and unfinished selection, quality and performance
+gates are adjacent. The historical DSpark checkpoint is explicitly separate from
+0731; no deployment alias or model-ID contract changes.
+
+The two JSON-owned technical figures, brand assets and generated benchmark
+showcase are unchanged. Older section anchors remain usable. The CLI examples
+were checked against the native registry/help, including technique listing,
+guided request capture and JSON replay; no model was loaded or invoked.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Documentation architecture | Metadata, project control, diagram and benchmark generators | Current canonical repository | Reachable owners, valid links/counts and no projection drift | 509 owners, 13 planes, 15 synchronized figures, 12 observation projections | Exact schema/link/generated-content checks | PASS | Internal publication consistency |
+| Publication regressions | Existing publication suite plus README positioning control | Source Markdown, figures and immutable receipts | Preserve semantics, rendering safety and claim boundaries | 36 tests pass | Exact assertions; benchmark block identical to baseline | PASS | Reader and generated evidence preservation |
+| CLI documentation surface | Registered native help and documentation surface checks | Existing local executable; help and technique listing only | Examples use supported syntax | Documentation surface passes; implemented techniques remain separately bounded | No inference or model-lifecycle operation | PASS | Command discoverability, not model readiness |
+| Responsive rendering | Chromium with GPU disabled | Local HTML reader and plain Markdown projection; widths 390/768/1440, light/dark | No page overflow; local images and navigation usable | 12 views; all three local images load per view; figure close restores focus; mobile navigation opens/closes | Page width at most viewport + 1 CSS pixel | PASS | Local desktop/mobile rendering and interactions |
+
+Rendering receipts and 60 viewport captures are retained outside Git in
+`yvex-readme-physical-compiler-20261016.FXhpi0fW`. The plain projection is a local
+Markdown rendering control, not GitHub-hosted acceptance. External badge fetches
+were blocked in that control and are not qualified by it. The first focus check
+sampled before the dialog's asynchronous close event; waiting for that event
+corrected the observer without changing the reader.
+
+No computational architecture, ABI, capability state, numerical contract,
+benchmark receipt, installed service or sibling repository changed. No new
+performance or quality result follows, and Program P remains IN PROGRESS with
+20/700 unearned. Hosted CI remains a separate source checkpoint; local
+documentation passes do not relabel inherited integration failures as green.
+
 ## Preserved and separated
 
 - All 149 capability names/states migrate unchanged to [Status](../project-control/STATUS.md).

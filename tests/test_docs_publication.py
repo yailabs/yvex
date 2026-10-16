@@ -44,6 +44,25 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'visible Markdown title'):
             metadata.parse(text.replace('alt="YVEX"','alt="Other"',1),branded_root=True)
 
+    def test_readme_compiler_positioning_preserves_qualification_boundaries(self):
+        text=(ROOT/'README.md').read_text()
+        self.assertIn('Physical Model Compiler &amp; Inference Runtime',text)
+        headings=['## Why YVEX','## Source to execution',
+                  '## Program P: physical model compilation','## Quick start',
+                  '## Available execution','## Measured performance',
+                  '## Inside the computational core','## Technical documentation']
+        offsets=[text.index(heading) for heading in headings]
+        self.assertEqual(offsets,sorted(offsets))
+        self.assertIn('targets remain **unearned**',text)
+        self.assertIn('Compilation does not install or replace a running engine.',text)
+        self.assertIn('Historical checkpoint used by the installed operator profile; not the 0731 candidate.',text)
+        for command in ('--list-techniques','--guided --out-request goals.json',
+                        '--request goals.json --json'):
+            self.assertIn('./yvex compile optimize '+command,text)
+        for identifier in ('why-yvex','active-frontier-goal-driven-physical-compilation',
+                           'one-host-your-models-independent-sessions','product-boundary'):
+            self.assertIn('<a id="'+identifier+'"></a>',text)
+
     def test_visible_yaml_refuses(self):
         visible=self.text.replace('<!-- docs:metadata','---',1).replace('-->','---',1)
         with self.assertRaisesRegex(ValueError,'visible YAML'):metadata.parse(visible)
