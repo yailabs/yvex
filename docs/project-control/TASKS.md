@@ -24,6 +24,12 @@ compiler/performance implementation authority and all its unearned exits.
 | `V010.TERMINAL.WORKBENCH.INTEGRATION.0` | Terminal-native operational workbench | P1 | ✅ COMPLETE | Linux inline Home/conversation, Models, Compile, contextual inspection and bounded Activity consume current registry/native owners through one REPLAI terminal owner. [Source-stable evidence](../evaluation/retained-observations.md#terminal-workbench-consumer-2026-10-10) qualifies PTY navigation, progressive output, Unicode, resize, cancellation, disconnection/recovery, host-incarnation refusal, restoration and real isolated CPU execution/retirement in dev and release builds. Linear CLI/protocol and operator engine remain unchanged. macOS rerun, full-screen UI, Program P quality and DeepSeek performance are not earned by this consumer delivery. |
 | `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0` | Source-faithful native output and tool-call recovery | P1 | 🔵 IN PROGRESS | Selected 2026-10-14: canonical empty-argument invocation falsely rejected; exact LF recognition has independent source serialization and tokenizer/feedback controls. A separate valid-source witness demonstrates invalid SSE UTF-8 at 4-KiB argument cuts; complete-scalar delivery now has buffered/SSE Chat/Responses and malformed-tail controls. [Evidence](../evaluation/provider-output-recovery.md) retains before/after witnesses, sanitizer/regression scope and refusals. Historical r32 output is unavailable; no causal closure or real-model/YAI acceptance follows. No GPU inference, service/model lifecycle mutation, historical Work replay or cross-repository changes. Program P retains compiler/performance ownership; explicit rollout/live gates remain open. |
 
+The separately authorized 2026-10-16 real-response forensics stays within
+`V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. It records an unrecoverable original
+response boundary and exact pinned producer/consumer fixture controls, not a
+new Program P intervention or an accepted YAI Work. The broad consumer failure
+does not establish producer ownership. See [forensic evidence](../evaluation/provider-output-recovery.md#generation-31-http-200-response-forensics-2026-10-16).
+
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
 2026-10-10. This is the sole active implementation authority for physical

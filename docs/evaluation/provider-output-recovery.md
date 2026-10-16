@@ -159,3 +159,90 @@ and deadline must be preflighted against the observed generation; no latency
 promise follows from fixture tests. Independent YAI governed Work acceptance
 follows only after that real producer gate and consumer identity reconciliation.
 Neither historical Work identity may be reused or automatically retried.
+
+## Generation-31 HTTP-200 response forensics — 2026-10-16
+
+**Classification: `INSUFFICIENT_RETAINED_EVIDENCE`.** This is a new incident
+on the corrected installed producer, not a reproduction of historical r32.
+The running Host executable matches `228cf6dd2ca599524d6ed5256e2faa6bf3b27665`,
+SHA-256 `feab11bad6ac0e286c7ecb5804c7d1b99d9b353552f7b554b997732d504b9f3b`.
+The original DSpark Engine remains generation 31 at explicit 32768 context.
+Core's installed executable SHA-256 matches its recorded `ff2ff541` build;
+its current repository HEAD is a separate identity.
+
+The retained journal associates `http-1381` with Session `oa-000000000006`,
+request `r17` and turn `t1` in Unix-ms interval
+`1792157932560–1792158075914`. It records 299 generated tokens, native EOS,
+HTTP 200 and terminal transport code zero, with no generation failure or
+cancellation. Native EOS is not proof of a particular HTTP `finish_reason`,
+valid native call, complete delivered JSON or accepted consumer result.
+The HTTP access event's `a` field is the peer TCP port, not response bytes.
+
+The consumer's `058c5299…` identity is the preflight provider request;
+the generation journal contains `097bf701…`. The linkage uses the unique
+interval, exact input population and HTTP-to-Session association, not an
+unavailable producer request-wire digest. The admitted body SHA-256
+`4f234095…` identifies the **request**, not the response. No exact response
+body, Content-Type, byte length, digest or observed delivery mode is retained
+in the audited producer journal or canonical consumer captures. The producer
+frees its buffered JSON after delivery; Core's failed response never reaches
+accepted ProviderResult storage. No process-memory dump, payload reconstruction,
+new inference or replay is used to fill that gap.
+
+### Consumer boundary and controlled compatibility
+
+At exact Core source `ff2ff5416dcd5230de73ef215f9f64ff987eca07`,
+`provider_execution.rs:391–405` classifies multiple `provider_response_invalid`
+causes as `response_schema_invalid` / `JsonParse`; it does not retain their
+specific cause. The response path additionally contains protocol normalization,
+deployment fences, native function validation and capability lowering.
+Consequently the original first failing predicate cannot be recovered from
+the broad stage label. A JSON syntax defect, producer defect, consumer defect
+or framing mismatch is not established by this observation.
+
+The exact extracted native decoder, strict JSON parser and bounded 2020-12
+schema owner were compiled without modifying their bodies, using Core's pinned
+Serde/JSON/schema-library versions. This is component qualification, not a
+build or execution of the whole Core controller. Its single-call limit remains
+intentional; Core requests `parallel_tool_calls=false`. Neither side's contract
+is relaxed.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Producer/native-consumer contract | Corrected `228cf6dd` production adapter and exact extracted `ff2ff541` native decoder/schema/strict-JSON functions | 27 synthetic text, empty/nonempty/Unicode calls and correlated-feedback responses, none/high/maximum; buffered and independently reassembled SSE | Accept valid shapes and preserve call identity, function and arguments | 27 accepted with exact field controls | Byte/structured equality; fixed dependency versions | PASS | Bounded component compatibility, not the original response or Case Work |
+| Producer refusal | Actual source completion parser and production HTTP/SSE adapter | 12 incomplete/malformed source outputs | Refuse without a fabricated successful finish | Buffered error or terminal SSE error, no successful completion | Exact status/framing controls | PASS | Existing malformed-output refusal remains intact |
+| Consumer refusal | Same pinned extracted decoder | 26 malformed JSON/UTF-8/trailing data, model/population/role, call/argument/schema and byte-bound controls | Preserve each specific refusal | All expected refusal codes match | Exact error-code equality | PASS | Distinct validation causes exist; the original generic label does not select one |
+
+SSE reassembly in this experiment is independent test code; it does not qualify
+Core's complete streaming router, transport or Case-specific capability lowering.
+All 39 HTTP exchanges target disposable CPU/protocol fixtures on an ephemeral
+loopback port, never the installed listener or GPU. Complete synthetic response
+bytes and hashes are retained separately from the unavailable original body.
+The 53 decoder cases contain no real prompt, response or Case material.
+
+### Required diagnostic handoff
+
+The actionable Core handoff is an observability gap, not a confirmed incompatible
+validator: preserve the bounded static validation cause before the generic
+classification at the original outcome boundary. Do not log raw parser messages
+that may contain argument keys, model text or credentials. Keep HTTP status,
+request/response identities, sanitized media type, exact received entity bytes
+and digest, framing/completion posture, and parser category/offset separately
+from semantic acceptance. Native-call counts, argument extents and schema
+identity can be retained without their contents. Producer-side sent-entity
+metadata must not be confused with client-received bytes or normalized JSON.
+These retention improvements are requirements, not implemented capabilities.
+
+If future byte-level replay is required, it needs an explicitly governed,
+bounded private response capture; a hash alone cannot reconstruct bytes.
+No new request is authorized to replace the failed submission. The original
+Work remains indeterminate and unchanged. No YVEX production defect is proven
+by this incident, so no speculative producer repair or installed rollout follows.
+
+Exact source excerpts, fixture runners, dependency lock, source hashes, synthetic
+bytes, 16 filtered original journal rows and receipts are retained under
+`/home/dgmothx/lab/models/evidence/yvex-response-forensics-20261016.5Br35h`.
+Original metadata receipt SHA-256:
+`e130c9eff0d332eaea6de5638d5dac334d339eaab1e4aaf9860e81201f452ea4`.
+Program P's source, resident services and GPU ownership are untouched. The
+provider Task's real-response/YAI acceptance gate remains open.
