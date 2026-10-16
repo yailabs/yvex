@@ -17,6 +17,12 @@ publication: {html: true, pdf: true, index: true}
 Use installed headers for public consumers. Source compatibility, wire
 compatibility and internal transient schemas are distinct promises.
 
+`yvex_quant_policy_iq2_encoder_version` observes the explicitly bound encoding
+producer: policies v1/v2 retain version 1, while policy v3 requires a supported
+selection. Null returns zero, not an admitted producer. Existing installed
+policy record layouts and schema-v2 identities are unchanged. This observation
+does not establish calibration quality, executable fit or an inference result.
+
 [Runtime ABI](runtime-abi.md) · [Numerical ABI](numerical-abi.md) ·
 [Benchmark publication](benchmark-publication.md)
 
@@ -102,6 +108,18 @@ resource limits refuse rather than publishing substitute observations.
 See the [numerical and atomicity contract](numerical-abi.md#offline-activation-sufficient-statistics).
 This arithmetic API does not expose runtime activation capture, remote
 calibration authority, an authenticated producer or model-quality qualification.
+
+`yvex_imatrix_data_open_profile` resolves existing raw-DAT provenance or a
+strict source/file/context-bound `yvex.imatrix_manifest.v2`. Its required source
+is the authenticated Transformation IR payload identity, not a model alias.
+Declared legacy raw-DAT provenance must also match that required source.
+The numeric owner copies provenance and retains its stable regular-file mapping;
+the profile document need not remain alive. The caller still supplies the
+mapping budget and closes the returned data owner. An incomplete, foreign,
+malformed or digest-mismatched profile publishes no owner.
+`yvex_imatrix_data_context_identity` returns a borrowed identity for bound
+profiles, or NULL for legacy data. Existing public record layouts and raw-DAT
+identities are unchanged; no wire or management schema changes.
 
 ### Physical optimization contracts
 

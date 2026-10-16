@@ -1,0 +1,18 @@
+{
+  "schema": "yvex.quant_policy.v3",
+  "iq2_encoder": "weighted-grid-v2",
+  "name": "weighted-iq2-producer-fixture",
+  "architecture": "fixture",
+  "rules": [
+    {
+      "match": {"role": "moe_expert_gate", "scope": "main_layer"},
+      "action": {"qtype": "IQ2_XXS", "calibration": "required"},
+      "priority": 100
+    },
+    {
+      "match": {"default": true},
+      "action": {"qtype": "SOURCE", "calibration": "none"},
+      "priority": 1
+    }
+  ]
+}

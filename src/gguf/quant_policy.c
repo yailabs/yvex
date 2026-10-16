@@ -22,6 +22,7 @@
 
 struct yvex_quant_policy {
     unsigned int schema_version;
+    unsigned int iq2_encoder_version;
     char *name;
     char *architecture;
     char *preset_name;
@@ -301,6 +302,9 @@ static int policy_identity_compute(yvex_quant_policy *policy) {
         !yvex_sha256_update_text(&hash, policy->preset_name ? policy->preset_name : "custom") ||
         !yvex_sha256_update_u64(&hash, policy->rule_count))
         return 0;
+    if (policy->schema_version == YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION &&
+        !yvex_sha256_update_u64(&hash, policy->iq2_encoder_version))
+        return 0;
     for (index = 0u; index < policy->rule_count; ++index) {
         const yvex_quant_policy_rule *rule = &policy->rules[index];
         if (!yvex_sha256_update_u64(&hash, rule->schema_version) ||
@@ -573,6 +577,11 @@ unsigned long long yvex_quant_policy_rule_count(const yvex_quant_policy *policy)
     return policy ? policy->rule_count : 0;
 }
 
+unsigned int yvex_quant_policy_iq2_encoder_version(const yvex_quant_policy *policy) {
+    return !policy ? 0u : policy->schema_version == YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION
+                             ? policy->iq2_encoder_version : 1u;
+}
+
 int yvex_quant_policy_clone(yvex_quant_policy **out,
                             const yvex_quant_policy *source, yvex_error *err)
 {
@@ -589,6 +598,7 @@ int yvex_quant_policy_clone(yvex_quant_policy **out,
         return YVEX_ERR_NOMEM;
     }
     copy->schema_version = source->schema_version;
+    copy->iq2_encoder_version = source->iq2_encoder_version;
     copy->name = yvex_core_strdup(source->name);
     copy->architecture = yvex_core_strdup(source->architecture);
     copy->preset_name = source->preset_name ? yvex_core_strdup(source->preset_name) : NULL;
@@ -995,7 +1005,8 @@ done:
 static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_error *err) {
     yvex_quant_policy *policy;
     yvex_gguf_json j;
-    int rc;
+    yvex_json syntax;
+    int rc, unknown_root_field = 0, closed_root = 0;
 
     if (!out || !path) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "quant_policy_json", "out and path are required");
@@ -1005,6 +1016,7 @@ static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_err
     rc = yvex_gguf_json_open(&j, path, "quant_policy_json", err);
     if (rc != YVEX_OK)
         return rc;
+    syntax = j.cursor;
     policy = (yvex_quant_policy *)calloc(1, sizeof(*policy));
     if (!policy) {
         yvex_gguf_json_close(&j);
@@ -1021,7 +1033,7 @@ static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_err
 
         rc = yvex_gguf_json_member(&j, &key, &complete);
         if (rc != YVEX_OK) goto fail;
-        if (complete) break;
+        if (complete) { closed_root = 1; break; }
         if (strcmp(key, "schema") == 0) {
             char *schema = yvex_gguf_json_string(&j);
             if (!schema) {
@@ -1033,6 +1045,8 @@ static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_err
                 policy->schema_version = 1u;
             else if (strcmp(schema, "yvex.quant_policy.v2") == 0)
                 policy->schema_version = YVEX_QUANT_POLICY_SCHEMA_VERSION;
+            else if (strcmp(schema, "yvex.quant_policy.v3") == 0)
+                policy->schema_version = YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION;
             else {
                 free(schema);
                 free(key);
@@ -1040,6 +1054,18 @@ static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_err
                 goto fail;
             }
             free(schema);
+        } else if (strcmp(key, "iq2_encoder") == 0) {
+            char *encoding = yvex_gguf_json_string(&j);
+            if (!encoding || policy->iq2_encoder_version) {
+                rc = yvex_gguf_json_fail(&j, "duplicate or malformed IQ2 encoder");
+            } else if (!strcmp(encoding, "legacy-grid-v1")) {
+                policy->iq2_encoder_version = 1u;
+            } else if (!strcmp(encoding, "weighted-grid-v2")) {
+                policy->iq2_encoder_version = YVEX_QUANT_IQ2_WEIGHTED_CONTRACT_VERSION;
+            } else {
+                rc = yvex_gguf_json_fail(&j, "unsupported IQ2 encoder");
+            }
+            free(encoding);
         } else if (strcmp(key, "name") == 0) {
             free(policy->name);
             policy->name = yvex_gguf_json_string(&j);
@@ -1061,15 +1087,34 @@ static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_err
             rc = yvex_gguf_json_array(&j, qj_parse_rule, policy,
                                       "malformed rules array", "unterminated rules array");
         } else if (policy->schema_version == 1u) {
+            unknown_root_field = 1;
             rc = yvex_gguf_json_skip(&j);
         } else {
-            rc = yvex_gguf_json_fail(&j, "unknown policy-v2 root field");
+            rc = yvex_gguf_json_fail(&j, "unknown quant policy root field");
         }
         free(key);
         if (rc != YVEX_OK)
             goto fail;
         yvex_gguf_json_optional_comma(&j);
     }
+    if (policy->schema_version == YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION &&
+        (!closed_root || !yvex_json_complete(&j.cursor) ||
+         !yvex_json_skip_value(&syntax) || !yvex_json_complete(&syntax))) {
+        rc = yvex_gguf_json_fail(&j, "explicit producer policy requires one complete JSON object");
+        goto fail;
+    }
+    if ((policy->schema_version == YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION) !=
+        (policy->iq2_encoder_version != 0u)) {
+        rc = yvex_gguf_json_fail(&j, "explicit IQ2 encoder requires policy v3");
+        goto fail;
+    }
+    if (policy->schema_version != 1u && unknown_root_field) {
+        rc = yvex_gguf_json_fail(&j, "unknown quant policy root field");
+        goto fail;
+    }
+    if (policy->schema_version == YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION)
+        for (unsigned long long i = 0ull; i < policy->rule_count; ++i)
+            policy->rules[i].schema_version = policy->schema_version;
     if (!policy->name)
         policy->name = yvex_core_strdup("unnamed-policy");
     if (!policy->architecture)
@@ -1107,6 +1152,9 @@ static int policy_write_json_file(const char *out_path, const yvex_quant_policy 
     }
     fprintf(fp, "{\n");
     fprintf(fp, "  \"schema\": \"yvex.quant_policy.v%u\",\n", policy->schema_version);
+    if (policy->schema_version == YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION)
+        fprintf(fp, "  \"iq2_encoder\": \"%s\",\n",
+                policy->iq2_encoder_version == 1u ? "legacy-grid-v1" : "weighted-grid-v2");
     fprintf(fp, "  \"name\": ");
     yvex_file_json_write_string(fp, policy->name);
     fprintf(fp, ",\n  \"architecture\": ");
@@ -1255,7 +1303,7 @@ static void qp_set_summary(yvex_quant_policy *policy, unsigned long long extra_i
              (rule->selector_kind == YVEX_QUANT_SELECTOR_UNKNOWN ||
               (rule->selector_kind == YVEX_QUANT_SELECTOR_ROLE &&
                rule->role == YVEX_TENSOR_ROLE_UNKNOWN))) ||
-            (policy->schema_version == YVEX_QUANT_POLICY_SCHEMA_VERSION && !rule->match_mask)) {
+            (policy->schema_version >= YVEX_QUANT_POLICY_SCHEMA_VERSION && !rule->match_mask)) {
             policy->summary.issue_count++;
             policy->summary.status = YVEX_QUANT_POLICY_STATUS_INVALID;
         }
@@ -1363,10 +1411,20 @@ int yvex_quant_policy_validate(yvex_quant_policy *policy, const char *template_p
         return YVEX_ERR_INVALID_ARG;
     }
     if (policy->schema_version != 1u &&
-        policy->schema_version != YVEX_QUANT_POLICY_SCHEMA_VERSION) {
+        policy->schema_version != YVEX_QUANT_POLICY_SCHEMA_VERSION &&
+        policy->schema_version != YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "quant_policy_validate",
                        "unsupported quant policy schema");
         return YVEX_ERR_UNSUPPORTED;
+    }
+    if ((policy->schema_version == YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION &&
+         policy->iq2_encoder_version != 1u &&
+         policy->iq2_encoder_version != YVEX_QUANT_IQ2_WEIGHTED_CONTRACT_VERSION) ||
+        (policy->schema_version != YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION &&
+         policy->iq2_encoder_version != 0u)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "quant_policy_validate",
+                       "IQ2 producer must be explicitly selected by policy v3");
+        return YVEX_ERR_FORMAT;
     }
     if (!policy->name)
         policy->name = yvex_core_strdup("unnamed-policy");

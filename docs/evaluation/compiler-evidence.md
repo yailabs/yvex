@@ -300,3 +300,88 @@ wide projections and long-history attention retain material costs outside this
 matrix scheduling correction. Their profile durations are not additive wall
 shares or a hardware ceiling. Program P and the 20/700 exit remain open;
 component improvement is not the requested complete-model result.
+
+### Source-weight IQ2 producer comparison (2026-10-15)
+
+This bounded checkpoint belongs to the selected Program P Task, not a new
+model-quality or competitive-performance qualification. Its complete retained
+campaign root is
+`/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/campaign-output-recovery-20261015.8QuK4Xg7`.
+
+The next discriminator uses authenticated official 0731 source operands,
+real population-normalized bootstrap statistics and the independently pinned
+ggml encoder/decoder. Source/role/expert association comes from sealed
+Transformation IR and compiled MoE operands, not tensor-name heuristics.
+The examined source-derived Q2 blocks reproduce the retained artifact exactly.
+Every IQ2 block is checked against the independent decoder; format compatibility
+is distinct from reconstruction fidelity.
+
+The native v1 IQ2 producer loses materially more calibration-weighted fidelity
+than the independent producer on these operands. Its one unweighted grid lookup
+and proxy magnitude fit differ from a weighted codebook search over the actual
+decoded levels. The new explicitly selected v2 producer improves the observed
+reconstruction objective on gate/up operands from hash-routed and learned-routed
+layers, at unchanged IQ2 bytes. Q2 remains more faithful in the examined controls.
+The full native implementation reproduces all retained prototype parameter
+payloads exactly. This is not a model-quality or throughput qualification.
+
+The retained campaign directory contains the exact sources, binaries and raw
+receipts: `source-expert-codec-independent-20261015-01`,
+`source-expert-iq2-population-20261015-01`,
+`source-expert-native-iq2-v2-20261015-01` and
+`source-expert-native-iq2-population-20261015-01`. They preserve per-role
+reconstruction errors, encoded bytes, construction/verification time and exact
+decoder populations. No aggregate full-model speedup is derived from them.
+
+Policy v3, versioned quant execution and writer provenance now carry the
+explicit producer choice; v1/v2 policies and default encoding remain controls.
+Only observed, complete selected operands may supply the exported calibration.
+Its normalized DAT divisor is one by construction, not a claim of one real
+observation; original per-population counts and capture identities remain in
+the retained receipt. The generic association now accepts a strict bound
+manifest through the existing `compile quant plan --imatrix-manifest` path.
+Its source is checked against sealed transformation facts; numeric bytes,
+context and producer become calibration identity rather than family constants.
+Legacy raw data retains its prior explicitly declared provenance and identity.
+
+`calibration-source-bound-profile-20261015-01` separates semantic dataset/context
+projections from forensic receipt paths and timestamps. The corresponding
+`observed-iq2-bound-native-plan-20261015-01/receipt.json` retains the frozen
+source delta, actual CLI executable/build, policy, data and writer-plan identity.
+It selects 56 fully observed gate/up terminals; the remaining 15 main layers,
+down projections and support parameters retain their previous encodings.
+Encoded bytes and compatibility reported by that plan are predictions, not
+resource admission, artifact integrity or model performance.
+
+Experimental production uses the canonical writer, independent reader and
+binding path. Full artifact completion, resource admission, actual-model
+measurements and independent held-out quality remain open. No service or
+Engine change follows from the CPU codec/production checks.
+
+The calibration lifetime control additionally demonstrates a source defect:
+the prior executor could accept a changed borrowed calibration file after
+execution had begun. Native terminal commit and final completion now revalidate
+the supplied owner. A deterministic append during sink delivery refuses before
+the first terminal commit; stable ownership and a fresh post-refusal owner
+complete normally. `calibration-lifetime-before-after-20261015-01/receipt.json`
+retains the same fixture against the frozen prior and repaired native libraries,
+with failure/success respectively. This is a synthetic resource-lifetime
+control, not evidence that real model calibration changed or that quality passed.
+
+The source-bound entrypoint also checks the explicitly declared legacy raw-DAT
+source against its independently required checkpoint identity. The synthetic
+`calibration_source_refusal_witness.c` accepts a foreign required source before
+that correction; matching legacy identities remain unchanged. This refusal is
+not authentication of an otherwise unverified collection history.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Native IQ2 reproduction | Pinned independent ggml decoder and retained prototype | Source-derived routed gate/up population | Exact decoder and native-producer reproduction | Retained component receipt agrees | Exact bytes; weighted reconstruction loss reported separately | PASS | Producer implementation, not model quality |
+| Calibration admission | Sealed source identity and exact numeric-file digest | Matching, foreign, malformed and drifting profiles | Preserve identity or refuse without terminal commit | Four affected native unit targets pass; before/after witnesses discriminate the defects | Exact identities and refusal/cleanup assertions | PASS | Source association and borrowed-data lifetime |
+| Quant sanitizers | Registered ASan/LSan and UBSan lane | Complete quantization fixtures | No sanitizer error | Full lane passes on the retained code snapshot | Zero reported sanitizer errors | PASS | Quantization software safety within fixture scope |
+| Structural recovery | Registered structural owners | Canonical ownership, ABI, build and documentation | Complete required checks | 18 PASS and two resource-throttled timeouts; both timed-out targets pass after bounded build-resource adjustment | Exact test identities; original ERROR records retained | PASS after rerun | Structural checks, not inference performance |
+
+The final native unit controls and structural reruns retain source delta
+`1b5b4913…`; the preceding full sanitizer lane retains `b363911e…`.
+Between those snapshots, only fixture tracking and a policy-v3 diagnostic
+changed. Exact run identities remain in the canonical QA receipts.

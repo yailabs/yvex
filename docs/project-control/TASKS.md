@@ -198,6 +198,14 @@ The existing Mamba proof remains the non-Transformer control. Technique referenc
 are not implemented capabilities; 20/700 and independent quality remain unearned.
 No second implementation Task or installed-engine replacement is selected.
 
+The 2026-10-15 calibrated-representation continuation adds an explicitly
+versioned IQ2 producer and source-bound numeric-calibration admission to the
+existing physical-variant pipeline. Real complete observations select only 28
+layers' gate/up operands; other parameters remain controls. Native planning and
+independent parameter-codec checks do not qualify the produced complete model,
+its quality, throughput or automatic selection. Experimental production and
+subsequent resource/execution comparisons continue under this same Task.
+
 The mainline continuation starts at `2de077e9` and connects the same native
 planning and production owners to bounded catalog-selected CLI/SDK observations
 and recoverable Jobs. Compiler search, emitted artifacts, admitted execution and

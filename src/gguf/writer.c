@@ -1315,6 +1315,19 @@ static int writer_complete_add_tokenizer_metadata(writer_complete_context *conte
 static int writer_complete_add_provenance_metadata(writer_complete_context *context) {
     writer_metadata *metadata = context->metadata;
     unsigned int *count = &context->metadata_count;
+    unsigned long long ordinal;
+
+    for (ordinal = 0ull; ordinal < context->quant->decision_count; ++ordinal) {
+        const yvex_quant_decision *decision = yvex_quant_plan_decision_at(context->quant_plan, ordinal);
+        if (!decision) return 0;
+        if (decision->qtype == YVEX_GGUF_QTYPE_IQ2_XXS &&
+            decision->numeric_contract_version != YVEX_QUANT_NUMERIC_CONTRACT_VERSION) {
+            if (decision->numeric_contract_version != YVEX_QUANT_IQ2_WEIGHTED_CONTRACT_VERSION ||
+                !writer_meta_u32(metadata, count, "yvex.quant.iq2_encoder_contract",
+                                 decision->numeric_contract_version)) return 0;
+            break;
+        }
+    }
 
     (void)snprintf(context->source_identity, sizeof(context->source_identity), "%016llx",
                    context->quant->source_snapshot_identity);

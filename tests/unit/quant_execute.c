@@ -2083,8 +2083,111 @@ int yvex_test_gguf_writer_artifact(void)
     return 0;
 }
 
+typedef struct {
+    yvex_quant_output_sink inner;
+    const char *calibration_path;
+    unsigned int mutation_count, commit_count;
+} quant_calibration_drift;
+
+static int quant_drift_begin(void *opaque, const yvex_quant_decision *decision)
+{
+    quant_calibration_drift *state = opaque;
+    return state->inner.begin_terminal(state->inner.context, decision);
+}
+
+static int quant_drift_deliver(void *opaque, const yvex_quant_decision *decision,
+    unsigned long long offset, const unsigned char *bytes, size_t count)
+{
+    quant_calibration_drift *state = opaque;
+    if (state->calibration_path && !state->mutation_count) {
+        FILE *file = fopen(state->calibration_path, "ab");
+        if (!file) return 1;
+        int written = fputc(0, file);
+        if (fclose(file) || written == EOF) return 1;
+        state->mutation_count++;
+    }
+    return state->inner.deliver_chunk(state->inner.context, decision, offset, bytes, count);
+}
+
+static int quant_drift_commit(void *opaque, const yvex_quant_decision *decision,
+    unsigned long long bytes)
+{
+    quant_calibration_drift *state = opaque;
+    state->commit_count++;
+    return state->inner.commit_terminal(state->inner.context, decision, bytes);
+}
+
+static void quant_drift_abort(void *opaque, const yvex_quant_decision *decision,
+    const yvex_quant_failure *failure, unsigned long long bytes)
+{
+    quant_calibration_drift *state = opaque;
+    state->inner.abort_terminal(state->inner.context, decision, failure, bytes);
+}
+
+/* A supplied calibration owner must remain immutable for the entire call,
+ * including execution that does not select its entries. No model calibration
+ * or quality claim is made from these deliberately synthetic unused values. */
+static int quant_test_calibration_snapshot_lifetime(void)
+{
+    const unsigned char bytes[] =
+        "\x01\0\0\0\x07\0\0\0" "fixture" "\x01\0\0\0\x01\0\0\0"
+        "\0\0\x80\x3f\x01\0\0\0\x07\0\0\0" "fixture";
+    quant_execute_fixture fixture;
+    yvex_error error = {0};
+    YVEX_TEST_ASSERT(quant_fixture_create(&fixture, "calibration-drift", 0, 0, &error),
+                     "calibration lifetime fixture constructs");
+    for (unsigned int step = 0u; step < 3u; ++step) {
+        int mutate = step == 1u;
+        const char *path = "build/tests/quant-calibration-lifetime.dat";
+        FILE *file = fopen(path, "wb");
+        yvex_imatrix_data *data = NULL;
+        yvex_imatrix_data_options data_options = {
+            .path = path, .source_model_identity = "synthetic-source",
+            .calibration_dataset_identity = "synthetic-dataset", .producer = "fixture", .producer_version = 1u,
+            .maximum_mapped_bytes = 1024u};
+        yvex_quant_digest_sink *digest = NULL;
+        yvex_quant_failure failure = {0};
+        yvex_quant_execution_summary summary = {0};
+        yvex_quant_executor_options options;
+        quant_calibration_drift state = {0};
+        yvex_source_payload_session_facts facts = {0};
+        YVEX_TEST_ASSERT(file && fwrite(bytes, 1u, sizeof(bytes) - 1u, file) == sizeof(bytes) - 1u &&
+            !fclose(file) && yvex_imatrix_data_open(&data, &data_options, &error) == YVEX_OK,
+            "admit a real bounded immutable numeric data owner");
+        YVEX_TEST_ASSERT(yvex_source_payload_session_facts_get(fixture.session, &facts, &error) == YVEX_OK &&
+            yvex_quant_digest_sink_create(&digest, fixture.plan, facts.payload_identity, &failure, &error) == YVEX_OK,
+            "calibration lifetime sink constructs");
+        yvex_quant_digest_sink_adapter(digest, &state.inner);
+        state.calibration_path = mutate ? path : NULL;
+        yvex_quant_output_sink sink = {quant_drift_begin, quant_drift_deliver,
+            quant_drift_commit, quant_drift_abort, &state};
+        yvex_quant_executor_options_default(&options);
+        options.worker_count = 1u;
+        options.source_chunk_bytes = 4096u;
+        options.output_chunk_bytes = 4096u;
+        options.maximum_owned_bytes = 8u * 1024u * 1024u;
+        options.imatrix = data;
+        int status = yvex_quant_execute(fixture.plan, &sink, &options, &summary, &failure, &error);
+        if (mutate) {
+            YVEX_TEST_ASSERT(status != YVEX_OK && !summary.complete && state.mutation_count == 1u &&
+                !state.commit_count && !summary.committed_terminals && summary.aborted_terminals == 1u &&
+                failure.code == YVEX_QUANT_FAILURE_CALIBRATION_IDENTITY,
+                "in-flight snapshot drift refuses before terminal commit without completed execution");
+        } else {
+            YVEX_TEST_ASSERT(status == YVEX_OK && summary.complete && state.commit_count == 4u,
+                             "a stable borrowed calibration owner preserves ordinary execution");
+        }
+        yvex_quant_digest_sink_release(&digest);
+        yvex_imatrix_data_close(data);
+        YVEX_TEST_ASSERT(!remove(path), "remove only the owned calibration fixture");
+    }
+    quant_fixture_release(&fixture);
+    return 0;
+}
+
 int yvex_test_quant_execute(void)
 {
+    if (quant_test_calibration_snapshot_lifetime() != 0) return 1;
     if (quant_test_family_neutral_lowering() != 0) return 1;
     if (quant_test_executor_success() != 0) return 1;
     if (quant_test_variant_file() != 0) return 1;

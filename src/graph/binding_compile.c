@@ -230,15 +230,14 @@ static int binding_compiler_imatrix(
     yvex_imatrix_data_summary *summary, yvex_error *err)
 {
     yvex_imatrix_data_options options = {0};
+    const yvex_transform_ir_summary *transform;
     int rc;
 
     if (!request->imatrix_path) return YVEX_OK;
-    if (!compiler->pipeline->imatrix_source_identity ||
-        !compiler->pipeline->imatrix_dataset_identity ||
-        !compiler->pipeline->imatrix_producer ||
-        !compiler->pipeline->imatrix_producer_version) {
+    transform = yvex_transform_ir_summary_get(compiler->source.transform_ir);
+    if (!transform || !transform->complete) {
         yvex_error_set(err, YVEX_ERR_STATE, "compilation.runtime-binding",
-                       "family imatrix provenance is incomplete");
+                       "calibration association requires sealed source transformation facts");
         return YVEX_ERR_STATE;
     }
     options.path = request->imatrix_path;
@@ -247,7 +246,8 @@ static int binding_compiler_imatrix(
     options.producer = compiler->pipeline->imatrix_producer;
     options.producer_version = compiler->pipeline->imatrix_producer_version;
     options.maximum_mapped_bytes = 1024u * 1024u * 1024u;
-    rc = yvex_imatrix_data_open(&compiler->imatrix, &options, err);
+    rc = yvex_imatrix_data_open_profile(&compiler->imatrix, &options,
+                                        transform->required_payload_identity, err);
     return rc == YVEX_OK ? yvex_imatrix_data_get_summary(compiler->imatrix, summary, err) : rc;
 }
 

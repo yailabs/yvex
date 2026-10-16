@@ -54,3 +54,16 @@ python3 tests/support/human_field.py --regex "$OUT_DIR/derived-validate.out" 'st
 
 "$YVEX_BIN" compile quant policy --help > "$OUT_DIR/help.out" 2> "$OUT_DIR/help.err" || fail "help failed"
 grep 'yvex compile quant policy' "$OUT_DIR/help.out" >/dev/null || fail "missing help"
+
+"$YVEX_BIN" compile quant policy inspect \
+  --policy tests/fixtures/quant/iq2_weighted_policy.json \
+  > "$OUT_DIR/weighted-inspect.out" 2> "$OUT_DIR/weighted-inspect.err" || fail "weighted policy inspect failed"
+python3 tests/support/human_field.py "$OUT_DIR/weighted-inspect.out" \
+  'schema_version: 3' || fail "explicit producer schema missing"
+python3 tests/support/human_field.py "$OUT_DIR/weighted-inspect.out" \
+  'iq2_encoder_version: 2' || fail "native selected producer missing"
+"$YVEX_BIN" compile quant policy validate \
+  --policy tests/fixtures/quant/iq2_weighted_policy.json \
+  > "$OUT_DIR/weighted-validate.out" 2> "$OUT_DIR/weighted-validate.err" || fail "weighted policy validate failed"
+python3 tests/support/human_field.py "$OUT_DIR/weighted-validate.out" \
+  'status: quant-policy-valid' || fail "weighted policy refusal state"

@@ -1533,6 +1533,8 @@ static int quant_lowered_policy_decision_build(
                                     decision, context->failure, context->err);
     if (rc != YVEX_OK)
         return rc;
+    if (qtype == YVEX_GGUF_QTYPE_IQ2_XXS)
+        decision->numeric_contract_version = yvex_quant_policy_iq2_encoder_version(policy);
     if (rule && rule->requires_imatrix)
         decision->calibration = YVEX_QUANT_CALIBRATION_REQUIRED;
     if (rule && rule->requires_cpu_compute && !decision->cpu_compute_available)
@@ -1592,14 +1594,15 @@ static int quant_plan_build_policy(
         !lowering->tensor_at || !lowering->contribution_at ||
         !lowering->summary(lowering_context, &lowering_summary) || !policy ||
         yvex_quant_policy_get_summary(policy, &policy_summary, err) != YVEX_OK ||
-        policy_summary.schema_version != YVEX_QUANT_POLICY_SCHEMA_VERSION ||
+        (policy_summary.schema_version != YVEX_QUANT_POLICY_SCHEMA_VERSION &&
+         policy_summary.schema_version != YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION) ||
         policy_summary.status != YVEX_QUANT_POLICY_STATUS_VALID ||
         !yvex_sha256_hex_valid(policy_summary.policy_identity) ||
         strlen(policy_summary.name) >= sizeof(((yvex_quant_plan_summary *)0)->profile_name))
         return quant_plan_fail(failure, YVEX_QUANT_FAILURE_INVALID_ARGUMENT, ULLONG_MAX,
                                ULLONG_MAX, 1u, 0u, UINT_MAX, YVEX_TRANSFORM_OP_COUNT, err,
                                YVEX_ERR_INVALID_ARG,
-                               "complete lowering inputs and one valid policy-v2 are required");
+                               "complete lowering inputs and one valid policy-v2/v3 are required");
     rc = yvex_quant_policy_identity_validate(policy, err);
     if (rc != YVEX_OK)
         return rc;

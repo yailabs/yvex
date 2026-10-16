@@ -741,8 +741,9 @@ static int quant_emitter_encode(quant_emitter *emitter, yvex_quant_failure *fail
                                       err, rc, "imatrix block read violated sealed coverage");
         weights = calibration;
     }
-    rc = weights ? yvex_quant_encode_block_weighted(
-                       emitter->decision->qtype, emitter->block, weights,
+    rc = weights ? yvex_quant_encode_block_weighted_versioned(
+                       emitter->decision->qtype, emitter->decision->numeric_contract_version,
+                       emitter->block, weights,
                        emitter->block_elements, encoded, sizeof(encoded), &encoded_bytes,
                        failure, err)
                  : yvex_quant_encode_block(emitter->decision->qtype, emitter->block,
@@ -886,6 +887,12 @@ static int quant_emitter_finish(quant_emitter *emitter, quant_terminal_result *r
             failure, YVEX_QUANT_FAILURE_SINK_SHORT_WRITE, emitter->decision, ULLONG_MAX, ULLONG_MAX,
             ULLONG_MAX, emitter->decision->encoded_bytes, emitter->output_offset, err, YVEX_ERR_IO,
             "terminal encoded byte count differs from its sealed decision");
+    if (emitter->executor->options.imatrix &&
+        yvex_imatrix_data_validate(emitter->executor->options.imatrix, err) != YVEX_OK)
+        return quant_execute_fail(failure, YVEX_QUANT_FAILURE_CALIBRATION_IDENTITY,
+                                  emitter->decision, ULLONG_MAX, ULLONG_MAX, ULLONG_MAX,
+                                  1u, 0u, err, YVEX_ERR_IO,
+                                  "calibration snapshot drifted before terminal commit");
     if (!emitter->sink->commit_terminal ||
         emitter->sink->commit_terminal(emitter->sink->context, emitter->decision,
                                        emitter->output_offset) != 0)
@@ -1875,6 +1882,12 @@ join:
                                 ULLONG_MAX, ULLONG_MAX, selected_terminal_count,
                                 executor.summary.terminals_executed, err, YVEX_ERR_FORMAT,
                                 "selected quant execution accounting is incomplete");
+        goto cleanup;
+    }
+    if (options.imatrix && yvex_imatrix_data_validate(options.imatrix, err) != YVEX_OK) {
+        rc = quant_execute_fail(failure, YVEX_QUANT_FAILURE_CALIBRATION_IDENTITY, NULL,
+                                ULLONG_MAX, ULLONG_MAX, ULLONG_MAX, 1u, 0u,
+                                err, YVEX_ERR_IO, "calibration snapshot drifted during execution");
         goto cleanup;
     }
     executor.summary.complete = 1;

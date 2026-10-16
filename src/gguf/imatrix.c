@@ -6,8 +6,10 @@
  */
 #include <yvex/internal/platform.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <fenv.h>
 #include <float.h>
+#include <limits.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -42,6 +44,7 @@ struct yvex_imatrix_data {
     char *calibration_dataset_identity;
     char *producer;
     char *dataset_name;
+    char context_identity[YVEX_IMATRIX_IDENTITY_CAP];
     unsigned int producer_version;
     struct stat snapshot;
     imatrix_data_entry *entries;
@@ -204,7 +207,8 @@ static int imatrix_data_identity(yvex_imatrix_data *data, yvex_error *err) {
     }
     yvex_sha256_hex(digest, data->summary.file_digest);
     yvex_sha256_init(&semantic_hash);
-    if (!yvex_sha256_update_text(&semantic_hash, "yvex.imatrix.data.v1") ||
+    if (!yvex_sha256_update_text(&semantic_hash, data->context_identity[0]
+                                  ? "yvex.imatrix.data.v2" : "yvex.imatrix.data.v1") ||
         !yvex_sha256_update_text(&semantic_hash, data->source_model_identity) ||
         !yvex_sha256_update_text(&semantic_hash, data->calibration_dataset_identity) ||
         !yvex_sha256_update_text(&semantic_hash, data->producer) ||
@@ -214,6 +218,8 @@ static int imatrix_data_identity(yvex_imatrix_data *data, yvex_error *err) {
         !yvex_sha256_update_u64(&semantic_hash, data->summary.value_count) ||
         !yvex_sha256_update_u64(&semantic_hash, data->summary.calibration_chunk_count) ||
         !yvex_sha256_update_text(&semantic_hash, data->dataset_name) ||
+        (data->context_identity[0] &&
+         !yvex_sha256_update_text(&semantic_hash, data->context_identity)) ||
         !yvex_sha256_final(&semantic_hash, digest)) {
         yvex_error_set(err, YVEX_ERR_STATE, "imatrix.data", "imatrix identity failed");
         return YVEX_ERR_STATE;
@@ -364,6 +370,10 @@ int yvex_imatrix_data_get_summary(const yvex_imatrix_data *data,
     }
     *out = data->summary;
     return YVEX_OK;
+}
+
+const char *yvex_imatrix_data_context_identity(const yvex_imatrix_data *data) {
+    return data && data->context_identity[0] ? data->context_identity : NULL;
 }
 
 int yvex_imatrix_data_find(const yvex_imatrix_data *data, const char *name,
@@ -653,6 +663,12 @@ typedef struct {
 } yvex_imatrix_coverage;
 
 struct yvex_imatrix_manifest {
+    unsigned int schema_version, producer_version, provenance_fields, strict_violations;
+    unsigned int nested_fields;
+    char source_identity[YVEX_IMATRIX_IDENTITY_CAP];
+    char dataset_identity[YVEX_IMATRIX_IDENTITY_CAP];
+    char context_identity[YVEX_IMATRIX_IDENTITY_CAP];
+    char file_digest[YVEX_IMATRIX_IDENTITY_CAP];
     char *name;
     char *architecture;
     char *source_manifest_path;
@@ -970,9 +986,14 @@ int yvex_imatrix_manifest_write_json(const char *out_path, const yvex_imatrix_ma
 }
 
 int yvex_imatrix_manifest_open(yvex_imatrix_manifest **out, const char *path, yvex_error *err) {
+    if (out) *out = NULL;
     int rc = manifest_parse_json(out, path, err);
     if (rc == YVEX_OK) {
         rc = yvex_imatrix_manifest_validate(*out, err);
+    }
+    if (rc != YVEX_OK && out && *out) {
+        yvex_imatrix_manifest_close(*out);
+        *out = NULL;
     }
     return rc;
 }
@@ -1033,14 +1054,26 @@ static int ij_parse_named_object(yvex_gguf_json *j, yvex_imatrix_manifest *manif
         {
             char **target = manifest_text_find(manifest, key, begin, end);
             if (target) {
+                unsigned int bit = 0u;
                 char *value = yvex_gguf_json_string(j);
+                for (size_t field = begin; field < end; ++field)
+                    if (target == manifest_text(manifest, field)) bit = 1u << field;
+                if (manifest->nested_fields & bit) manifest->strict_violations = 1u;
+                manifest->nested_fields |= bit;
                 if (!value)
                     rc = yvex_error_code(j->err);
                 else {
                     free(*target);
                     *target = value;
                 }
+            } else if (begin == 4u && !strcmp(key, "external")) {
+                int external;
+                if (manifest->nested_fields & 256u) manifest->strict_violations = 1u;
+                manifest->nested_fields |= 256u;
+                if (!yvex_json_bool(&j->cursor, &external))
+                    rc = yvex_gguf_json_fail(j, "external calibration marker must be boolean");
             } else {
+                manifest->strict_violations = 1u;
                 rc = yvex_gguf_json_skip(j);
             }
         }
@@ -1057,6 +1090,7 @@ static int ij_parse_coverage_row(yvex_gguf_json *j, void *context) {
     char *kind = NULL;
     char *selector = NULL;
     char *purpose = NULL;
+    unsigned int fields = 0u;
     int rc = yvex_gguf_json_expect(j, '{');
 
     if (rc != YVEX_OK)
@@ -1068,14 +1102,25 @@ static int ij_parse_coverage_row(yvex_gguf_json *j, void *context) {
         rc = yvex_gguf_json_member(j, &key, &complete);
         if (rc != YVEX_OK) goto done;
         if (complete) break;
-        if (strcmp(key, "kind") == 0)
+        if (strcmp(key, "kind") == 0) {
+            if (fields & 1u) manifest->strict_violations = 1u;
+            fields |= 1u;
+            free(kind);
             kind = yvex_gguf_json_string(j);
-        else if (strcmp(key, "selector") == 0)
+        } else if (strcmp(key, "selector") == 0) {
+            if (fields & 2u) manifest->strict_violations = 1u;
+            fields |= 2u;
+            free(selector);
             selector = yvex_gguf_json_string(j);
-        else if (strcmp(key, "purpose") == 0)
+        } else if (strcmp(key, "purpose") == 0) {
+            if (fields & 4u) manifest->strict_violations = 1u;
+            fields |= 4u;
+            free(purpose);
             purpose = yvex_gguf_json_string(j);
-        else
+        } else {
+            manifest->strict_violations = 1u;
             rc = yvex_gguf_json_skip(j);
+        }
         free(key);
         if (rc != YVEX_OK)
             goto done;
@@ -1090,10 +1135,65 @@ done:
     return rc;
 }
 
+/* Bound provenance is data identity, not a caller-supplied quality verdict. */
+static int ij_parse_provenance(yvex_gguf_json *json, yvex_imatrix_manifest *manifest) {
+    static const char *const keys[] = {
+        "source_model_identity", "calibration_dataset_identity", "execution_context_identity", "file_sha256"
+    };
+    char *destinations[] = {manifest->source_identity, manifest->dataset_identity,
+                            manifest->context_identity, manifest->file_digest};
+    int rc = yvex_gguf_json_expect(json, '{');
+    if (manifest->provenance_fields)
+        return yvex_gguf_json_fail(json, "duplicate imatrix provenance");
+    while (rc == YVEX_OK && json->cursor.cursor < json->cursor.end) {
+        char *key = NULL;
+        unsigned int field;
+        int complete = 0;
+        rc = yvex_gguf_json_member(json, &key, &complete);
+        if (rc != YVEX_OK) return rc;
+        if (complete) return YVEX_OK;
+        for (field = 0u; field < 4u; ++field)
+            if (!strcmp(key, keys[field])) break;
+        if (field < 4u && !(manifest->provenance_fields & (1u << field))) {
+            char *value = yvex_gguf_json_string(json);
+            if (!value || !yvex_sha256_hex_valid(value))
+                rc = yvex_gguf_json_fail(json, "invalid imatrix provenance identity");
+            else {
+                memcpy(destinations[field], value, YVEX_IMATRIX_IDENTITY_CAP);
+                manifest->provenance_fields |= 1u << field;
+            }
+            free(value);
+        } else if (!strcmp(key, "producer_version") && !(manifest->provenance_fields & 16u)) {
+            unsigned long long version = 0ull;
+            if (!yvex_json_u64(&json->cursor, &version) || !version || version > UINT_MAX)
+                rc = yvex_gguf_json_fail(json, "invalid calibration producer version");
+            else {
+                manifest->producer_version = (unsigned int)version;
+                manifest->provenance_fields |= 16u;
+            }
+        } else {
+            rc = yvex_gguf_json_fail(json, "unknown or duplicate imatrix provenance field");
+        }
+        free(key);
+        if (rc == YVEX_OK) yvex_gguf_json_optional_comma(json);
+    }
+    return rc == YVEX_OK ? yvex_gguf_json_fail(json, "unterminated imatrix provenance") : rc;
+}
+
+static unsigned int imatrix_root_key_bit(const char *key) {
+    static const char *const keys[] = {"name", "architecture", "source_manifest", "quant_policy",
+        "schema", "status", "format", "imatrix", "calibration", "coverage", "provenance"};
+    for (unsigned int i = 0u; i < sizeof(keys) / sizeof(keys[0]); ++i)
+        if (!strcmp(key, keys[i])) return 1u << i;
+    return 0u;
+}
+
 static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yvex_error *err) {
     yvex_imatrix_manifest *manifest;
     yvex_gguf_json j;
-    int rc;
+    yvex_json syntax;
+    int rc, closed = 0;
+    unsigned int fields = 0u;
 
     if (!out || !path) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "imatrix_json", "out and path are required");
@@ -1103,12 +1203,14 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
     rc = yvex_gguf_json_open(&j, path, "imatrix_json", err);
     if (rc != YVEX_OK)
         return rc;
+    syntax = j.cursor;
     manifest = (yvex_imatrix_manifest *)calloc(1, sizeof(*manifest));
     if (!manifest) {
         yvex_gguf_json_close(&j);
         yvex_error_set(err, YVEX_ERR_NOMEM, "imatrix_json", "manifest allocation failed");
         return YVEX_ERR_NOMEM;
     }
+    manifest->schema_version = 1u;
     rc = yvex_gguf_json_expect(&j, '{');
     if (rc != YVEX_OK)
         goto fail;
@@ -1118,7 +1220,12 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
 
         rc = yvex_gguf_json_member(&j, &key, &complete);
         if (rc != YVEX_OK) goto fail;
-        if (complete) break;
+        if (complete) { closed = 1; break; }
+        {
+            unsigned int bit = imatrix_root_key_bit(key);
+            if (!bit || (fields & bit)) manifest->strict_violations = 1u;
+            fields |= bit;
+        }
         if (strcmp(key, "schema") == 0) {
             char *schema = yvex_gguf_json_string(&j);
             if (!schema) {
@@ -1126,13 +1233,19 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
                 rc = yvex_error_code(err);
                 goto fail;
             }
-            if (strcmp(schema, "yvex.imatrix_manifest.v1") != 0) {
+            if (!strcmp(schema, "yvex.imatrix_manifest.v2"))
+                manifest->schema_version = 2u;
+            else if (!strcmp(schema, "yvex.imatrix_manifest.v1"))
+                manifest->schema_version = 1u;
+            else {
                 free(schema);
                 free(key);
                 rc = yvex_gguf_json_fail(&j, "unsupported imatrix schema");
                 goto fail;
             }
             free(schema);
+        } else if (strcmp(key, "provenance") == 0) {
+            rc = ij_parse_provenance(&j, manifest);
         } else if (manifest_text_find(manifest, key, 0u, 4u)) {
             char **target = manifest_text_find(manifest, key, 0u, 4u);
             char *value = yvex_gguf_json_string(&j);
@@ -1173,6 +1286,13 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
         if (rc != YVEX_OK)
             goto fail;
         yvex_gguf_json_optional_comma(&j);
+    }
+    if ((manifest->schema_version == 2u && (!closed || !yvex_json_complete(&j.cursor) ||
+         !yvex_json_skip_value(&syntax) || !yvex_json_complete(&syntax) ||
+         manifest->strict_violations || manifest->provenance_fields != 31u)) ||
+        (manifest->schema_version != 2u && manifest->provenance_fields)) {
+        rc = yvex_gguf_json_fail(&j, "bound imatrix manifest requires complete strict v2 provenance");
+        goto fail;
     }
     {
         size_t index;
@@ -1216,7 +1336,14 @@ static int manifest_write_json_file(const char *out_path, const yvex_imatrix_man
         return YVEX_ERR_IO;
     }
     fprintf(fp, "{\n");
-    fprintf(fp, "  \"schema\": \"yvex.imatrix_manifest.v1\",\n");
+    fprintf(fp, "  \"schema\": \"yvex.imatrix_manifest.v%u\",\n",
+            manifest->schema_version == 2u ? 2u : 1u);
+    if (manifest->schema_version == 2u)
+        fprintf(fp, "  \"provenance\": {\"source_model_identity\":\"%s\","
+                "\"calibration_dataset_identity\":\"%s\",\"execution_context_identity\":\"%s\","
+                "\"file_sha256\":\"%s\",\"producer_version\":%u},\n", manifest->source_identity,
+                manifest->dataset_identity, manifest->context_identity, manifest->file_digest,
+                manifest->producer_version);
     for (field = 0u; field < sizeof(imatrix_json_fields) / sizeof(imatrix_json_fields[0]); ++field) {
         fputs(imatrix_json_fields[field].prefix, fp);
         yvex_file_json_write_string(fp, manifest_json_value(manifest, &imatrix_json_fields[field]));
@@ -1251,6 +1378,16 @@ int yvex_imatrix_manifest_validate(const yvex_imatrix_manifest *manifest, yvex_e
     }
     summary = (yvex_imatrix_summary *)&manifest->summary;
     manifest_refresh_summary(manifest, summary);
+    if (manifest->schema_version == 2u &&
+        (manifest->provenance_fields != 31u || !manifest->producer_version ||
+         !manifest->producer || !manifest->producer[0] ||
+         !manifest->imatrix_path || !manifest->imatrix_path[0] ||
+         (manifest->format != YVEX_IMATRIX_FORMAT_LLAMA_CPP_DAT &&
+          manifest->format != YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT))) {
+        summary->status = YVEX_IMATRIX_STATUS_INVALID;
+        yvex_error_set(err, YVEX_ERR_FORMAT, "imatrix.profile", "bound numeric calibration profile is incomplete");
+        return YVEX_ERR_FORMAT;
+    }
 
     if (manifest->quant_policy_path && manifest->quant_policy_path[0]) {
         yvex_quant_policy *policy = NULL;
@@ -1293,4 +1430,90 @@ int yvex_imatrix_manifest_validate(const yvex_imatrix_manifest *manifest, yvex_e
         summary->status = YVEX_IMATRIX_STATUS_DECLARED;
     }
     return YVEX_OK;
+}
+
+/* Content classification is not admission. Valid DAT counts contain NUL bytes
+ * in their four-byte prefix, unlike a JSON object; no suffix selects behavior. */
+static int imatrix_profile_is_document(const char *path, int *document, yvex_error *err) {
+    unsigned char prefix[4];
+    struct stat observed;
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    ssize_t count;
+    if (fd < 0) {
+        yvex_error_set(err, YVEX_ERR_IO, "imatrix.profile", "calibration input is unavailable");
+        return YVEX_ERR_IO;
+    }
+    do { count = pread(fd, prefix, sizeof(prefix), 0); } while (count < 0 && errno == EINTR);
+    if (fstat(fd, &observed) || !S_ISREG(observed.st_mode) || count != 4) {
+        close(fd);
+        yvex_error_set(err, YVEX_ERR_FORMAT, "imatrix.profile", "calibration input has no bounded format header");
+        return YVEX_ERR_FORMAT;
+    }
+    close(fd);
+    *document = imatrix_data_u32(prefix) > 65536u;
+    return YVEX_OK;
+}
+
+/* Resolve raw legacy facts or an explicitly source/file/context-bound profile.
+ * Copies only identity-bearing provenance; caller claims never grant quality. */
+int yvex_imatrix_data_open_profile(yvex_imatrix_data **out,
+    const yvex_imatrix_data_options *legacy_options,
+    const char *required_source_identity, yvex_error *err) {
+    yvex_imatrix_manifest *profile = NULL;
+    yvex_imatrix_data *data = NULL;
+    yvex_imatrix_data_options options;
+    int document = 0, rc;
+    if (out) *out = NULL;
+    if (!out || !legacy_options || !legacy_options->path ||
+        !legacy_options->maximum_mapped_bytes || !yvex_sha256_hex_valid(required_source_identity)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "imatrix.profile",
+                       "calibration path, budget and authenticated source are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = imatrix_profile_is_document(legacy_options->path, &document, err);
+    if (rc != YVEX_OK) return rc;
+    if (!document) {
+        if (!legacy_options->source_model_identity || !legacy_options->calibration_dataset_identity ||
+            !legacy_options->producer || !legacy_options->producer_version) {
+            yvex_error_set(err, YVEX_ERR_STATE, "imatrix.profile",
+                "raw calibration requires declared legacy provenance; use a source-bound v2 manifest");
+            return YVEX_ERR_STATE;
+        }
+        if (strcmp(legacy_options->source_model_identity, required_source_identity)) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "imatrix.profile",
+                "raw calibration provenance identifies a different authenticated source");
+            return YVEX_ERR_FORMAT;
+        }
+        return yvex_imatrix_data_open(out, legacy_options, err);
+    }
+    rc = yvex_imatrix_manifest_open(&profile, legacy_options->path, err);
+    if (rc != YVEX_OK) goto done;
+    if (profile->schema_version != 2u || strcmp(profile->source_identity, required_source_identity)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "imatrix.profile",
+                       "numeric calibration requires exact source-bound v2 provenance");
+        rc = YVEX_ERR_FORMAT;
+        goto done;
+    }
+    options = *legacy_options;
+    options.path = profile->imatrix_path;
+    options.source_model_identity = profile->source_identity;
+    options.calibration_dataset_identity = profile->dataset_identity;
+    options.producer = profile->producer;
+    options.producer_version = profile->producer_version;
+    rc = yvex_imatrix_data_open(&data, &options, err);
+    if (rc != YVEX_OK) goto done;
+    if (strcmp(data->summary.file_digest, profile->file_digest)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "imatrix.profile",
+                       "numeric calibration file digest differs from its profile");
+        rc = YVEX_ERR_FORMAT;
+        goto done;
+    }
+    memcpy(data->context_identity, profile->context_identity, sizeof(data->context_identity));
+    rc = imatrix_data_identity(data, err);
+    if (rc == YVEX_OK) rc = yvex_imatrix_data_validate(data, err);
+    if (rc == YVEX_OK) { *out = data; data = NULL; }
+done:
+    yvex_imatrix_data_close(data);
+    yvex_imatrix_manifest_close(profile);
+    return rc;
 }

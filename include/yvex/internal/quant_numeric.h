@@ -21,6 +21,7 @@ extern "C" {
 #endif
 /* Quant Numeric. */
 #define YVEX_QUANT_NUMERIC_CONTRACT_VERSION 1u
+#define YVEX_QUANT_IQ2_WEIGHTED_CONTRACT_VERSION 2u
 #define YVEX_QUANT_Q8_0_ELEMENTS 32u
 #define YVEX_QUANT_Q8_0_BYTES 34u
 #define YVEX_QUANT_MXFP4_ELEMENTS 32u
@@ -189,6 +190,11 @@ int yvex_quant_encode_block_weighted(unsigned int qtype,
                                      size_t *encoded_bytes,
                                      yvex_quant_failure *failure,
                                      yvex_error *err);
+int yvex_quant_encode_block_weighted_versioned(
+    unsigned int qtype, unsigned int numeric_contract_version,
+    const float *source, const float *calibration_weights, unsigned long long elements,
+    unsigned char *encoded, size_t encoded_capacity, size_t *encoded_bytes,
+    yvex_quant_failure *failure, yvex_error *err);
 int yvex_quant_decode_block(unsigned int qtype,
                             const unsigned char *encoded,
                             size_t encoded_bytes,

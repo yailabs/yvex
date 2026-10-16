@@ -47,6 +47,63 @@ does not establish representative calibration or independent held-out quality.
 Producing an authenticated importance matrix and admitting its use in a new
 physical recipe remain distinct from this arithmetic primitive.
 
+The numeric-profile entrypoint checks the required source identity for both a
+bound v2 manifest and explicitly declared legacy raw-DAT provenance. Raw data
+does not acquire authority to identify a different checkpoint by being supplied
+through a compatibility path; matching declarations still do not prove collection
+history or quality.
+
+### Explicit IQ2 encoding producer
+
+Policy v1/v2 preserve the original IQ2 encoder and their exact identities.
+Policy v3 requires `iq2_encoder`: `legacy-grid-v1` or `weighted-grid-v2`.
+The latter searches a deterministic 16-neighbor magnitude codebook with seven
+scale seeds, three bounded least-squares refinements and three final FP16 scale
+candidates. Fitting uses the actual decoded levels (8, 25, 43), not the proxy
+levels (1, 3, 5). Each published block retains the lower calibration-weighted
+reconstruction loss between the new search and the original encoding.
+
+The policy identity, quant decision's numeric producer version and payload
+recipe bind this choice. Version 2 applies only to explicitly selected IQ2
+decisions; scalar/Q2/MXFP4 encoders and existing bindings do not change.
+The complete writer additionally records `yvex.quant.iq2_encoder_contract` for
+version 2. The 66-byte IQ2 storage ABI and runtime decoder remain unchanged.
+This is a representation producer, not a new inference arithmetic class or an
+independent model-quality certificate. Re-emission needs its own artifact and
+binding; existing artifact consumers are not automatically changed.
+
+The producer's process-shared immutable neighbor table occupies 699,056 bytes,
+in addition to the existing 43,691-byte legacy table. Initialization occurs once;
+search scratch is bounded per worker and does not create a second weight matrix.
+This offline process storage is distinct from engine-local prepared weights.
+
+### Source-bound numeric calibration
+
+The existing `--imatrix-manifest` input accepts raw DAT with the family's
+explicit legacy provenance, or `yvex.imatrix_manifest.v2`. The latter binds
+the exact source payload identity, calibration dataset identity, producing
+execution-context identity, numeric-file SHA-256 and producer/version. The
+compiler checks the source against the sealed Transformation IR, then the
+importance-matrix owner checks the declared bytes and mapping budget before
+publishing data. A legacy metadata manifest is not numeric calibration.
+
+The context is a semantic projection: source/representation, admitted
+arithmetic, workload content and real observed populations. Local paths,
+timestamps and live engine generations do not identify it. Paths only locate
+the manifest and DAT; relative paths retain the CLI working-directory meaning.
+The opaque data identity binds this context in addition to the existing numeric
+and producer facts. Existing raw-data identities remain unchanged.
+
+Coverage claims in a manifest are descriptive. Quant execution independently
+requires an actual numeric entry covering each selected terminal's complete
+expert-row geometry. Missing populations cannot be filled with invented means.
+Bootstrap statistics from a quantized engine remain distinct from independent
+checkpoint calibration and held-out quality. Neither this manifest nor a
+successful plan grants model-quality qualification or deployment authority.
+Execution borrows a stable numeric snapshot for its entire call. It revalidates
+any supplied calibration owner before terminal commit and final completion;
+drift refuses rather than publishing a completed encoding under a stale identity.
+
 ## Current machinery and target search
 
 Current quant planning, encoding, writer and admission machinery can construct

@@ -492,6 +492,146 @@ static int test_accumulator_ieee(void)
     return 0;
 }
 
+static int write_bound_profile(const char *path, const char *data, const char *source,
+                               const char *dataset, const char *context,
+                               const char *digest, const char *extra)
+{
+    FILE *file = fopen(path, "wb");
+    if (!file) return 0;
+    fprintf(file, "{\"schema\":\"yvex.imatrix_manifest.v2\",\"name\":\"bound-test\","
+            "\"format\":\"llama_cpp_dat\",\"imatrix\":{\"path\":\"%s\"},"
+            "\"calibration\":{\"producer\":\"test\",\"dataset\":\"fixture\"},"
+            "\"provenance\":{\"source_model_identity\":\"%s\","
+            "\"calibration_dataset_identity\":\"%s\",\"execution_context_identity\":\"%s\","
+            "\"file_sha256\":\"%s\",\"producer_version\":1%s}}",
+            data, source, dataset, context, digest, extra ? extra : "");
+    return fclose(file) == 0;
+}
+
+static int test_bound_data_profile(void)
+{
+    const char *path = "build/tests/imatrix/bound.json";
+    const char *data_path = "build/tests/imatrix/bound.dat";
+    const char *written = "build/tests/imatrix/bound-written.json";
+    char source[65], dataset[65], context[65], other[65];
+    yvex_imatrix_data_options options = {0};
+    yvex_imatrix_data *data = NULL;
+    yvex_imatrix_manifest *manifest = NULL;
+    yvex_imatrix_data_summary raw = {0}, bound = {0}, readback = {0};
+    yvex_error error = {0};
+    unsigned int i;
+    memset(source, 'a', 64); source[64] = '\0';
+    memset(dataset, 'b', 64); dataset[64] = '\0';
+    memset(context, 'c', 64); context[64] = '\0';
+    memset(other, 'd', 64); other[64] = '\0';
+    options.path = data_path; options.source_model_identity = source;
+    options.calibration_dataset_identity = dataset; options.producer = "test";
+    options.producer_version = 1u; options.maximum_mapped_bytes = 1024u * 1024u;
+    YVEX_TEST_ASSERT(write_imatrix_data(data_path) &&
+        yvex_imatrix_data_open_profile(&data, &options, source, &error) == YVEX_OK &&
+        yvex_imatrix_data_get_summary(data, &raw, &error) == YVEX_OK &&
+        !yvex_imatrix_data_context_identity(data), "raw DAT preserves its explicit legacy provenance and identity");
+    yvex_imatrix_data_close(data); data = NULL;
+    YVEX_TEST_ASSERT(yvex_imatrix_data_open_profile(&data, &options, other, &error) == YVEX_ERR_FORMAT &&
+        !data, "raw legacy provenance must match the independently required authenticated source");
+    YVEX_TEST_ASSERT(write_bound_profile(path, data_path, source, dataset, context, raw.file_digest, NULL),
+                     "write exact source/file/context calibration profile");
+    options.path = path;
+    options.source_model_identity = options.calibration_dataset_identity = options.producer = NULL;
+    options.producer_version = 0u;
+    YVEX_TEST_ASSERT(yvex_imatrix_data_open_profile(&data, &options, source, &error) == YVEX_OK &&
+        yvex_imatrix_data_get_summary(data, &bound, &error) == YVEX_OK &&
+        !strcmp(bound.source_model_identity, source) && !strcmp(bound.calibration_dataset_identity, dataset) &&
+        !strcmp(bound.producer, "test") && bound.producer_version == 1u &&
+        !strcmp(yvex_imatrix_data_context_identity(data), context) &&
+        strcmp(bound.imatrix_identity, raw.imatrix_identity), "bound data is independent of absent family constants");
+    YVEX_TEST_ASSERT(yvex_imatrix_manifest_open(&manifest, path, &error) == YVEX_OK &&
+        yvex_imatrix_manifest_write_json(written, manifest, &error) == YVEX_OK,
+        "canonical manifest projection preserves v2 provenance");
+    yvex_imatrix_manifest_close(manifest); manifest = NULL;
+    yvex_imatrix_data_close(data); data = NULL;
+    options.path = written;
+    YVEX_TEST_ASSERT(yvex_imatrix_data_open_profile(&data, &options, source, &error) == YVEX_OK &&
+        yvex_imatrix_data_get_summary(data, &readback, &error) == YVEX_OK &&
+        !strcmp(bound.imatrix_identity, readback.imatrix_identity) && remove(written) == 0 &&
+        yvex_imatrix_data_validate(data, &error) == YVEX_OK,
+        "numeric owner copies provenance independently of profile-document lifetime");
+    yvex_imatrix_data_close(data); data = NULL; options.path = path;
+    YVEX_TEST_ASSERT(yvex_imatrix_data_open_profile(&data, &options, other, &error) == YVEX_ERR_FORMAT &&
+                     !data, "foreign checkpoint profile refuses without publication");
+    for (i = 0u; i < 4u; ++i) {
+        const char *extra = i == 1u ? ",\"qualified\":true" :
+                            i == 2u ? ",\"producer_version\":2" : NULL;
+        YVEX_TEST_ASSERT(write_bound_profile(path, data_path, source, dataset, context,
+            i == 0u ? other : raw.file_digest, extra), "write refused bound profile control");
+        if (i == 3u) {
+            FILE *file = fopen(path, "ab");
+            YVEX_TEST_ASSERT(file && fputs(" unexpected", file) >= 0 && !fclose(file), "append invalid terminal data");
+        }
+        YVEX_TEST_ASSERT(yvex_imatrix_data_open_profile(&data, &options, source, &error) != YVEX_OK && !data,
+                         "wrong bytes, caller quality, duplicate provenance and trailing data refuse");
+    }
+    YVEX_TEST_ASSERT(write_bound_profile(path, data_path, source, dataset, other, raw.file_digest, NULL) &&
+        yvex_imatrix_data_open_profile(&data, &options, source, &error) == YVEX_OK &&
+        yvex_imatrix_data_get_summary(data, &readback, &error) == YVEX_OK &&
+        strcmp(bound.imatrix_identity, readback.imatrix_identity), "execution context is identity-bearing without hashing local paths");
+    yvex_imatrix_data_close(data); data = NULL;
+    options.maximum_mapped_bytes = 1u;
+    YVEX_TEST_ASSERT(yvex_imatrix_data_open_profile(&data, &options, source, &error) != YVEX_OK && !data,
+                     "bound data cannot escape caller mapping budget");
+    options.maximum_mapped_bytes = 1024u * 1024u; options.path = data_path;
+    YVEX_TEST_ASSERT(yvex_imatrix_data_open_profile(&data, &options, source, &error) == YVEX_ERR_STATE && !data,
+                     "raw data without legacy provenance does not inherit a checkpoint identity");
+    return 0;
+}
+
+static int test_bound_document_refusals(void)
+{
+    const char *path = "build/tests/imatrix/bound.json";
+    const char *prefix = "{\"schema\":\"yvex.imatrix_manifest.v2\",\"format\":\"llama_cpp_dat\","
+        "\"imatrix\":{\"path\":\"build/tests/imatrix/bound.dat\"},\"calibration\":{\"producer\":\"test\"},"
+        "\"provenance\":{\"source_model_identity\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\","
+        "\"calibration_dataset_identity\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\","
+        "\"execution_context_identity\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\","
+        "\"file_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"producer_version\":1}";
+    const char *suffixes[] = {
+        " \"name\":\"missing-comma\"}", ",}", "", ",\"schema\":\"yvex.imatrix_manifest.v2\"}",
+        ",\"imatrix\":{\"path\":\"other\"}}", ",\"calibration\":{\"producer\":\"test\",\"unknown\":0}}",
+        ",\"coverage\":[{\"kind\":\"global\",\"selector\":\"all\",\"unknown\":0}]}",
+        ",\"coverage\":[{\"kind\":\"global\",\"kind\":\"global\",\"selector\":\"all\"}]}"
+    };
+    yvex_error error = {0};
+    for (size_t i = 0u; i < sizeof(suffixes) / sizeof(suffixes[0]); ++i) {
+        yvex_imatrix_manifest *manifest = NULL;
+        FILE *file = fopen(path, "wb");
+        YVEX_TEST_ASSERT(file && fputs(prefix, file) >= 0 && fputs(suffixes[i], file) >= 0 &&
+            !fclose(file) && yvex_imatrix_manifest_open(&manifest, path, &error) != YVEX_OK &&
+            !manifest, "bound documents reject malformed syntax and duplicate or unknown facts");
+    }
+    YVEX_TEST_ASSERT(write_file(path, "{\"schema\":\"yvex.imatrix_manifest.v1\",\"format\":\"llama_cpp_dat\"}"),
+                     "write metadata-only legacy manifest");
+    {
+        yvex_imatrix_manifest *manifest = NULL, *refused = NULL;
+        yvex_imatrix_summary summary = {0};
+        YVEX_TEST_ASSERT(yvex_imatrix_manifest_open(&manifest, path, &error) == YVEX_OK,
+                         "retain caller-owned metadata control");
+        refused = manifest;
+        YVEX_TEST_ASSERT(yvex_imatrix_manifest_open(&refused, NULL, &error) == YVEX_ERR_INVALID_ARG &&
+            !refused && yvex_imatrix_manifest_get_summary(manifest, &summary, &error) == YVEX_OK,
+            "invalid open clears its output without closing a previously caller-owned manifest");
+        yvex_imatrix_manifest_close(manifest);
+    }
+    {
+        yvex_imatrix_data_options options = {0};
+        yvex_imatrix_data *data = NULL;
+        options.path = path; options.maximum_mapped_bytes = 1024u * 1024u;
+        YVEX_TEST_ASSERT(yvex_imatrix_data_open_profile(&data, &options,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", &error) == YVEX_ERR_FORMAT && !data,
+            "legacy metadata is not an authenticated numeric profile");
+    }
+    return 0;
+}
+
 int yvex_test_imatrix(void)
 {
     if (test_accumulator_populations() != 0) return 1;
@@ -501,6 +641,8 @@ int yvex_test_imatrix(void)
     if (test_names() != 0) return 1;
     if (test_create_write_open_present() != 0) return 1;
     if (test_data_snapshot() != 0) return 1;
+    if (test_bound_data_profile() != 0) return 1;
+    if (test_bound_document_refusals() != 0) return 1;
     if (test_duplicate_data_entry() != 0) return 1;
     if (test_missing_file() != 0) return 1;
     if (test_invalid_args() != 0) return 1;

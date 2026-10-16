@@ -7,6 +7,7 @@
 #include <yvex/internal/quant_numeric.h>
 
 #include <float.h>
+#include <fenv.h>
 #include <limits.h>
 #include <math.h>
 #include <stdint.h>
@@ -781,6 +782,79 @@ static int quant_test_f32_ordered_dot(void)
     return 0;
 }
 
+static int quant_test_weighted_iq2_v2(void)
+{
+    float source[256], weights[256], control[256], candidate[256], independent[256];
+    unsigned char legacy[66], first[66], repeat[66];
+    unsigned int block, i, changed = 0u;
+    uint32_t state = 0x6e624eb7u;
+    yvex_quant_failure failure = {0};
+    yvex_error error = {0};
+    size_t bytes;
+    for (block = 0u; block < 128u; ++block) {
+        double baseline_loss = 0.0, candidate_loss = 0.0;
+        for (i = 0u; i < 256u; ++i) {
+            state = state * 1664525u + 1013904223u;
+            source[i] = block == 0u ? 0.0f : (float)((int)(state >> 16u) - 32768) *
+                        (block & 1u ? 0.00003125f : 0.002f);
+            state = state * 1664525u + 1013904223u;
+            weights[i] = block == 1u ? 0.0f : (float)(state & 4095u) / 512.0f;
+        }
+        YVEX_TEST_ASSERT(yvex_quant_encode_block_weighted(YVEX_GGUF_QTYPE_IQ2_XXS,
+            source, weights, 256u, legacy, sizeof(legacy), &bytes, &failure, &error) == YVEX_OK &&
+            yvex_quant_encode_block_weighted_versioned(YVEX_GGUF_QTYPE_IQ2_XXS, 1u,
+            source, weights, 256u, first, sizeof(first), &bytes, &failure, &error) == YVEX_OK &&
+            !memcmp(legacy, first, sizeof(first)), "producer v1 retains exact original bytes");
+        YVEX_TEST_ASSERT(yvex_quant_encode_block_weighted_versioned(YVEX_GGUF_QTYPE_IQ2_XXS, 2u,
+            source, weights, 256u, first, sizeof(first), &bytes, &failure, &error) == YVEX_OK && bytes == 66u &&
+            yvex_quant_encode_block_weighted_versioned(YVEX_GGUF_QTYPE_IQ2_XXS, 2u,
+            source, weights, 256u, repeat, sizeof(repeat), &bytes, &failure, &error) == YVEX_OK &&
+            !memcmp(first, repeat, sizeof(first)), "bounded weighted producer v2 is deterministic");
+        changed += (unsigned int)(memcmp(first, legacy, sizeof(first)) != 0);
+        YVEX_TEST_ASSERT(yvex_quant_decode_block(YVEX_GGUF_QTYPE_IQ2_XXS, legacy, sizeof(legacy),
+            control, 256u, &failure, &error) == YVEX_OK &&
+            yvex_quant_decode_block(YVEX_GGUF_QTYPE_IQ2_XXS, first, sizeof(first),
+            candidate, 256u, &failure, &error) == YVEX_OK &&
+            quant_reference_block(YVEX_GGUF_QTYPE_IQ2_XXS, first, independent),
+            "v2 bytes retain the pinned independent storage decoder");
+        for (i = 0u; i < 256u; ++i) {
+            double old_delta = (double)source[i] - control[i];
+            double new_delta = (double)source[i] - candidate[i];
+            YVEX_TEST_ASSERT(quant_float_bits_equal(candidate[i], independent[i]),
+                             "v2 decoder is bitwise independent-reference compatible");
+            baseline_loss += weights[i] * old_delta * old_delta;
+            candidate_loss += weights[i] * new_delta * new_delta;
+        }
+        YVEX_TEST_ASSERT(candidate_loss <= baseline_loss,
+                         "actual published v2 block never worsens the declared calibration loss");
+    }
+    YVEX_TEST_ASSERT(changed, "v2 must actually explore a different encoding");
+    memset(first, 0xa5, sizeof(first)); memcpy(repeat, first, sizeof(first)); bytes = 123u;
+    YVEX_TEST_ASSERT(yvex_quant_encode_block_weighted_versioned(YVEX_GGUF_QTYPE_IQ2_XXS, 3u,
+        source, weights, 256u, first, sizeof(first), &bytes, &failure, &error) == YVEX_ERR_UNSUPPORTED &&
+        !bytes && !memcmp(first, repeat, sizeof(first)), "unknown producer refuses without encoded publication");
+    YVEX_TEST_ASSERT(yvex_quant_encode_block_weighted_versioned(YVEX_GGUF_QTYPE_Q2_K, 2u,
+        source, weights, 256u, first, sizeof(first), &bytes, &failure, &error) == YVEX_ERR_UNSUPPORTED &&
+        !bytes && !memcmp(first, repeat, sizeof(first)), "IQ2 producer version cannot silently change another qtype");
+    {
+        int rounding = fegetround(), status;
+        YVEX_TEST_ASSERT(fesetround(FE_DOWNWARD) == 0, "enter a deliberately unsupported arithmetic mode");
+        status = yvex_quant_encode_block_weighted_versioned(YVEX_GGUF_QTYPE_IQ2_XXS, 2u,
+            source, weights, 256u, first, sizeof(first), &bytes, &failure, &error);
+        YVEX_TEST_ASSERT(fesetround(rounding) == 0 && status == YVEX_ERR_STATE &&
+            !bytes && !memcmp(first, repeat, sizeof(first)), "non-nearest arithmetic refuses without encoded publication");
+    }
+    weights[17] = -1.0f;
+    YVEX_TEST_ASSERT(yvex_quant_encode_block_weighted_versioned(YVEX_GGUF_QTYPE_IQ2_XXS, 2u,
+        source, weights, 256u, first, sizeof(first), &bytes, &failure, &error) == YVEX_ERR_FORMAT &&
+        !bytes && !memcmp(first, repeat, sizeof(first)), "invalid calibration refuses before v2 writes");
+    weights[17] = NAN;
+    YVEX_TEST_ASSERT(yvex_quant_encode_block_weighted_versioned(YVEX_GGUF_QTYPE_IQ2_XXS, 2u,
+        source, weights, 256u, first, sizeof(first), &bytes, &failure, &error) == YVEX_ERR_FORMAT &&
+        !bytes && !memcmp(first, repeat, sizeof(first)), "nonfinite calibration remains refused");
+    return 0;
+}
+
 int yvex_test_quant_numeric(void)
 {
     float zero_q8[YVEX_QUANT_Q8_0_ELEMENTS] = {0};
@@ -795,6 +869,7 @@ int yvex_test_quant_numeric(void)
         quant_test_source_formats() != 0 || quant_test_registry() != 0 ||
         quant_test_golden_blocks() != 0 ||
         quant_test_weighted_blocks() != 0 ||
+        quant_test_weighted_iq2_v2() != 0 ||
         quant_test_exact_scalar_blocks() != 0 || quant_test_f32_ordered_dot() != 0 ||
         quant_test_block(YVEX_GGUF_QTYPE_Q8_0,
                          YVEX_QUANT_Q8_0_ELEMENTS,

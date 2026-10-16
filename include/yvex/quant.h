@@ -125,6 +125,13 @@ typedef struct yvex_imatrix_data yvex_imatrix_data;
 int yvex_imatrix_data_open(yvex_imatrix_data **out,
                            const yvex_imatrix_data_options *options,
                            yvex_error *err);
+/* Raw DAT retains explicitly supplied legacy provenance. A bound v2 manifest
+ * instead verifies its file digest and exact authenticated source, and binds
+ * its declared execution context. Neither path establishes model quality. */
+int yvex_imatrix_data_open_profile(yvex_imatrix_data **out,
+    const yvex_imatrix_data_options *legacy_options,
+    const char *required_source_identity, yvex_error *err);
+const char *yvex_imatrix_data_context_identity(const yvex_imatrix_data *data);
 void yvex_imatrix_data_close(yvex_imatrix_data *data);
 int yvex_imatrix_data_validate(const yvex_imatrix_data *data, yvex_error *err);
 int yvex_imatrix_data_get_summary(const yvex_imatrix_data *data,
@@ -340,6 +347,7 @@ typedef enum {
 } yvex_quant_policy_issue_kind;
 
 #define YVEX_QUANT_POLICY_SCHEMA_VERSION 2u
+#define YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION 3u
 #define YVEX_QUANT_POLICY_IDENTITY_CAP 65u
 enum {
     YVEX_QUANT_MATCH_ROLE = 1ull << 0,
@@ -438,6 +446,10 @@ int yvex_quant_policy_get_summary(const yvex_quant_policy *policy,
                                   yvex_error *err);
 
 unsigned long long yvex_quant_policy_rule_count(const yvex_quant_policy *policy);
+
+/* Policy v1/v2 retain encoder v1. V3 explicitly binds the IQ2 producer,
+ * independently of its unchanged storage format and runtime decoder. */
+unsigned int yvex_quant_policy_iq2_encoder_version(const yvex_quant_policy *policy);
 
 const yvex_quant_policy_rule *yvex_quant_policy_rule_at(const yvex_quant_policy *policy,
                                                         unsigned long long index);

@@ -22,6 +22,13 @@ publication: {html: true, pdf: true, index: true}
 
 ## Active goal-driven Physical Model Compiler
 
+The selective 2026-10-15 representation continuation admits a source/file/context-
+bound calibration profile through the existing CLI and an explicitly versioned,
+independently checked IQ2 encoding producer. Complete real gate/up observations
+select 28 layers; other weights remain controls. Native planning succeeds, while
+experimental artifact completion, full execution, quality and throughput remain
+unfinished. Lower parameter reconstruction loss is not an inference speedup.
+
 `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` now owns generic physical
 configuration search and the next DeepSeek implementation. `.5` retains its
 historical evidence and unearned 20/700 exits, BLOCKED on this selected owner;

@@ -6,6 +6,7 @@
  * artifact.
  */
 #include <float.h>
+#include <fenv.h>
 #include <limits.h>
 #include <math.h>
 #include <pthread.h>
@@ -637,13 +638,203 @@ int yvex_quant_encode_block(unsigned int qtype, const float *source, unsigned lo
     return YVEX_OK;
 }
 
-int yvex_quant_encode_block_weighted(unsigned int qtype, const float *source,
+/* Bounded weighted IQ2 producer v2. Its codebook and decoder are unchanged.
+ * Candidate order and ties are deterministic. The v1 producer remains the
+ * explicit control and a reconstruction-loss guard, never a runtime fallback. */
+#define QUANT_IQ2_NEIGHBORS 16u
+static unsigned char quant_iq2_neighbors[43691][QUANT_IQ2_NEIGHBORS];
+static pthread_once_t quant_iq2_weighted_once = PTHREAD_ONCE_INIT;
+static const float quant_iq2_levels[3] = {1.0f, 3.125f, 5.375f};
+
+static void quant_iq2_weighted_initialize(void) {
+    unsigned int key;
+    for (key = 0u; key < 43691u; ++key) {
+        unsigned int lane, grid, i;
+        float distances[QUANT_IQ2_NEIGHBORS];
+        int valid = 1;
+        for (lane = 0u; lane < 8u; ++lane)
+            if (((key >> (2u * lane)) & 3u) == 3u) valid = 0;
+        if (!valid) continue;
+        for (i = 0u; i < QUANT_IQ2_NEIGHBORS; ++i) distances[i] = INFINITY;
+        for (grid = 0u; grid < 256u; ++grid) {
+            float distance = 0.0f;
+            for (lane = 0u; lane < 8u; ++lane) {
+                float delta = quant_iq2_levels[(key >> (2u * lane)) & 3u] -
+                    quant_iq2_levels[(quant_iq2_grid[grid] >> (2u * lane)) & 3u];
+                distance += delta * delta;
+            }
+            for (i = 0u; i < QUANT_IQ2_NEIGHBORS; ++i) {
+                if (distance < distances[i]) {
+                    unsigned int j;
+                    for (j = QUANT_IQ2_NEIGHBORS - 1u; j > i; --j) {
+                        distances[j] = distances[j - 1u];
+                        quant_iq2_neighbors[key][j] = quant_iq2_neighbors[key][j - 1u];
+                    }
+                    distances[i] = distance;
+                    quant_iq2_neighbors[key][i] = (unsigned char)grid;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+static unsigned int quant_iq2_weighted_grid(const float *magnitude, const float *weight,
+                                            float scale) {
+    unsigned int key = 0u, selected = 0u, lane, i;
+    double best = INFINITY;
+    for (lane = 0u; lane < 8u; ++lane) {
+        float value = magnitude[lane] / scale;
+        unsigned int digit = value > 4.25f ? 2u : value > 2.0625f ? 1u : 0u;
+        key |= digit << (2u * lane);
+    }
+    for (i = 0u; i < QUANT_IQ2_NEIGHBORS; ++i) {
+        unsigned int grid = quant_iq2_neighbors[key][i];
+        double loss = 0.0;
+        for (lane = 0u; lane < 8u; ++lane) {
+            float value = scale * quant_iq2_levels[(quant_iq2_grid[grid] >> (2u * lane)) & 3u];
+            double delta = (double)magnitude[lane] - value;
+            loss += weight[lane] * delta * delta;
+        }
+        if (loss < best) { best = loss; selected = grid; }
+    }
+    return selected;
+}
+
+static double quant_iq2_weighted_loss(const float *source, const float *calibration,
+                                      const unsigned char *encoded) {
+    float decoded[YVEX_QUANT_IQ2_XXS_ELEMENTS];
+    yvex_quant_failure failure = {0};
+    yvex_error error = {0};
+    double loss = 0.0;
+    unsigned int i;
+    if (yvex_quant_decode_block(YVEX_GGUF_QTYPE_IQ2_XXS, encoded, YVEX_QUANT_IQ2_XXS_BYTES,
+                                decoded, YVEX_QUANT_IQ2_XXS_ELEMENTS,
+                                &failure, &error) != YVEX_OK) return INFINITY;
+    for (i = 0u; i < YVEX_QUANT_IQ2_XXS_ELEMENTS; ++i) {
+        double delta = (double)source[i] - decoded[i];
+        loss += calibration[i] * delta * delta;
+    }
+    return loss;
+}
+
+static int quant_encode_iq2_weighted(const float *source, const float *calibration,
+                                     unsigned char *encoded) {
+    float magnitude[256], weight[256], group_scale[8];
+    unsigned int signs[32], i, group;
+    float maximum_scale = 0.0f;
+    double sum = 0.0, best_loss;
+    int seed;
+    if (!quant_encode_iq2_xxs(source, calibration, encoded)) return 0;
+    pthread_once(&quant_iq2_weighted_once, quant_iq2_weighted_initialize);
+    for (i = 0u; i < 256u; ++i) sum += (double)source[i] * source[i];
+    for (i = 0u; i < 256u; ++i) {
+        magnitude[i] = fabsf(source[i]);
+        weight[i] = calibration[i] * sqrtf((float)(sum / 256.0) + source[i] * source[i]);
+    }
+    for (i = 0u; i < 32u; ++i) {
+        unsigned int mask = 0u, count = 0u, least = 0u, bit;
+        double least_cost = INFINITY;
+        for (bit = 0u; bit < 8u; ++bit) {
+            unsigned int at = 8u * i + bit;
+            double cost = (double)weight[at] * source[at] * source[at];
+            if (source[at] < 0.0f) { mask |= 1u << bit; ++count; }
+            if (cost < least_cost) { least_cost = cost; least = bit; }
+        }
+        if (count & 1u) { magnitude[8u * i + least] *= -1.0f; mask ^= 1u << least; }
+        signs[i] = mask & 127u;
+    }
+    for (group = 0u; group < 8u; ++group) {
+        float maximum = 0.0f;
+        double best = INFINITY;
+        for (i = 0u; i < 32u; ++i)
+            if (fabsf(magnitude[32u * group + i]) > maximum)
+                maximum = fabsf(magnitude[32u * group + i]);
+        group_scale[group] = 0.0f;
+        for (seed = -3; seed <= 3 && maximum > 0.0f; ++seed) {
+            float scale = maximum / 5.375f * (1.0f + 0.15f * (float)seed);
+            unsigned int trial[4] = {0u}, iteration;
+            for (iteration = 0u; iteration < 3u && scale > 0.0f; ++iteration) {
+                unsigned int vector;
+                double numerator = 0.0, denominator = 0.0, loss = 0.0;
+                for (vector = 0u; vector < 4u; ++vector)
+                    trial[vector] = quant_iq2_weighted_grid(magnitude + 32u * group + 8u * vector,
+                        weight + 32u * group + 8u * vector, scale);
+                for (i = 0u; i < 32u; ++i) {
+                    double level = quant_iq2_levels[(quant_iq2_grid[trial[i / 8u]] >> (2u * (i & 7u))) & 3u];
+                    unsigned int at = 32u * group + i;
+                    numerator += (double)weight[at] * magnitude[at] * level;
+                    denominator += (double)weight[at] * level * level;
+                }
+                scale = denominator > 0.0 ? (float)(numerator / denominator) : 0.0f;
+                if (!(scale > 0.0f) || !isfinite(scale)) break;
+                for (i = 0u; i < 32u; ++i) {
+                    float level = quant_iq2_levels[(quant_iq2_grid[trial[i / 8u]] >> (2u * (i & 7u))) & 3u];
+                    double delta = (double)magnitude[32u * group + i] - scale * level;
+                    loss += weight[32u * group + i] * delta * delta;
+                }
+                if (loss < best) { best = loss; group_scale[group] = scale; }
+            }
+        }
+        if (group_scale[group] > maximum_scale) maximum_scale = group_scale[group];
+    }
+    if (!(maximum_scale > 0.0f)) return 1;
+    best_loss = quant_iq2_weighted_loss(source, calibration, encoded);
+    for (seed = -1; seed <= 1; ++seed) {
+        unsigned char candidate[YVEX_QUANT_IQ2_XXS_BYTES] = {0};
+        unsigned short bits = yvex_quant_f16_encode(maximum_scale / 31.0f * (1.0f + .05f * (float)seed));
+        float admitted = yvex_quant_f16_decode(bits);
+        double loss;
+        if (!(admitted > 0.0f) || !isfinite(admitted)) continue;
+        quant_store_u16(candidate, bits);
+        for (group = 0u; group < 8u; ++group) {
+            int code = quant_nearest_even(.5f * (group_scale[group] / admitted - 1.0f));
+            uint32_t grid_word = 0u, sign_word;
+            float scale;
+            unsigned int vector;
+            if (code < 0) code = 0;
+            if (code > 15) code = 15;
+            scale = admitted * (float)(1 + 2 * code);
+            sign_word = (unsigned int)code << 28u;
+            for (vector = 0u; vector < 4u; ++vector) {
+                unsigned int at = group * 32u + vector * 8u;
+                unsigned int grid = quant_iq2_weighted_grid(magnitude + at, weight + at, scale);
+                grid_word |= grid << (8u * vector);
+                sign_word |= signs[group * 4u + vector] << (7u * vector);
+            }
+            quant_store_u32(candidate + 2u + group * 8u, grid_word);
+            quant_store_u32(candidate + 6u + group * 8u, sign_word);
+        }
+        loss = quant_iq2_weighted_loss(source, calibration, candidate);
+        if (loss < best_loss) { best_loss = loss; memcpy(encoded, candidate, sizeof(candidate)); }
+    }
+    return 1;
+}
+
+int yvex_quant_encode_block_weighted_versioned(unsigned int qtype, unsigned int version,
+                                     const float *source,
                                      const float *calibration_weights,
                                      unsigned long long elements, unsigned char *encoded,
                                      size_t encoded_capacity, size_t *encoded_bytes,
                                      yvex_quant_failure *failure, yvex_error *err) {
     unsigned long long bad = ULLONG_MAX;
 
+    if (version != YVEX_QUANT_NUMERIC_CONTRACT_VERSION &&
+        (version != YVEX_QUANT_IQ2_WEIGHTED_CONTRACT_VERSION ||
+         qtype != YVEX_GGUF_QTYPE_IQ2_XXS)) {
+        if (encoded_bytes) *encoded_bytes = 0u;
+        quant_block_fail(failure, YVEX_QUANT_FAILURE_PROFILE_SCHEMA, qtype,
+                         YVEX_QUANT_NUMERIC_CONTRACT_VERSION, version, err,
+                         YVEX_ERR_UNSUPPORTED, "quantization producer version is unsupported");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (version == YVEX_QUANT_IQ2_WEIGHTED_CONTRACT_VERSION && fegetround() != FE_TONEAREST) {
+        if (encoded_bytes) *encoded_bytes = 0u;
+        quant_block_fail(failure, YVEX_QUANT_FAILURE_INVALID_STATE, qtype,
+                         FE_TONEAREST, (unsigned int)fegetround(), err, YVEX_ERR_STATE,
+                         "weighted IQ2 producer requires nearest-even arithmetic");
+        return YVEX_ERR_STATE;
+    }
     if (qtype != YVEX_GGUF_QTYPE_IQ2_XXS && qtype != YVEX_GGUF_QTYPE_Q2_K)
         return yvex_quant_encode_block(qtype, source, elements, encoded, encoded_capacity,
                                        encoded_bytes, failure, err);
@@ -694,7 +885,9 @@ int yvex_quant_encode_block_weighted(unsigned int qtype, const float *source,
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    if (!quant_encode_iq2_xxs(source, calibration_weights, encoded)) {
+    if (!(version == YVEX_QUANT_IQ2_WEIGHTED_CONTRACT_VERSION
+              ? quant_encode_iq2_weighted(source, calibration_weights, encoded)
+              : quant_encode_iq2_xxs(source, calibration_weights, encoded))) {
         quant_block_fail(failure, YVEX_QUANT_FAILURE_IQ2_XXS_BLOCK, qtype, 1u, 0u, err,
                          YVEX_ERR_FORMAT,
                          "IQ2_XXS weights or derived scale violate the codec contract");
@@ -705,6 +898,15 @@ int yvex_quant_encode_block_weighted(unsigned int qtype, const float *source,
         memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+int yvex_quant_encode_block_weighted(unsigned int qtype, const float *source,
+                                     const float *calibration_weights,
+                                     unsigned long long elements, unsigned char *encoded,
+                                     size_t encoded_capacity, size_t *encoded_bytes,
+                                     yvex_quant_failure *failure, yvex_error *err) {
+    return yvex_quant_encode_block_weighted_versioned(qtype, YVEX_QUANT_NUMERIC_CONTRACT_VERSION,
+        source, calibration_weights, elements, encoded, encoded_capacity, encoded_bytes, failure, err);
 }
 
 /*

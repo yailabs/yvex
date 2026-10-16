@@ -66,6 +66,30 @@ Invalid schema, geometry, nonfinite values, exhausted limits and unobserved
 population reads refuse. Nonfinite binary32 readout is refused before writing
 any requested output or count. Reset clears both coverage and moments.
 
+## Explicit weighted IQ2 encoding producer
+
+The legacy IQ2 producer remains version 1. Policy v3 can explicitly select
+`weighted-grid-v2`, recorded as numeric producer version 2 on IQ2 quant
+decisions and bound into the physical and payload-plan identities. This
+version identifies parameter encoding, not a changed runtime dot-product
+class. Storage remains the pinned 256-element/66-byte IQ2_XXS geometry.
+
+The bounded search fits the actual decoded magnitude ratios 1, 3.125 and
+5.375. Per-coordinate search weights are the supplied nonnegative calibration
+means multiplied by `sqrt(mean(source²) + source[i]²)`. Even-parity signs,
+candidate order, scale seeds and first-candidate tie handling are deterministic.
+F64 accumulates scalar least-squares and reconstruction objectives; F32 and
+FP16 publication retain their explicit codec operations under nearest-even
+execution. Search selection remains a heuristic, not a global optimum.
+
+The final encoded block is decoded through the canonical reader and compared
+with the unchanged v1 block using the supplied calibration-weighted squared
+error. V2 replaces it only on a strictly smaller computed objective. This
+guard does not bound held-out activations, layer errors, logits or model
+quality. Missing, negative or nonfinite calibration and unsupported producer
+versions refuse; another qtype cannot inherit version 2. Existing v1 entrypoints,
+policy identities and encoded output are preserved.
+
 ## Ordered encoded-F32 CPU projection
 
 Canonical encoded-F32 weights and F32 activations produce one literal

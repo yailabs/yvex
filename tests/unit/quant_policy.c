@@ -333,6 +333,87 @@ static int test_dspark_bootstrap_policy(void)
     return 0;
 }
 
+static int test_explicit_iq2_encoder(void)
+{
+    const char *path = "build/tests/quant-policy/encoder.json";
+    const char *written = "build/tests/quant-policy/encoder-written.json";
+    const char *encoders[] = {"legacy-grid-v1", "weighted-grid-v2"};
+    const char *invalid[] = {
+        "\"schema\":\"yvex.quant_policy.v3\"",
+        "\"schema\":\"yvex.quant_policy.v2\",\"iq2_encoder\":\"weighted-grid-v2\"",
+        "\"schema\":\"yvex.quant_policy.v3\",\"iq2_encoder\":\"unknown\"",
+        "\"schema\":\"yvex.quant_policy.v3\",\"iq2_encoder\":null",
+        "\"unexpected\":0,\"schema\":\"yvex.quant_policy.v3\",\"iq2_encoder\":\"weighted-grid-v2\"",
+        "\"schema\":\"yvex.quant_policy.v3\",\"iq2_encoder\":\"weighted-grid-v2\",\"iq2_encoder\":\"legacy-grid-v1\""
+    };
+    yvex_error error = {0};
+    char identities[2][YVEX_QUANT_POLICY_IDENTITY_CAP];
+    unsigned int i;
+    YVEX_TEST_ASSERT(!yvex_quant_policy_iq2_encoder_version(NULL), "absent policy is not a producer");
+    for (i = 0u; i < 2u; ++i) {
+        yvex_quant_policy *policy = NULL, *copy = NULL, *readback = NULL;
+        yvex_quant_policy_summary summary = {0}, observed = {0};
+        FILE *file = fopen(path, "wb");
+        YVEX_TEST_ASSERT(file, "open explicit producer fixture");
+        fprintf(file, "{\"schema\":\"yvex.quant_policy.v3\",\"iq2_encoder\":\"%s\","
+                "\"name\":\"same-name\",\"architecture\":\"same-architecture\","
+                "\"rules\":[{\"match\":{\"default\":true},\"action\":{\"qtype\":\"IQ2_XXS\",\"calibration\":\"required\"}}]}", encoders[i]);
+        YVEX_TEST_ASSERT(!fclose(file) && yvex_quant_policy_open(&policy, path, &error) == YVEX_OK,
+                         "explicit producer policy opens");
+        YVEX_TEST_ASSERT(yvex_quant_policy_validate(policy, NULL, &error) == YVEX_OK &&
+            yvex_quant_policy_get_summary(policy, &summary, &error) == YVEX_OK &&
+            summary.status == YVEX_QUANT_POLICY_STATUS_VALID && summary.schema_version == 3u &&
+            yvex_quant_policy_iq2_encoder_version(policy) == i + 1u,
+            "policy owns the explicit producer, not a runtime decoder class");
+        memcpy(identities[i], summary.policy_identity, sizeof(identities[i]));
+        YVEX_TEST_ASSERT(yvex_quant_policy_clone(&copy, policy, &error) == YVEX_OK &&
+            yvex_quant_policy_iq2_encoder_version(copy) == i + 1u &&
+            yvex_quant_policy_write_json(written, copy, &error) == YVEX_OK &&
+            yvex_quant_policy_open(&readback, written, &error) == YVEX_OK &&
+            yvex_quant_policy_get_summary(readback, &observed, &error) == YVEX_OK &&
+            !strcmp(summary.policy_identity, observed.policy_identity) &&
+            yvex_quant_policy_iq2_encoder_version(readback) == i + 1u,
+            "clone and canonical publication preserve producer identity");
+        {
+            yvex_quant_policy *reordered = NULL;
+            FILE *permuted = fopen(path, "wb");
+            YVEX_TEST_ASSERT(permuted, "open member-order control");
+            fprintf(permuted, "{\"rules\":[{\"match\":{\"default\":true},"
+                    "\"action\":{\"qtype\":\"IQ2_XXS\",\"calibration\":\"required\"}}],"
+                    "\"name\":\"same-name\",\"iq2_encoder\":\"%s\","
+                    "\"architecture\":\"same-architecture\",\"schema\":\"yvex.quant_policy.v3\"}", encoders[i]);
+            YVEX_TEST_ASSERT(!fclose(permuted) && yvex_quant_policy_open(&reordered, path, &error) == YVEX_OK &&
+                yvex_quant_policy_get_summary(reordered, &observed, &error) == YVEX_OK &&
+                !strcmp(summary.policy_identity, observed.policy_identity),
+                "JSON member order does not change the explicit producer or rule identity");
+            yvex_quant_policy_close(reordered);
+            permuted = fopen(path, "ab");
+            YVEX_TEST_ASSERT(permuted && fputs(" null", permuted) >= 0 && !fclose(permuted) &&
+                yvex_quant_policy_open(&reordered, path, &error) != YVEX_OK && !reordered,
+                "explicit producer policy rejects trailing JSON values");
+        }
+        yvex_quant_policy_close(readback); yvex_quant_policy_close(copy); yvex_quant_policy_close(policy);
+    }
+    YVEX_TEST_ASSERT(strcmp(identities[0], identities[1]), "different producers cannot alias a physical policy");
+    for (i = 0u; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
+        yvex_quant_policy *policy = NULL;
+        FILE *file = fopen(path, "wb");
+        YVEX_TEST_ASSERT(file, "open refused producer fixture");
+        fprintf(file, "{%s,\"name\":\"refused\",\"architecture\":\"generic\",\"rules\":[]}", invalid[i]);
+        YVEX_TEST_ASSERT(!fclose(file) && yvex_quant_policy_open(&policy, path, &error) != YVEX_OK &&
+                         !policy, "unknown, missing, duplicate or old-schema producer refuses without publication");
+    }
+    {
+        yvex_quant_policy *policy = NULL;
+        FILE *file = fopen(path, "wb");
+        YVEX_TEST_ASSERT(file && fputs("{\"schema\":\"yvex.quant_policy.v3\","
+            "\"iq2_encoder\":\"weighted-grid-v2\",\"rules\":[]", file) >= 0 && !fclose(file) &&
+            yvex_quant_policy_open(&policy, path, &error) != YVEX_OK && !policy,
+            "unterminated explicit producer policy refuses");
+    }
+    return 0;
+}
+
 int yvex_test_quant_policy(void)
 {
     if (test_names() != 0) return 1;
@@ -341,5 +422,6 @@ int yvex_test_quant_policy(void)
     if (test_reject_unknown_qtype() != 0) return 1;
     if (test_derive_fixture() != 0) return 1;
     if (test_policy_v2_and_presets() != 0) return 1;
+    if (test_explicit_iq2_encoder() != 0) return 1;
     return test_dspark_bootstrap_policy();
 }
