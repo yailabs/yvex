@@ -150,6 +150,11 @@
       "token/s",
       "newly committed uncached input positions / complete prefill wall"
     ],
+    "prefill.prefix-reused": [
+      "deployment-performance",
+      "token/s",
+      "newly executed input positions following a reused prefix / complete prefill wall; reused positions excluded"
+    ],
     "ttft.server": [
       "deployment-performance",
       "s",
@@ -270,6 +275,14 @@
     "prefill.uncached": {
       "reused_tokens": {
         "maximum": 0
+      },
+      "prefill_tokens": {
+        "minimum": 1
+      }
+    },
+    "prefill.prefix-reused": {
+      "reused_tokens": {
+        "minimum": 1
       },
       "prefill_tokens": {
         "minimum": 1

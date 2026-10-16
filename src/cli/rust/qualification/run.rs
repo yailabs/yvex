@@ -847,6 +847,7 @@ fn measurements(
                 ("final.phase-rate", "final_phase_rate"),
                 ("decode.post-first.committed", "post_first_decode_rate"),
                 ("prefill.uncached", "prefill_rate"),
+                ("prefill.prefix-reused", "prefill_rate"),
                 ("prefill.wall", "prefill_seconds"),
             ] {
                 if group
@@ -1162,6 +1163,11 @@ mod tests {
                 eligible
             );
             assert!(!metrics.iter().any(|m| m["metric"] == "prefill.uncached"));
+            assert!(
+                metrics.iter().any(
+                    |m| m["metric"] == "prefill.prefix-reused" && m["samples"] == json!([11.0])
+                )
+            );
             assert!(metrics.iter().any(|m| m["metric"] == "prefill.wall"));
             assert!(
                 metrics
@@ -1192,6 +1198,26 @@ mod tests {
             &json!({"prefill_tokens":0,"reused_tokens":0}),
             &rules
         ));
+        for (new, reused, expected) in [
+            (json!(6), json!(16), true),
+            (json!(6), json!(0), false),
+            (json!(0), json!(16), false),
+            (json!(6), Value::Null, false),
+            (Value::Null, json!(16), false),
+            (json!(6), json!(true), false),
+            (json!(6), json!(-1), false),
+            (json!(6), json!(16.0), false),
+            (json!(6), json!("16"), false),
+        ] {
+            assert_eq!(
+                metric_observation_admitted(
+                    "prefill.prefix-reused",
+                    &json!({"prefill_tokens":new,"reused_tokens":reused}),
+                    &rules
+                ),
+                expected
+            );
+        }
         assert!(!metric_observation_admitted(
             "decode.post-first.committed",
             &json!({"post_first_decode_units":255}),

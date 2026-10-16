@@ -218,8 +218,13 @@ positions from `decode.post-first.committed`; a ten-token greeting remains a
 latency/phase observation, not a sustained-decode sample. This eligibility floor
 does not, by itself, establish steady-state or release throughput. Likewise,
 `prefill.uncached` requires a positive newly executed population and zero reused
-prefix tokens. Reused turns retain their new-position counts and prefill wall
-time, but do not become uncached-prefill benchmarks. Missing or malformed counts
+prefix tokens. `prefill.prefix-reused` separately requires positive reused and
+newly executed populations; only the new positions count as executed work.
+A fully reused input with no new execution has no prefill rate, not a zero-cost
+or infinite-speed sample. Reused turns retain their new-position counts and
+prefill wall time, but do not become uncached-prefill benchmarks. These are
+execution observations, not prefetch timing or proof of a particular cache
+mechanism. Missing or malformed counts
 are unavailable, not zero. Both Rust and the engineering adapter consume the
 same generated population rules; a mixed eligible/ineligible repetition group
 cannot silently discard short samples and publish the remainder.

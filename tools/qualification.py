@@ -47,6 +47,7 @@ METRICS = {
     "prefill.wall": ("deployment-performance", "s", "server-authored complete newly executed prefill wall time"),
     "decode.post-first.committed": ("deployment-performance", "token/s", "committed tokens after first / elapsed decode wall after first"),
     "prefill.uncached": ("deployment-performance", "token/s", "newly committed uncached input positions / complete prefill wall"),
+    "prefill.prefix-reused": ("deployment-performance", "token/s", "newly executed input positions following a reused prefix / complete prefill wall; reused positions excluded"),
     "ttft.server": ("deployment-performance", "s", "turn start to first committed model-token callback"),
     "ttft.client-visible": ("product-path", "s", "client dispatch including connect to first nonempty final/reasoning content"),
     "delivery.client-gap.maximum": ("product-path", "s", "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint"),
@@ -75,6 +76,7 @@ METRIC_ADMISSION = {
     "delivery.client-gap.mean": {"client_visible_fragments": {"minimum": 2}},
     "decode.post-first.committed": {"post_first_decode_units": {"minimum": 32}},
     "prefill.uncached": {"reused_tokens": {"maximum": 0}, "prefill_tokens": {"minimum": 1}},
+    "prefill.prefix-reused": {"reused_tokens": {"minimum": 1}, "prefill_tokens": {"minimum": 1}},
 }
 
 

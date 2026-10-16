@@ -219,10 +219,12 @@ class NativeReceiptTests(unittest.TestCase):
         rows = [dict(repetition=i, input_identity="history-" + str(i),
                      configuration={"turn_index":1}, metrics=metrics) for i in range(2)]
         observations, _ = measurement.native_measurements(config, rows, "fixture only", "fixture", 0)
-        self.assertEqual(len(observations), 2)
+        self.assertEqual(len(observations), 4)
         self.assertEqual({r["case"] for r in observations},
                          {"fixture-history/turn-1/input-history-0", "fixture-history/turn-1/input-history-1"})
-        self.assertTrue(all(r["metric"] == "request.client-complete" and r["session_state"] == "reused"
+        self.assertEqual({r["metric"] for r in observations},
+                         {"request.client-complete", "prefill.prefix-reused"})
+        self.assertTrue(all(r["session_state"] == "reused"
                             and r["statistics"]["count"] == 1 for r in observations))
 
     def test_shared_metric_population_rules_refuse_missing_malformed_or_short_counts(self):
@@ -247,6 +249,29 @@ class NativeReceiptTests(unittest.TestCase):
             self.assertFalse(q.metric_observation_admitted("prefill.uncached",
                 dict(prefill_tokens=tokens, reused_tokens=reused)))
         self.assertFalse(q.metric_observation_admitted("unknown", {}))
+
+    def test_reused_prefill_requires_new_work_and_never_counts_the_prefix(self):
+        config = dict(case="fixture-prefix", output_bound=32, warm_state="fixture")
+        for tokens, reused, rate, expected in (
+                (5, 10, 5, True), (5, 0, 5, False), (0, 10, 0, False),
+                (5, None, 5, False), (None, 10, 5, False), (5, True, 5, False),
+                (5, -1, 5, False), (5, 10.0, 5, False), (5, "10", 5, False),
+                (5, 10, None, False)):
+            metrics = dict(client_complete_seconds=3, prefill_seconds=1,
+                prefill_tokens=tokens, reused_tokens=reused, prefill_rate=rate)
+            rows = [dict(repetition=0, input_identity="fixture",
+                configuration={"turn_index":1}, metrics=metrics)]
+            observations, _ = measurement.native_measurements(config, rows, "fixture", "fixture", 0)
+            rates = [r for r in observations if r["metric"] == "prefill.prefix-reused"]
+            self.assertEqual(bool(rates), expected)
+            if rates:
+                self.assertEqual(rates[0]["samples"], [5])  # Not (5 + 10) / 1.
+                self.assertNotIn("prefill.uncached", {r["metric"] for r in observations})
+            # Mixed cache regimes may not discard ineligible repetitions.
+            rows.append(dict(repetition=1, input_identity="fixture",
+                configuration={"turn_index":1}, metrics=dict(metrics, reused_tokens=0)))
+            observations, _ = measurement.native_measurements(config, rows, "fixture", "fixture", 0)
+            self.assertFalse(any(r["metric"] == "prefill.prefix-reused" for r in observations))
 
     def test_native_delivery_gap_projection_preserves_absent_values(self):
         config = dict(case="fixture-delivery", output_bound=32, warm_state="fixture")

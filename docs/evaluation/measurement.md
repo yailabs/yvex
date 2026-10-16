@@ -90,6 +90,13 @@ automatically promoted to comparable performance rows or independent model
 evidence. The additional client projection/journaling work belongs to the
 measurement adapter's exact build; old timing samples are not silently upgraded.
 
+Prefill observations distinguish `prefill.uncached` from
+`prefill.prefix-reused`. The latter requires both a reused prefix and positive
+new work, retaining the producer's new-position rate without counting reused
+positions as executed work. Fully reused inputs, missing counters and absent
+rates do not produce a rate row. Both native adapters consume the same generated
+population rules; mixed eligible/ineligible repetitions are not cherry-picked.
+
 Production execution publishes lightweight counters, typed events, physical
 facts, and compact lineage handles. Audit, numerical conformance, profiling, and
 benchmark owners assemble richer records outside the ordinary execution ABI.

@@ -509,7 +509,7 @@ def native_measurements(config, rows, scope, evidence, skip_first):
         case = f"{config['case']}/turn-{turn}" + ("/input-" + input_identity if split else "")
         for m in values:
             populations.append(dict(m, case=case, input_identity=input_identity))
-        for metric in (*fields, "prefill.uncached", "decode.post-first.committed",
+        for metric in (*fields, "prefill.uncached", "prefill.prefix-reused", "decode.post-first.committed",
                        "reasoning.phase-rate", "final.phase-rate"):
             def value(m):
                 if not q.metric_observation_admitted(metric, m):
@@ -518,8 +518,8 @@ def native_measurements(config, rows, scope, evidence, skip_first):
                     return None
                 if metric.startswith("final.") and not m.get("final_tokens"):
                     return None
-                if metric == "prefill.uncached":
-                    return m["prefill_rate"]
+                if metric in ("prefill.uncached", "prefill.prefix-reused"):
+                    return m.get("prefill_rate")
                 if metric == "decode.post-first.committed":
                     return m["post_first_decode_rate"]
                 if metric in ("reasoning.phase-rate", "final.phase-rate"):
