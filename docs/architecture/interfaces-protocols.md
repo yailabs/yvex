@@ -149,6 +149,11 @@ projects its typed text/reasoning/function result; it does not parse DSML or
 repair model output. The [empty-body correction](../evaluation/provider-output-recovery.md)
 aligns completion recognition with the canonical renderer, without changing
 the wire layout, executing tools or altering installed Engine lifetimes.
+The same source-owned decoder admits variable Unicode whitespace only at the
+typed invocation tag/name boundary, as required by the upstream parser. Static
+structural refusal predicates and invocation-relative byte offsets pass through
+the existing error projection; adapters neither interpret those predicates nor
+recover invalid calls. See the [source-decoder witness](../evaluation/provider-output-recovery.md#invocation-whitespace-and-structural-refusals-2026-10-17).
 
 The local protocol carries bounded byte fragments, not independently complete
 UTF-8 strings. The adapter keeps a complete-scalar cursor in each existing

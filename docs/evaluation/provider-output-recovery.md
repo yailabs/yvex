@@ -246,3 +246,89 @@ Original metadata receipt SHA-256:
 `e130c9eff0d332eaea6de5638d5dac334d339eaab1e4aaf9860e81201f452ea4`.
 Program P's source, resident services and GPU ownership are untouched. The
 provider Task's real-response/YAI acceptance gate remains open.
+
+## Invocation whitespace and structural refusals — 2026-10-17
+
+The subsequent generation-34 failure is distinct from r32 and the generation-31
+HTTP-200 incident. Original journal metadata correlates `http-1749`,
+`oa-000000000013/r38`, 9,319 input tokens and 91 generated tokens with HTTP 400.
+The retained 150-byte error entity has SHA-256
+`ec4166cd0d9aac8b2efa5635e6adc9feadac4a665a12bdcf1eb65a0e2fab4512`.
+The original completion and failing parser predicate are unavailable. Matching
+the static error entity locates the invocation parser; it does **not** identify
+which invocation predicate failed or prove malformed model behavior.
+
+A separate, independently reproducible source defect is now established.
+The authenticated DSpark `encoding_dsv4.py` identified above parses the
+invocation name with `^\s*name="(.*?)">\n$`. YVEX instead consumed the entire
+literal `<｜DSML｜invoke name="`, rejecting source-valid zero, multiple, tab,
+newline and Unicode whitespace separators. The official decoder accepts all
+18 tested separators with unchanged function and arguments, in chat and
+thinking modes; zero-width space, a foreign attribute prefix and BOM refuse.
+These are synthetic nonempty calls, not a reconstruction of the failed Work.
+
+The tokenizer now applies the existing Unicode classification at that single
+lexical slot of the compiled typed-attribute grammar. Canonical serialization,
+mandatory delimiters, parameter bytes, offered-function validation, duplicate
+refusal and JSON validation remain unchanged. XML-element grammars retain exact
+literal matching. There is no ABI, wire, conversation-policy, artifact or binding
+identity change and no HTTP-owned second parser.
+
+Invocation errors retain `YVEX_ERR_FORMAT` and the existing diagnostic prefix,
+adding a static predicate and invocation-relative byte offset. The diagnostic
+does not interpolate generated names, arguments or reasoning. Allocation
+failure remains a distinct error. This makes future failures inspectable; it
+cannot recover the missing predicate of r38.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Before-fix witness | Existing native parser | New variable-whitespace invocation test | Source-valid call succeeds | Refused; receipt `7fbf8dc5…` | Exact native result | FAIL | Demonstrated false rejection before correction |
+| Independent source | SHA-bound official Python decoder | 18 separators × chat/thinking; 3 invalid separators × 2 | Exact function/argument recovery or refusal | 36 accepted, 6 refused | Exact strings; no model execution | PASS | Upstream decoder permits the corrected lexical forms |
+| Native completion | DSpark and independently resolved 0731 policies | 108 positive cases; 30 structural/privacy negatives, plus existing regressions | Equal output identities; transactional refusal | `b65e6771…` | Exact arguments, identities and predicates | PASS | Source-compatible parsing and privacy-bounded errors |
+| Buffered/SSE | Production adapters and native parser with disposable local Host | 48 source cases, 52 Unicode cases, 3 feedback continuations; pinned SDK controls | Valid calls preserved; invalid calls never finish successfully | `519b7d71…` | Exact calls, arguments, finish classes and predicates | PASS | Native-source-to-HTTP fixture behavior, not model inference |
+
+The first HTTP gate was BLOCKED (`341eafbe…`) because `node`/`npm` were absent
+from PATH. The unchanged registered gate passed using the already installed
+Node toolchain; no producer or test condition was weakened.
+
+Broad source-stable controls at parent `f4e9bb55…`, dirty delta `d570a7cd…`,
+pass `fast` (104 PASS, zero FAIL/SKIP/BLOCKED/ERROR; `96d43edb…`) and
+`structural` (20 PASS at the QA gate level; `8fb186d7…`). The latter retains
+the build-contract suite's one platform-dependent inner unittest skip; it is
+not an executed backend qualification. Subsequent evidence/Task/Status text
+does not change the tested implementation. Hosted QA for the parent source
+also passed both lanes; that does not establish hosted QA for this correction.
+
+Final runtime/sanitizer checks use the same unchanged C/tests at dirty delta
+`318d5a4d…`; both receipts verify source stability. Their broad environment
+includes the preserved Program P work, which this repair does not publish.
+
+| Gate | Expected | Observed | Result / claim boundary |
+| --- | --- | --- | --- |
+| `runtime` | No registered lifecycle, protocol, product or consumer regression | 49 PASS; zero FAIL/SKIP/BLOCKED/ERROR; `dea382a9…` | PASS at software-fixture scope; SDK credential controls use a disposable verified-owner Secret Service, never the operator vault |
+| `sanitizer.runtime` | No ASan/LSan/UBSan finding or fixture failure | Complete two-build lane PASS; `db6f5615…`; 48 source and 52 Unicode cases repeated under each instrumentation | PASS at instrumented CPU/native/HTTP/lifecycle scope, not real-model execution |
+
+The pre-correction tokenizer owner on parent main and clean installed-source
+`228cf6dd` is byte-identical (SHA-256 `121a3986e561e27e45d69f21dec30726b444273ff1c49e5c5ab0b464f391846e`).
+The corrected owner is `a10e274deaeef12b71806b4e85f5289b133e37925e8d368ccb708758105570b7`.
+The complete observed source capture, its HEAD/delta record and owned patch are
+retained with the receipts below. Archive SHA-256:
+`7fbe755f5aa32c44d1eb54610b791dad303cf328ecec51b4996c9658b2ef9b42`.
+This is a reproduction capture of an actual Git-built test snapshot, not a
+Git-less release build or an independently qualified deployment executable.
+
+Reproduction uses `unit.runtime_tokenizer` and `integration.openai` through
+`python3 tools/qa.py run <gate> --jobs 2`. Source-oracle runner and output are
+retained under
+`/home/dgmothx/lab/models/evidence/deepseek-invoke-recovery-20261017.oplPye`;
+the JSON oracle result SHA-256 is
+`26d68eda02909a30985620955efe01ff658d5a3854c6f5ff624f0c59daa3d471`.
+The prior bounded journal and 37-case forensic control remain under
+`/home/dgmothx/lab/models/evidence/yai-dspark34-structural-forensics-20261017.yvYrGV`.
+
+**Historical causality remains unknown.** This correction does not establish
+that r38 used variable whitespace, that the installed producer has been fixed,
+or that the real YAI Work succeeds. Installed source `228cf6dd`, the resident
+DSpark generation, historical submissions and all GPU work are unchanged by
+this repair. A separately authorized rollout and new, independently identified
+live acceptance are still required; no historical Work may be silently replayed.

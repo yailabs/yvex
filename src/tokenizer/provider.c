@@ -1518,6 +1518,39 @@ static int parameter_name_seen(const provider_builder *names,
     return 0;
 }
 
+/* Typed-attribute source parsing admits Unicode \s* between the invoke tag
+ * and its name attribute. The emitter remains canonical (one ASCII space).
+ * No other delimiter or parameter-body whitespace is normalized here. */
+static int consume_invoke_start(const yvex_conversation_protocol *conversation,
+                                const unsigned char **position,
+                                const unsigned char *end)
+{
+    const char *start = conversation->tool_invoke_start;
+    const char *separator = strrchr(start, ' ');
+    const unsigned char *cursor = *position;
+    size_t prefix_count;
+    if (conversation->tool_grammar !=
+            YVEX_CONVERSATION_TOOL_GRAMMAR_TYPED_ATTRIBUTES || !separator)
+        return consume(position, end, start);
+    prefix_count = (size_t)(separator - start);
+    if ((size_t)(end - cursor) < prefix_count ||
+        memcmp(cursor, start, prefix_count) != 0)
+        return 0;
+    cursor += prefix_count;
+    while (cursor < end) {
+        unsigned long long offset = 0u;
+        uint32_t point;
+        if (!yvex_tokenizer_utf8_next(cursor, (unsigned long long)(end - cursor),
+                                     &offset, &point) ||
+            !(yvex_tokenizer_unicode_class(point) & TOKENIZER_UNICODE_SPACE))
+            break;
+        cursor += offset;
+    }
+    if (!consume(&cursor, end, separator + 1u)) return 0;
+    *position = cursor;
+    return 1;
+}
+
 static int parse_invoke(const yvex_conversation_protocol *conversation,
                         const yvex_provider_request *request,
                         const unsigned char **position,
@@ -1531,13 +1564,21 @@ static int parse_invoke(const yvex_conversation_protocol *conversation,
     unsigned long long parameter_count = 0u;
     const unsigned char *cursor = *position;
     const yvex_provider_function_tool *tool = NULL;
+    const char *predicate = "invoke_start";
     int rc = YVEX_OK;
-    if (!consume(&cursor, end, conversation->tool_invoke_start) ||
-        !attribute(&cursor, end, conversation->tool_invoke_name_end,
-                   call->name, sizeof(call->name)) ||
-        !(tool = tool_find(request, call->name)) ||
-        literal(&arguments, "{", err) != YVEX_OK)
+    if (!consume_invoke_start(conversation, &cursor, end))
         rc = YVEX_ERR_FORMAT;
+    else {
+        predicate = "invoke_name";
+        if (!attribute(&cursor, end, conversation->tool_invoke_name_end,
+                       call->name, sizeof(call->name)))
+            rc = YVEX_ERR_FORMAT;
+        else {
+            predicate = "function_not_offered";
+            if (!(tool = tool_find(request, call->name))) rc = YVEX_ERR_FORMAT;
+            else rc = literal(&arguments, "{", err);
+        }
+    }
     /* The canonical emitter separates an empty argument body from the closing
        invoke with one LF. Consume only that exact empty-body spelling; never
        skip whitespace inside parameters or repair an incomplete invocation. */
@@ -1549,8 +1590,13 @@ static int parse_invoke(const yvex_conversation_protocol *conversation,
         const unsigned char *value, *close;
         size_t parameter_size;
         int is_string = 0;
-        if (!consume(&cursor, end, conversation->tool_parameter_start) ||
-            !attribute(&cursor, end,
+        predicate = "parameter_start";
+        if (!consume(&cursor, end, conversation->tool_parameter_start)) {
+            rc = YVEX_ERR_FORMAT;
+            break;
+        }
+        predicate = "parameter_name";
+        if (!attribute(&cursor, end,
                        conversation->tool_parameter_name_end, parameter,
                        sizeof(parameter))) {
             rc = YVEX_ERR_FORMAT;
@@ -1558,6 +1604,7 @@ static int parse_invoke(const yvex_conversation_protocol *conversation,
         }
         if (conversation->tool_grammar ==
             YVEX_CONVERSATION_TOOL_GRAMMAR_TYPED_ATTRIBUTES) {
+            predicate = "parameter_kind";
             if (!attribute(&cursor, end,
                            conversation->tool_parameter_kind_end, string_kind,
                            sizeof(string_kind)) ||
@@ -1568,10 +1615,12 @@ static int parse_invoke(const yvex_conversation_protocol *conversation,
             }
             is_string = strcmp(string_kind, "true") == 0;
         } else if (!tool_parameter_type(tool, parameter, &is_string)) {
+            predicate = "parameter_type";
             rc = YVEX_ERR_FORMAT;
             break;
         }
         value = cursor;
+        predicate = "parameter_close";
         close = find_bytes(cursor, (unsigned long long)(end - cursor),
                            conversation->tool_parameter_end);
         if (!close) {
@@ -1579,12 +1628,18 @@ static int parse_invoke(const yvex_conversation_protocol *conversation,
             break;
         }
         parameter_size = strlen(parameter) + 1u;
-        if (parameter_name_seen(&parameter_names, parameter) ||
-            parameter_names.count > YVEX_PROVIDER_MAX_TOOL_SCHEMA_BYTES -
+        predicate = "duplicate_parameter";
+        if (parameter_name_seen(&parameter_names, parameter)) {
+            rc = YVEX_ERR_FORMAT;
+            break;
+        }
+        predicate = "parameter_limit";
+        if (parameter_names.count > YVEX_PROVIDER_MAX_TOOL_SCHEMA_BYTES -
                                         parameter_size) {
             rc = YVEX_ERR_FORMAT;
             break;
         }
+        predicate = "arguments_construction";
         rc = append(&parameter_names, parameter, parameter_size, err);
         if (rc == YVEX_OK && parameter_count++)
             rc = literal(&arguments, ", ", err);
@@ -1596,6 +1651,7 @@ static int parse_invoke(const yvex_conversation_protocol *conversation,
             rc = json_string(&arguments, value,
                              (unsigned long long)(close - value), err);
         else if (rc == YVEX_OK) {
+            predicate = "parameter_json";
             if (yvex_provider_json_value_validate(
                     value, (unsigned long long)(close - value), 0, err) != YVEX_OK)
                 rc = YVEX_ERR_FORMAT;
@@ -1609,18 +1665,25 @@ static int parse_invoke(const yvex_conversation_protocol *conversation,
             rc = YVEX_ERR_FORMAT;
     }
     if (rc == YVEX_OK) rc = literal(&arguments, "}", err);
-    if (rc == YVEX_OK &&
-        !consume(&cursor, end, conversation->tool_invoke_end))
-        rc = YVEX_ERR_FORMAT;
-    if (rc == YVEX_OK && yvex_provider_json_value_validate(
-            arguments.data, arguments.count, 1, err) != YVEX_OK)
-        rc = YVEX_ERR_FORMAT;
+    if (rc == YVEX_OK) {
+        predicate = "invoke_close";
+        if (!consume(&cursor, end, conversation->tool_invoke_end))
+            rc = YVEX_ERR_FORMAT;
+    }
+    if (rc == YVEX_OK) {
+        predicate = "arguments_json";
+        if (yvex_provider_json_value_validate(
+                arguments.data, arguments.count, 1, err) != YVEX_OK)
+            rc = YVEX_ERR_FORMAT;
+    }
     if (rc != YVEX_OK) {
         free(arguments.data);
         free(parameter_names.data);
         if (rc == YVEX_ERR_NOMEM) return rc;
-        yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.provider.tool",
-                       "completion contains a malformed source-authored tool call");
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "tokenizer.provider.tool",
+                        "completion contains a malformed source-authored tool call"
+                        ": %s at invocation byte %llu", predicate,
+                        (unsigned long long)(cursor - *position));
         return YVEX_ERR_FORMAT;
     }
     free(parameter_names.data);

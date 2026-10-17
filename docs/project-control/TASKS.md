@@ -30,6 +30,14 @@ response boundary and exact pinned producer/consumer fixture controls, not a
 new Program P intervention or an accepted YAI Work. The broad consumer failure
 does not establish producer ownership. See [forensic evidence](../evaluation/provider-output-recovery.md#generation-31-http-200-response-forensics-2026-10-16).
 
+The 2026-10-17 repair remains in the same provider Task: source-valid Unicode
+whitespace at the invocation tag/name boundary was falsely rejected. The
+source-owned correction and bounded structural diagnostics have independent
+upstream-parser and native/HTTP fixtures. [Evidence](../evaluation/provider-output-recovery.md#invocation-whitespace-and-structural-refusals-2026-10-17)
+does not recover the generation-34 r38 completion or establish its exact cause.
+Installed rollout and real YAI acceptance remain separate, unearned gates;
+no historical Work replay or GPU/service mutation is part of this repair.
+
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
 2026-10-10. This is the sole active implementation authority for physical

@@ -706,6 +706,15 @@ has separate Linux PTY and pinned-emulator evidence. Historical macOS interface
 qualification remains bound to its recorded source; the new flow consumer does
 not inherit a macOS rerun or a model-throughput claim from REPLAI producer CI.
 
+Provider recovery additionally corrects a demonstrated source-decoder mismatch:
+Unicode whitespace at the typed invocation tag/name boundary now follows the
+authenticated upstream parser. Static refusal predicates and relative byte
+offsets expose structural failures without generated content. [Independent
+source and native/HTTP controls](../evaluation/provider-output-recovery.md#invocation-whitespace-and-structural-refusals-2026-10-17)
+qualify this correction, not the unrecoverable generation-34 r38 output or a
+successful YAI Work. Publication, installed rollout and real acceptance remain
+separate; the resident DSpark service is not changed by these fixture tests.
+
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |
 | Native CLI | 🟢 ESTABLISHED | Product operations consume typed owners. | Preserve thin parsing/rendering boundaries as operations grow. | X | [Command architecture][commands] |

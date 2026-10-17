@@ -1103,6 +1103,126 @@ static int test_provider_empty_arguments(void)
     return 0;
 }
 
+static int test_provider_invocation_whitespace(void)
+{
+    /* The pinned source decoder's invocation-name expression starts with
+       Unicode \s*. Only that lexical slot permits variable whitespace. */
+    static const char *const separators[] = {
+        " ", "", "  ", "\t", "\n", "\r\n", "\v\f", "\x1c\x1d\x1e\x1f",
+        "\xc2\x85", "\xc2\xa0", "\xe1\x9a\x80", "\xe2\x80\x80",
+        "\xe2\x80\x8a", "\xe2\x80\xa8", "\xe2\x80\xa9",
+        "\xe2\x80\xaf", "\xe2\x81\x9f", "\xe3\x80\x80"
+    };
+    yvex_tokenizer tokenizer;
+    yvex_token_info tokens[4];
+    yvex_provider_request request;
+    yvex_provider_message messages[1];
+    yvex_provider_function_tool tools[1];
+    yvex_error err;
+    fixture_open(&tokenizer, tokens);
+    YVEX_TEST_ASSERT(provider_fixture(&request, messages, tools, &err) == YVEX_OK,
+                     "source invocation request seals");
+    for (unsigned policy = 0u; policy < 2u; ++policy) {
+    if (policy) {
+        const yvex_graph_execution_binding *execution =
+            yvex_graph_execution_find(0u, 0u, "deepseek4-v4-flash-0731");
+        YVEX_TEST_ASSERT(execution && execution->compiler &&
+            execution->compiler->tokenizer_policy(&tokenizer.compiled_policy, &err) &&
+            yvex_tokenizer_family_policy_conversation(&tokenizer.compiled_policy,
+                                                     &tokenizer.conversation_view),
+            "0731 independent policy resolves");
+    }
+    for (int mode = YVEX_REASONING_DISABLED; mode <= YVEX_REASONING_MAXIMUM; ++mode) {
+        char baseline_identity[YVEX_SHA256_HEX_CAP] = {0};
+        request.reasoning_policy = (yvex_reasoning_policy)mode;
+        YVEX_TEST_ASSERT(request_reseal(&request, &err) == YVEX_OK, "mode seals");
+        for (unsigned i = 0u; i < sizeof(separators) / sizeof(separators[0]); ++i) {
+            unsigned char completion[1024];
+            yvex_tokenizer_provider_result result = {0};
+            int n = snprintf((char *)completion, sizeof(completion),
+                "%s\n\n<" TEST_DSML "tool_calls>\n<" TEST_DSML "invoke%sname=\"get_match_context\">\n"
+                "<" TEST_DSML "parameter name=\"match_id\" string=\"true\">synthetic"
+                "</" TEST_DSML "parameter>\n</" TEST_DSML "invoke>\n</" TEST_DSML "tool_calls>",
+                mode ? "fixture reasoning</think>" : "", separators[i]);
+            YVEX_TEST_ASSERT(n > 0 && (size_t)n < sizeof(completion), "bounded fixture");
+            YVEX_TEST_ASSERT(yvex_tokenizer_parse_provider_completion(&tokenizer, &request,
+                completion, (unsigned)n, &result, &err) == YVEX_OK && result.completed &&
+                result.tool_call_count == 1u &&
+                !strcmp(result.tool_calls[0].name, "get_match_context") &&
+                result.tool_calls[0].arguments_json.count == strlen("{\"match_id\": \"synthetic\"}") &&
+                !memcmp(result.tool_calls[0].arguments_json.bytes,
+                        "{\"match_id\": \"synthetic\"}", result.tool_calls[0].arguments_json.count),
+                "official decoder invocation whitespace preserves exact call and arguments");
+            if (!i) strcpy(baseline_identity, result.output_identity);
+            YVEX_TEST_ASSERT(!strcmp(baseline_identity, result.output_identity),
+                             "lexical separator does not change semantic output identity");
+            yvex_tokenizer_provider_result_clear(&result);
+        }
+    }
+    }
+    return 0;
+}
+
+static int test_provider_invocation_diagnostics(void)
+{
+    static const struct { const char *invoke; const char *predicate; } invalid[] = {
+        {"<" TEST_DSML "invoke\xe2\x80\x8bname=\"get_match_context\">\n",
+         "invoke_start"}, /* zero-width space is not source whitespace */
+        {"<" TEST_DSML "invoke xname=\"get_match_context\">\n", "invoke_start"},
+        {"<" TEST_DSML "invoke name=\"get_match_context\">\r\n", "invoke_name"},
+        {"<" TEST_DSML "invoke name=\"private_sentinel\">\n", "function_not_offered"},
+        {"<" TEST_DSML "invoke name=\"get_match_context\">\n "
+         "<" TEST_DSML "parameter name=\"x\" string=\"true\">private_sentinel",
+         "parameter_start"},
+        {"<" TEST_DSML "invoke name=\"get_match_context\">\n"
+         "<" TEST_DSML "parameter name=\"x\" string=\"maybe\">private_sentinel",
+         "parameter_kind"},
+        {"<" TEST_DSML "invoke name=\"get_match_context\">\n"
+         "<" TEST_DSML "parameter name=\"x\" string=\"true\">private_sentinel",
+         "parameter_close"},
+        {"<" TEST_DSML "invoke name=\"get_match_context\">\n"
+         "<" TEST_DSML "parameter name=\"x\" string=\"false\">private_sentinel"
+         "</" TEST_DSML "parameter>\n", "parameter_json"},
+        {"<" TEST_DSML "invoke name=\"get_match_context\">\n"
+         "<" TEST_DSML "parameter name=\"x\" string=\"true\">private_sentinel"
+         "</" TEST_DSML "parameter>\n"
+         "<" TEST_DSML "parameter name=\"x\" string=\"true\">b"
+         "</" TEST_DSML "parameter>\n", "duplicate_parameter"},
+        {"<" TEST_DSML "invoke name=\"get_match_context\">\n", "invoke_close"}
+    };
+    yvex_tokenizer tokenizer;
+    yvex_token_info tokens[4];
+    yvex_provider_request request;
+    yvex_provider_message messages[1];
+    yvex_provider_function_tool tools[1];
+    yvex_error err;
+    fixture_open(&tokenizer, tokens);
+    YVEX_TEST_ASSERT(provider_fixture(&request, messages, tools, &err) == YVEX_OK,
+                     "diagnostic request seals");
+    for (int mode = YVEX_REASONING_DISABLED; mode <= YVEX_REASONING_MAXIMUM; ++mode) {
+        request.reasoning_policy = (yvex_reasoning_policy)mode;
+        YVEX_TEST_ASSERT(request_reseal(&request, &err) == YVEX_OK, "mode seals");
+        for (unsigned i = 0u; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
+            unsigned char completion[2048];
+            yvex_tokenizer_provider_result result = {0};
+            char expected[128];
+            int n = snprintf((char *)completion, sizeof(completion),
+                "%s\n\n<" TEST_DSML "tool_calls>\n%s",
+                mode ? "private_reasoning_sentinel</think>" : "", invalid[i].invoke);
+            snprintf(expected, sizeof(expected), ": %s at invocation byte ", invalid[i].predicate);
+            YVEX_TEST_ASSERT(n > 0 && (size_t)n < sizeof(completion), "bounded fixture");
+            YVEX_TEST_ASSERT(yvex_tokenizer_parse_provider_completion(&tokenizer, &request,
+                completion, (unsigned)n, &result, &err) == YVEX_ERR_FORMAT &&
+                !result.completed && !result.tool_calls && !result.content &&
+                !result.reasoning_content && strstr(yvex_error_message(&err), expected) &&
+                !strstr(yvex_error_message(&err), "sentinel") &&
+                !strstr(yvex_error_message(&err), "get_match_context"),
+                "structural refusal retains predicate without publishing output or private bytes");
+        }
+    }
+    return 0;
+}
+
 static int test_provider_projection(void)
 {
     static const unsigned char completion[] =
@@ -1550,6 +1670,10 @@ int yvex_test_runtime_tokenizer(void)
     if (test_qwen_tool_grammar() != 0)
         return 1;
     if (test_provider_empty_arguments() != 0)
+        return 1;
+    if (test_provider_invocation_whitespace() != 0)
+        return 1;
+    if (test_provider_invocation_diagnostics() != 0)
         return 1;
     if (test_provider_projection() != 0)
         return 1;

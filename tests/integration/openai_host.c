@@ -712,6 +712,16 @@ static int send_source_completion(int fd, const yvex_client_request *request,
         "<" FIXTURE_DSML "parameter name=\"note\" string=\"true\">fixture value"
         "</" FIXTURE_DSML "parameter>\n"
         "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
+    static const char whitespace[] =
+        "\n\n<" FIXTURE_DSML "tool_calls>\n"
+        "<" FIXTURE_DSML "invoke\t\xc2\xa0name=\"inspect_fixture\">\n"
+        "<" FIXTURE_DSML "parameter name=\"note\" string=\"true\">fixture value"
+        "</" FIXTURE_DSML "parameter>\n"
+        "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
+    static const char bad_start[] =
+        "\n\n<" FIXTURE_DSML "tool_calls>\n"
+        "<" FIXTURE_DSML "invoke xname=\"private_sentinel\">\n\n"
+        "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
     yvex_tokenizer tokenizer = {0};
     yvex_tokenizer_provider_result parsed = {0};
     yvex_rendered_prompt prompt = {0};
@@ -724,6 +734,10 @@ static int send_source_completion(int fd, const yvex_client_request *request,
             ? incomplete :
         request_contains(request->provider_request, "SOURCE_COMPLETION_MALFORMED")
             ? malformed :
+        request_contains(request->provider_request, "SOURCE_COMPLETION_BAD_START")
+            ? bad_start :
+        request_contains(request->provider_request, "SOURCE_COMPLETION_WHITESPACE")
+            ? whitespace :
         request_contains(request->provider_request, "SOURCE_COMPLETION_NONEMPTY")
             ? nonempty : empty_call;
     const char *prefix = fixture_reasoning_policy(request->provider_request->reasoning_policy)

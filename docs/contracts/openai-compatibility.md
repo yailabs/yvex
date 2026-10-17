@@ -307,6 +307,13 @@ The source-authored empty argument body is a complete call with arguments `{}`,
 not an unfinished structure: the canonical tokenizer renderer owns its LF before
 the closing invocation, and the completion parser consumes that exact empty-body
 separator. It does not skip arbitrary whitespace or synthesize missing closers.
+For the typed-attribute source grammar, the invocation's tag/name boundary
+accepts exactly the upstream decoder's Unicode whitespace rule (`\s*`);
+parameter delimiters and values are not normalized. Rendering still emits the
+canonical single ASCII space. A native invocation refusal includes a static
+structural predicate and a byte offset relative to that invocation, without
+copying function names, arguments or reasoning into the diagnostic. These
+details refine the existing error message, not the public error schema or code.
 Buffered and SSE paths preserve the parsed function identity, argument bytes,
 call correlation and `tool_calls` finish. A malformed or incomplete native call
 still terminates in error; an already opened SSE stream does not turn that error

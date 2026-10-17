@@ -106,6 +106,7 @@ for mode in ("none", "high", "max"):
         assert reasoning == ("" if mode == "none" else "fixture reasoning")
         count += 1
         for marker, expected in (("SOURCE_COMPLETION_NONEMPTY", {"note": "fixture value"}),
+                                 ("SOURCE_COMPLETION_WHITESPACE", {"note": "fixture value"}),
                                  ("SOURCE_COMPLETION_LONG_UNICODE", {"note": "a"*4085 + "é🌍"})):
             status, nonempty = run(marker, mode, stream)
             assert status == 200
@@ -128,15 +129,22 @@ for mode in ("none", "high", "max"):
             assert text["choices"][0]["finish_reason"] == "stop"
             assert text["choices"][0]["message"]["content"] == "fixture final ✓"
         count += 1
-        for marker in ("SOURCE_COMPLETION_INCOMPLETE", "SOURCE_COMPLETION_MALFORMED"):
+        for marker, predicate in (("SOURCE_COMPLETION_INCOMPLETE", "parameter_start"),
+                                  ("SOURCE_COMPLETION_MALFORMED", "parameter_json"),
+                                  ("SOURCE_COMPLETION_BAD_START", "invoke_start")):
             status, error = run(marker, mode, stream)
             if stream:
                 assert status == 200 and any("error" in event for event in error)
                 choices = [choice for event in error for choice in event.get("choices", [])]
                 assert not any(choice.get("finish_reason") for choice in choices)
                 assert not any(choice.get("delta", {}).get("tool_calls") for choice in choices)
+                diagnostic = next(event["error"] for event in error if "error" in event)
             else:
                 assert status == 400 and "error" in error and "choices" not in error
+                diagnostic = error["error"]
+            assert f": {predicate} at invocation byte " in diagnostic["message"], diagnostic
+            assert "private_sentinel" not in diagnostic["message"]
+            assert "inspect_fixture" not in diagnostic["message"]
             count += 1
 print(json.dumps({"scope": "deterministic native-source/HTTP fixture; no model execution",
                   "cases": count, "feedback_continuations": 3, "result": "PASS"}))
