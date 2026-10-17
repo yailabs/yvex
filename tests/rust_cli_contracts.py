@@ -1167,6 +1167,7 @@ def optimization_guided(binary: Path) -> int:
             if saved:
                 replay = json.loads(output.read_text())
                 assert (replay["backend"], replay["goal"], replay["context"], replay["prefill"]) == ("cpu", "throughput", 4096, 512)
+                assert "iq2_encoders" not in replay, "legacy replay must not gain an unknown null field"
                 assert replay["allow_approximation"] and b"Request saved" in transcript
                 repeated = invoke(binary, ["compile", "optimize", "--request", str(output), "--json"], environment)
                 assert repeated.returncode and not repeated.stdout, repeated

@@ -35,6 +35,7 @@ struct OptimizationFile {
     technique: Option<String>,
     weight_budget: Option<u64>,
     search_states: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     iq2_encoders: Option<String>,
 }
 
@@ -1714,6 +1715,13 @@ mod tests {
     #[test]
     fn reconstruction_request_versions_reuse_native_registry() {
         let registry = crate::registry::Registry::embedded().unwrap();
+        let legacy: OptimizationFile = serde_json::from_str(&optimization_input()).unwrap();
+        assert!(
+            serde_json::to_value(&legacy)
+                .unwrap()
+                .get("iq2_encoders")
+                .is_none()
+        );
         let invoke = registry
             .parse(&["compile", "optimize", "--request", "goals.json"].map(String::from))
             .unwrap();
