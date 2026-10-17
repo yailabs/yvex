@@ -1657,8 +1657,9 @@ static int runtime_moe_rows_complete(yvex_runtime_moe_context *context,
         if (pending->status) {
             yvex_error_setf(
                 err, YVEX_ERR_BACKEND, "runtime.moe",
-                "deferred CUDA MoE layer %llu reported device status %d",
-                index, pending->status);
+                "deferred CUDA MoE layer %llu reported device status %d (%s; rows=%llu pairs=%llu)",
+                index, pending->status, yvex_moe_device_status_name(pending->status),
+                pending->row_count, pending->row_expert_pairs);
             rc = YVEX_ERR_BACKEND;
             break;
         }

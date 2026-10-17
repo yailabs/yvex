@@ -34,6 +34,28 @@ static int moe_refuse(yvex_error *err, yvex_status status, const char *reason)
     yvex_error_set(err, status, "graph.moe", reason);
     return status;
 }
+const char *yvex_moe_device_status_name(int status)
+{
+    switch (status) {
+    case 0: return "none";
+    case 1: return "unclassified-numeric";
+    case 2: return "unclassified-geometry";
+    case YVEX_MOE_DEVICE_ROUTER_SCORE: return "router-score-nonfinite";
+    case YVEX_MOE_DEVICE_ROUTER_NORMALIZATION: return "router-normalization-invalid";
+    case YVEX_MOE_DEVICE_GATE_OPERAND: return "gate-operand-nonfinite";
+    case YVEX_MOE_DEVICE_UP_OPERAND: return "up-operand-nonfinite";
+    case YVEX_MOE_DEVICE_DOWN_OPERAND: return "down-operand-nonfinite";
+    case YVEX_MOE_DEVICE_ROUTED_ACTIVATION: return "routed-activation-invalid";
+    case YVEX_MOE_DEVICE_DOWN_PUBLICATION: return "down-publication-nonfinite";
+    case YVEX_MOE_DEVICE_ROUTED_REDUCTION: return "routed-reduction-nonfinite";
+    case YVEX_MOE_DEVICE_SHARED_COMBINATION: return "shared-combination-nonfinite";
+    case YVEX_MOE_DEVICE_SHARED_ACTIVATION: return "shared-activation-invalid";
+    case YVEX_MOE_DEVICE_WEIGHTED_ACCUMULATION: return "weighted-accumulation-nonfinite";
+    case YVEX_MOE_DEVICE_NORMALIZED_INPUT: return "normalized-input-nonfinite";
+    case YVEX_MOE_DEVICE_ROUTED_INTERMEDIATE: return "routed-intermediate-nonfinite";
+    default: return "unknown";
+    }
+}
 /*
  * Identify routing evidence field-by-field without native structure layout.
  *

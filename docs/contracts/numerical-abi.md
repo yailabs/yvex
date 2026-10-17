@@ -318,6 +318,27 @@ normalized hidden state only; tokenizer text, output-head projection, logits,
 sampling, and generation remain outside it.
 
 
+### MoE first-refusal diagnostics
+
+The internal execution-observation vocabulary distinguishes existing refusal
+predicates for normalized-input and routed-intermediate quantization, router
+scores/normalization, gate/up/down operands, activation publication, routed
+reduction and shared combination. The existing status word is latched with
+`atomicCAS(status, 0, reason)`: a later failure cannot replace a prior refusal.
+Competing threads within one launch do not establish a deterministic failing
+coordinate or an upstream causal origin. A reported layer is a detection site.
+Legacy numeric/geometry codes and unknown codes remain explicitly unclassified.
+
+The quantizer's backend-private launch parameters carry the caller's failure
+reason; all non-MoE consumers retain their original numeric code. Kernel-bundle
+identity binds the changed launch signature. No public ABI, immutable parameter
+representation, runtime binding, arithmetic, acceptance predicate, workspace
+extent, download population or synchronization boundary is changed. Diagnostic
+text contains only the predicate, layer ordinal and row/pair counts, not
+activation values, selected experts, tokens or user content. This does not
+detect every possible stale-buffer defect or qualify a successful computation.
+
+
 ## Internal Repeated Decode Boundary
 
 `include/yvex/internal/decode.h` owns the non-installed teacher-forced decode

@@ -9,6 +9,7 @@
 #include <yvex/internal/execution_batch.h>
 #include <yvex/internal/neural_operations.h>
 #include <yvex/internal/quant_numeric.h>
+#include <yvex/internal/execution_observation.h>
 #include "src/backend/cuda/private.h"
 #include "tests/test.h"
 
@@ -103,6 +104,94 @@ static int moe_grouped_swiglu_precision(yvex_backend *backend)
         "nonfinite grouped expert input refuses without publishing output");
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
         "release grouped expert precision fixture");
+    return 0;
+}
+
+static int moe_combination_failure(yvex_backend *backend)
+{
+    typedef struct { float routed, shared, output; int status; } fixture;
+    fixture host = {0}, observed;
+    yvex_backend_tensor_desc desc = {.name = "moe-combination-failure", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {sizeof(host)}, .bytes = sizeof(host)};
+    yvex_device_tensor *arena = NULL;
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_error err = {0};
+    unsigned long long count = 1u;
+    int device_wide = 0;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &arena, &err) == YVEX_OK,
+        "allocate bounded combination failure fixture");
+    CUdeviceptr base = yvex_cuda_activation_pointer(backend, arena);
+    CUdeviceptr routed = base + offsetof(fixture, routed);
+    CUdeviceptr shared = base + offsetof(fixture, shared);
+    CUdeviceptr output = base + offsetof(fixture, output);
+    CUdeviceptr status = base + offsetof(fixture, status);
+    for (int accumulate = 0; accumulate < 2; ++accumulate)
+    for (int scenario = 0; scenario < 4; ++scenario) {
+        float weight = scenario == 2 ? 2.0f : 1.0f;
+        host = (fixture){1.0f, 2.0f, 2.0f, 0};
+        if (scenario == 1 || scenario == 3) host.routed = INFINITY;
+        if (scenario == 2) host.routed = host.shared = host.output = FLT_MAX;
+        if (scenario == 3) host.status = YVEX_MOE_DEVICE_ROUTER_SCORE;
+        int expected = !scenario ? 0 : scenario == 3 ? host.status :
+            accumulate ? YVEX_MOE_DEVICE_WEIGHTED_ACCUMULATION : YVEX_MOE_DEVICE_SHARED_COMBINATION;
+        void *combine_params[] = {&routed, &shared, &count, &output, &status};
+        void *accumulate_params[] = {&routed, &count, &weight, &output, &status};
+        CUfunction function = accumulate ? state->moe_accumulate_function : state->moe_combine_rows_function;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, &host, sizeof(host), &err) == YVEX_OK &&
+            yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                function, 1u, 256u, 0u, accumulate ? accumulate_params : combine_params,
+                "cuda.test.moe-combination-failure", &err) == YVEX_OK &&
+            yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                &device_wide, "cuda.test.moe-combination-failure", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, &observed, sizeof(observed), &err) == YVEX_OK,
+            "observe combination and accumulation predicates independently");
+        YVEX_TEST_ASSERT(observed.status == expected &&
+            observed.output == (!scenario ? 3.0f : host.output),
+            "finite output agrees exactly; invalid output refuses without publication or prior-error replacement");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+        "release bounded combination failure fixture");
+    return 0;
+}
+
+static int moe_quantization_failure(yvex_backend *backend)
+{
+    struct { float input[256]; unsigned char encoded[292]; int status; } host = {0}, observed;
+    yvex_backend_tensor_desc desc = {.name = "moe-q8-failure", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {sizeof(host)}, .bytes = sizeof(host)};
+    yvex_device_tensor *arena = NULL;
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_error err = {0};
+    unsigned long long width = 256u, rows = 1u, groups = 1u;
+    int device_wide = 0;
+    const int reasons[] = {1, YVEX_MOE_DEVICE_NORMALIZED_INPUT,
+                          YVEX_MOE_DEVICE_ROUTED_INTERMEDIATE};
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &arena, &err) == YVEX_OK,
+        "allocate bounded quantization failure fixture");
+    CUdeviceptr input = yvex_cuda_activation_pointer(backend, arena);
+    CUdeviceptr encoded = input + sizeof(host.input);
+    CUdeviceptr status = encoded + sizeof(host.encoded);
+    for (size_t reason = 0; reason < sizeof(reasons) / sizeof(reasons[0]); ++reason)
+    for (int prior = 0; prior < 2; ++prior) {
+        memset(&host, 0, sizeof(host));
+        host.input[137] = NAN;
+        host.status = prior ? YVEX_MOE_DEVICE_ROUTER_SCORE : 0;
+        int operand_failure = reasons[reason];
+        void *params[] = {&encoded, &input, &width, &rows, &groups, &width, &status,
+                          &operand_failure};
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, &host, sizeof(host), &err) == YVEX_OK &&
+            yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                state->q8_quantize_function, 1u, 256u, 0u, params,
+                "cuda.test.moe-q8-failure", &err) == YVEX_OK &&
+            yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                &device_wide, "cuda.test.moe-q8-failure", &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, arena, &observed, sizeof(observed), &err) == YVEX_OK,
+            "observe real quantizer failure without model data");
+        YVEX_TEST_ASSERT(observed.status == (prior ? host.status : operand_failure),
+            "quantizer records supplied predicate without replacing the first error");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+        "release bounded quantization failure fixture");
     return 0;
 }
 
@@ -484,6 +573,8 @@ int yvex_cuda_test_moe_rows(void)
     int rc = yvex_backend_open(&backend, &options, &err);
     if (rc == YVEX_ERR_UNSUPPORTED) return 77;
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open expert CUDA backend");
+    if (moe_combination_failure(backend)) return 1;
+    if (moe_quantization_failure(backend)) return 1;
     if (moe_grouped_swiglu_precision(backend)) return 1;
     for (unsigned int scenario = 0u; scenario < 7u; ++scenario)
         if (moe_route_precision(backend, scenario)) return 1;

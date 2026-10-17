@@ -437,8 +437,36 @@ static int moe_test_scheduler_results(void)
     return 0;
 }
 
+static int moe_test_failure_names(void)
+{
+    const struct { int code; const char *name; } cases[] = {
+        {0, "none"}, {1, "unclassified-numeric"}, {2, "unclassified-geometry"},
+        {YVEX_MOE_DEVICE_ROUTER_SCORE, "router-score-nonfinite"},
+        {YVEX_MOE_DEVICE_ROUTER_NORMALIZATION, "router-normalization-invalid"},
+        {YVEX_MOE_DEVICE_GATE_OPERAND, "gate-operand-nonfinite"},
+        {YVEX_MOE_DEVICE_UP_OPERAND, "up-operand-nonfinite"},
+        {YVEX_MOE_DEVICE_DOWN_OPERAND, "down-operand-nonfinite"},
+        {YVEX_MOE_DEVICE_ROUTED_ACTIVATION, "routed-activation-invalid"},
+        {YVEX_MOE_DEVICE_DOWN_PUBLICATION, "down-publication-nonfinite"},
+        {YVEX_MOE_DEVICE_ROUTED_REDUCTION, "routed-reduction-nonfinite"},
+        {YVEX_MOE_DEVICE_SHARED_COMBINATION, "shared-combination-nonfinite"},
+        {YVEX_MOE_DEVICE_SHARED_ACTIVATION, "shared-activation-invalid"},
+        {YVEX_MOE_DEVICE_WEIGHTED_ACCUMULATION, "weighted-accumulation-nonfinite"},
+        {YVEX_MOE_DEVICE_NORMALIZED_INPUT, "normalized-input-nonfinite"},
+        {YVEX_MOE_DEVICE_ROUTED_INTERMEDIATE, "routed-intermediate-nonfinite"},
+        {-1, "unknown"}, {3, "unknown"}, {15, "unknown"}, {29, "unknown"},
+        {0x7fffffff, "unknown"}
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i)
+        YVEX_TEST_ASSERT(strcmp(yvex_moe_device_status_name(cases[i].code),
+                               cases[i].name) == 0,
+            "closed failure vocabulary preserves unknown and legacy boundaries");
+    return 0;
+}
+
 int yvex_test_runtime_moe(void)
 {
+    if (moe_test_failure_names() != 0) return 1;
     if (moe_test_scheduler_results() != 0) return 1;
     if (moe_test_result_views() != 0) return 1;
     if (moe_test_family_plan() != 0) return 1;

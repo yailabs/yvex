@@ -7,13 +7,15 @@
 #include "src/backend/cuda/kernel_primitives.h"
 #include "src/backend/cuda/dot_recovery.h"
 #include <yvex/internal/execution_batch.h>
+#include <yvex/internal/execution_observation.h>
 static __device__ float moe_warp_dot(
     const unsigned char *weight, const unsigned char *activation, unsigned long long extent,
     unsigned long long row_bytes, unsigned int qtype, int q8_input, int *status,
-    const unsigned short *grid_table = nullptr)
+    const unsigned short *grid_table = nullptr, int operand_failure = 1)
 {
     if (!q8_input) {
-        float sum = qtype_warp_dot(weight, (const float *)activation, extent, qtype, status);
+        float sum = qtype_warp_dot(weight, (const float *)activation, extent, qtype,
+                                   status, operand_failure);
         if (!(threadIdx.x & 31u) && !isfinite(sum) && !*status)
             sum = qtype_dot_recover_f64(weight, (const float *)activation, extent, qtype);
         return sum;
@@ -30,7 +32,7 @@ static __device__ float moe_warp_dot(
     /* Finite rows retain their DP4A order; exceptional rows share one decoded oracle. */
     if (!(threadIdx.x & 31u) && !isfinite(sum) && !*status)
         sum = qtype_q8_dot_recover_f64(weight, activation, extent,
-                                       row_bytes / extent, qtype, status);
+                                       row_bytes / extent, qtype, status, operand_failure);
     return sum;
 }
 
@@ -53,7 +55,7 @@ extern "C" __global__ void yvex_moe_route(
         double softplus = value > 0.0 ? value + log1p(exp(-value)) : log1p(exp(value));
         double score = sqrt(softplus);
         if (!isfinite(score)) {
-            atomicCAS(status, 0, 1);
+            atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTER_SCORE);
             return;
         }
         scores[expert] = (float)score;
@@ -94,7 +96,7 @@ extern "C" __global__ void yvex_moe_route(
     for (unsigned long long rank = 0ull; rank < topk; ++rank)
         total += (double)weights[rank];
     if (normalize && (!isfinite(total) || total <= 0.0)) {
-        atomicCAS(status, 0, 1);
+        atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTER_NORMALIZATION);
         return;
     }
     for (unsigned long long rank = 0ull; rank < topk; ++rank) {
@@ -139,14 +141,14 @@ extern "C" __global__ void yvex_moe_grouped_up(
         }
     }
     g = moe_warp_dot(gate_row, input, input_extent, gate_row_bytes,
-                     gate_qtype, q8_input, status);
+                     gate_qtype, q8_input, status, nullptr, YVEX_MOE_DEVICE_GATE_OPERAND);
     u = moe_warp_dot(up_row, input, input_extent, up_row_bytes,
-                     up_qtype, q8_input, status);
+                     up_qtype, q8_input, status, nullptr, YVEX_MOE_DEVICE_UP_OPERAND);
     if (!lane && !*status) {
         float route_weight = weights ? weights[rank] : 1.0f;
         float value;
         if (!cuda_clamped_swiglu_bf16_value(g, u, limit, route_weight, &value))
-            atomicCAS(status, 0, 1);
+            atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTED_ACTIVATION);
         else intermediate[rank * intermediate_width + row] = value;
     }
 }
@@ -178,7 +180,8 @@ extern "C" __global__ void yvex_moe_grouped_down(
         const unsigned char *activation = intermediate + rank * intermediate_extent *
             (q8_input ? YVEX_CUDA_Q8_K_BYTES : sizeof(float));
         float dot = moe_warp_dot(weight, activation, intermediate_extent,
-                                 row_bytes, qtype, q8_input, status);
+                                 row_bytes, qtype, q8_input, status, nullptr,
+                                 YVEX_MOE_DEVICE_DOWN_OPERAND);
         if (!lane && !*status) {
             total = __fadd_rn(total, float_to_bf16_rne(dot));
         }
@@ -223,7 +226,7 @@ extern "C" __global__ void yvex_moe_route_rows(
         double value = (double)row_logits[expert];
         double softplus = value > 0.0 ? value + log1p(exp(-value)) : log1p(exp(value));
         float score = (float)sqrt(softplus);
-        if (!isfinite(score)) atomicCAS(status, 0, 1);
+        if (!isfinite(score)) atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTER_SCORE);
         route_scores[expert] = score;
         row_scores[expert] = score;
     }
@@ -290,7 +293,7 @@ extern "C" __global__ void yvex_moe_route_rows(
     for (unsigned long long rank = 0ull; rank < topk; ++rank)
         total += (double)row_weights[rank];
     if (normalize && (!isfinite(total) || total <= 0.0)) {
-        atomicCAS(status, 0, 1);
+        atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTER_NORMALIZATION);
         return;
     }
     for (unsigned long long rank = 0ull; rank < topk; ++rank) {
@@ -547,14 +550,14 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     gate_row = gate + expert * gate_expert_bytes + output_row * gate_row_bytes;
     up_row = up + expert * up_expert_bytes + output_row * up_row_bytes;
     g = moe_warp_dot(gate_row, activation, input_extent, gate_row_bytes,
-                     gate_qtype, q8_input, status, grid_table);
+                     gate_qtype, q8_input, status, grid_table, YVEX_MOE_DEVICE_GATE_OPERAND);
     u = moe_warp_dot(up_row, activation, input_extent, up_row_bytes,
-                     up_qtype, q8_input, status, grid_table);
+                     up_qtype, q8_input, status, grid_table, YVEX_MOE_DEVICE_UP_OPERAND);
     if (!lane && !*status) {
         float route_weight = weights ? weights[source_pair] : 1.0f;
         float value;
         if (!cuda_clamped_swiglu_bf16_value(g, u, limit, route_weight, &value))
-            atomicCAS(status, 0, 1);
+            atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTED_ACTIVATION);
         else intermediate[ordered_pair * intermediate_width + output_row] = value;
     }
     }
@@ -626,10 +629,11 @@ extern "C" __global__ void yvex_moe_grouped_down_rows(
     if (output_row >= hidden) return;
     weight = down + expert * expert_bytes + output_row * row_bytes;
     float dot = moe_warp_dot(weight, activation, intermediate_extent,
-                             row_bytes, qtype, q8_input, status, grid_table);
+                             row_bytes, qtype, q8_input, status, grid_table,
+                             YVEX_MOE_DEVICE_DOWN_OPERAND);
     if (!lane && !*status) {
         float value = float_to_bf16_rne(dot);
-        if (!isfinite(value)) atomicCAS(status, 0, 1);
+        if (!isfinite(value)) atomicCAS(status, 0, YVEX_MOE_DEVICE_DOWN_PUBLICATION);
         else pair_outputs[source_pair * hidden + output_row] = value;
     }
     }
@@ -650,7 +654,7 @@ extern "C" __global__ void yvex_moe_reduce_rows(
     float total = 0.0f;
     for (unsigned long long rank = 0ull; rank < topk; ++rank)
         total = __fadd_rn(total, pair_outputs[(row * topk + rank) * hidden + lane]);
-    if (!isfinite(total)) atomicCAS(status, 0, 1);
+    if (!isfinite(total)) atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTED_REDUCTION);
     else output[index] = total;
 }
 
@@ -665,7 +669,7 @@ extern "C" __global__ void yvex_moe_combine_rows(
         return;
     }
     float value = float_to_bf16_rne(__fadd_rn(routed[index], shared[index]));
-    if (!isfinite(value)) atomicCAS(status, 0, 1);
+    if (!isfinite(value)) atomicCAS(status, 0, YVEX_MOE_DEVICE_SHARED_COMBINATION);
     else combined[index] = value;
 }
 
@@ -681,7 +685,7 @@ extern "C" __global__ void yvex_moe_swiglu(
     }
     float value;
     if (!cuda_clamped_swiglu_bf16_value(gate[index], up[index], limit, route_weight, &value))
-        atomicCAS(status, 0, 1);
+        atomicCAS(status, 0, YVEX_MOE_DEVICE_SHARED_ACTIVATION);
     else output[index] = value;
 }
 
@@ -696,6 +700,6 @@ extern "C" __global__ void yvex_moe_accumulate(
         return;
     }
     float value = __fadd_rn(aggregate[index], __fmul_rn(expert[index], weight));
-    if (!isfinite(value)) atomicCAS(status, 0, 1);
+    if (!isfinite(value)) atomicCAS(status, 0, YVEX_MOE_DEVICE_WEIGHTED_ACCUMULATION);
     else aggregate[index] = value;
 }

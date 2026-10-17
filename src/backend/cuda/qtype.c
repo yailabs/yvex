@@ -1491,7 +1491,9 @@ static int cuda_encoded_activation_pack(yvex_cuda_work *work,
     else rc = yvex_cuda_work_allocate(work, packed, (size_t)bytes,
         NULL, 0, "cuda.encoded-matvec.q8", NULL, err);
     if (rc == YVEX_OK) {
-        void *params[] = {packed, &input, &width, &rows, &groups, &width, &status};
+        int operand_failure = 1;
+        void *params[] = {packed, &input, &width, &rows, &groups, &width, &status,
+                          &operand_failure};
         rc = yvex_cuda_launch(work->backend, work->variant,
             work->state->q8_quantize_function, (unsigned int)tasks,
             CUDA_QTYPE_MATVEC_BLOCK, 0u, params, "cuda.encoded-matvec.q8", err);

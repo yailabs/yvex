@@ -437,7 +437,7 @@ extern "C" __global__ void yvex_attention_f32(
 extern "C" __global__ void yvex_q8_quantize(
     unsigned char *encoded, const float *values, unsigned long long width,
     unsigned long long rows, unsigned long long groups,
-    unsigned long long input_stride, int *status)
+    unsigned long long input_stride, int *status, int operand_failure)
 {
     __shared__ float absolute[256];
     __shared__ float signed_value[256];
@@ -457,7 +457,7 @@ extern "C" __global__ void yvex_q8_quantize(
     block = encoded + (row * blocks + block_index) * YVEX_CUDA_Q8_K_BYTES;
     value = values[input_row * input_stride + group * width +
                    block_index * YVEX_CUDA_Q8_K_BLOCK + thread];
-    if (!isfinite(value)) atomicCAS(status, 0, 1);
+    if (!isfinite(value)) atomicCAS(status, 0, operand_failure);
     absolute[thread] = fabsf(value);
     signed_value[thread] = value;
     __syncthreads();

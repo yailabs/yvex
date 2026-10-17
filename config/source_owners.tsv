@@ -109,7 +109,7 @@ include/yvex/internal/deployment.h	deployment	deployment.plan	generic	private	in
 include/yvex/internal/deployment_compatibility.h	model.catalog	model.catalog.deployment-compatibility	generic	private	internal-abi	model.catalog,cli,server,tests	interface	none
 include/yvex/internal/device_view.h	graph	graph.device_view	generic	private	internal-abi	graph,runtime,backend,tests	interface	none
 include/yvex/internal/execution.h	graph	graph.physical_package	generic	private	internal-abi	compilation,artifact,runtime,tests	interface	none
-include/yvex/internal/execution_observation.h	graph	graph.observation	generic	private	internal-abi	graph,runtime,tests	interface	none
+include/yvex/internal/execution_observation.h	graph	graph.observation	generic	private	internal-abi	graph,runtime,backend,tests	interface	none
 include/yvex/internal/evidence.h	runtime	runtime.evidence	generic	private	internal-abi	runtime,cli,tests	interface	none
 include/yvex/internal/execution_transaction.h	runtime	runtime.execution_transaction	generic	private	internal-abi	runtime,graph,tests	interface	none
 include/yvex/internal/family_catalog.h	graph	graph.family_catalog	generic	private	internal-abi	graph.family,graph	interface	none

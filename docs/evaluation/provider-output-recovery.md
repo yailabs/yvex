@@ -15,6 +15,283 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## Prefill numerical refusal — 2026-10-17
+
+The separately operated rollout installed clean `f12d8818`, executable SHA-256
+`a90afc6e1c5a601c8c984e1f3a43f70ea4313b06babc9136a83db5ec29e4356d`, build
+`19bb0fa5caf2614b2e981f44031c1701292b11eb81c15cee9c453664e90b980a`.
+The original DSpark artifact `b669d807…` and binding `8cdb4929…` were retained,
+with a new Host incarnation and engine generation 1 at 32,768 tokens. This is
+not the 0731 Program P candidate.
+
+The new operator-authorized YAI submission
+`send:tech-infra-f12d8818-20261017-1` correlated to `http-16`, session
+`oa-000000000001`, request `r2`, provider identity
+`fc01eb107941b7056418d25b1f6bc8a1984ab356f6b0dce94690c9e7d8240ab3`.
+Retained journal metadata shows 8,055 input tokens, last successful prefill
+progress 6,144, zero generated tokens, generation failure after 79.0965214 s
+and HTTP 503 after 80.2062064 s. The reported message identifies deferred MoE
+ordinal 11, device status 1. The tool parser was not reached; neither parser
+success nor model-directed tool use is established. The Work remains
+indeterminate and must not be replayed under its historical identity.
+
+Six retained native CUDA images (MoE, Tensor Core, common kernels, attention,
+transformer and decoded projections) are byte-identical between the clean
+`228cf6dd` and `f12d8818` release builds. Their source owners are unchanged.
+This excludes a new compiled image in those modules, not buffer/state defects,
+a pre-existing input-dependent numerical failure or other execution differences.
+The original status word does not encode the failing predicate. No activation
+snapshot or original failing coordinate is retained; retrospective attribution
+to a specific arithmetic operation is unavailable.
+
+The local diagnostic candidate extends the existing failure word and bounded
+error text, not model numerics. See the [contract](../contracts/numerical-abi.md#moe-first-refusal-diagnostics).
+It adds no payload logging, GPU allocation, per-stage download or barrier.
+CPU vocabulary controls and CUDA fault-injection controls are separate gates;
+compiling an SM121 image does not execute or numerically qualify it. In
+particular, these diagnostics do not prove or repair the historical root cause.
+The candidate is not installed and is not a release-qualified correction.
+
+Software qualification used `f12d8818` plus the stable, unpublished shared-tree
+delta `1402b35267634c2821405fdd4519022bbd0fdb2ea1b247937551d61cff5cb55f`.
+This includes retained Program P work and is **not** the clean installed build.
+
+| Lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Focused CPU MoE | Closed diagnostic vocabulary and existing CPU references | 21 known/legacy/unknown codes; routing, scheduler and result-view controls | Exact names and unchanged refusals | Receipt `03c17be7…` | Exact strings; existing numerical tolerances unchanged | PASS | Host-side diagnostic projection only |
+| Fast regression | Registered `fast` lane | Disposable CPU/protocol fixtures | Existing behavior retained | 104 PASS, 0 FAIL/ERROR/BLOCKED/SKIP; receipt `6e892563…` | Registered assertions | PASS | Software regression scope, not device execution |
+| Structural | Registered `structural` lane | Architecture, ownership, ABI, documentation and publication controls | Existing boundaries retained | 20 PASS, 0 FAIL/ERROR/BLOCKED/SKIP; receipt `b285eff2…` | Registered assertions; nested repository suite retains its one conditional skip | PASS | Structural compatibility, not numerical conformance |
+| Focused sanitizers | ASan, LeakSanitizer and UBSan; CPU reference tests | Ten runtime owners: binding, decode, generation, logits, MoE, prefill, sampling, speculation, state, transformer | No sanitizer finding | Exit 0; log SHA-256 `32c4bbdd66b57d6bf82a5bbb4a562763847b979fb0542819c2340e614ddd3942` | Halt on first finding; leak checking enabled | PASS | Selected CPU controls, not the complete registered sanitizer lane |
+| Offline CUDA compilation | Canonical Make/NVCC SM121 build | MoE, Tensor Core and common kernel images; changed CUDA test translation unit | Compile without diagnostics | All compiled | No device dispatch | PASS | Build compatibility only |
+| Device diagnostics / equivalence | Independent scalar references and injected exceptional operands | Registered `cuda.moe_rows`, including first-error preservation and six quantizer cases | Correct tested predicates and unchanged admitted output | PASS; receipt `068028bc…`, 144.456244 s device-test process | Existing tolerances; exact controls where contracted | PASS | Bounded synthetic coverage below, not all predicates or the failed model request |
+
+The focused sanitizer executable SHA-256 is
+`da6b8901ad8a78d5acec0227d6978f50c126758e6dc39cb01b0b9127fd787769`.
+Its build and logs are retained under `/tmp/yvex-moe-diagnostics.N5Hn7ucU`;
+canonical receipts are under `build/qa/evidence`. These are local evidence,
+not published model qualification. The initial CUDA compile rejected a heavy
+internal header's C atomic type; routing the vocabulary through the existing
+lightweight execution-observation owner resolved that build failure. No model
+computation or original numerical refusal was repaired by this change.
+
+The operator subsequently authorized only `cuda.moe_rows`, with a 600-second
+limit, idle-resource preflight and preservation of the resident DSpark. One
+registered test ran with source delta
+`3b0e73b1a5dd11546c12fe9bfb8cdd12c64e6f79fd5ff4f73a130da6fa2d3f9c`,
+build `3b2d3f5197347afdfb913ff8fa41419fdaf25527f666562beaff8ab5a5988a7a`
+and test executable SHA-256
+`d9c8e2589b5f774f6ec397f1d19cf325d1a8558a2c80b28a249cf11dee808da9`.
+The source remained unchanged throughout execution. The guarded procedure took
+147.283 s; the test process took 144.456244 s. No timeout or numerical failure
+occurred. The canonical receipt reports PASS=1, FAIL=0, ERROR=0, BLOCKED=0,
+SKIP=0.
+
+The log retains 440 encoded-matrix configurations: 282 successful numerical
+cases and 158 expected refusals, including 22 retained legacy errors, 44
+geometry refusals, 54 gate-operand and 38 down-operand refusals. Twenty-two
+successful exceptional recoveries compare exactly; the maximum observed
+error/tolerance ratio across the reported configurations is 0.97164885, below
+the unchanged acceptance bound of 1. Routing additionally distinguishes
+nonfinite score (16), invalid normalization (17) and preservation of an earlier
+down error (20), in single-row and multi-row implementations. Six quantizer
+controls distinguish legacy (1), normalized input (27), routed intermediate
+(28), and preserve a pre-existing router error. These are synthetic values,
+not private model contents. Separate injected witnesses for every other new
+predicate are not established by this run; in particular, no comprehensive
+buffer-race or model-state correctness claim follows.
+
+Before dispatch, no competing compute process or accelerator test lock was
+observed. The guard protected all 95,050,210,272 mapped artifact bytes from its
+available-memory estimate, plus the canonical 16,332,895,744-byte system reserve.
+This conservative deduction is not a measured physical-residency total. Across
+140 sampled observations, the remaining margin was at least 13,374,283,296 bytes
+and free memory at least 8,776,519,680 bytes. A disposable systemd scope enforced
+MemoryMax=2 GiB and MemorySwapMax=0; its retained intermediate high-water reading
+was 369,369,088 bytes. The final cgroup peak is unavailable after scope removal;
+the cgroup reading does not measure all driver/device allocations. The first
+scope setup refused unsupported `MemoryOOMGroup`; it dispatched no test, and
+the supported MemoryMax/MemorySwapMax setup then ran successfully.
+
+The original Host PID 1937768, executable SHA, engine generation 1, artifact,
+binding and 32K context were unchanged. Model requests stayed 3→3 and completed
+HTTP requests 30→30. Host and management remained active with zero restarts.
+After cleanup, only the original Host appeared in the CUDA process list and
+the accelerator test lock was released. Sampled clear observations do not prove
+an uninterrupted hardware reservation. Raw positive/negative logs, before/after
+snapshots, guard script and receipt are retained at
+`/home/dgmothx/lab/models/evidence/moe-first-refusal-20261017.T2luHYlv`.
+Raw log SHA-256:
+`cd952f5cd8f6a9af34dddfd5351585253559b0fb6bb052d0111dc146ec6fa82b`.
+
+At that synthetic checkpoint, remaining gates included diagnostic coverage, a
+coherent candidate separate from unpublished Program P changes, and a separately
+authorized isolated reproduction with fresh request identity. Such an experiment
+must retain the first predicate, phase geometry, exact artifact/binding/build
+and resource observations without retaining private activations or replaying
+the indeterminate YAI Work. This bounded CUDA-test approval authorized no model
+load/unload, service restart, rollout, YAI SEND or Case mutation. None occurred.
+
+### Attribution boundary after the synthetic control
+
+Read-only inspection of the installed `f12d8818` source followed the row-batch
+ingress, workspace initialization, graph capture/replay, result transfer and
+deferred completion owners. This is a source audit, not an execution witness:
+
+| Boundary | Implemented control inspected | What remains unproven |
+| --- | --- | --- |
+| MoE ingress and scratch | `moe_cuda_batch_ranges` initializes the status word; `moe_cuda_batch_inputs` copies the current ingress before graph execution | Whether the failed request supplied finite, correct ingress values |
+| Graph replay | `yvex_cuda_graph_execute` updates kernel parameters and checks replay kernel count and workspace cursor | Whether the complete failed execution had a lifetime or ordering defect |
+| Result publication | Device result transfer checks ownership, extents and overlap before copying to caller-owned buffers | Correctness of all preceding writers in the real request |
+| Deferred refusal | `runtime_moe_rows_complete` checks pending layers in ordinal order; `transformer_moe_complete` preserves an already reported primary error | Which device predicate first rejected, and whether its input was corrupted upstream |
+
+The synthetic test calls device kernels with constructed inputs. It does not
+exercise this complete runtime ingress/graph/workspace/completion chain. Its
+passing result therefore neither exonerates that chain nor identifies an
+originating kernel. No demonstrated alias, missing replay update or incorrect
+status lifetime was found in this inspection; absence of a source finding is
+not proof of their runtime correctness.
+
+The historical integer `1` cannot be decoded retrospectively into the new
+predicate vocabulary. A fresh instrumented execution requires separate
+authorization; it is not a retry of the indeterminate YAI submission. A
+synthetic failure of another predicate qualifies diagnostics only, not this
+request's cause.
+
+The operator subsequently authorized the following bounded discriminator.
+Its first execution is retained below; the conditional second execution was
+not eligible because the first did not reproduce the refusal.
+
+| Item | Bounded experiment |
+| --- | --- |
+| Source | Clean `f12d8818` plus reviewed diagnostic-only changes, excluding unpublished Program P algorithms; qualify and bind the actual executable before dispatch |
+| Model | Original DSpark artifact `b669d807…`, binding `8cdb4929…`, context 32,768; no 0731 substitution |
+| Population | A newly authored public fixture, tokenized to exactly 8,055 input positions, no reused prefix, chunk 512, at most one generated token; a new local request identity, never a YAI submission |
+| First execution | Ordinary physical execution with the qualified predicate vocabulary; retain chunk progress, first refusal code, layer/row/pair geometry and resource observations, not private activation values |
+| Conditional control | At most one additional execution, only if the first reproduces a refusal and a single-variable diagnostic control can distinguish its upstream origin; otherwise retain NOT REPRODUCED and stop this experiment |
+| Deadline | At most 600 seconds per inference, at most two inference dispatches; load/restore time is separately measured, not represented as part of that inference bound |
+| Resource boundary | No simultaneous second model-sized resident engine. A separately authorized temporary unload/reload is required if the isolated candidate cannot coexist under canonical admission and the unchanged reserve |
+| Recovery | Preserve the installed Host binary/listeners/grants; verify recovery of the original artifact/binding and 32K profile, with a new generation if unloading was authorized |
+
+The original input is not available to this experiment and equal token count
+is not equal activation/routing history. A successful public-fixture run cannot
+close the original incident. The existing `engine_scheduling` option also
+changes admitted width and compatible scheduling in addition to eager graph
+execution; toggling it is not an isolated graph-replay A/B. Any conditional
+control must retain the same physical population and numerical realization and
+record its diagnostic perturbation explicitly. No timing claim follows from
+instrumented or synchronized execution.
+
+### Isolated original-DSpark discriminator — 2026-10-17
+
+Result: **NOT REPRODUCED**, not repaired. A genuine detached checkout at
+`f12d8818dc0b0dcf45faf8e1d9df0d2a0f3744e7`, tree
+`d37e75c552c834a6bce46f2bea5b982b3e436ada`, contains only reviewed first-refusal
+diagnostics and their tests. Unpublished Program P algorithms were not imported.
+The frozen source delta is
+`e23f3599bd8795b9ec76d3b8ce8eaa996620d684bffcc5eccad17106eac9cc31`,
+build `4155a3e72e4ab3867ca458a0eeaec8da9baabbb409a27bd3fba85d225348cba3`,
+executable SHA-256
+`b9a29b6c27222e33337872a8b784d0b457dc25a169f622bd431b8535f6c67162`.
+The local protocol remains 25 and the HTTP compatibility profile remains v3.
+
+| Boundary | Authority / input | Observed result | Claim / limit |
+| --- | --- | --- | --- |
+| Software | Registered fast lane on the isolated source | 104 PASS, no failures, errors, skips or blocked tests; receipt `ab68be9a…` | Software regressions, not historical causality |
+| CPU sanitizers | Registered `sanitizer.runtime` on the same frozen source | PASS in 551.166 s; receipt `05945cd9…`; ASan/LeakSanitizer and UBSan include native/HTTP/PTY controls | CPU/runtime safety scope, not CUDA race or original-input qualification |
+| Structure / publication | Registered structural lane and explicit documentation rerun | First run 19 PASS / 1 FAIL (`markdown` missing), receipt `3b75165b…`; documentation rerun PASS using the existing docs environment, receipt `7399d78…` | All 20 selected obligations covered; original environment failure retained |
+| Device fixture | Registered `cuda.moe_rows`, original release test population plus six quantizer controls | PASS, 4.286 s; receipt `b742f640…` | Isolated-candidate diagnostics; not the earlier 440-configuration Program P test population |
+| Native execution | Original artifact `b669d807…`, binding `8cdb4929…`, specialization `3fb4ce20…`, 32K context, chunk 512, DSpark, none reasoning, temperature 0 | All 8,055 uncached input positions completed in 91.8560424 s; one final token; HTTP 200 | One public-input execution, not independent checkpoint quality or a throughput benchmark |
+| Product completion | Buffered Chat Completions; fresh local request, maximum one output token | `finish_reason=length`, 8,055 prompt + 1 completion token; 93.159250656 s client request duration | Valid bounded completion, not natural EOS or tool-call acceptance |
+| Restoration | Original installed binary, Host and management identities, protected configuration hashes, exact artifact/binding/profile | Original DSpark restored at generation 3 and 32K; both original service PIDs retained | No rollout, service restart, YAI SEND or historical Work replay |
+
+The fresh provider request identity is
+`12815f8a8009bef564ba1494114128eb57d0a6930b66c95d52c343c18e616093`.
+Its HTTP body is 744 bytes, `application/json`, SHA-256
+`d315db68f268f2af11d1f93134417f57a97c6ef53f31a3bcd2b7d980be90e751`.
+The fresh public text is retained locally; no private YAI contents or model
+activations were captured. Equal input length, artifact and chunk geometry do
+not reproduce the original activation, routing or preceding process history.
+No first-failure predicate occurred, so no originating numerical operation was
+identified. The permitted conditional second inference was not dispatched.
+
+Resource observations retain 46 samples, minimum MemAvailable
+115,644,211,200 bytes and minimum MemFree 980,201,472 bytes. The guard deducted
+the full mapped artifact (95,050,210,272 bytes) and unchanged system reserve
+(16,332,895,744 bytes), leaving at least 4,261,105,184 bytes. This conservative
+margin is not a physical-residency measurement; free pages alone exclude
+reclaimable file cache. Device/process observations were sampled, not proof
+of uninterrupted exclusivity.
+
+Two preliminary attempts are retained, with zero inference dispatches. The
+first rejected an unsupported `--json` flag on the unload command before any
+unload. The second unloaded the original engine but refused candidate admission:
+113,837,204,008 bytes required versus 8,579,964,928 available under an added
+104-GiB test cgroup cap. Source inspection found that clamping `system_total`
+to that cap prevents the existing `device.total_memory_bytes == system_total`
+shared-memory check in `capacity_hardware` from matching. Removing only this
+test-added cap allowed normal admission; neither native reserve nor operator
+configuration was weakened. This is a separate capacity-accounting finding,
+not evidence of the historical numerical cause. The original profile was
+restored at generation 2 after that refusal. The successful experiment then
+temporarily unloaded generation 2 and restored generation 3. Measured
+unload-start to verified-restoration intervals were approximately 7.23 s and
+105.77 s respectively, not transport downtime: Host/listeners remained alive.
+
+All retained evidence is under
+`/home/dgmothx/lab/models/evidence/dspark-numeric-attribution-20261017.KJiGhsSf`:
+the detached source, build/QA logs, `synthetic/`, rejected attempts and
+`attempt-3/` request, resource, stage and restoration records. The installed
+executable remains the original `a90afc6e…`; the diagnostic candidate is not
+installed or a numerical repair.
+
+Post-execution review found two diagnostic codes transposed during extraction
+from the shared tree: `moe_combine_rows` reported weighted accumulation and
+`moe_accumulate` reported shared combination. Main's original diagnostic edits
+had the intended mapping. No failure predicate fired during the public-input
+execution, so it supplies no positive coverage of those labels. The exact first
+binary and patch are preserved as `first-execution-yvex` and
+`first-execution-source.patch`; corrected diagnostic source must not inherit
+their build identity. This extraction defect changes error attribution, not
+arithmetic, and is unrelated to the installed producer's legacy status 1.
+
+The new eight-case combination/accumulation fixture fails on that extracted
+candidate (receipt `b498733f…`) and passes after correcting only those two
+codes (receipt `595fb2a0…`, 3.994 s registered `cuda.moe_rows` run). It checks
+exact finite output, nonfinite input, finite-input overflow and preservation of
+a prior error, independently for both consumers; refused outputs remain
+unpublished. The negative process was too short for the sampled CUDA process
+list to observe it; the retained device-test assertion is the execution witness,
+not the sampler's `gpu_dispatched=false`. Its 70.116 s registered duration
+includes rebuilding and is not a kernel duration. Both guarded runs preserve
+the original generation 3 and installed binary.
+
+The corrected, uninstalled diagnostic candidate has source delta
+`d3fade9ed9c4ff09495676e0f6ebe87279654702e4a0a17891c8f2021b49b674`,
+build `298bf58d0da43a14ad8b07a97683e2e7a40ca933fe7b2bf3a8ac5aca50d3052c`
+and executable SHA-256
+`997b9ceab27898671cb04b66f0a06ce4b8d23dffe34762934cf879acba1e2367`.
+The green test executable is
+`151b2a5abb986a565f7c645459cb8ee039ba92143f543955f73eca940becc5be`.
+This last source was not run through another full-model request: the successful
+8,055-token observation belongs exclusively to the earlier frozen identity.
+Logs and source-stable before/after resource records are retained in
+`synthetic-label-red/` and `synthetic-label-green/` under the same evidence root.
+The final source also passes all 104 fast-lane tests (receipt `457e5de7…`) and
+the code-policy rerun (receipt `de72560d…`). Earlier complete structural and
+CPU sanitizer receipts retain their earlier source identity; the final delta
+changes two CUDA error labels and the CUDA regression fixture, not CPU/runtime
+implementation. No hosted CI or installed rollout is inherited from local QA.
+
+The next causal prerequisite is an authorized input-equivalent computational
+witness, not another arbitrary 8K prompt. YAI must first establish whether the
+exact admitted message/tool serialization or token input is still recoverable,
+with its digest and rendering policy, without redispatching the historical
+Work. If it is unavailable, historical causality remains unknown. A new,
+separately authorized local diagnostic request may use such a witness without
+executing tools or mutating the Case; it must preserve model/binding/chunk
+geometry and explicitly distinguish any changed process history. No further
+GPU inference or diagnostic rollout is implied by this negative result.
+
 ## Demonstrated defect
 
 The tokenizer's canonical `append_tool_calls` renderer emits one LF for an empty

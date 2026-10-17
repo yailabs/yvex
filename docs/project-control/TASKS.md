@@ -38,6 +38,22 @@ does not recover the generation-34 r38 completion or establish its exact cause.
 Installed rollout and real YAI acceptance remain separate, unearned gates;
 no historical Work replay or GPU/service mutation is part of this repair.
 
+The subsequent `f12d8818` operator rollout and new YAI Work exposed a distinct
+prefill refusal before output parsing: deferred MoE ordinal 11, legacy device
+status 1, after 6,144 of 8,055 input positions. The same recovery boundary now
+includes first-refusal diagnostics; Program P retains numerical
+implementation ownership. [Evidence](../evaluation/provider-output-recovery.md#prefill-numerical-refusal-2026-10-17)
+separates diagnostic preparation from cause attribution. A separately authorized, 600-second-bounded
+`cuda.moe_rows` run passes in 144.456244 s with the original DSpark preserved;
+its synthetic predicate/numerical scope does not establish the failed Work's
+cause. Subsequent explicit authorization permits one fresh public 8,055-token
+diagnostic execution: it completes with HTTP 200 and does not reproduce the
+refusal; the conditional second inference is not dispatched. Original DSpark
+returns at generation 3/32K with installed services unchanged. No historical
+Work replay, installed rollout or numerical relaxation occurred. Remaining
+predicate coverage, historical causality, numerical repair and real YAI
+acceptance are unearned; an input-equivalent witness is the next causal gate.
+
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
 2026-10-10. This is the sole active implementation authority for physical

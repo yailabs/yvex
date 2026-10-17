@@ -189,7 +189,7 @@ static __device__ float qtype_value(const unsigned char *encoded,
 }
 static __device__ float qtype_warp_dot(const unsigned char *row, const float *vector,
                                        unsigned long long width, unsigned int qtype,
-                                       int *status)
+                                       int *status, int operand_failure = 1)
 {
     /* Dense source types select once per row so the inner dot has no qtype dispatch. */
     unsigned int lane = threadIdx.x & 31u;
@@ -223,7 +223,7 @@ static __device__ float qtype_warp_dot(const unsigned char *row, const float *ve
         int invalid = 0;
         for (unsigned long long i = lane; i < width; i += 32ull)
             invalid |= !isfinite(qtype_value(row, i, qtype)) || !isfinite(vector[i]);
-        if (__any_sync(0xffffffffu, invalid) && !lane) atomicCAS(status, 0, 1);
+        if (__any_sync(0xffffffffu, invalid) && !lane) atomicCAS(status, 0, operand_failure);
     }
     return sum;
 }

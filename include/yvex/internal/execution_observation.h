@@ -10,6 +10,26 @@
 extern "C" {
 #endif
 
+/* First latched MoE refusal, not an upstream-cause attribution. Legacy
+ * primitive codes remain valid; unknown codes must not imply a stage.
+ * This is the existing completion status word, not a retained payload. */
+typedef enum {
+    YVEX_MOE_DEVICE_ROUTER_SCORE = 16,
+    YVEX_MOE_DEVICE_ROUTER_NORMALIZATION,
+    YVEX_MOE_DEVICE_GATE_OPERAND,
+    YVEX_MOE_DEVICE_UP_OPERAND,
+    YVEX_MOE_DEVICE_DOWN_OPERAND,
+    YVEX_MOE_DEVICE_ROUTED_ACTIVATION,
+    YVEX_MOE_DEVICE_DOWN_PUBLICATION,
+    YVEX_MOE_DEVICE_ROUTED_REDUCTION,
+    YVEX_MOE_DEVICE_SHARED_COMBINATION,
+    YVEX_MOE_DEVICE_SHARED_ACTIVATION,
+    YVEX_MOE_DEVICE_WEIGHTED_ACCUMULATION,
+    YVEX_MOE_DEVICE_NORMALIZED_INPUT,
+    YVEX_MOE_DEVICE_ROUTED_INTERMEDIATE
+} yvex_moe_device_failure;
+const char *yvex_moe_device_status_name(int status);
+
 typedef struct {
     unsigned long long active_weight_bytes, state_bytes, activation_bytes, temporary_bytes;
     unsigned long long measured_operations, missing_operations;

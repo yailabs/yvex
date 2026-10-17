@@ -715,6 +715,20 @@ qualify this correction, not the unrecoverable generation-34 r38 output or a
 successful YAI Work. Publication, installed rollout and real acceptance remain
 separate; the resident DSpark service is not changed by these fixture tests.
 
+After the independently operated `f12d8818` rollout, a new real Work failed
+during prefill, before the tool parser: deferred MoE ordinal 11, legacy status 1.
+The [numerical-refusal evidence](../evaluation/provider-output-recovery.md#prefill-numerical-refusal-2026-10-17)
+does not identify the original failing predicate. Local, uninstalled first-refusal
+diagnostics pass CPU/structural checks and the separately authorized synthetic
+`cuda.moe_rows` run (440 encoded configurations plus routing/quantizer controls).
+A separately authorized, isolated diagnostic-only executable then completes a
+fresh public 8,055-token input and one output token, HTTP 200, without reproducing
+the refusal. No conditional second inference was dispatched. Original DSpark is
+restored at generation 3/32K; installed Host, management and configuration are
+unchanged. Complete diagnostic coverage, historical causal attribution and a
+numerical correction remain unearned. Input-equivalent evidence is required
+before another causal experiment; this is not successful YAI acceptance.
+
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |
 | Native CLI | 🟢 ESTABLISHED | Product operations consume typed owners. | Preserve thin parsing/rendering boundaries as operations grow. | X | [Command architecture][commands] |

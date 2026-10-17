@@ -6,6 +6,7 @@
  * without materializing a dense dequantized matrix.
  */
 #include "src/backend/cuda/kernel_primitives.h"
+#include <yvex/internal/execution_observation.h>
 #include "src/backend/cuda/dot_recovery.h"
 #include <yvex/internal/execution_batch.h>
 
@@ -334,7 +335,8 @@ static __device__ float4 tensorcore_expert_register_dot(const unsigned char *wei
     unsigned long long rb, unsigned long long rows, unsigned long long rowbase,
     const unsigned char *input, unsigned blocks, const unsigned long long *order,
     unsigned long long offset, unsigned pop, unsigned topk, unsigned columnbase,
-    unsigned qtype, int ordered, int *status, const unsigned int *grid_table);
+    unsigned qtype, int ordered, int *status, const unsigned int *grid_table = nullptr,
+    int operand_failure = 1);
 
 extern "C" __global__ void yvex_q8_row_matrix(
     const unsigned char *weights, unsigned long long row_bytes, unsigned long long width,
@@ -429,7 +431,7 @@ static __device__ float4 tensorcore_expert_register_dot(const unsigned char *wei
     unsigned long long rows,unsigned long long rowbase,const unsigned char *input,
     unsigned blocks,const unsigned long long *order,unsigned long long offset,
     unsigned pop,unsigned topk,unsigned columnbase,unsigned qtype,int ordered,int *status,
-    const unsigned int *grid_table = nullptr) {
+    const unsigned int *grid_table, int operand_failure) {
     unsigned lane=threadIdx.x&31, group=lane>>2, t=lane&3;
     float4 s0={},s1={},s2={},s3={},s4={},result={};
     for(unsigned leaf=0;leaf<32;leaf++) {
@@ -503,7 +505,8 @@ static __device__ float4 tensorcore_expert_register_dot(const unsigned char *wei
             unsigned long long source = ordered ? offset + column : order[offset + column] / topk;
             values[coordinate] = qtype_q8_dot_recover_f64(weights + row * rb,
                 input + source * blocks * YVEX_CUDA_Q8_K_BYTES, blocks,
-                qtype == YVEX_GGUF_QTYPE_IQ2_XXS ? 66ull : 84ull, qtype, status);
+                qtype == YVEX_GGUF_QTYPE_IQ2_XXS ? 66ull : 84ull, qtype, status,
+                operand_failure);
         }
     }
     return make_float4(values[0], values[1], values[2], values[3]);
@@ -650,11 +653,11 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
         float4 gate_values = tensorcore_expert_register_dot(gate + expert * gate_expert_bytes,
             gate_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
             order, offset, (unsigned int)population, (unsigned int)topk,
-            column_base, gate_qtype, 0, status, grid_table);
+            column_base, gate_qtype, 0, status, grid_table, YVEX_MOE_DEVICE_GATE_OPERAND);
         float4 up_values = tensorcore_expert_register_dot(up + expert * up_expert_bytes,
             up_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
             order, offset, (unsigned int)population, (unsigned int)topk,
-            column_base, up_qtype, 0, status, grid_table);
+            column_base, up_qtype, 0, status, grid_table, YVEX_MOE_DEVICE_UP_OPERAND);
         const float gates[] = {gate_values.x, gate_values.y, gate_values.z, gate_values.w};
         const float ups[] = {up_values.x, up_values.y, up_values.z, up_values.w};
         for (unsigned int coordinate = 0u; coordinate < 4u; ++coordinate) {
@@ -664,7 +667,8 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
                 unsigned long long ordered_pair = offset + column, source_pair = order[ordered_pair];
                 float value;
                 if (!cuda_clamped_swiglu_bf16_value(gates[coordinate], ups[coordinate],
-                        limit, weights[source_pair], &value)) atomicCAS(status, 0, 1);
+                        limit, weights[source_pair], &value))
+                    atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTED_ACTIVATION);
                 else intermediate[ordered_pair * intermediate_width + row] = value;
             }
         }
@@ -740,14 +744,15 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
     {
         float4 dot = tensorcore_expert_register_dot(down + expert * expert_bytes,
             row_bytes, hidden, row_base, intermediate, (unsigned int)input_blocks,
-            order, offset, (unsigned int)population, (unsigned int)topk, column_base, qtype, 1, status);
+            order, offset, (unsigned int)population, (unsigned int)topk, column_base, qtype, 1,
+            status, nullptr, YVEX_MOE_DEVICE_DOWN_OPERAND);
         const float values[] = {dot.x, dot.y, dot.z, dot.w};
         for (unsigned int coordinate = 0u; coordinate < 4u; ++coordinate) {
             unsigned long long row = row_base + (lane >> 2u) + (coordinate >> 1u) * 8ull;
             unsigned int column = column_base + (lane & 3u) * 2u + (coordinate & 1u);
             if (row < hidden && column < population && !*status) {
                 float value = float_to_bf16_rne(values[coordinate]);
-                if (!isfinite(value)) atomicCAS(status, 0, 1);
+                if (!isfinite(value)) atomicCAS(status, 0, YVEX_MOE_DEVICE_DOWN_PUBLICATION);
                 else pair_outputs[order[offset + column] * hidden + row] = value;
             }
         }

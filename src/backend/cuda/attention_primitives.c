@@ -333,9 +333,10 @@ static int attention_matvec(yvex_cuda_work *work,
         }
         quantized = work->q8_input;
         if (rc == YVEX_OK) {
+            int operand_failure = 1;
             void *params[] = {&quantized, &vector, (void *)&weight->row_width,
                               &input_rows, &group_count,
-                              (void *)&weight->row_width, &status};
+                              (void *)&weight->row_width, &status, &operand_failure};
             rc = attention_launch(work, work->state->q8_quantize_function,
                                   (unsigned int)quantize_tasks, CUDA_ATTENTION_BLOCK, 0u,
                                   params, "cuda.q8-activation", failure, err);
@@ -462,8 +463,9 @@ static int attention_matvec_grouped(
         }
         quantized = work->q8_input;
         if (rc == YVEX_OK) {
+            int operand_failure = 1;
             void *params[] = {&quantized, &vector, (void *)&weight->row_width,
-                              &quantized_rows, &groups, &input_stride, &status};
+                              &quantized_rows, &groups, &input_stride, &status, &operand_failure};
             rc = attention_launch(work, work->state->q8_quantize_function,
                                   (unsigned int)quantize_tasks,
                                   CUDA_ATTENTION_BLOCK, 0u, params,

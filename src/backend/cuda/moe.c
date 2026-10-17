@@ -300,8 +300,8 @@ static int moe_cuda_sync_status(yvex_backend_moe_execution *execution,
     }
     if (rc == YVEX_OK && execution->host_status) {
         yvex_error_setf(err, YVEX_ERR_BACKEND, "cuda.moe",
-            "CUDA MoE kernel reported device status %d (invalid or non-finite numerics)",
-            execution->host_status);
+            "CUDA MoE kernel reported device status %d (%s)",
+            execution->host_status, yvex_moe_device_status_name(execution->host_status));
         rc = YVEX_ERR_BACKEND;
     }
     return rc;
@@ -885,7 +885,7 @@ static int moe_cuda_encoded_expert_policy(
 static int moe_cuda_batch_quantize(
     moe_cuda_batch *batch, CUdeviceptr output, CUdeviceptr input,
     unsigned long long width, unsigned long long rows,
-    const char *stage, yvex_error *err)
+    int operand_failure, const char *stage, yvex_error *err)
 {
     unsigned long long tasks;
     if (!batch || !output || !input || !width || !rows ||
@@ -895,7 +895,8 @@ static int moe_cuda_batch_quantize(
         return moe_cuda_refuse(err, YVEX_ERR_BOUNDS,
                                "CUDA MoE Q8 activation geometry is invalid");
     unsigned long long one = 1ull;
-    void *params[] = {&output, &input, &width, &rows, &one, &width, &batch->status};
+    void *params[] = {&output, &input, &width, &rows, &one, &width, &batch->status,
+                      &operand_failure};
     return batch->ops->launch(
         &batch->work, batch->state->q8_quantize_function,
         (unsigned int)tasks, MOE_CUDA_BLOCK, 0u, params, stage,
@@ -1084,7 +1085,7 @@ static int moe_cuda_batch_prepare(moe_cuda_batch *batch,
         rc = moe_cuda_batch_quantize(
             batch, batch->q8_normalized, batch->normalized,
             layer->hidden_width, rows->row_count,
-            "cuda.moe.rows.q8-normalized", err);
+            YVEX_MOE_DEVICE_NORMALIZED_INPUT, "cuda.moe.rows.q8-normalized", err);
     return rc;
 }
 
@@ -1284,7 +1285,7 @@ static int moe_cuda_batch_experts(moe_cuda_batch *batch,
     if (rc == YVEX_OK && down_q8)
         rc = moe_cuda_batch_quantize(
             batch, q8_intermediate, intermediate, intermediate_width, count,
-            "cuda.moe.rows.q8-routed-intermediate",
+            YVEX_MOE_DEVICE_ROUTED_INTERMEDIATE, "cuda.moe.rows.q8-routed-intermediate",
             err);
     if (rc == YVEX_OK) {
         CUdeviceptr down_address = (CUdeviceptr)down->device_address;
@@ -1543,9 +1544,13 @@ static int moe_cuda_batch_publish(moe_cuda_batch *batch,
             batch->stream_synchronizations += (unsigned long long)!device_wide;
         }
     }
-    if (rc == YVEX_OK && !deferred && batch->host_status)
-        rc = moe_cuda_refuse(err, YVEX_ERR_BACKEND,
-                             "CUDA width-N MoE reported invalid or non-finite numerics");
+    if (rc == YVEX_OK && !deferred && batch->host_status) {
+        yvex_error_setf(err, YVEX_ERR_BACKEND, "cuda.moe",
+            "CUDA width-N MoE reported device status %d (%s; rows=%llu pairs=%llu)",
+            batch->host_status, yvex_moe_device_status_name(batch->host_status),
+            rows->row_count, pairs);
+        rc = YVEX_ERR_BACKEND;
+    }
     if (rc == YVEX_OK && !deferred &&
         (!batch->host_worklist.bucket_count ||
          batch->host_worklist.bucket_count > layer->routed_experts ||
