@@ -28,8 +28,18 @@ composition and availability instead of synthesizing an additive timeline.
 Source-owned display names are projected separately from retained deployment
 aliases. Concise public routing-ID migration, unobserved lifecycle metrics,
 independent model quality and competitive performance remain open. These source
-changes do not update the installed Host or consumer bindings. The operator's
-YAI window owns the GPU; independent CPU work continues.
+changes do not update the installed Host or consumer bindings. On 2026-10-17
+the operator ended the exclusive YAI window and authorized resumed Program P
+GPU qualification, subject to fresh ownership/resource checks and exact original
+profile restoration. The frozen10/12 three-arm campaign now completes with
+N=3 per measured cell, separate current profiles and original DSpark 32K
+restoration at generations 32 and 33. Same-width replay logits and fragments
+agree; the width-1,024 8K continuation differs and is not promoted as equivalent.
+Independent source-distribution observations retain nonzero differences and
+no held-out quality certificate. Layout/algorithm and narrow/raw controls,
+four independent CPU replays and nine bounded device-tool checks remain
+component evidence, not a production prepared layout or competitive exit.
+No installed rollout follows from that campaign.
 
 The selective 2026-10-15 representation continuation admits a source/file/context-
 bound calibration profile through the existing CLI and an explicitly versioned,

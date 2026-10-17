@@ -412,3 +412,65 @@ The former retains the repaired snapshot-admission failure; the latter is the
 successful, source-stable control. Package production and executable numerical
 qualification remain independent: this mechanism transfers neither quality nor
 performance evidence to a different realization.
+
+### Frozen decoded scheduling and layout separation — 2026-10-17
+
+`decoded-tiles-native-product-comparison-20261017-01` completes the reserved
+three-arm comparison: frozen10/512, frozen12/512 and frozen12/1,024. The frozen
+executables retain source `2d385e6f…` with independently captured deltas
+`572a614c…` and `4a09dbdd…`; the later `ed5dc342…` observer checkout is not their
+build source. Artifact `a54c74cd…`, binding `c730fa87…`, none reasoning and greedy
+sampling remain fixed. No executable weight layout changes in these three arms.
+Coding and DSpark use 4K context and 256 committed output tokens; uncached
+2K/8K cases use 16K context and 16 output tokens. Ten measured cells contain
+three fresh sessions each; seven warmup turns are separate.
+
+`campaign-output-recovery-20261015.8QuK4Xg7/decoded-tiles-complete-model-analysis-20261017-01.json`
+authenticates the native receipts, binaries, loaded geometry, resource witnesses
+and restoration. Same-width scheduling has a small complete-model effect, not
+a competitive breakthrough. Width 1,024 is a separate experimental axis and
+has no fresh frozen10/1,024 control in this campaign. Its 8K greedy continuation
+differs from width 512, consistently across its three sessions. The faster
+cell is characterized, not promoted to an equivalent or quality-qualified
+recommendation. The first control load and later warm loads have different
+page-cache histories; their load durations are not an algorithmic speedup.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Native before/after | Frozen builds, canonical native receipts and sampled ownership | Ten cells, N=3; identical artifact/binding with explicit geometry axes | Complete, retain exact populations and release private contexts | All cells complete; same-width ordered fragments agree; width-1,024 8K continuation differs | Receipt medians, ranges and MAD; no pooled incompatible cells | CHARACTERIZED | Complete-model performance, not independent quality or automatic selection |
+| Numerical replay | Whole-vocabulary frozen10/frozen12 arrays | Same 53 source-authored tokens; one prefill position then 52 teacher-forced positions | Preserve the equivalent implementation | All 6,851,840 F32 values agree bitwise | Exact complete-array SHA-256 agreement | PASS | Replay equivalence, not upstream conformance |
+| Independent source comparison | Retained authenticated official 0731 implementation | Same 53 tokens, separately identified reference arithmetic and prefill geometry | Characterize distributions without inventing a quality floor | Both native arms have the same nonzero reference differences; reference endpoint-observation limitation retained | Logit, KL, probability, top-token and NLL observations in `source-comparison.json` | CHARACTERIZED | Independent bounded numerical observation; held-out quality remains open |
+| IQ2 layout/algorithm controls | Native control, explicit alternate arithmetic and lossless raw/SoA pair | Four fresh component probes; actual narrow widths 1/3/7 and separate wide populations | Separate arithmetic, traversal and layout effects | Exact-layout and narrow arrays agree; alternate wide raw/SoA arrays agree without claiming native ROW equivalence | Full finite arrays and independent decoded-F64 sample bounds | PASS | Component scope only; no prepared-layout engine admission |
+| Independent codec/operator replay | Original pinned ggml CPU decoder `af97976c…` | Four fresh bounded device captures; exhaustive code/sign/odd-scale controls | Independent decoding and publication agreement | Four CPU replays pass under ASan/LSan/UBSan | Whole decoded blocks and captured finite outputs; linked archives are not instrumented | PASS | Independent component numerics, not checkpoint quality |
+| Bounded device tools | NVIDIA Compute Sanitizer; actual argv and summaries | Exact-layout, alternate-wide and narrow-triplet small fixtures | No invalid access, shared-memory hazard or invalid synchronization | Nine memcheck/racecheck/synccheck controls pass | At most 64 filtered candidate launches per tool | PASS | Instrumented finite populations only; not exceptional recovery or full-model safety |
+
+The new narrow discriminator includes a first-party canonical-byte consumer,
+not only a prepared-weight consumer. It separates the original scalar kernel,
+a four-row-per-warp gate/up realization with shared activation loads and unpack
+lookup, and the same realization over lossless SoA. The raw alternative can
+improve the width-one component without another prepared weight copy. This is
+not yet a compiler-selected production implementation or a model speedup.
+Conversely, the alternate wide F32 realization regresses the 512-position
+component despite improving 1,024 positions; it is not a universal replacement.
+Full-model prepared-resource fit, construction peaks, exceptional recovery and
+independent quality remain separate obligations.
+
+Fresh frozen12 8K profiles at both widths and a separately executed current
+coding profile replace reliance on older attribution. The coding record
+`decoded-current-coding-profile-20261017-01` resolves 64 readouts and 63 interior
+decode intervals through captured BF16 readout geometry. Dense encoded
+projections, other narrow projections, routed work and mHC remain material.
+Driver synchronization intervals mostly overlap device work. Kernel/copy
+coverage does not include every kind of device activity: this probe does not
+record GPU memset intervals. Its uncovered intervals therefore establish
+neither CPU overhead nor GPU idleness. No bandwidth, occupancy or hardware
+ceiling follows from these traces.
+
+The first campaign restores the original DSpark artifact/binding at generation
+32; the separate coding-profile campaign restores it at generation 33, both
+explicitly at 32K. Host PID/executable, management, listeners and grants remain
+unchanged. Independent public-path observation from Exon verifies health and
+the original catalog after the first restoration; no YAI inference or SEND is
+performed. All raw controls and failed/refused predecessors remain retained.
+Program P remains IN PROGRESS; neither competitive performance nor independent
+model quality is earned by this campaign.

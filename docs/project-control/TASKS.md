@@ -203,6 +203,16 @@ through Evaluation, and qualify the native guided/file CLI and real 0731 executi
 The existing Mamba proof remains the non-Transformer control. Technique references
 are not implemented capabilities; 20/700 and independent quality remain unearned.
 No second implementation Task or installed-engine replacement is selected.
+The 2026-10-17 operator handoff releases the YAI-exclusive GPU window for the
+reserved Program P campaign. Frozen R10/R12 comparisons retain equivalent
+workloads and separate implementation, geometry and layout axes. Fresh resource
+ownership, numerical/resource controls and restoration of the original DSpark
+32K profile remain mandatory; no installed rollout or competitive exit is earned
+by this authorization. The fresh frozen10/12 three-arm comparison completes
+with three sessions per measured cell, current phase attribution and original
+32K restoration. The observed wide-geometry continuation difference, independent
+quality gate and competitive exits remain open. Subsequent lossless-layout,
+algorithm/raw and narrow controls are retained at component scope only.
 
 The operator's 2026-10-16 end-to-end qualification extension remains in this
 Task. Extend the existing typed measurement and qualification owners across
