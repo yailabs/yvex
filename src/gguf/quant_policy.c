@@ -629,6 +629,40 @@ const yvex_quant_policy_rule *yvex_quant_policy_rule_at(const yvex_quant_policy 
     return &policy->rules[index];
 }
 
+int yvex_quant_policy_with_iq2_encoder(yvex_quant_policy **out,
+    const yvex_quant_policy *source, unsigned int version, yvex_error *err)
+{
+    yvex_quant_policy *copy = NULL;
+    int iq2 = 0, rc;
+    if (out) *out = NULL;
+    if (!out || !source || (version != 1u && version != 2u)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "quant_policy_reconstruction",
+                       "sealed policy and an admitted IQ2 encoder version required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = yvex_quant_policy_identity_validate(source, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0ull; i < source->rule_count; ++i)
+        iq2 |= source->rules[i].qtype == YVEX_QUANT_QTYPE_IQ2_XXS;
+    if (!iq2) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "quant_policy_reconstruction",
+                       "IQ2 reconstruction cannot apply to a policy without IQ2 rules");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    rc = yvex_quant_policy_clone(&copy, source, err);
+    if (rc != YVEX_OK) return rc;
+    if (version != yvex_quant_policy_iq2_encoder_version(source)) {
+        copy->schema_version = YVEX_QUANT_POLICY_ENCODER_SCHEMA_VERSION;
+        copy->iq2_encoder_version = version;
+        for (unsigned long long i = 0ull; i < copy->rule_count; ++i)
+            copy->rules[i].schema_version = copy->schema_version;
+        rc = yvex_quant_policy_validate(copy, NULL, err);
+    }
+    if (rc == YVEX_OK) *out = copy;
+    else yvex_quant_policy_close(copy);
+    return rc;
+}
+
 static yvex_quant_qtype template_qtype_from_dtype(yvex_dtype dtype) {
     size_t index;
     for (index = 0u; index < sizeof(qtype_dtypes) / sizeof(qtype_dtypes[0]); ++index)

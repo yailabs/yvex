@@ -214,6 +214,14 @@ with three sessions per measured cell, current phase attribution and original
 quality gate and competitive exits remain open. Subsequent lossless-layout,
 algorithm/raw and narrow controls are retained at component scope only.
 
+The 2026-10-17 CPU continuation connects admitted IQ2 reconstruction producers
+to the same physical-policy search, checked canonical plans and policy export.
+The opt-in local request/result are versioned separately; default search and
+public management remain compatible. Reconstruction is not a new quantization
+format, quality certificate or measured recommendation. Source/CPU qualification
+and complete-model performance remain separate; Program P stays IN PROGRESS.
+
+
 The operator's 2026-10-16 end-to-end qualification extension remains in this
 Task. Extend the existing typed measurement and qualification owners across
 production, loading, request preparation, compute, sampling/state and delivery;

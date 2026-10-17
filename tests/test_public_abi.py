@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 # schema decision. Updating an entry is therefore a reviewable ABI migration,
 # not a mechanical consequence of editing an installed header.
 RECORDS = {
+    "yvex_optimization_reconstruction": (
+        "include/yvex/optimization.h", "YVEX_OPTIMIZATION_RECONSTRUCTION_SCHEMA_V1", 1, 8,
+        "2db748c340fbef03d67621c62b9310c1ea31aff1e5c06557a7746d900edd2b45"),
     "yvex_optimization_context": (
         "include/yvex/optimization.h", "YVEX_OPTIMIZATION_CONTEXT_SCHEMA_V1", 1, 456,
         "a926554d19fa228cfa20b513add5ed5ef22c6fc6326fbfe23695cfdf59d3fb31"),

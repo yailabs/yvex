@@ -615,8 +615,56 @@ static int synthesize_policy(const yvex_optimization_request *request,
     return yvex_quant_policy_create_definition(out, &definition, err);
 }
 
-int yvex_optimization_search_open(yvex_optimization_search **out,
-                                 const yvex_optimization_request *r, yvex_error *err)
+static int search_append(yvex_optimization_search *search,
+    const yvex_optimization_request *r, const yvex_physical_variant_api *api,
+    const yvex_family_compiler_adapter *adapter, const char *recipe,
+    yvex_quant_policy *policy, int status, int *iq2, yvex_error *err)
+{
+    yvex_physical_variant_session *session = NULL;
+    yvex_optimization_candidate *c;
+    yvex_physical_variant_request variant = {
+        .target_id = r->target_id, .source_path = r->source_path, .models_root = r->models_root,
+        .source_manifest_path = r->source_manifest_path, .imatrix_path = r->imatrix_path,
+        .quant_policy = policy, .worker_count = 1u
+    };
+    if (iq2) *iq2 = 0;
+    if (search->count >= r->maximum_candidates) {
+        yvex_quant_policy_close(policy);
+        return refuse(err, YVEX_ERR_BOUNDS, "composed population exceeds explicit search budget");
+    }
+    c = &search->candidates[search->count];
+    memset(c, 0, sizeof(*c));
+    c->schema_version = YVEX_OPTIMIZATION_SCHEMA_V1;
+    c->missing_evidence = YVEX_OPTIMIZATION_MISSING_WORKSPACE |
+        YVEX_OPTIMIZATION_MISSING_STATE | YVEX_OPTIMIZATION_MISSING_MODEL_EXECUTION |
+        YVEX_OPTIMIZATION_MISSING_QUALITY | YVEX_OPTIMIZATION_MISSING_PERFORMANCE |
+        YVEX_OPTIMIZATION_MISSING_LIFECYCLE;
+    yvex_core_text_copy(c->recipe, sizeof(c->recipe), recipe);
+    if (status == YVEX_OK) status = api->open(&session, &variant, err);
+    if (status == YVEX_OK) {
+        const yvex_physical_variant_view *view = api->view(session);
+        status = collect(view, r, adapter, c, err);
+        if (status == YVEX_OK && iq2) {
+            const yvex_quant_plan_summary *summary = yvex_quant_plan_summary_get(view->plan);
+            for (unsigned long long i = 0ull; i < summary->decision_count; ++i)
+                *iq2 |= yvex_quant_plan_decision_at(view->plan, i)->qtype == YVEX_QUANT_QTYPE_IQ2_XXS;
+        }
+    }
+    api->close(&session);
+    if (status != YVEX_OK) {
+        yvex_quant_policy_close(policy);
+        if (status != YVEX_ERR_UNSUPPORTED) return status;
+        c->state = YVEX_OPTIMIZATION_COMPILATION_REFUSED;
+        c->failure_status = status;
+        yvex_core_text_copy(c->reason, sizeof(c->reason), err ? err->message :
+            "recipe prerequisites are not admitted");
+    } else search->policies[search->count] = policy;
+    search->count++;
+    return YVEX_OK;
+}
+
+static int search_open_reconstruction(yvex_optimization_search **out,
+    const yvex_optimization_request *r, unsigned int encoders, yvex_error *err)
 {
     const yvex_graph_execution_binding *execution;
     const yvex_physical_variant_api *api;
@@ -646,51 +694,65 @@ int yvex_optimization_search_open(yvex_optimization_search **out,
     rc = yvex_optimization_context_resolve(r, &search->context, err);
     if (rc != YVEX_OK) { free(search); return rc; }
     for (unsigned int i = 0u; i < count; ++i) {
-        yvex_physical_variant_session *session = NULL;
         yvex_quant_policy *policy = NULL;
-        yvex_optimization_candidate *c = &search->candidates[i];
         const char *preset = r->policy_path || i >= presets ? NULL :
             yvex_quant_policy_target_preset_name(r->target_id, i);
-        yvex_physical_variant_request variant = {
-            .target_id = r->target_id, .source_path = r->source_path, .models_root = r->models_root,
-            .source_manifest_path = r->source_manifest_path, .quant_preset_name = preset,
-            .quant_policy_path = r->policy_path, .imatrix_path = r->imatrix_path,
-            .backend = NULL, .worker_count = 1u
-        };
-        c->schema_version = YVEX_OPTIMIZATION_SCHEMA_V1;
-        c->missing_evidence = YVEX_OPTIMIZATION_MISSING_WORKSPACE |
-            YVEX_OPTIMIZATION_MISSING_STATE | YVEX_OPTIMIZATION_MISSING_MODEL_EXECUTION |
-            YVEX_OPTIMIZATION_MISSING_QUALITY | YVEX_OPTIMIZATION_MISSING_PERFORMANCE |
-            YVEX_OPTIMIZATION_MISSING_LIFECYCLE;
-        yvex_core_text_copy(c->recipe, sizeof(c->recipe), i >= presets ?
-            synthesis[i - presets].name : preset ? preset : "explicit-policy");
+        const char *recipe = i >= presets ? synthesis[i - presets].name :
+            preset ? preset : "explicit-policy";
+        unsigned int base = search->count;
+        int iq2 = 0;
         rc = i >= presets ? synthesize_policy(r, (unsigned int)(i - presets), &policy, err) :
             r->policy_path ? yvex_quant_policy_open(&policy, r->policy_path, err) :
             yvex_quant_policy_preset_open(&policy, preset, err);
-        variant.quant_preset_name = NULL;
-        variant.quant_policy_path = NULL;
-        variant.quant_policy = policy;
-        if (rc == YVEX_OK) rc = api->open(&session, &variant, err);
-        if (rc == YVEX_OK) rc = collect(api->view(session), r, execution->compiler, c, err);
-        api->close(&session);
-        if (rc != YVEX_OK) {
-            yvex_quant_policy_close(policy);
-            /* Never hide integrity/IO/state errors as a merely lower-ranked recipe. */
-            if (rc != YVEX_ERR_UNSUPPORTED) {
-                yvex_optimization_search_close(&search);
-                return rc;
+        rc = search_append(search, r, api, execution->compiler, recipe, policy, rc, &iq2, err);
+        if (rc == YVEX_OK && encoders && iq2) {
+            unsigned int original = yvex_quant_policy_iq2_encoder_version(search->policies[base]);
+            unsigned int alternate = original == 1u ? 2u : 1u;
+            if (encoders & (1u << (alternate - 1u))) {
+                char name[128];
+                policy = NULL;
+                rc = yvex_quant_policy_with_iq2_encoder(&policy, search->policies[base], alternate, err);
+                if (rc == YVEX_OK && !(encoders & (1u << (original - 1u)))) {
+                    yvex_quant_policy_close(search->policies[base]);
+                    search->policies[base] = NULL;
+                    search->count--;
+                }
+                (void)snprintf(name, sizeof(name), "%s-iq2-%s", recipe,
+                    alternate == 1u ? "legacy-v1" : "weighted-v2");
+                if (rc == YVEX_OK)
+                    rc = search_append(search, r, api, execution->compiler, name, policy, rc, NULL, err);
             }
-            c->state = YVEX_OPTIMIZATION_COMPILATION_REFUSED;
-            c->failure_status = rc;
-            yvex_core_text_copy(c->reason, sizeof(c->reason), err ? err->message :
-                "recipe prerequisites are not admitted");
-        } else search->policies[i] = policy;
-        search->count++;
+        }
+        if (rc != YVEX_OK) {
+            yvex_optimization_search_close(&search);
+            return rc;
+        }
     }
     prioritize(search, r->goal);
     *out = search;
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+int yvex_optimization_search_open(yvex_optimization_search **out,
+    const yvex_optimization_request *r, yvex_error *err)
+{
+    return search_open_reconstruction(out, r, 0u, err);
+}
+
+int yvex_optimization_search_reconstruct(yvex_optimization_search **out,
+    const yvex_optimization_request *r, const char *technique,
+    const yvex_optimization_reconstruction *reconstruction, yvex_error *err)
+{
+    if (out) *out = NULL;
+    if (!out || !r || !reconstruction ||
+        reconstruction->schema_version != YVEX_OPTIMIZATION_RECONSTRUCTION_SCHEMA_V1 ||
+        !reconstruction->iq2_encoder_mask || reconstruction->iq2_encoder_mask > 3u)
+        return refuse(err, YVEX_ERR_INVALID_ARG, "current bounded reconstruction constraints required");
+    if (!technique || strcmp(technique, "fixed-recipes-v1"))
+        return refuse(err, YVEX_ERR_UNSUPPORTED,
+            "reconstruction composes parameter search, not source/Q2 allocation");
+    return search_open_reconstruction(out, r, reconstruction->iq2_encoder_mask, err);
 }
 
 typedef struct {

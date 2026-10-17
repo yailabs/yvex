@@ -1181,7 +1181,23 @@ def optimization_guided(binary: Path) -> int:
         refused = invoke(binary, words, environment)
         assert refused.returncode and "unsupported optimization request schema" in refused.stderr, refused
         assert output.read_bytes() == previous
-        return 8
+        # An explicit reconstruction axis survives the same real terminal
+        # journey; guided editing must not downgrade its versioned request.
+        reconstruction = {**stale, "schema": "yvex.optimization.request.v3", "iq2_encoders": "both"}
+        request.write_text(json.dumps(reconstruction))
+        reconstructed = directory / "reconstruction.json"
+        status, transcript = guided_transcript(binary, [
+            "compile", "optimize", "--guided", "--request", str(request),
+            "--out-request", str(reconstructed)], environment, b"1\n2\n1\n2\n")
+        assert status != 0 and b"Request saved" in transcript and b"\x1b" not in transcript, transcript
+        replay = json.loads(reconstructed.read_text())
+        assert replay["schema"] == "yvex.optimization.request.v3" and replay["iq2_encoders"] == "both"
+        invalid = {**reconstruction, "schema": "yvex.optimization.request.v2"}
+        request.write_text(json.dumps(invalid))
+        refused = invoke(binary, words, environment)
+        assert refused.returncode and "require optimization request v3" in refused.stderr, refused
+        assert output.read_bytes() == previous
+        return 10
 
 
 def provider_catalog(binary: Path, reference: Path | None) -> int:

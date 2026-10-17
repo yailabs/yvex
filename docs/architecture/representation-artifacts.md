@@ -72,6 +72,14 @@ This is a representation producer, not a new inference arithmetic class or an
 independent model-quality certificate. Re-emission needs its own artifact and
 binding; existing artifact consumers are not automatically changed.
 
+The native policy owner can derive an admitted IQ2 producer from a sealed policy
+without editing its selectors or encoded qtypes. A no-op preserves the exact
+identity; a producer change normalizes the policy and rule schema tags to v3
+before hashing, so canonical JSON publication/readback has the same identity.
+The original policy is never mutated. Unknown producers and policies without IQ2
+rules refuse. This constructor feeds compiler reconstruction alternatives; it
+does not supply missing calibration or transfer quality between producers.
+
 The producer's process-shared immutable neighbor table occupies 699,056 bytes,
 in addition to the existing 43,691-byte legacy table. Initialization occurs once;
 search scratch is bounded per worker and does not create a second weight matrix.

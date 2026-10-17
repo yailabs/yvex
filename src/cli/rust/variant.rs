@@ -35,14 +35,22 @@ struct OptimizationFile {
     technique: Option<String>,
     weight_budget: Option<u64>,
     search_states: Option<u64>,
+    iq2_encoders: Option<String>,
 }
 
 fn optimization_file_schema(input: &OptimizationFile) -> Result<()> {
     if !matches!(
         input.schema.as_str(),
-        "yvex.optimization.request.v1" | "yvex.optimization.request.v2"
+        "yvex.optimization.request.v1"
+            | "yvex.optimization.request.v2"
+            | "yvex.optimization.request.v3"
     ) {
         return Err(grammar("unsupported optimization request schema"));
+    }
+    if input.iq2_encoders.is_some() && input.schema != "yvex.optimization.request.v3" {
+        return Err(grammar(
+            "reconstruction constraints require optimization request v3",
+        ));
     }
     if input.schema == "yvex.optimization.request.v1"
         && (input.technique.is_some()
@@ -70,6 +78,7 @@ fn optimization_file_words(
         ("--backend", input.backend),
         ("--goal", input.goal),
         ("--technique", input.technique),
+        ("--iq2-encoders", input.iq2_encoders),
         (
             "--weight-budget",
             input.weight_budget.map(|n| n.to_string()),
@@ -213,6 +222,7 @@ fn guided_model(
         technique: Some("presets".into()),
         weight_budget: None,
         search_states: None,
+        iq2_encoders: None,
     })
 }
 
@@ -387,7 +397,12 @@ fn optimize_guided(
             "Allow approximate candidates; independent quality remains mandatory",
         ],
     )? == 1;
-    input.schema = "yvex.optimization.request.v2".into();
+    input.schema = if input.iq2_encoders.is_some() {
+        "yvex.optimization.request.v3"
+    } else {
+        "yvex.optimization.request.v2"
+    }
+    .into();
     // The request is the reproducible non-interactive product contract. Never overwrite one.
     let mut flags = invocation.flags.clone();
     flags.retain(|name, _| name == "--request");
@@ -622,6 +637,17 @@ pub(crate) fn optimize(invocation: &Invocation<'_>, width: usize, styled: bool) 
             .then(|| number("--weight-budget", 0))
             .transpose()?,
         search_states: number("--search-states", 4096)?.try_into()?,
+        reconstruction: invocation.value("--iq2-encoders").map(|value| {
+            raw::yvex_optimization_reconstruction {
+                schema_version: raw::YVEX_OPTIMIZATION_RECONSTRUCTION_SCHEMA_V1,
+                iq2_encoder_mask: match value {
+                    "legacy" => 1,
+                    "weighted" => 2,
+                    "both" => 3,
+                    _ => unreachable!("registry-validated reconstruction constraint"),
+                },
+            }
+        }),
     })?;
     let deployment = invocation
         .value("--runtime-binding")
@@ -760,6 +786,16 @@ fn optimization_json(
     );
     projection["selected_candidate"] = serde_json::json!(invocation.value("--select"));
     projection["exported_policy"] = serde_json::json!(invocation.value("--out-policy"));
+    if let Some(encoders) = invocation.value("--iq2-encoders") {
+        projection["schema"] = serde_json::json!("yvex.optimization.search.v4");
+        projection["reconstruction"] = serde_json::json!({
+            "schema": "yvex.optimization.reconstruction.v1",
+            "iq2_encoders": encoders,
+            "scope": "actual compiled IQ2 terminals only; other parameter encodings unchanged",
+            "quality": null,
+            "measured_selection": false
+        });
+    }
     projection["qualification_evidence"] = evidence.clone();
     projection["deployment_assessment"] = serde_json::json!(deployment.as_ref().map(|d| {
                     serde_json::json!({
@@ -844,6 +880,12 @@ fn optimization_human(
             .into(),
         "".into(),
     ];
+    if let Some(encoders) = invocation.value("--iq2-encoders") {
+        lines.insert(4, format!(
+            "IQ2 reconstruction: {} · actual IQ2 terminals only; independent quality unqualified",
+            encoders
+        ));
+    }
     for c in &report.rows {
         lines.push(format!(
             "{} · {}",
@@ -1662,6 +1704,40 @@ mod tests {
         );
         let mut input: OptimizationFile = serde_json::from_str(&optimization_input()).unwrap();
         input.backend = Some("invented".into());
+        assert!(
+            registry
+                .parse(&optimization_file_words(&invoke, input).unwrap())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn reconstruction_request_versions_reuse_native_registry() {
+        let registry = crate::registry::Registry::embedded().unwrap();
+        let invoke = registry
+            .parse(&["compile", "optimize", "--request", "goals.json"].map(String::from))
+            .unwrap();
+        for schema in [
+            "yvex.optimization.request.v1",
+            "yvex.optimization.request.v2",
+        ] {
+            let mut input: OptimizationFile = serde_json::from_str(&optimization_input()).unwrap();
+            input.schema = schema.into();
+            input.iq2_encoders = Some("both".into());
+            assert!(optimization_file_words(&invoke, input).is_err());
+        }
+        for encoding in ["legacy", "weighted", "both"] {
+            let mut input: OptimizationFile = serde_json::from_str(&optimization_input()).unwrap();
+            input.schema = "yvex.optimization.request.v3".into();
+            input.iq2_encoders = Some(encoding.into());
+            let words = optimization_file_words(&invoke, input).unwrap();
+            let parsed = registry.parse(&words).unwrap();
+            assert_eq!(parsed.value("--iq2-encoders"), Some(encoding));
+            assert_eq!(parsed.value("--source"), Some("source with spaces"));
+        }
+        let mut input: OptimizationFile = serde_json::from_str(&optimization_input()).unwrap();
+        input.schema = "yvex.optimization.request.v3".into();
+        input.iq2_encoders = Some("unimplemented".into());
         assert!(
             registry
                 .parse(&optimization_file_words(&invoke, input).unwrap())

@@ -151,6 +151,22 @@ unknown methods and inappropriate method inputs refuse. The existing fixed
 recipes and `source-retention-allocation-v1` share canonical policy, quantization,
 writer and compatibility owners. Research references are not registered methods.
 
+The additive eight-byte `yvex_optimization_reconstruction` schema 1 declares an
+IQ2 producer mask: 1 admits legacy, 2 weighted, 3 both. Empty/unknown masks and
+stale schemas refuse before source work. `yvex_optimization_search_reconstruct`
+composes this constraint with fixed parameter search, including explicit expert
+selectors; source/Q2 allocation refuses unused reconstruction inputs. Only
+canonical plans with actual IQ2 terminals expand. The complete population must
+fit the request's candidate budget; overflow closes all owned plans/policies
+and leaves the output null, never a silently truncated population.
+
+`yvex_quant_policy_with_iq2_encoder` derives a sealed policy without mutating its
+input, selectors or encoded qtypes. No-op derivation preserves identity. Changing
+the producer gives policy/rules v3 tags and a new canonical policy identity;
+export/readback must agree. It does not remove calibration requirements or
+qualify a representation. Both alternatives retain explicit missing execution,
+quality and performance evidence, independent of their equal encoded byte cost.
+
 The allocation schema 1 solves a bounded two-choice-per-group problem over
 canonical source/Q2 tensor plans. Coupled expert gate/up roles share one group;
 mandatory routed-matrix operands stay fixed. The independent algorithm returns
@@ -205,6 +221,11 @@ projects missing metrics as `null` and keeps
 `qualified_recommendation` null until its independent evidence is implemented.
 Request JSON v1 remains accepted; allocation controls require request v2. The
 guided Rust surface writes that same v2 request and never installs a model.
+Explicit `--iq2-encoders legacy|weighted|both` instead requires request JSON v3
+and returns local `yvex.optimization.search.v4` with its reconstruction scope.
+Guided replay preserves that version and control. This is not a new management
+operation or SDK claim: the existing public optimization operation and default
+local v3 result remain unchanged.
 Receipt authentication is distinct from parsing: an exact whole-record match
 against the build's embedded canonical publication is identified explicitly;
 other files remain untrusted inspection. A digest alone is not a trust root.

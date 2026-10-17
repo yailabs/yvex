@@ -191,6 +191,31 @@ int yvex_test_optimization(void)
     }
     YVEX_TEST_ASSERT(measured_selection() == 0, "bounded measured-selection controls");
     yvex_optimization_request r = request();
+    {
+        yvex_optimization_reconstruction reconstruction = {1u, 3u};
+        yvex_optimization_search *search = NULL;
+        yvex_error failure = {0};
+        for (unsigned int mask = 0u; mask <= 4u; mask += 4u) {
+            reconstruction.iq2_encoder_mask = mask;
+            YVEX_TEST_ASSERT(yvex_optimization_search_reconstruct(&search, &r,
+                "fixed-recipes-v1", &reconstruction, &failure) == YVEX_ERR_INVALID_ARG && !search,
+                "unknown or empty reconstruction populations refuse without source work");
+        }
+        reconstruction.iq2_encoder_mask = 3u;
+        reconstruction.schema_version = 2u;
+        YVEX_TEST_ASSERT(yvex_optimization_search_reconstruct(&search, &r,
+            "fixed-recipes-v1", &reconstruction, &failure) == YVEX_ERR_INVALID_ARG && !search,
+            "stale reconstruction layout refuses before consuming its fields");
+        reconstruction.schema_version = 1u;
+        YVEX_TEST_ASSERT(yvex_optimization_search_reconstruct(&search, &r,
+            "source-retention-allocation-v1", &reconstruction, &failure) == YVEX_ERR_UNSUPPORTED && !search,
+            "binary source/Q2 allocation does not pretend to consume IQ2 reconstruction controls");
+        r.policy_path = "not-opened.json";
+        YVEX_TEST_ASSERT(yvex_optimization_search_reconstruct(&search, &r,
+            "fixed-recipes-v1", &reconstruction, &failure) == YVEX_ERR_INVALID_ARG && !search,
+            "expert selectors still require exact authenticated source inputs");
+        r.policy_path = NULL;
+    }
     yvex_optimization_candidate c = candidate();
     yvex_error err = {0};
     char identity[65];

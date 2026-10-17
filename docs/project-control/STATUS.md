@@ -22,6 +22,13 @@ publication: {html: true, pdf: true, index: true}
 
 ## Active goal-driven Physical Model Compiler
 
+The 2026-10-17 local CPU continuation composes IQ2 producer alternatives with
+canonical parameter plans and unchanged calibration/compatibility owners.
+Default search and public management are unchanged; the opt-in CLI projection
+is explicitly versioned. Complete-model effect and independent quality remain
+unearned. The operator has meanwhile reserved the GPU for YAI; Program P's
+GPU dispatch stays stopped and the original DSpark 32K service is preserved.
+
 The end-to-end qualification/model-identity extension is selected inside the
 same Program P Task. Native phase observations preserve producer clock,
 composition and availability instead of synthesizing an additive timeline.

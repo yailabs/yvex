@@ -414,6 +414,53 @@ static int test_explicit_iq2_encoder(void)
     return 0;
 }
 
+static int test_reconstruction_derivation(void)
+{
+    yvex_quant_policy_rule rule = {0};
+    yvex_quant_policy_definition definition = {"derived", "generic", "test", &rule, 1ull};
+    yvex_quant_policy *legacy = NULL, *weighted = NULL, *same = NULL, *readback = NULL;
+    yvex_quant_policy_summary a = {0}, b = {0}, observed = {0};
+    yvex_error error = {0};
+    const char *path = "build/tests/quant-policy/derived-encoder.json";
+    rule.schema_version = YVEX_QUANT_POLICY_SCHEMA_VERSION;
+    rule.match_mask = YVEX_QUANT_MATCH_DEFAULT;
+    rule.qtype = YVEX_QUANT_QTYPE_IQ2_XXS;
+    rule.requires_imatrix = 1;
+    YVEX_TEST_ASSERT(yvex_quant_policy_create_definition(&legacy, &definition, &error) == YVEX_OK &&
+        yvex_quant_policy_get_summary(legacy, &a, &error) == YVEX_OK,
+        "native definition owns the legacy policy");
+    YVEX_TEST_ASSERT(yvex_quant_policy_with_iq2_encoder(&same, legacy, 1u, &error) == YVEX_OK &&
+        yvex_quant_policy_get_summary(same, &observed, &error) == YVEX_OK &&
+        !strcmp(a.policy_identity, observed.policy_identity), "no-op derivation preserves old identity");
+    yvex_quant_policy_close(same); same = NULL;
+    YVEX_TEST_ASSERT(yvex_quant_policy_with_iq2_encoder(&weighted, legacy, 2u, &error) == YVEX_OK &&
+        yvex_quant_policy_get_summary(weighted, &b, &error) == YVEX_OK &&
+        b.schema_version == 3u && strcmp(a.policy_identity, b.policy_identity) &&
+        yvex_quant_policy_iq2_encoder_version(legacy) == 1u &&
+        yvex_quant_policy_iq2_encoder_version(weighted) == 2u,
+        "producer alternative changes immutable identity, not the original policy");
+    YVEX_TEST_ASSERT(yvex_quant_policy_rule_count(weighted) == 1ull &&
+        yvex_quant_policy_rule_at(weighted, 0ull)->qtype == rule.qtype &&
+        yvex_quant_policy_rule_at(weighted, 0ull)->requires_imatrix,
+        "reconstruction preserves Q and calibration requirements");
+    YVEX_TEST_ASSERT(yvex_quant_policy_write_json(path, weighted, &error) == YVEX_OK &&
+        yvex_quant_policy_open(&readback, path, &error) == YVEX_OK &&
+        yvex_quant_policy_get_summary(readback, &observed, &error) == YVEX_OK &&
+        !strcmp(b.policy_identity, observed.policy_identity),
+        "derived producer publishes through the canonical reader and writer");
+    for (unsigned int version = 0u; version <= 4u; version += 3u)
+        YVEX_TEST_ASSERT(yvex_quant_policy_with_iq2_encoder(&same, legacy, version, &error) ==
+            YVEX_ERR_INVALID_ARG && !same, "unknown producers refuse atomically");
+    yvex_quant_policy_close(readback); yvex_quant_policy_close(weighted);
+    yvex_quant_policy_close(legacy); legacy = NULL;
+    rule.qtype = YVEX_QUANT_QTYPE_Q2_K; rule.requires_imatrix = 0;
+    YVEX_TEST_ASSERT(yvex_quant_policy_create_definition(&legacy, &definition, &error) == YVEX_OK &&
+        yvex_quant_policy_with_iq2_encoder(&same, legacy, 2u, &error) == YVEX_ERR_UNSUPPORTED && !same,
+        "an absent codec does not acquire an invented reconstruction technique");
+    yvex_quant_policy_close(legacy);
+    return 0;
+}
+
 int yvex_test_quant_policy(void)
 {
     if (test_names() != 0) return 1;
@@ -423,5 +470,6 @@ int yvex_test_quant_policy(void)
     if (test_derive_fixture() != 0) return 1;
     if (test_policy_v2_and_presets() != 0) return 1;
     if (test_explicit_iq2_encoder() != 0) return 1;
+    if (test_reconstruction_derivation() != 0) return 1;
     return test_dspark_bootstrap_policy();
 }

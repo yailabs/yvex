@@ -91,6 +91,19 @@ const yvex_optimization_technique *yvex_optimization_technique_at(unsigned int i
 int yvex_optimization_search_run(yvex_optimization_search **out,
     const yvex_optimization_request *request, const char *technique_identity,
     unsigned long long weight_budget, unsigned int maximum_states, yvex_error *err);
+/* Optional reconstruction axis over the existing parameter search. Bits 0/1
+ * admit the existing legacy/weighted IQ2 producers. Only canonical plans with
+ * actual IQ2 terminals expand; other architectures keep their real topology.
+ * Expert selectors/encodings are preserved; only the explicitly requested
+ * producer axis varies. Source/Q2 allocation refuses unused controls.
+ * The request/candidate layouts and default search are unchanged. */
+#define YVEX_OPTIMIZATION_RECONSTRUCTION_SCHEMA_V1 1u
+typedef struct {
+    unsigned int schema_version, iq2_encoder_mask;
+} yvex_optimization_reconstruction;
+int yvex_optimization_search_reconstruct(yvex_optimization_search **out,
+    const yvex_optimization_request *request, const char *technique_identity,
+    const yvex_optimization_reconstruction *reconstruction, yvex_error *err);
 /* Derived projection of canonical source/semantic and request owners. No new
  * persisted profile store and no engine-scoped execution profile. Available
  * memory stays in the observation, deliberately outside identity. */

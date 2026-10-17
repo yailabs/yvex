@@ -520,6 +520,7 @@ pub(crate) struct OptimizationInput<'a> {
     pub request: raw::yvex_optimization_request,
     pub weight_budget: Option<u64>,
     pub search_states: u32,
+    pub reconstruction: Option<raw::yvex_optimization_reconstruction>,
 }
 
 pub(crate) struct OptimizationReport {
@@ -599,22 +600,36 @@ pub(crate) fn optimize(input: OptimizationInput<'_>) -> Result<OptimizationRepor
     let mut failure = raw::yvex_error::default();
     checked(
         unsafe {
-            raw::yvex_optimization_search_run(
-                &mut search.0,
-                &request,
-                if input.weight_budget.is_some() {
-                    c"source-retention-allocation-v1".as_ptr()
-                } else {
-                    c"fixed-recipes-v1".as_ptr()
-                },
-                input.weight_budget.unwrap_or(0),
-                if input.weight_budget.is_some() {
-                    input.search_states
-                } else {
-                    0
-                },
-                &mut failure,
-            )
+            if let Some(reconstruction) = input.reconstruction.as_ref() {
+                raw::yvex_optimization_search_reconstruct(
+                    &mut search.0,
+                    &request,
+                    if input.weight_budget.is_some() {
+                        c"source-retention-allocation-v1".as_ptr()
+                    } else {
+                        c"fixed-recipes-v1".as_ptr()
+                    },
+                    reconstruction,
+                    &mut failure,
+                )
+            } else {
+                raw::yvex_optimization_search_run(
+                    &mut search.0,
+                    &request,
+                    if input.weight_budget.is_some() {
+                        c"source-retention-allocation-v1".as_ptr()
+                    } else {
+                        c"fixed-recipes-v1".as_ptr()
+                    },
+                    input.weight_budget.unwrap_or(0),
+                    if input.weight_budget.is_some() {
+                        input.search_states
+                    } else {
+                        0
+                    },
+                    &mut failure,
+                )
+            }
         },
         &failure,
     )?;

@@ -4026,6 +4026,11 @@
       },
       {
         "description": "Inspect canonical receipts related by policy/source; exact calibration and recipe match remain unproven.",
+      {
+        "description": "Compose admitted IQ2 reconstruction producers with planned parameter encodings; calibration and independent quality remain required.",
+        "name": "--iq2-encoders", "takes_value": true, "value_type": "enum",
+        "enum_values": ["legacy", "weighted", "both"]
+      },
         "name": "--evidence",
         "takes_value": true,
         "value_type": "path"

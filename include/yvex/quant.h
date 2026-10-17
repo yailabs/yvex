@@ -451,6 +451,13 @@ unsigned long long yvex_quant_policy_rule_count(const yvex_quant_policy *policy)
  * independently of its unchanged storage format and runtime decoder. */
 unsigned int yvex_quant_policy_iq2_encoder_version(const yvex_quant_policy *policy);
 
+/* Derive a sealed policy with a different admitted IQ2 producer (1 or 2).
+ * Rules, source and the caller's policy remain unchanged. A changed producer
+ * has its own v3 identity; no-op derivation preserves the original identity.
+ * Refuses policies without IQ2 rules. This is not calibration or quality proof. */
+int yvex_quant_policy_with_iq2_encoder(yvex_quant_policy **out,
+    const yvex_quant_policy *source, unsigned int version, yvex_error *err);
+
 const yvex_quant_policy_rule *yvex_quant_policy_rule_at(const yvex_quant_policy *policy,
                                                         unsigned long long index);
 

@@ -71,6 +71,25 @@ The selected policy is exported by exact candidate identity for the existing
 `compile quant plan` / `compile quant emit` pipeline. The internal physical
 variant adapter is version 2 to admit a borrowed policy, cloned before ownership
 crosses the source session; its unchanged summary remains version 1.
+The local optional `--iq2-encoders legacy|weighted|both` composes the existing
+parameter search with the admitted IQ2 reconstruction producers. Applicability
+comes from complete compiler decisions containing actual IQ2 terminals, not a
+family name or the presence of unused policy rules. Other encodings are unchanged;
+models without IQ2 terminals gain no invented implementation. Expansion consumes
+the declared candidate budget and refuses overflow without a partial search.
+An expert policy can constrain the encoded qtypes and selectors while this
+explicit control varies only the producer; its original file and identity are
+never mutated. Source/Q2 allocation cannot consume this control and refuses
+rather than ignoring it. Calibration, coupled
+operand compatibility, initial costing and policy export still use their existing
+owners. Neither producer is ranked by presumed quality or speed.
+
+Reconstruction controls require `yvex.optimization.request.v3`; older request
+layouts and the default search remain unchanged. Only the opt-in local JSON result
+uses `yvex.optimization.search.v4` and its reconstruction projection. The existing
+public management/SDK optimization operation keeps its current contract and does
+not advertise this new local action. Exported policies feed canonical production;
+no artifact is emitted, engine loaded or recommendation qualified by search.
 The family compiler adapter is version 3: a family may expose its existing
 static artifact catalog as a borrowed constraint. The planner compares physical,
 source, transformation, writer and file identities before emission; it never

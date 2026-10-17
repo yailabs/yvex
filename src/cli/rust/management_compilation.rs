@@ -179,6 +179,7 @@ pub(crate) fn plan(value: &Value) -> Result<Value> {
         request,
         weight_budget: input.weight_budget,
         search_states: input.search_states.unwrap_or(4096),
+        reconstruction: None,
     })?;
     let mut result = variant::optimization_projection(
         &report,

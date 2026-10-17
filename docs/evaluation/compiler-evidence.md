@@ -87,6 +87,36 @@ MXFP4 publication records lack a kernel-bundle identity: the new comparison gate
 does not fill that gap from the current build or rank those rows automatically.
 Independent held-out quality and the 20/700 performance gates remain unearned.
 
+## IQ2 reconstruction composition — 2026-10-17
+
+The local compiler can compose the existing parameter policy with admitted IQ2
+producers, rather than changing qtype to express a reconstruction algorithm.
+This CPU-only witness uses the authenticated 0731 source and previously retained
+28-layer observed/calibrated policy. It is not a new full-model representation,
+GPU experiment, quality reference or competitive result.
+
+| Control | Authority / fixture | Observation | Claim boundary |
+| --- | --- | --- | --- |
+| Real 0731 planning | Canonical source, calibration manifest and native compiler; encoder masks 1, 2 and 3 | One legacy candidate, one weighted candidate, or both; 138 real routed terminals and equal encoded bytes | Actual coupled Q/R planning, not runtime admission or a quality ranking |
+| Immutable identity | Canonical policy owner and JSON reader/writer | Weighted input policy identity `4cd41470…` is preserved; the derived legacy policy `ee2e45c9…` is distinct; exported policies reopen with exact identities | Reconstruction provenance and reproducibility, not an equivalent weight representation |
+| Refusal / ownership | One-candidate budget for a two-candidate population; version/unused-control negatives | Budget overflow returns no partial search; policy derivation does not mutate the original | Bounded construction and explicit refusal, not qualified deployment |
+
+The raw CPU witness is retained under the existing campaign root in
+`reconstruction-profile-20261017.fxqCCW/receipt.json`, with source delta
+`8d3996809409da72a01338c57b36715cab830bacec833212751e87b348634833`
+at main `8796291ceec469f3cf68fae6ecf2b197fca0f69e`. The CPU plan/export run
+took 6.49 seconds and observed a 410,251,264-byte RSS peak; these are planner
+costs, not preparation/load/inference measurements. No artifact was emitted,
+backend opened or operator generation changed. Complete resource admission,
+independent checkpoint quality and full-model performance remain unearned.
+
+The final source-captured replay is retained in
+`reconstruction-closure-20261017.nqicnB` at source delta `df493034…`.
+Its separate `mamba-checked.FSQElh/mamba-receipt.json` exercises the same CLI on
+real Mamba2 source: all seven candidate identities remain unchanged, with 64
+sequence-mixer layers, zero attention and zero routed experts. No SSM execution
+or inference throughput is claimed by this planning control.
+
 ## Mainline public planning and source handoff
 
 The continuation based on `2de077e9` closes a bounded producer/consumer path,
