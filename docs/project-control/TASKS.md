@@ -52,7 +52,11 @@ refusal; the conditional second inference is not dispatched. Original DSpark
 returns at generation 3/32K with installed services unchanged. No historical
 Work replay, installed rollout or numerical relaxation occurred. Remaining
 predicate coverage, historical causality, numerical repair and real YAI
-acceptance are unearned; an input-equivalent witness is the next causal gate.
+acceptance are unearned. The separately authorized 2026-10-18 exact-wire
+diagnostic completes all 8,055 input positions and produces one schema-valid
+native call on the diagnostic binary; original DSpark returns at generation
+5/32K. This does not establish a numerical repair. An unchanged-original-binary
+fresh-process control is prepared and requires its own inference authorization.
 
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on

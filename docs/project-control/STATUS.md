@@ -726,8 +726,13 @@ fresh public 8,055-token input and one output token, HTTP 200, without reproduci
 the refusal. No conditional second inference was dispatched. Original DSpark is
 restored at generation 3/32K; installed Host, management and configuration are
 unchanged. Complete diagnostic coverage, historical causal attribution and a
-numerical correction remain unearned. Input-equivalent evidence is required
-before another causal experiment; this is not successful YAI acceptance.
+numerical correction remain unearned. The separately authorized 2026-10-18
+exact-wire diagnostic then completes all 8,055 input positions and returns one
+independently schema-validated native call, HTTP 200. Original DSpark is restored
+at generation 5/32K, with installed services unchanged. This passes the prior
+failure position only on the diagnostic binary in a fresh process; an isolated
+unchanged-original-binary control remains unexecuted and requires authorization.
+Neither a historical numerical repair nor successful YAI Work follows.
 
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |

@@ -15,6 +15,60 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## Exact-wire diagnostic completes with a native call — 2026-10-18
+
+After separate authorization for one additional request, the same retained
+26,803-byte wire (`dee234e8…`) completed on the unchanged diagnostic executable
+`997b9cea…`, build `298bf58d…`, base `f12d8818` plus delta `d3fade9e…`.
+The original DSpark artifact `b669d807…`, binding `8cdb4929…`, specialization
+`3fb4ce20…`, 32K context, 512-position chunks and speculative execution were
+retained. There was no YAI SEND, Work replay, tool execution or installed rollout.
+
+The experimental guard now records failing snapshots and traceback, and admits
+only journal-confirmed, successful health/catalog GETs with idle execution
+counters. Non-discovery operations, incomplete observations, foreign compute
+ownership and resource violations still refuse. Four positive and seven
+negative CPU controls pass. Two completed discovery reads were observed during
+the successful run; original model requests remained 3→3. No numerical or
+runtime admission predicate was changed.
+
+| Boundary | Observation | Earned scope |
+| --- | --- | --- |
+| Input and prefill | 8,055 newly executed input positions; all 16 chunks complete in 96.5341173 s | Exact-wire diagnostic passes the historical 6,144-position failure boundary on this binary/process |
+| Generation and buffered delivery | HTTP 200; 140 final tokens; `finish_reason=tool_calls`; native turn 112.752229 s, client 113.871974457 s | One completed real buffered generation, not a sustained benchmark or SSE qualification |
+| Native call | One function from the offered set; JSON arguments conform to its offered schema | Independent `jsonschema` 4.10.3 / Draft 2020-12 validation; invalid-null control rejected; no external schema references or tool effects |
+| Resources | 55 samples; minimum available 115,137,867,776 bytes; conservative reserve margin at least 3,754,761,760 bytes | Sampled safety, not a physical-residency or peak-allocation certificate |
+| Restoration | Original DSpark generation 4→5 at 32K, verified through Exon; original Host/management PIDs and executable hashes unchanged | Supported lifecycle recovery; original-model unavailability upper interval 126.939122388 s |
+
+The 1,170-byte response is privately retained with SHA-256
+`15c934265337203d962de50ca032869eb0ad8292357442951127edaf204c6f09`.
+Neither its content nor its function/argument payload is published. Prompt
+identity is `face4042db838ba388ee3614b756a75cd168fea5e150e15c38fc1fea3c881f72`;
+tokenizer identity is `68f23b5e24f8ee3aa208a424041c306581435a0f9eaaf7da7e81d5527af0e50e`.
+The original wire omits temperature and seed. The existing adapter uses its
+temperature-1 default and creates a seed at admission; the sealed provider
+identity also includes adapter correlation. Thus the preflight and executed
+provider digests need not match despite identical wire. Historical sampling
+seed and an independent historical prompt digest remain unavailable. Sampling
+variation does not by itself explain a failure before any generated token.
+
+Source comparison finds identical C/CUDA build flags and byte-identical
+attention, transformer and decoded-projection CUDA images. Common, MoE and
+Tensor Core images differ because of the diagnostic changes. This remains a
+different executable in a fresh process; passing this run does **not** prove
+that diagnostics repair the original failure, or exclude a lifetime, buffer,
+timing-sensitive or input/history-dependent defect. No numerical correction
+has been demonstrated. Independent checkpoint quality and real YAI acceptance
+remain unearned.
+
+Private evidence: `/home/dgmothx/lab/models/evidence/dspark-exact-wire-followup-20261018.7HGjogYA`.
+Receipt SHA-256:
+`e434d03524cbe48af68a0a33840f459f4e1bd71df89fa57ca2017a97cbaf5a7a`.
+The next discriminating control is the original `f12d8818` executable in the
+same isolated, fresh-process conditions and exact wire. Its script is prepared,
+not dispatched; an additional inference requires authorization. Provider
+recovery remains IN PROGRESS, with numerical causality explicitly unresolved.
+
 ## Exact-wire diagnostic interrupted by safety guard — 2026-10-18
 
 The operator authorized one new isolated diagnostic request, bounded to 600 s,
