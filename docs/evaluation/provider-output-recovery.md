@@ -15,6 +15,49 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## Exact-wire diagnostic interrupted by safety guard — 2026-10-18
+
+The operator authorized one new isolated diagnostic request, bounded to 600 s,
+using the privately retained original wire body, not a YAI Work replay. The
+26,803-byte file was verified on Exon and after private transfer; SHA-256
+`dee234e82facd2005ea534f9076378455e083f69b6a1ce994f613cf6d0c81959`.
+The payload and resulting private records are not published in Git.
+
+Execution used the final diagnostic candidate from the preceding qualification:
+base `f12d8818`, delta `d3fade9e…`, build `298bf58d…`, executable SHA-256
+`997b9ceab27898671cb04b66f0a06ce4b8d23dffe34762934cf879acba1e2367`.
+Its implementation is published in `5f67fbe5`; that commit's hosted QA is now
+completed successfully. The original DSpark artifact/binding, 32K context,
+512-position chunks and speculative strategy were retained. An isolated fresh
+Host admitted generation 1, allowing the complete original wire to be submitted
+without rewriting its generation field. Preflight confirmed 8,055 input tokens
+and the requested 2,048-token output allowance. This is a new diagnostic process
+and execution history, not reconstruction of the historical process state.
+
+| Observation | Result | Claim boundary |
+| --- | --- | --- |
+| Exact wire and isolated preflight | PASS: digest/size match; full requested output fits | Input/capacity identity, not successful numerical execution |
+| One inference dispatch | Last reported prefill progress 2,048/8,055; zero generated; `generation.cancelled` at 26.2373169 s | Cancelled before the historical 6,144-position boundary; neither reproduction nor exoneration |
+| Safety guard | `AssertionError`; exact failed predicate/snapshot and traceback not retained | Harness diagnostic gap; no numerical root-cause attribution |
+| Concurrent observation | Original Host journal records `GET /v1/models` approximately 0.125 s after the guard event | Catalog activity is established; causation of the exact assertion is not |
+| Sampled resources | 13 samples; minimum available memory 116,680,249,344 bytes; conservative remaining margin 5,297,143,328 bytes after mapped bytes and reserve | No sampled reserve violation; not uninterrupted residency/resource proof |
+| Recovery | Original generation 3 → 4, 32K; same artifact/binding, Host/management PIDs and executable hashes; model requests 3 → 3; Exon catalog verified | Original service recovered, no installed rollout or YAI/tool execution |
+
+The original-model unavailability upper interval was 40.250245418 s, from unload
+start through independent restored-state observation. No second inference was
+dispatched. The historical numerical cause and real YAI acceptance remain open.
+Any next approved run must retain the actual failed guard fields and traceback,
+and establish the external activity boundary before dispatch; catalog reads
+must not be reported as model generation. No production arithmetic, refusal
+predicate or resource reserve was changed by this experiment.
+
+Private evidence: `/home/dgmothx/lab/models/evidence/dspark-exact-wire-20261018.HypjJaeH`.
+Metadata receipt SHA-256:
+`18205bea38a959ba2ff4f0cde4b3494bf7c29b4b8bb40b083977eb4ca36a0a5c`.
+The provider recovery Task remains IN PROGRESS; Program P work and all
+historical submissions are preserved. This record promotes no model, quality,
+performance or deployment claim.
+
 ## Prefill numerical refusal — 2026-10-17
 
 The separately operated rollout installed clean `f12d8818`, executable SHA-256
