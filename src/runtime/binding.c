@@ -24,9 +24,13 @@
 #define BINDING_MAGIC_V15 "YVRBND15"
 #define BINDING_MAGIC_V16 "YVRBND16"
 #define BINDING_MAGIC_V17 "YVRBND17"
+#define BINDING_MAGIC_V18 "YVRBND18"
+#define BINDING_MAGIC_V19 "YVRBND19"
 #define BINDING_SCHEMA_V14 14u
 #define BINDING_SCHEMA_V15 15u
 #define BINDING_SCHEMA_V16 16u
+#define BINDING_SCHEMA_V17 17u
+#define BINDING_SCHEMA_V18 18u
 #define BINDING_MAGIC_BYTES 8u
 #define BINDING_HEADER_BYTES (BINDING_MAGIC_BYTES + 16u + 64u)
 #define BINDING_MAX_BYTES (64u * 1024u * 1024u)
@@ -821,12 +825,14 @@ static int write_attention_layer(binding_bytes *bytes, const yvex_attention_laye
            fields_write(bytes, &value->indexer_query_activation,
                         activation_fields, FIELD_COUNT(activation_fields)) &&
            fields_write(bytes, &value->sparse_topk, topk_fields, FIELD_COUNT(topk_fields)) &&
-           fields_write(bytes, value, layer_tail_fields, FIELD_COUNT(layer_tail_fields));
+           fields_write(bytes, value, layer_tail_fields, FIELD_COUNT(layer_tail_fields)) &&
+           bytes_put_u64(bytes, value->mhc_projection) && bytes_put_u64(bytes, value->matrix_projection);
 }
-static int read_attention_layer(binding_cursor *cursor, yvex_attention_layer_plan *value)
+static int read_attention_layer(binding_cursor *cursor, yvex_attention_layer_plan *value, unsigned schema)
 {
+    unsigned long long projection = 0ull;
     memset(value, 0, sizeof(*value));
-    return fields_read(cursor, value, layer_prefix_fields, FIELD_COUNT(layer_prefix_fields)) &&
+    int valid = fields_read(cursor, value, layer_prefix_fields, FIELD_COUNT(layer_prefix_fields)) &&
            fields_read(cursor, &value->attention_kv_activation,
                        activation_fields, FIELD_COUNT(activation_fields)) &&
            fields_read(cursor, &value->compressor_activation,
@@ -837,6 +843,14 @@ static int read_attention_layer(binding_cursor *cursor, yvex_attention_layer_pla
                        activation_fields, FIELD_COUNT(activation_fields)) &&
            fields_read(cursor, &value->sparse_topk, topk_fields, FIELD_COUNT(topk_fields)) &&
            fields_read(cursor, value, layer_tail_fields, FIELD_COUNT(layer_tail_fields));
+    if (valid && schema >= 18u)
+        valid = cursor_u64(cursor, &projection) && projection <= YVEX_MHC_PROJECTION_F32_ACC_V1;
+    value->mhc_projection = (yvex_mhc_projection_contract)projection;
+    projection = 0ull;
+    if (valid && schema >= 19u)
+        valid = cursor_u64(cursor, &projection) && projection <= YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1;
+    value->matrix_projection = (yvex_matrix_projection_contract)projection;
+    return valid;
 }
 static int write_physical_execution(binding_bytes *body,
                                     const yvex_physical_execution_ir *physical)
@@ -1149,7 +1163,7 @@ static int binding_body_write(const yvex_runtime_binding_prepare_request *reques
     layer_count = attention ? attention->layer_count : 0ull;
     draft_layer_count = draft_attention ? draft_attention->layer_count : 0ull;
     if (!yvex_runtime_capabilities_identity(capabilities, capability_identity) ||
-        !bytes_put_text(body, "yvex.runtime.binding.payload.v17") ||
+        !bytes_put_text(body, "yvex.runtime.binding.payload.v19") ||
         !bytes_put_u64(body, YVEX_RUNTIME_BINDING_SCHEMA_CURRENT) ||
         !bytes_put_u64(body, adapter_id) || !bytes_put_u64(body, adapter_version) ||
         !bytes_put_text(body, format) || !bytes_put_u64(body, format_version) ||
@@ -1227,8 +1241,10 @@ static int binding_identity(unsigned int schema, const unsigned char *body, size
                              ? "yvex.runtime.binding.v15"
                          : schema == BINDING_SCHEMA_V16
                              ? "yvex.runtime.binding.v16"
+                         : schema == BINDING_SCHEMA_V17 ? "yvex.runtime.binding.v17"
+                         : schema == BINDING_SCHEMA_V18 ? "yvex.runtime.binding.v18"
                          : schema == YVEX_RUNTIME_BINDING_SCHEMA_CURRENT
-                             ? "yvex.runtime.binding.v17" : NULL;
+                             ? "yvex.runtime.binding.v19" : NULL;
     yvex_sha256_init(&hash);
     if (!domain || !yvex_sha256_update_text(&hash, domain) ||
         !yvex_sha256_update_u64(&hash, schema) ||
@@ -1242,7 +1258,7 @@ static int build_file(const binding_bytes *body, const char *identity, binding_b
     if (!body || !identity || !file) return 0;
     file->maximum = BINDING_MAX_BYTES;
     file->initial_capacity = 4096u;
-    return yvex_core_bytes_append(file, BINDING_MAGIC_V17, BINDING_MAGIC_BYTES) &&
+    return yvex_core_bytes_append(file, BINDING_MAGIC_V19, BINDING_MAGIC_BYTES) &&
            bytes_put_u64(file, YVEX_RUNTIME_BINDING_SCHEMA_CURRENT) &&
            bytes_put_u64(file, (unsigned long long)body->count) &&
            yvex_core_bytes_append(file, identity, 64u) &&
@@ -1309,7 +1325,11 @@ static binding_parse_result parse_body(yvex_runtime_binding *binding,
                            ? "yvex.runtime.binding.payload.v15"
                        : expected_schema == BINDING_SCHEMA_V16
                            ? "yvex.runtime.binding.payload.v16"
-                           : "yvex.runtime.binding.payload.v17") != 0 ||
+                           : expected_schema == BINDING_SCHEMA_V17
+                           ? "yvex.runtime.binding.payload.v17"
+                           : expected_schema == BINDING_SCHEMA_V18
+                           ? "yvex.runtime.binding.payload.v18"
+                           : "yvex.runtime.binding.payload.v19") != 0 ||
         !cursor_u64(&cursor, &family_id) || !family_id ||
         !cursor_u64(&cursor, &family_version) || !family_version ||
         !cursor_text(&cursor, format, sizeof(format)) || !format[0] ||
@@ -1393,7 +1413,7 @@ static binding_parse_result parse_body(yvex_runtime_binding *binding,
             (size_t)compiled_plan_bytes, NULL) != YVEX_OK)
         return BINDING_PARSE_FORMAT;
     cursor.offset += (size_t)compiled_plan_bytes;
-    if (expected_schema >= YVEX_RUNTIME_BINDING_SCHEMA_CURRENT &&
+    if (expected_schema >= BINDING_SCHEMA_V17 &&
         (!cursor_u64(&cursor, &attention_present) || attention_present > 1ull))
         return BINDING_PARSE_FORMAT;
     if (attention_present) {
@@ -1409,7 +1429,7 @@ static binding_parse_result parse_body(yvex_runtime_binding *binding,
             (size_t)layer_count, sizeof(*binding->layers));
         if (!binding->layers) return BINDING_PARSE_ALLOCATION;
         for (i = 0ull; i < layer_count; ++i)
-            if (!read_attention_layer(&cursor, &binding->layers[i]))
+            if (!read_attention_layer(&cursor, &binding->layers[i], expected_schema))
                 return BINDING_PARSE_FORMAT;
     }
     if (!cursor_u64(&cursor, &draft_present) || draft_present > 1ull)
@@ -1428,7 +1448,7 @@ static binding_parse_result parse_body(yvex_runtime_binding *binding,
             (size_t)draft_layer_count, sizeof(*binding->draft_layers));
         if (!binding->draft_layers) return BINDING_PARSE_ALLOCATION;
         for (i = 0ull; i < draft_layer_count; ++i)
-            if (!read_attention_layer(&cursor, &binding->draft_layers[i]))
+            if (!read_attention_layer(&cursor, &binding->draft_layers[i], expected_schema))
                 return BINDING_PARSE_FORMAT;
     }
     binding->summary.schema_version = (unsigned int)schema;
@@ -1564,8 +1584,10 @@ static int binding_file_decode(yvex_runtime_binding **out,
            memcmp(magic, BINDING_MAGIC_V15, sizeof(magic)) == 0) ||
           (schema == BINDING_SCHEMA_V16 &&
            memcmp(magic, BINDING_MAGIC_V16, sizeof(magic)) == 0) ||
+          (schema == BINDING_SCHEMA_V17 && memcmp(magic, BINDING_MAGIC_V17, sizeof(magic)) == 0) ||
+          (schema == BINDING_SCHEMA_V18 && memcmp(magic, BINDING_MAGIC_V18, sizeof(magic)) == 0) ||
           (schema == YVEX_RUNTIME_BINDING_SCHEMA_CURRENT &&
-           memcmp(magic, BINDING_MAGIC_V17, sizeof(magic)) == 0))) {
+           memcmp(magic, BINDING_MAGIC_V19, sizeof(magic)) == 0))) {
         rc = binding_reject(failure, YVEX_RUNTIME_BINDING_FAILURE_SCHEMA,
                             "schema-version", path, 0ull,
                             YVEX_RUNTIME_BINDING_SCHEMA_CURRENT, schema,

@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <yvex/backend.h>
 #include <yvex/internal/backend.h>
+#include <yvex/internal/execution_batch.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/quant_numeric.h>
 #include "src/backend/private.h"
@@ -141,6 +142,7 @@ typedef struct {
     CUresult (*cuModuleLoadData)(CUmodule *module, const void *image);
     CUresult (*cuModuleGetFunction)(CUfunction *hfunc, CUmodule hmod, const char *name);
     CUresult (*cuModuleUnload)(CUmodule hmod);
+    CUresult (*cuFuncGetAttribute)(int *, int, CUfunction), (*cuFuncSetAttribute)(CUfunction, int, int);
     CUresult (*cuLaunchKernel)(CUfunction f,
                                unsigned int gridDimX,
                                unsigned int gridDimY,
@@ -232,9 +234,7 @@ typedef struct {
     unsigned int module_count;
     CUfunction embed_function;
     CUfunction embed_f16_function;
-    CUfunction rms_norm_f32_function;
-    CUfunction rms_norm_f16_function;
-    CUfunction rms_norm_bf16_policy_function;
+    CUfunction rms_norm_f32_function, rms_norm_f16_function, rms_norm_bf16_policy_function;
     CUfunction rope_function;
     CUfunction matmul_function;
     CUfunction qtype_row_dot_function;
@@ -244,16 +244,16 @@ typedef struct {
         attention_bf16_pair_function;
     CUfunction qtype_split_matvec_function, qtype_tensorcore_rows_function;
     CUfunction qtype_tensorcore_wide_rows_function;
-    CUfunction mxfp4_tensorcore_wide_rows_function;
-    CUfunction q8_row_matrix_function;
-    CUfunction decoded_prepare_function, decoded_rows_function, decoded_mxfp4_function;
+    CUfunction mxfp4_tensorcore_wide_rows_function, mxfp4_tensorcore_shared_rows_function;
+    CUfunction q8_row_matrix_function, mxfp4_row_matrix_shared_function;
+    CUfunction decoded_prepare_function, decoded_rows_function, decoded_mxfp4_function, f32_matrix_function,
+        bf16_matrix_function, bf16_prepare_function, matrix_finish_function;
     CUfunction qtype_gather_function, argmax_f32_function;
-    CUfunction sample_stochastic_f32_function;
-    CUfunction speculation_stochastic_f32_function;
+    CUfunction sample_stochastic_f32_function, speculation_stochastic_f32_function;
     CUfunction q8_quantize_function;
     CUfunction encoded_row_decode_function;
     CUfunction attention_weighted_norm_function;
-    CUfunction attention_unit_norm_function;
+    CUfunction attention_unit_norm_function, attention_unit_norm_cohort_function;
     CUfunction attention_yarn_rope_function;
     CUfunction attention_activation_quantize_function;
     CUfunction residual_mhc_pre_function;
@@ -261,16 +261,22 @@ typedef struct {
     CUfunction transformer_feature_mean_function;
     CUfunction transformer_final_function;
     CUfunction attention_rolling_state_function, attention_rolling_rows_function;
-    CUfunction attention_topk_function, attention_candidate_scores_function;
+    CUfunction attention_topk_function, attention_candidate_scores_function, attention_index_prepare_function;
+    CUfunction attention_candidate_scores_matrix_function, attention_candidate_scores_prepared_function;
     CUfunction attention_reduce_function, attention_reduce_native_function;
-    CUfunction attention_reduce_native_warp_function;
-    CUfunction moe_route_function;
-    CUfunction moe_route_rows_function;
+    CUfunction attention_reduce_native_warp_function, attention_reduce_native_warp_512_function;
+    CUfunction attention_reduce_native_candidates_function;
+    CUfunction attention_block_qk_function, attention_block_softmax_function, attention_block_pv_function,
+        attention_block_prepare_function, attention_block_map_function, attention_block_fused_function;
+    unsigned int attention_block_fused_shared_bytes;
+    CUfunction moe_route_function, moe_route_rows_function;
     CUfunction expert_worklist_build_cuda_function;
     CUfunction moe_grouped_up_function;
     CUfunction moe_grouped_down_function;
     CUfunction moe_grouped_up_rows_function, moe_grouped_down_rows_function;
+    CUfunction moe_grouped_up_q2_rows_function, moe_grouped_down_q2_rows_function;
     CUfunction moe_grouped_up_tensorcore_function, moe_grouped_down_tensorcore_function;
+    CUfunction moe_grouped_up_shared_function, moe_grouped_down_shared_function, moe_grouped_up_iq2_shared_function;
     CUfunction moe_reduce_rows_function;
     CUfunction moe_combine_rows_function;
     CUfunction moe_swiglu_function;
@@ -394,17 +400,17 @@ typedef struct {
     CUdeviceptr pointers[YVEX_CUDA_WORK_MAX_RANGES], q8_input, status;
     unsigned long long sizes[YVEX_CUDA_WORK_MAX_RANGES];
     unsigned char workspace_owned[YVEX_CUDA_WORK_MAX_RANGES], status_deferred, status_scoped;
-    int prepare_only, raw_only, forensic_numeric, activation_q8;
+    int prepare_only, raw_only, forensic_numeric, activation_q8, matrix_projection;
     unsigned int count;
     unsigned long long current_bytes, peak_bytes, budget, launches, q8_capacity;
     unsigned long long tensor_core_launches;
-    CUdeviceptr decoded_workspace;
-    unsigned long long decoded_capacity;
+    CUdeviceptr decoded_workspace, index_workspace;
+    unsigned long long decoded_capacity, index_capacity;
 } yvex_cuda_work;
 /* Physical optimization envelope, not an admission or model capability limit.
  * Outside it the original ordered-dot implementation remains canonical. */
 static inline unsigned long long yvex_cuda_decoded_workspace(unsigned long long rows) {
-    return !rows || rows > 1024ull ? 0ull : rows < 32ull ? 4ull * 1024ull * 1024ull :
+    return !rows || rows > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH ? 0ull : rows < 32ull ? 4ull * 1024ull * 1024ull :
         (1024ull + rows) * 4096ull * 25ull / 8ull;
 }
 int yvex_cuda_decoded_rows(yvex_cuda_work *, const yvex_backend_attention_weight *,
@@ -512,7 +518,8 @@ int yvex_cuda_qtype_matvec_geometry(
     unsigned long long rows, unsigned long long row_width, unsigned long long input_rows,
     unsigned int qtype, int block_row_eligible, int decoded_input, unsigned int *grid, unsigned int *block,
     int *block_row);
-int yvex_cuda_qtype_tensorcore_geometry(unsigned long long, unsigned long long, unsigned int *, unsigned int *);
+int yvex_cuda_qtype_tensorcore_geometry(unsigned long long, unsigned long long,
+    unsigned int, unsigned long long, unsigned int *, unsigned int *);
 int yvex_cuda_q8_row_matrix_geometry(unsigned long long, unsigned long long, unsigned long long,
     unsigned int *, unsigned int *);
 static inline unsigned int cuda_qtype_tensorcore_columns(
@@ -521,7 +528,8 @@ static inline unsigned int cuda_qtype_tensorcore_columns(
 }
 static inline CUfunction cuda_qtype_tensorcore_function(
     const yvex_cuda_backend_state *state, unsigned long long rows, unsigned long long inputs,
-    unsigned int qtype) {
+    unsigned int qtype, unsigned int block) {
+    if (block == 256u) return state->mxfp4_tensorcore_shared_rows_function;
     if (cuda_qtype_tensorcore_columns(rows, inputs) == 16u && qtype == YVEX_GGUF_QTYPE_MXFP4)
         return state->mxfp4_tensorcore_wide_rows_function;
     return cuda_qtype_tensorcore_columns(rows, inputs) == 16u

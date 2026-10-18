@@ -517,6 +517,33 @@ static __device__ int qtype_matvec_pair(
         (unsigned long long)blockIdx.x, rows, input_rows, row, input_row);
 }
 
+/* Tile independent decoded dots in both dimensions. The larger population
+ * owns the outer tiles; each bounded tile reuses both operands rather than
+ * traversing every input before advancing one weight row. Dot order is unchanged. */
+static __device__ int qtype_decoded_pair_index(
+    unsigned long long task, unsigned long long rows, unsigned long long inputs,
+    unsigned long long *row, unsigned long long *input)
+{
+    if (!rows || !inputs || rows > ~0ull / inputs || task >= rows * inputs) return 0;
+    if (inputs >= rows) {
+        unsigned long long group = rows * min(8ull, inputs), base = task / group * 8ull;
+        unsigned long long columns = min(8ull, inputs - base), within = task % group;
+        unsigned long long row_base = within / (columns * 8ull) * 8ull;
+        unsigned long long row_count = min(8ull, rows - row_base);
+        unsigned long long cell = within % (columns * 8ull);
+        *row = row_base + cell % row_count;
+        *input = base + cell / row_count;
+    } else {
+        unsigned long long group = inputs * min(8ull, rows), base = task / group * 8ull;
+        unsigned long long row_count = min(8ull, rows - base), within = task % group;
+        unsigned long long input_base = within / (row_count * 8ull) * 8ull;
+        unsigned long long cell = within % (row_count * 8ull);
+        *row = base + cell % row_count;
+        *input = input_base + cell / row_count;
+    }
+    return *row < rows && *input < inputs;
+}
+
 extern "C" __global__ void yvex_qtype_matvec(
     const unsigned char *encoded,
     unsigned long long row_bytes,
@@ -573,8 +600,12 @@ extern "C" __global__ void yvex_qtype_matvec(
         unsigned long long task =
             (unsigned long long)blockIdx.x * (blockDim.x / 32u) + warp;
         if (row_count > ~0ull / input_rows || task >= row_count * input_rows) return;
-        row = task / input_rows;
-        input_row = task % input_rows;
+        if (!forensic_numeric && input_rows > 1ull) {
+            if (!qtype_decoded_pair_index(task, row_count, input_rows, &row, &input_row)) return;
+        } else {
+            row = task / input_rows;
+            input_row = task % input_rows;
+        }
     } else if (!qtype_matvec_pair(row_count, input_rows, &row, &input_row))
         return;
     row_data = encoded + (start_row + row) * row_bytes;
@@ -977,94 +1008,54 @@ extern "C" __global__ void yvex_attention_unit_norm(
     }
 }
 
-static __device__ double attention_yarn_frequency(
-    unsigned long long pair, unsigned long long rope_dims,
-    unsigned long long theta, unsigned long long scaling_factor,
-    unsigned long long original_context, unsigned long long beta_fast,
-    unsigned long long beta_slow)
+/* Eight independent vectors per CTA. Virtual leaves and the offsets
+ * 128/64/32/16/8/4/2/1 match the 256-thread unit-norm reduction above. */
+extern "C" __global__ void yvex_attention_unit_norm_cohort(
+    float *values, unsigned long long vector_count,
+    unsigned long long vector_width, double epsilon, int *status)
 {
-    const double pi = 3.14159265358979323846264338327950288;
-    double exponent = (double)(pair * 2ull) / (double)rope_dims;
-    double frequency = 1.0 / pow((double)theta, exponent);
-    if (original_context && scaling_factor) {
-        double denominator = 2.0 * log((double)theta);
-        double low = floor((double)rope_dims *
-            log((double)original_context /
-                ((double)beta_fast * 2.0 * pi)) / denominator);
-        double high = ceil((double)rope_dims *
-            log((double)original_context /
-                ((double)beta_slow * 2.0 * pi)) / denominator);
-        double lane = (double)pair;
-        if (low < 0.0) low = 0.0;
-        if (high > (double)rope_dims - 1.0)
-            high = (double)rope_dims - 1.0;
-        if (low == high) high += 0.001;
-        double ramp = (lane - low) / (high - low);
-        if (ramp < 0.0) ramp = 0.0;
-        if (ramp > 1.0) ramp = 1.0;
-        double smooth = 1.0 - ramp;
-        frequency = frequency / (double)scaling_factor * (1.0 - smooth) +
-                    frequency * smooth;
-    }
-    return frequency;
-}
-
-extern "C" __global__ void yvex_attention_yarn_rope(
-    float *values, unsigned long long vectors_per_token,
-    unsigned long long token_count,
-    unsigned long long vector_width, unsigned long long rope_dims,
-    unsigned long long token_position, unsigned long long position_step,
-    unsigned long long theta,
-    unsigned long long scaling_factor, unsigned long long original_context,
-    unsigned long long beta_fast, unsigned long long beta_slow,
-    int inverse, int *status)
-{
-    unsigned long long pair =
-        (unsigned long long)blockIdx.x * (unsigned long long)blockDim.x +
-        (unsigned long long)threadIdx.x;
-    unsigned long long pairs_per_vector;
-    unsigned long long total;
+    unsigned int lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
+    unsigned long long row = (unsigned long long)blockIdx.x * 8u + warp;
     if (!status) return;
-    if (*status != 0) return;
-    if (!values || !vectors_per_token || !token_count || !position_step ||
-        token_count - 1ull > (~0ull - token_position) / position_step || !rope_dims ||
-        rope_dims > vector_width ||
-        (rope_dims & 1ull) || theta <= 1ull || !scaling_factor ||
-        (original_context && (!beta_slow || beta_fast <= beta_slow))) {
-        atomicCAS(status, 0, 2);
+    if (blockDim.x != 256u || !values || !vector_width || epsilon <= 0.0) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
         return;
     }
-    pairs_per_vector = rope_dims / 2ull;
-    if (token_count > ~0ull / vectors_per_token ||
-        token_count * vectors_per_token > ~0ull / pairs_per_vector) {
-        atomicCAS(status, 0, 2);
+    if (row >= vector_count || __shfl_sync(0xffffffffu, *status, 0) != 0) return;
+    float *vector = values + row * vector_width;
+    double partial[8] = {};
+    int invalid = 0;
+#pragma unroll
+    for (unsigned int j = 0u; j < 8u; ++j) {
+        for (unsigned long long i = lane + j * 32u; i < vector_width; i += 256ull) {
+            double value = (double)vector[i];
+            if (!isfinite(value)) invalid = 1;
+            else partial[j] += value * value;
+        }
+    }
+    if (__any_sync(0xffffffffu, invalid)) {
+        if (!lane) atomicCAS(status, 0, 1);
         return;
     }
-    total = token_count * vectors_per_token * pairs_per_vector;
-    if (pair >= total) return;
-    unsigned long long vector_index = pair / pairs_per_vector;
-    unsigned long long token_index = vector_index / vectors_per_token;
-    unsigned long long local_pair = pair % pairs_per_vector;
-    unsigned long long start = vector_width - rope_dims;
-    unsigned long long offset = vector_index * vector_width + start +
-                                local_pair * 2ull;
-    double frequency = attention_yarn_frequency(
-        local_pair, rope_dims, theta, scaling_factor, original_context,
-        beta_fast, beta_slow);
-    double angle = (double)(token_position + token_index * position_step) * frequency;
-    double c = cos(angle);
-    double s = inverse ? -sin(angle) : sin(angle);
-    double x = (double)values[offset];
-    double y = (double)values[offset + 1ull];
-    double left = x * c - y * s;
-    double right = x * s + y * c;
-    float published_left = (float)left;
-    float published_right = (float)right;
-    if (!isfinite(left) || !isfinite(right) || !isfinite(published_left) ||
-        !isfinite(published_right)) atomicCAS(status, 0, 1);
-    else {
-        values[offset] = float_to_bf16_rne(published_left);
-        values[offset + 1ull] = float_to_bf16_rne(published_right);
+#pragma unroll
+    for (unsigned int j = 0u; j < 4u; ++j)
+        partial[j] = __dadd_rn(partial[j], partial[j + 4u]);
+    partial[0] = __dadd_rn(partial[0], partial[2]);
+    partial[1] = __dadd_rn(partial[1], partial[3]);
+    double sum = __dadd_rn(partial[0], partial[1]);
+    for (unsigned int offset = 16u; offset; offset >>= 1u)
+        sum = __dadd_rn(sum, __shfl_down_sync(0xffffffffu, sum, offset));
+    double inverse = 0.0;
+    if (!lane) inverse = rsqrt(sum / (double)vector_width + epsilon);
+    inverse = __shfl_sync(0xffffffffu, inverse, 0);
+    if (!isfinite(inverse)) {
+        if (!lane) atomicCAS(status, 0, 1);
+        return;
+    }
+    for (unsigned long long i = lane; i < vector_width; i += 32ull) {
+        float published = (float)((double)vector[i] * inverse);
+        if (!isfinite(published)) atomicCAS(status, 0, 1);
+        else vector[i] = float_to_bf16_rne(published);
     }
 }
 
@@ -1355,6 +1346,15 @@ extern "C" __global__ void yvex_residual_mhc_pre(
     double *pre_weights = shared;
     double *inverse = shared + streams;
     double *square_terms = inverse + 1;
+    /* Library-produced affine mixes have no row-dot status epilogue. Check
+     * every mix before sigmoid could hide an infinity or any state is used. */
+    for (unsigned long long lane = thread; lane < mixing_rows; lane += blockDim.x)
+        if (!isfinite(linear_mix[lane])) {
+            atomicCAS(status, 0, 1);
+            atomicExch(&active, 0);
+        }
+    __syncthreads();
+    if (!active) return;
     for (unsigned long long lane = (unsigned long long)thread; lane < expanded;
          lane += (unsigned long long)blockDim.x) {
         float value = float_to_bf16_rne(residual[lane]);

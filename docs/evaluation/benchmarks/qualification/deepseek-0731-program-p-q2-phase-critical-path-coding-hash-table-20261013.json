@@ -1,0 +1,652 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-q2-phase-critical-path-coding-hash-table-20261013",
+  "limitations": [
+    "Profiled diagnostic with exact input/output population, not an uninstrumented performance sample.",
+    "Overlapping host scopes and GPU intervals cannot be summed as disjoint request phases.",
+    "Kernel duration/population does not establish physical bandwidth, occupancy or a hardware ceiling.",
+    "No independent checkpoint quality or installed-runtime promotion.",
+    "GDB wrapper, CUPTI and launch-argument interception are present; use separate native N=3 receipts for performance."
+  ],
+  "measurements": [],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": true,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/source-capture",
+    "source": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/source.json",
+      "sha256": "5104850a391de14cd213762ae0bd582a38daa9fc51f0b8198c5ae07416c1e5bc",
+      "result": "PASS"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-kernel-identity-01/stdout.jsonl",
+      "sha256": "f6bd8b83c782e2c0e74181e6ef4c3efdc6efe7eb4884113c0e81db7f9aabd581",
+      "result": "PASS"
+    },
+    "restoration": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/operator-restored.json",
+      "sha256": "122081808debd8c1ab8bf846a1f654f3a2c79487686f2a9fbf66ed4975855def",
+      "result": "PASS"
+    },
+    "traces": [
+      {
+        "case": "coding.hash-table",
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/identity.json",
+          "sha256": "2f4dac06d8ed78590a703fb9623f8c30468d950de181933b15d22927c57fbc98",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/closed.json",
+          "sha256": "52b4f3c9315f22c5f560138a50fdb5cba573d6742d3229348b5c6b9a3305f9f2",
+          "result": "PASS"
+        },
+        "trace": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/cupti.tsv",
+          "sha256": "3928aaf893977a0bb13a850c31b20b3cf34f5d2d815425a4cbd7b4c02c586328",
+          "result": "PASS"
+        },
+        "result": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/result.json",
+          "sha256": "9abb05ffe982a09bdfaa757d49ecff2825eb6d0b340b14ad9650f084a261e76a",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/resources.jsonl.summary.json",
+          "sha256": "56d18a390db91aa5e30d2a423a456ceaefdcd0526d7becea27d45e41c40a5520",
+          "result": "PASS"
+        },
+        "population_analysis": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/kernel-populations.json",
+          "sha256": "985b65886ea8e97af43253e867ecf621623aba8d6d850318a807b9c3e384eeb0",
+          "result": "PASS"
+        },
+        "geometry_analysis": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/matvec-geometry.json",
+          "sha256": "af8c12eaa083f1ddf8031193c5684b8f3e5e755818e2b071cb69878cc3b5802e",
+          "result": "PASS"
+        },
+        "context": 4096,
+        "prompt_tokens": 31,
+        "generated_tokens": 64,
+        "kernel_count": 170664,
+        "kernel_sum_seconds": 5.614228513,
+        "kernel_union_seconds": 5.614167171,
+        "kernel_or_copy_union_seconds": 5.835319599,
+        "span_seconds": 8.720130379,
+        "unobserved_gap_seconds": 2.88481078,
+        "largest_kernel_populations": [
+          {
+            "name": "yvex_qtype_matvec",
+            "count": 28796,
+            "seconds": 1.843549292
+          },
+          {
+            "name": "yvex_moe_grouped_up_q2_rows",
+            "count": 2752,
+            "seconds": 0.682887256
+          },
+          {
+            "name": "yvex_decoded_mxfp4_rows",
+            "count": 2752,
+            "seconds": 0.485811661
+          },
+          {
+            "name": "yvex_mxfp4_q8_rows",
+            "count": 4096,
+            "seconds": 0.438708765
+          },
+          {
+            "name": "yvex_residual_mhc_pre",
+            "count": 5590,
+            "seconds": 0.37673587
+          },
+          {
+            "name": "yvex_moe_grouped_down_q2_rows",
+            "count": 2752,
+            "seconds": 0.356603621
+          },
+          {
+            "name": "yvex_attention_yarn_rope",
+            "count": 10464,
+            "seconds": 0.19493483
+          },
+          {
+            "name": "yvex_attention_activation_quantize",
+            "count": 4874,
+            "seconds": 0.137729587
+          },
+          {
+            "name": "yvex_attention_weighted_norm",
+            "count": 11894,
+            "seconds": 0.131440144
+          },
+          {
+            "name": "yvex_moe_grouped_up_shared",
+            "count": 43,
+            "seconds": 0.128021312
+          },
+          {
+            "name": "yvex_f32_matrix_rows",
+            "count": 5504,
+            "seconds": 0.098319262
+          },
+          {
+            "name": "yvex_qtype_tensorcore_rows",
+            "count": 236,
+            "seconds": 0.093086563
+          }
+        ],
+        "matvec_populations": [
+          {
+            "K": 4096,
+            "M": 129280,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 64,
+            "seconds": 0.407375424,
+            "minimum_ns": 6207052,
+            "maximum_ns": 7303524,
+            "launch_configurations": [
+              [
+                16160,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 8192,
+            "M": 4096,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 2752,
+            "seconds": 0.369810552,
+            "minimum_ns": 122559,
+            "maximum_ns": 504668,
+            "launch_configurations": [
+              [
+                512,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 2048,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 5504,
+            "seconds": 0.26912709,
+            "minimum_ns": 43808,
+            "maximum_ns": 220286,
+            "launch_configurations": [
+              [
+                256,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 1024,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 2688,
+            "seconds": 0.201594394,
+            "minimum_ns": 52415,
+            "maximum_ns": 176831,
+            "launch_configurations": [
+              [
+                128,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 256,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 5440,
+            "seconds": 0.162127186,
+            "minimum_ns": 20352,
+            "maximum_ns": 128575,
+            "launch_configurations": [
+              [
+                32,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 512,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 2560,
+            "seconds": 0.142277544,
+            "minimum_ns": 29344,
+            "maximum_ns": 400413,
+            "launch_configurations": [
+              [
+                64,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 2048,
+            "M": 4096,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 2752,
+            "seconds": 0.108937139,
+            "minimum_ns": 35647,
+            "maximum_ns": 300126,
+            "launch_configurations": [
+              [
+                512,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 1024,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 2752,
+            "seconds": 0.06462754,
+            "minimum_ns": 21184,
+            "maximum_ns": 137471,
+            "launch_configurations": [
+              [
+                128,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 512,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 2752,
+            "seconds": 0.0426858,
+            "minimum_ns": 14464,
+            "maximum_ns": 68447,
+            "launch_configurations": [
+              [
+                64,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 64,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 1344,
+            "seconds": 0.029402423,
+            "minimum_ns": 19456,
+            "maximum_ns": 103039,
+            "launch_configurations": [
+              [
+                8,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 1024,
+            "N": 31,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 42,
+            "seconds": 0.020690965,
+            "minimum_ns": 420124,
+            "maximum_ns": 1176566,
+            "launch_configurations": [
+              [
+                3968,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 256,
+            "N": 31,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 85,
+            "seconds": 0.012297275,
+            "minimum_ns": 117183,
+            "maximum_ns": 304638,
+            "launch_configurations": [
+              [
+                992,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 512,
+            "N": 31,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 40,
+            "seconds": 0.011167235,
+            "minimum_ns": 255038,
+            "maximum_ns": 581051,
+            "launch_configurations": [
+              [
+                1984,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 64,
+            "N": 31,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 21,
+            "seconds": 0.001428725,
+            "minimum_ns": 44160,
+            "maximum_ns": 80127,
+            "launch_configurations": [
+              [
+                248,
+                256,
+                64,
+                3760
+              ]
+            ]
+          }
+        ],
+        "profile": {
+          "counters": {
+            "accelerated_matrix_launches": 322,
+            "accepted_draft_tokens": 0,
+            "cache_evictions": 0,
+            "cache_hits": 11180,
+            "cache_misses": 0,
+            "d2d_bytes": 3529473412,
+            "d2h_bytes": 804179564,
+            "device_allocations": 0,
+            "device_synchronizations": 65,
+            "discarded_candidate_rows": 0,
+            "downloads": 8450,
+            "draft_forwards": 0,
+            "draft_rows": 0,
+            "event_synchronizations": 0,
+            "expert_bytes": 253323555072,
+            "expert_subviews": 0,
+            "full_array_host_scan_bytes": 0,
+            "generated_tokens": 64,
+            "graph_captures": 362,
+            "graph_launches": 5590,
+            "graph_replays": 5590,
+            "h2d_bytes": 819781500,
+            "host_allocations": 0,
+            "host_payload_reads": 0,
+            "kernel_launches": 170580,
+            "logits_d2d_bytes": 0,
+            "logits_d2h_bytes": 1536,
+            "logits_h2d_bytes": 0,
+            "managed_prefetch_bytes": 0,
+            "mapped_bytes_touched": 0,
+            "new_prefill_tokens": 31,
+            "output_head_rows": 64,
+            "promoted_target_rows": 0,
+            "prompt_tokens": 31,
+            "queue_synchronizations": 8579,
+            "replayed_accepted_target_rows": 0,
+            "reused_tokens": 0,
+            "row_expert_pairs": 24510,
+            "target_extensions": 0,
+            "target_forwards": 65,
+            "target_rows": 95,
+            "target_verifications": 0,
+            "unique_experts": 19137,
+            "uploads": 2860,
+            "verified_rows": 0,
+            "workspace_resets": 0
+          },
+          "identity": "e1fc451f86c70fda2f25350cb97bd28c4cd982a3c0923be673560bb61a110eb2",
+          "mode": "summary",
+          "phases_ns": {
+            "attention": 7199366250,
+            "detokenization": 263087,
+            "embedding": 11027684,
+            "final_normalization": 22264984,
+            "first_decode": 146309301,
+            "kv_commit": 0,
+            "logits_publication": 157232,
+            "moe_ingress": 0,
+            "moe_post": 0,
+            "moe_total": 5825459330,
+            "output_head": 414013447,
+            "prompt_rendering": 0,
+            "provider_publication": 0,
+            "queue": 0,
+            "routed_experts": 0,
+            "router_projection": 0,
+            "router_topk": 0,
+            "sampling": 14214486,
+            "selected_expert_preparation": 0,
+            "shared_experts": 0,
+            "state_validation": 0,
+            "subsequent_decode": 6441358725,
+            "synchronization_wait": 0,
+            "tokenizer": 95071,
+            "total_generation": 7831861761,
+            "total_prefill": 814704208
+          },
+          "schema": 4
+        },
+        "execution_profile": "2d2ba89d2552ce5cde5e5e5d7391590918c3a369efc8f222f30b182ec7573d87"
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "coding.hash-table.kernel_sum_seconds",
+        "case": "coding.hash-table",
+        "value": 5.614228513,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/kernel-populations.json"
+      },
+      {
+        "id": "coding.hash-table.kernel_union_seconds",
+        "case": "coding.hash-table",
+        "value": 5.614167171,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/kernel-populations.json"
+      },
+      {
+        "id": "coding.hash-table.kernel_or_copy_union_seconds",
+        "case": "coding.hash-table",
+        "value": 5.835319599,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/kernel-populations.json"
+      },
+      {
+        "id": "coding.hash-table.span_seconds",
+        "case": "coding.hash-table",
+        "value": 8.720130379,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/kernel-populations.json"
+      },
+      {
+        "id": "coding.hash-table.unobserved_gap_seconds",
+        "case": "coding.hash-table",
+        "value": 2.88481078,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/coding.hash-table/kernel-populations.json"
+      }
+    ]
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; q2-phase admitted realization",
+    "binding": "0884e68a1ccb6362323bd27241c7b1bd2ed96d0fd712684a1dea7b6c2ce30c37",
+    "build": "3320efd425c14059a6a20f2cc2008ac5a96f18d8af54830d994d0a1ecef8e570",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "3a11abad19923147c18e3895105daa6ab0662f8bc307776af202242d2e383861",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "a22675f812e5b96f44920f72a1e822e7d6c01233bd1bf54c216c364bc14c7f48",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "controlled-engine CUPTI diagnostic with GDB wrapper",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "controlled fresh engine; bounded diagnostic output; instrumented",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "ac932ecd8d958b5a38bf8a521f0c672d4694a4085ad119f8eff4edbe79cc8689",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": null,
+    "strategy": "target-only",
+    "suite": "b23466b5e56a949a06e589eccb55ed96b3a508acef881e7904bb6c3b91f65bcb",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "5bd1853a2cb42087da1ca302da63676888d3699c6328e20e7cc35521a9f5b6bb",
+  "title": "0731 phase-specific Q2 CUPTI attribution: coding.hash-table (not timing evidence)"
+}

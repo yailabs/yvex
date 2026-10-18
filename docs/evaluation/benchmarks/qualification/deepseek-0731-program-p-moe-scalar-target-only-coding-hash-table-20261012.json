@@ -1,0 +1,904 @@
+{
+  "claims": {
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Three isolated native requests; explicit numerical class with equivalent MoE scheduling where selected; no installed rollout or independent checkpoint quality",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/receipt.json",
+          "sha256": "067edc7bc9a973191fda76fa3cf0b4a7c8825a7804aca0814bab2645c1caf4aa",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+          "sha256": "e0f04f285224b830fc4590490f3f082a8b9919b8de384d34b01bc4f8c715196c",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/source.json",
+          "sha256": "2c7600127a09245c1d3d423753e0e0c84093a4223db6dbd6181eb364d65c80da",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/build.json",
+          "sha256": "840cbdc4829d8f783fef3faf2a0eb4274eb4275fdef5943fd52aa7e952e203ac",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-kernel-identity-01/stdout.jsonl",
+          "sha256": "381800328fdfae6ba0a30645cd7e7ae8d5d732693ff21438e422084b7b61b41d",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/closed.json",
+          "sha256": "2080fa86a4c9e7390e4455609654ebdf70fad083f338ca0a3b84c94c07d117e2",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/operator-restored.json",
+          "sha256": "dadd8b8dd7cd03e506c3e60a0ba3f4855098fa09068a61cd78e5ead1bc2dd94f",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "bf50cc2caa436bdb81b2679e1e031c29ee8f3e25d3a16d125701dc808d61cbdf",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Local native measurement only; independent reference and producer provenance incomplete",
+      "state": "UNQUALIFIED"
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Three isolated native requests; explicit numerical class with equivalent MoE scheduling where selected; no installed rollout or independent checkpoint quality",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/receipt.json",
+          "sha256": "067edc7bc9a973191fda76fa3cf0b4a7c8825a7804aca0814bab2645c1caf4aa",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+          "sha256": "e0f04f285224b830fc4590490f3f082a8b9919b8de384d34b01bc4f8c715196c",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/source.json",
+          "sha256": "2c7600127a09245c1d3d423753e0e0c84093a4223db6dbd6181eb364d65c80da",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/build.json",
+          "sha256": "840cbdc4829d8f783fef3faf2a0eb4274eb4275fdef5943fd52aa7e952e203ac",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-kernel-identity-01/stdout.jsonl",
+          "sha256": "381800328fdfae6ba0a30645cd7e7ae8d5d732693ff21438e422084b7b61b41d",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/closed.json",
+          "sha256": "2080fa86a4c9e7390e4455609654ebdf70fad083f338ca0a3b84c94c07d117e2",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/operator-restored.json",
+          "sha256": "dadd8b8dd7cd03e506c3e60a0ba3f4855098fa09068a61cd78e5ead1bc2dd94f",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "bf50cc2caa436bdb81b2679e1e031c29ee8f3e25d3a16d125701dc808d61cbdf",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "family-conformance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Local native measurement only; independent reference and producer provenance incomplete",
+      "state": "UNQUALIFIED"
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Three isolated native requests; explicit numerical class with equivalent MoE scheduling where selected; no installed rollout or independent checkpoint quality",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/receipt.json",
+          "sha256": "067edc7bc9a973191fda76fa3cf0b4a7c8825a7804aca0814bab2645c1caf4aa",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+          "sha256": "e0f04f285224b830fc4590490f3f082a8b9919b8de384d34b01bc4f8c715196c",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/source.json",
+          "sha256": "2c7600127a09245c1d3d423753e0e0c84093a4223db6dbd6181eb364d65c80da",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/build.json",
+          "sha256": "840cbdc4829d8f783fef3faf2a0eb4274eb4275fdef5943fd52aa7e952e203ac",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-kernel-identity-01/stdout.jsonl",
+          "sha256": "381800328fdfae6ba0a30645cd7e7ae8d5d732693ff21438e422084b7b61b41d",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/closed.json",
+          "sha256": "2080fa86a4c9e7390e4455609654ebdf70fad083f338ca0a3b84c94c07d117e2",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/operator-restored.json",
+          "sha256": "dadd8b8dd7cd03e506c3e60a0ba3f4855098fa09068a61cd78e5ead1bc2dd94f",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "bf50cc2caa436bdb81b2679e1e031c29ee8f3e25d3a16d125701dc808d61cbdf",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "representation-quality": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Local native measurement only; independent reference and producer provenance incomplete",
+      "state": "UNQUALIFIED"
+    }
+  },
+  "id": "deepseek-0731-program-p-moe-scalar-target-only-coding-hash-table-20261012",
+  "limitations": [
+    "Three fresh-session samples, not a confidence interval.",
+    "Same encoded artifact. BF16 matrix differs in numerical class/binding from mHC-stream; scalar scheduling preserves the BF16-matrix binding and arithmetic.",
+    "No independent full-model quality, high/maximum reasoning, HTTP or installed-product performance qualification.",
+    "Advisory locks plus sampled clear resource observations do not prove continuous exclusivity.",
+    "Native first-fragment arrival is not terminal painting.",
+    "4K coding/16K prefill admission does not qualify 32K candidate execution."
+  ],
+  "measurements": [
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.754986275,
+        0.623720918,
+        0.675721275
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.754986275,
+        "median": 0.675721275,
+        "median_absolute_deviation": 0.05200035700000005,
+        "minimum": 0.623720918
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        28.557974062,
+        28.295844423,
+        28.237535022
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 28.557974062,
+        "median": 28.295844423,
+        "median_absolute_deviation": 0.05830940099999893,
+        "minimum": 28.237535022
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.7505667919999999,
+        1.6107193400000002,
+        1.587051778
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.7505667919999999,
+        "median": 1.6107193400000002,
+        "median_absolute_deviation": 0.023667562000000197,
+        "minimum": 1.587051778
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.12818339500000064,
+        0.12432963300000033,
+        0.11748732499999903
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.12818339500000064,
+        "median": 0.12432963300000033,
+        "median_absolute_deviation": 0.003853762000000316,
+        "minimum": 0.11748732499999903
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.10512532915294118,
+        0.10464575834901961,
+        0.10450988058039215
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.10512532915294118,
+        "median": 0.10464575834901961,
+        "median_absolute_deviation": 0.00013587776862745982,
+        "minimum": 0.10450988058039215
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.995677813,
+        0.986929702,
+        0.911279575
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.995677813,
+        "median": 0.986929702,
+        "median_absolute_deviation": 0.008748111000000058,
+        "minimum": 0.911279575
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.995677813,
+        0.986929702,
+        0.911279575
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.995677813,
+        "median": 0.986929702,
+        "median_absolute_deviation": 0.008748111000000058,
+        "minimum": 0.911279575
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.7505667919999999,
+        1.6107193400000002,
+        1.587051778
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.7505667919999999,
+        "median": 1.6107193400000002,
+        "median_absolute_deviation": 0.023667562000000197,
+        "minimum": 1.587051778
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        9.49781785835313,
+        9.55086651679923,
+        9.565354073878316
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 9.565354073878316,
+        "median": 9.55086651679923,
+        "median_absolute_deviation": 0.014487557079085889,
+        "minimum": 9.49781785835313
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "committed tokens after first / elapsed decode wall after first",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "decode.post-first.committed",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        9.512486783967308,
+        9.556024203718454,
+        9.568451411722304
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 9.568451411722304,
+        "median": 9.556024203718454,
+        "median_absolute_deviation": 0.012427208003849444,
+        "minimum": 9.512486783967308
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        36.5187043779557,
+        35.726520071750194,
+        38.8479600844679
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 38.8479600844679,
+        "median": 36.5187043779557,
+        "median_absolute_deviation": 0.7921843062055061,
+        "minimum": 35.726520071750194
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.848880061,
+        0.867702758,
+        0.797982698
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.867702758,
+        "median": 0.848880061,
+        "median_absolute_deviation": 0.018822696999999944,
+        "minimum": 0.797982698
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "checkpoint_relationship": {
+      "claims_inherited": false,
+      "record_identity": "f1387c4121499ede11dd4124fd87d6b42ccbc21881ab756a1c8243acfc8bfb0f",
+      "source": "explicit-local-record",
+      "target_identity": "1e7ad49b1b826b2a4881e2a3650d6b4c4749f19895f4caaeb3da24e810004d8e"
+    },
+    "cleanup": "owned sessions closed; generation/count checked",
+    "client_build": "ac1399cc141587d33865be141c580d4bd7f0be89ba7886964115ee1ce32100db",
+    "engine": {
+      "active_work": 0,
+      "activity": "idle",
+      "alias": "program-p-0731-convergence",
+      "artifact_identity": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+      "attached_clients": 0,
+      "backend": 1,
+      "capabilities": {
+        "input_mask": 1,
+        "inputs": [
+          "text"
+        ],
+        "maximum_input_parts": 32,
+        "output_mask": 1,
+        "outputs": [
+          "text"
+        ],
+        "properties": 15
+      },
+      "capacity": {
+        "compatible_operation_batching": false,
+        "continuous_batching": false,
+        "cooperative_scheduling": false,
+        "physical_sequence_width": 1,
+        "runnable_work": 1,
+        "sessions": 8
+      },
+      "capacity_plan_identity": "c7acd83af48cff7b1c90ff936e6001a7b736205ba3156f28c7318ca2f94a7b7e",
+      "configured_physical_sequence_width": 1,
+      "context_capacity": 4096,
+      "continuous_batching": false,
+      "engine_kind": "text",
+      "execution_ready": true,
+      "execution_strategy": "target-only",
+      "generation": 1,
+      "mapped_package_bytes": 103728880544,
+      "maximum_new_tokens": 4096,
+      "maximum_sessions": 8,
+      "model_identity": "8e8048607a8a40f0cdf8eb5e4df495a42dcf7fe325f5183860750a9973fc7368",
+      "model_leases": 0,
+      "prefill_chunk_tokens": 512,
+      "prepared_bytes": 0,
+      "resident_device_bytes": 0,
+      "resident_host_bytes": 0,
+      "resources": {
+        "activation_arena_current_bytes": 0,
+        "activation_arena_peak_bytes": 0,
+        "available": 129,
+        "components": 1,
+        "logical_download_bytes": 0,
+        "logical_upload_bytes": 0,
+        "model_artifact_bytes": 103728880544,
+        "model_device_addressable_bytes": 103728880544,
+        "model_explicit_device_bytes": 0,
+        "model_explicit_host_bytes": 0,
+        "model_mapped_bytes": 103728880544,
+        "model_prepared_bytes": 0,
+        "physical_residency_known": false,
+        "placement": "mapped-device-addressable",
+        "process_rss_current_bytes": 0,
+        "process_rss_peak_bytes": 0,
+        "schema_version": 1,
+        "session_attention_allocated_bytes": 0,
+        "session_attention_page_table_bytes": 0,
+        "session_attention_resident_bytes": 0,
+        "session_attention_virtual_bytes": 0,
+        "session_candidate_state_bytes": 0,
+        "session_convolution_state_bytes": 0,
+        "session_physical_state_bytes": 0,
+        "session_recurrent_state_bytes": 0,
+        "transient_current_bytes": 0,
+        "transient_peak_bytes": 0,
+        "unified_memory": true,
+        "workspace_current_bytes": 0,
+        "workspace_peak_bytes": 0
+      },
+      "runtime_binding_identity": "f01c0d0ce14d7c48d0adb582f903d48fbe1f322c59799292aadad2820c8abee3",
+      "sessions": 0,
+      "specialization_identity": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+      "state": "loaded",
+      "target": "deepseek4-v4-flash-0731"
+    },
+    "evidence_class": "local-characterization",
+    "observations": [
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.754986275,
+        "client_complete_seconds": 28.557974062,
+        "client_first_final_seconds": 1.7505667919999999,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.7505667919999999,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.12818339500000064,
+        "client_visible_gap_mean_seconds": 0.10512532915294118,
+        "commit_seconds": 0.0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0.0,
+        "final_phase_rate": 9.49781785835313,
+        "final_seconds": 26.95355963,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "post_first_decode_ns": 26806870358,
+        "post_first_decode_rate": 9.512486783967308,
+        "post_first_decode_units": 255,
+        "prefill_rate": 36.5187043779557,
+        "prefill_seconds": 0.848880061,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0.0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 0,
+        "sampling": {
+          "min_p": 0.0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0.0,
+          "top_k": 0,
+          "top_p": 1.0,
+          "typical_p": 1.0
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.995677813,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.995677813,
+        "session": "bench-e921453e4db22854fff995bf",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "527c3dee1fdf4d408f2912d9135c77904002f691a9eb4397e4bf3b6295cc6bd1",
+        "total_completion_seconds": 27.802753547,
+        "turn_identity": "5ba271ca6f59e6c87cd0243c3c1282a7fce3eca45cd6ca6e56c652c59e8cda09",
+        "turn_index": 0,
+        "verification_seconds": 0.0
+      },
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.623720918,
+        "client_complete_seconds": 28.295844423,
+        "client_first_final_seconds": 1.6107193400000002,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.6107193400000002,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.12432963300000033,
+        "client_visible_gap_mean_seconds": 0.10464575834901961,
+        "commit_seconds": 0.0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0.0,
+        "final_phase_rate": 9.55086651679923,
+        "final_seconds": 26.803850682,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "post_first_decode_ns": 26684737770,
+        "post_first_decode_rate": 9.556024203718454,
+        "post_first_decode_units": 255,
+        "prefill_rate": 35.726520071750194,
+        "prefill_seconds": 0.867702758,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0.0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 1,
+        "sampling": {
+          "min_p": 0.0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0.0,
+          "top_k": 0,
+          "top_p": 1.0,
+          "typical_p": 1.0
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.986929702,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.986929702,
+        "session": "bench-1e312fac9eb949fbbefa399e",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "527c3dee1fdf4d408f2912d9135c77904002f691a9eb4397e4bf3b6295cc6bd1",
+        "total_completion_seconds": 27.671870513,
+        "turn_identity": "5ba271ca6f59e6c87cd0243c3c1282a7fce3eca45cd6ca6e56c652c59e8cda09",
+        "turn_index": 0,
+        "verification_seconds": 0.0
+      },
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.675721275,
+        "client_complete_seconds": 28.237535022,
+        "client_first_final_seconds": 1.587051778,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.587051778,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.11748732499999903,
+        "client_visible_gap_mean_seconds": 0.10450988058039215,
+        "commit_seconds": 0.0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0.0,
+        "final_phase_rate": 9.565354073878316,
+        "final_seconds": 26.763253929,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "post_first_decode_ns": 26650080460,
+        "post_first_decode_rate": 9.568451411722304,
+        "post_first_decode_units": 255,
+        "prefill_rate": 38.8479600844679,
+        "prefill_seconds": 0.797982698,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0.0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 2,
+        "sampling": {
+          "min_p": 0.0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0.0,
+          "top_k": 0,
+          "top_p": 1.0,
+          "typical_p": 1.0
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.911279575,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.911279575,
+        "session": "bench-635cdbfafd6e4fa1d4319598",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "527c3dee1fdf4d408f2912d9135c77904002f691a9eb4397e4bf3b6295cc6bd1",
+        "total_completion_seconds": 27.561577331,
+        "turn_identity": "5ba271ca6f59e6c87cd0243c3c1282a7fce3eca45cd6ca6e56c652c59e8cda09",
+        "turn_index": 0,
+        "verification_seconds": 0.0
+      }
+    ],
+    "raw_evidence_sha256": "e0f04f285224b830fc4590490f3f082a8b9919b8de384d34b01bc4f8c715196c",
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-coding.hash-table-resources.jsonl",
+      "allowed_pids": [
+        1673590
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 86,
+      "probe_seconds": 2.056263885082444,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 1674826,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "sampling_selection": "greedy",
+    "separated_inputs": [],
+    "source_stability": "frozen",
+    "profiled": false,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/source-capture",
+    "build": {
+      "build_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+      "build_identity": "ac1399cc141587d33865be141c580d4bd7f0be89ba7886964115ee1ce32100db",
+      "local_protocol_version": 25,
+      "registry_identity": "ebeb28e5db8f54ced95eaa8c4c8fbfa6f4d87ddc290ee4a5baaa61eeec23c59d",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "3c981bc643dd1b8b50cb8444a7c78d83d6a225cf9c351fe746a2ddbe2602a5d4",
+      "source_delta_identity": "e9987a3c22b88ebe802d0c0d40d7d0698a8ad06ded4b62197a453344a21faf01",
+      "source_state": "dirty",
+      "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+      "version": "0.1.0"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-kernel-identity-01/stdout.jsonl",
+      "sha256": "381800328fdfae6ba0a30645cd7e7ae8d5d732693ff21438e422084b7b61b41d",
+      "result": "PASS"
+    },
+    "restoration": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/operator-restored.json",
+      "sha256": "dadd8b8dd7cd03e506c3e60a0ba3f4855098fa09068a61cd78e5ead1bc2dd94f",
+      "result": "PASS"
+    },
+    "selection": {
+      "state": "rejected",
+      "reason": "Equivalent component controls pass, but same-binding native 2K/8K prefill regresses; do not retain as an acceleration."
+    },
+    "component_numerical_scope": "BF16-stored matrix: independently decoded F64 coordinate bound and CUDA numerical/refusal checks. MoE scalar scheduling: prior-cubin bitwise controls, CPU decoding/F64 reference and CUDA memcheck. Synthetic activations are not held-out model quality.",
+    "separate_warmup": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/moe-scalar-native-01/target-only/4096-chat.short/receipt.json",
+      "sha256": "ef09fa2da86649c0673c723ec2da8909e7548d92f6d2479db851fe9e9aeb0819",
+      "result": "PASS"
+    },
+    "explicit_comparison": {
+      "kind": "explicit-experiment",
+      "varying": [
+        "source_delta",
+        "build",
+        "executable",
+        "backend_implementation",
+        "kernel_bundle"
+      ],
+      "left": "2243adc0102ddd02453720d471e8f990660f203d3a055385aecc6210c50ae1ef",
+      "right": "9a247f4ee693e048daff4c9d98ab1e549c2439479629a266bed78a97593648fb",
+      "automatic_ranking": false
+    }
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; admitted mHC F32 and BF16-stored matrix; moe-scalar executable realization",
+    "binding": "f01c0d0ce14d7c48d0adb582f903d48fbe1f322c59799292aadad2820c8abee3",
+    "build": "ac1399cc141587d33865be141c580d4bd7f0be89ba7886964115ee1ce32100db",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "cb9cf0a9a8ba3c197cb3923213da2423ea90b4ef52cd679a605668ac3a844ae2",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "e0d604aa4d24abab240b7fdd34d8dcf1f5d14dfeea03d52b416c0cdd9bdd1100",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v25",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "e9987a3c22b88ebe802d0c0d40d7d0698a8ad06ded4b62197a453344a21faf01",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+    "strategy": "target-only",
+    "suite": "d5d9eb417abe63fc2d2c242317479cfc785ce46688e25cc7e936501111393f9d",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "9a247f4ee693e048daff4c9d98ab1e549c2439479629a266bed78a97593648fb",
+  "title": "0731 explicit BF16/F32 matrices and scalar-worklist scheduling: moe-scalar / target-only / coding.hash-table"
+}

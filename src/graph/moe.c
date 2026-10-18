@@ -229,6 +229,12 @@ static int moe_layer_identity(yvex_moe_layer_plan *layer,
     yvex_sha256_init(&hash);
     if (!yvex_sha256_update_text(&hash, "yvex.moe.layer.v1") ||
         !yvex_sha256_update_text(&hash, summary->runtime_descriptor_identity)) return 0;
+    if (layer->mhc_projection &&
+        (layer->mhc_projection != YVEX_MHC_PROJECTION_F32_ACC_V1 ||
+         layer->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
+         layer->qtypes[YVEX_MOE_WEIGHT_MHC_FUNCTION] != YVEX_GGUF_QTYPE_F32 ||
+         !yvex_sha256_update_text(&hash, "mhc-projection.v1") ||
+         !yvex_sha256_update_u64(&hash, layer->mhc_projection))) return 0;
     for (slot = 0ull; slot < sizeof(fields) / sizeof(fields[0]); ++slot)
         if (!yvex_sha256_update_u64(&hash, fields[slot])) return 0;
     if (!moe_hash_f64(&hash, layer->rms_epsilon) ||
@@ -328,6 +334,7 @@ int yvex_moe_plan_build(yvex_moe_plan **out, const yvex_moe_family_api *family,
         }
         plan->summary.hash_router_layer_count +=
             layer->router_class == YVEX_MOE_ROUTER_HASH_TOKEN_ID;
+        if (layer->mhc_projection) plan->summary.schema_version = YVEX_MOE_PLAN_SCHEMA_V2;
         plan->summary.learned_router_layer_count +=
             layer->router_class == YVEX_MOE_ROUTER_LEARNED_HIDDEN_STATE;
         plan->summary.shared_experts = layer->shared_experts;
@@ -351,9 +358,11 @@ int yvex_moe_plan_import(yvex_moe_plan **out,
     yvex_moe_plan *plan = NULL;
     char expected_plan[YVEX_SHA256_HEX_CAP];
     unsigned long long index;
+    unsigned int observed_schema = YVEX_MOE_PLAN_SCHEMA_V1;
     if (out) *out = NULL;
     if (!out || !summary || !layers ||
-        summary->schema_version != YVEX_MOE_PLAN_SCHEMA_V1 ||
+        (summary->schema_version != YVEX_MOE_PLAN_SCHEMA_V1 &&
+         summary->schema_version != YVEX_MOE_PLAN_SCHEMA_V2) ||
         summary->tensor_scope > YVEX_TENSOR_SCOPE_DRAFT ||
         !summary->layer_count || summary->layer_count > SIZE_MAX / sizeof(*layers) ||
         !summary->routed_experts || !summary->experts_per_token ||
@@ -377,7 +386,8 @@ int yvex_moe_plan_import(yvex_moe_plan **out,
         yvex_moe_layer_plan *layer = &plan->layers[index];
         memcpy(expected_layer, layer->layer_identity, sizeof(expected_layer));
         layer->layer_identity[0] = '\0';
-        if (layer->schema_version != YVEX_MOE_PLAN_SCHEMA_V1 ||
+        if (layer->mhc_projection) observed_schema = YVEX_MOE_PLAN_SCHEMA_V2;
+        if (layer->schema_version != (layer->mhc_projection ? YVEX_MOE_PLAN_SCHEMA_V2 : YVEX_MOE_PLAN_SCHEMA_V1) ||
             layer->ordinal != index ||
             layer->tensor_scope != summary->tensor_scope ||
             layer->routed_experts != summary->routed_experts ||
@@ -386,7 +396,7 @@ int yvex_moe_plan_import(yvex_moe_plan **out,
             strcmp(layer->layer_identity, expected_layer) != 0)
             goto invalid;
     }
-    if (!moe_plan_identity(plan) ||
+    if (observed_schema != summary->schema_version || !moe_plan_identity(plan) ||
         strcmp(plan->summary.moe_plan_identity, expected_plan) != 0)
         goto invalid;
     *out = plan;

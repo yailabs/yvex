@@ -188,9 +188,11 @@ static int neural_linear(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err
     const yvex_ir_type *output = neural_output(m, op, 0u);
     uint32_t index;
     const yvex_ir_attribute *reduction = yvex_ir_attribute_get(m, id, "reduction");
-    if (reduction && (reduction->value.integer != YVEX_IR_REDUCTION_ROW_DOT ||
+    if (reduction && ((reduction->value.integer != YVEX_IR_REDUCTION_ROW_DOT &&
+        reduction->value.integer != YVEX_IR_REDUCTION_F32_ACC) ||
         input->scalar != YVEX_IR_F32 || weight->scalar != YVEX_IR_F32 || output->scalar != YVEX_IR_F32))
-        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "row-dot reduction requires F32 input, parameter and result");
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT,
+                             "explicit linear reduction requires admitted class and F32 operands/result");
     if (!neural_float_tensor(input) || !neural_float_tensor(weight) ||
         !neural_float_tensor(output) || weight->rank != 2u ||
         output->rank != input->rank ||

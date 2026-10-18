@@ -701,6 +701,148 @@ static int quant_cuda_q8_grouped_matvec(yvex_backend *backend,
     return 0;
 }
 
+static int quant_cuda_tensor(yvex_backend *backend, const char *name,
+                             unsigned int dtype, const void *source,
+                             unsigned long long bytes,
+                             yvex_device_tensor **tensor, yvex_error *err)
+{
+    yvex_backend_tensor_desc descriptor = {0};
+    descriptor.name = name;
+    descriptor.dtype = dtype;
+    descriptor.rank = 1u;
+    descriptor.dims[0] = dtype == YVEX_DTYPE_F32 ? bytes / sizeof(float) : bytes;
+    descriptor.bytes = bytes;
+    return yvex_backend_tensor_alloc(backend, &descriptor, tensor, err) == YVEX_OK &&
+           (!source || yvex_backend_tensor_write(
+                           backend, *tensor, source, bytes, err) == YVEX_OK);
+}
+
+/* Ordinary scheduling and the untouched literal reference visit different
+ * independent pairs. Compare every output/padding bit, plus CPU ordered-F64
+ * samples; neither comparison establishes complete-model quality. */
+static int quant_cuda_decoded_tiles(yvex_backend *backend, unsigned long long inputs,
+    unsigned long long rows, unsigned long long width, int publication)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    CUstream stream = yvex_cuda_launch_stream(backend);
+    yvex_device_tensor *arena = NULL;
+    yvex_error err = {0};
+    unsigned long long row_bytes = width * 2ull, weight_bytes = rows * row_bytes;
+    unsigned long long input_bytes = inputs * width * sizeof(float), stride = rows + 3ull;
+    unsigned long long output_bytes = (inputs * stride + 2ull) * sizeof(float);
+    unsigned long long input_offset = (weight_bytes + 255ull) & ~255ull;
+    unsigned long long output_offset = input_offset + ((input_bytes + 255ull) & ~255ull);
+    unsigned long long status_offset = output_offset + 2ull * ((output_bytes + 255ull) & ~255ull);
+    unsigned long long size = status_offset + sizeof(int), first = 0ull;
+    unsigned short *weights = malloc((size_t)weight_bytes);
+    float *vectors = malloc((size_t)input_bytes), *actual = malloc((size_t)output_bytes);
+    float *reference = malloc((size_t)output_bytes);
+    unsigned int grid, block, qtype = YVEX_GGUF_QTYPE_BF16;
+    int block_row = 0, q8 = 0, forensic = 0, status_value = 0;
+    YVEX_TEST_ASSERT(weights && vectors && actual && reference && size < 64ull * 1024ull * 1024ull,
+        "bounded decoded-pair test storage allocates");
+    for (unsigned long long i = 0ull; i < rows * width; ++i)
+        weights[i] = (unsigned short)((0x3a21u + (i * 17ull % 997ull)) |
+                                     (i % 3ull == 0ull ? 0x8000u : 0u));
+    for (unsigned long long i = 0ull; i < inputs * width; ++i)
+        vectors[i] = (float)((int)(i * 29ull % 1999ull) - 999) * 0.000731f;
+    YVEX_TEST_ASSERT(quant_cuda_tensor(backend, "decoded_pair_tiles", YVEX_DTYPE_I8,
+        NULL, (size_t)size, &arena, &err), "decoded-pair device storage allocates");
+    CUdeviceptr base = yvex_cuda_tensor_ptr(arena), weight = base, input = base + input_offset;
+    CUdeviceptr output = base + output_offset + sizeof(float), additive = 0ull;
+    CUdeviceptr status = base + status_offset;
+    /* Raw fixture initialization must precede the same nonblocking stream's
+     * kernels. A legacy-default-stream memset supplies no such dependency. */
+    YVEX_TEST_ASSERT(state->driver.cuMemcpyHtoDAsync_v2(weight, weights,
+            (size_t)weight_bytes, stream) == 0 &&
+        state->driver.cuMemcpyHtoDAsync_v2(input, vectors, (size_t)input_bytes, stream) == 0 &&
+        state->driver.cuMemsetD8Async(status, 0u, sizeof(int), stream) == 0 &&
+        yvex_cuda_qtype_matvec_geometry(rows, width, inputs, qtype, 0, 1,
+            &grid, &block, &block_row) && !block_row,
+        "decoded-pair geometry retains complete warp ownership");
+    void *params[] = {&weight, &row_bytes, &width, &first, &rows, &inputs, &qtype,
+        &input, &width, &q8, &block_row, &forensic, &additive, &output, &stride, &publication, &status};
+    for (int arm = 0; arm < 2; ++arm) {
+        forensic = arm;
+        output = base + output_offset + (unsigned long long)arm *
+            ((output_bytes + 255ull) & ~255ull) + sizeof(float);
+        YVEX_TEST_ASSERT(state->driver.cuMemsetD8Async(output - sizeof(float), 0xcdu,
+            (size_t)output_bytes, stream) == 0 && yvex_cuda_launch(backend,
+            YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, state->qtype_matvec_function,
+            grid, block, 0u, params, "cuda.test.decoded-pair-tiles", &err) == YVEX_OK &&
+            state->driver.cuStreamSynchronize(stream) == 0 &&
+            state->driver.cuMemcpyDtoH_v2(&status_value, status, sizeof(status_value)) == 0 &&
+            status_value == 0 && state->driver.cuMemcpyDtoH_v2(arm ? reference : actual,
+                output - sizeof(float), (size_t)output_bytes) == 0,
+            "ordinary and literal decoded-pair outputs complete");
+    }
+    if (memcmp(actual, reference, (size_t)output_bytes) != 0) {
+        for (unsigned long long i = 0ull; i < output_bytes / sizeof(float); ++i) {
+            unsigned int observed, literal;
+            memcpy(&observed, actual + i, sizeof(observed));
+            memcpy(&literal, reference + i, sizeof(literal));
+            if (observed != literal) {
+                fprintf(stderr, "decoded tile mismatch N=%llu M=%llu K=%llu publication=%d "
+                    "offset=%llu ordinary=%08x literal=%08x\n", inputs, rows, width,
+                    publication, i, observed, literal);
+                break;
+            }
+        }
+    }
+    YVEX_TEST_ASSERT(memcmp(actual, reference, (size_t)output_bytes) == 0,
+        "tiled decoded pairs retain every literal output and padding bit");
+    for (unsigned long long i = 0ull; i < inputs * stride + 2ull; ++i) {
+        unsigned int bits;
+        memcpy(&bits, actual + i, sizeof(bits));
+        int padding = !i || i == inputs * stride + 1ull || (i - 1ull) % stride >= rows;
+        YVEX_TEST_ASSERT(padding ? bits == 0xcdcdcdcdu : isfinite(actual[i]),
+            "every real pair is finite and all output guards/padding remain untouched");
+    }
+    for (unsigned long long sample = 0ull; sample < 32ull; ++sample) {
+        unsigned long long row = (sample * 211ull + 7ull) % rows;
+        unsigned long long position = (sample * 487ull + 3ull) % inputs;
+        double sum = 0.0;
+        for (unsigned long long column = 0ull; column < width; ++column)
+            sum += (double)yvex_quant_bf16_decode(weights[row * width + column]) *
+                   (double)vectors[position * width + column];
+        float expected = (float)sum;
+        if (publication) expected = yvex_quant_bf16_decode(yvex_quant_bf16_encode(expected));
+        YVEX_TEST_ASSERT(memcmp(&expected, actual + 1ull + position * stride + row,
+            sizeof(expected)) == 0, "decoded tile sample matches independent CPU ordered F64 bits");
+    }
+    forensic = 0;
+    status_value = 7;
+    YVEX_TEST_ASSERT(state->driver.cuMemcpyHtoDAsync_v2(status, &status_value,
+            sizeof(status_value), stream) == 0 &&
+        state->driver.cuMemsetD8Async(output - sizeof(float), 0xcdu,
+            (size_t)output_bytes, stream) == 0 &&
+        yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, state->qtype_matvec_function,
+            grid, block, 0u, params, "cuda.test.decoded-pair-prior-error", &err) == YVEX_OK &&
+        state->driver.cuStreamSynchronize(stream) == 0 &&
+        state->driver.cuMemcpyDtoH_v2(actual, output - sizeof(float), (size_t)output_bytes) == 0 &&
+        state->driver.cuMemcpyDtoH_v2(&status_value, status, sizeof(status_value)) == 0 && status_value == 7,
+        "prior failure prevents all decoded tile publication");
+    for (unsigned long long i = 0ull; i < output_bytes / sizeof(float); ++i) {
+        unsigned int bits;
+        memcpy(&bits, actual + i, sizeof(bits));
+        YVEX_TEST_ASSERT(bits == 0xcdcdcdcdu, "prior failure preserves decoded tile output bytes");
+    }
+    status_value = 0;
+    vectors[0] = NAN;
+    YVEX_TEST_ASSERT(state->driver.cuMemcpyHtoDAsync_v2(status, &status_value,
+            sizeof(status_value), stream) == 0 &&
+        state->driver.cuMemcpyHtoDAsync_v2(input, vectors, sizeof(float), stream) == 0 &&
+        yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, state->qtype_matvec_function,
+            grid, block, 0u, params, "cuda.test.decoded-pair-nonfinite", &err) == YVEX_OK &&
+        state->driver.cuStreamSynchronize(stream) == 0 &&
+        state->driver.cuMemcpyDtoH_v2(&status_value, status, sizeof(status_value)) == 0 && status_value == 1,
+        "nonfinite decoded input remains refused rather than fabricated completion");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+        "decoded tile fixture releases its only device owner");
+    free(weights); free(vectors); free(actual); free(reference);
+    return 0;
+}
+
 static int quant_cuda_bf16_gemm(yvex_backend *backend)
 {
     enum { ROWS = 5, INPUT_ROWS = 3, WIDTH = 64 };
@@ -866,19 +1008,40 @@ static int quant_cuda_f32_gemm(yvex_backend *backend)
     YVEX_TEST_ASSERT(rc == YVEX_OK && facts.kernel_launches == 1ull &&
                          !facts.d2h_bytes && !facts.temporary_bytes &&
                          facts.device_synchronizations == 1ull,
-                     "F32 row batch selects one cuBLAS GEMM");
+                     "F32 row batch selects one admitted contraction with standalone completion");
     YVEX_TEST_ASSERT(yvex_backend_tensor_read(
                          backend, output, actual, sizeof(actual), &err) == YVEX_OK,
                      "F32 GEMM result downloads");
     for (column = 0ull; column < INPUT_ROWS * ROWS; ++column)
         YVEX_TEST_ASSERT(fabs((double)actual[column] - expected[column]) <=
                              2e-5 * (1.0 + fabs((double)expected[column])),
-                         "cuBLAS F32 GEMM matches the independent reference");
+                         "F32 contraction matches the independent reference");
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    yvex_device_tensor *completion = NULL;
+    yvex_backend_tensor_desc completion_desc = {.name = "f32-completion", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {sizeof(int)}, .bytes = sizeof(int)};
+    YVEX_TEST_ASSERT(ops && ops->program_begin && ops->program_complete &&
+        yvex_backend_tensor_alloc(backend, &completion_desc, &completion, &err) == YVEX_OK,
+        "F32 completion scope owns its checked word");
+    YVEX_TEST_ASSERT(ops->program_begin(backend, completion, &err) == YVEX_OK &&
+        yvex_backend_encoded_matvec(backend, mapped, sizeof(weights), YVEX_GGUF_QTYPE_F32,
+            ROWS, WIDTH, WIDTH * sizeof(float), INPUT_ROWS, input, NULL, 0u, NULL,
+            output, YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_F32_ACC, &facts, &err) == YVEX_OK &&
+        facts.device_synchronizations == 0u && facts.queue_synchronizations == 0u &&
+        facts.temporary_bytes == 0u && facts.kernel_launches == 1u &&
+        ops->program_complete(backend, &facts, &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, output, actual, sizeof(actual), &err) == YVEX_OK,
+        "F32 contraction defers only to its actual checked completion owner");
+    for (column = 0u; column < INPUT_ROWS * ROWS; ++column)
+        YVEX_TEST_ASSERT(fabs((double)actual[column] - expected[column]) <=
+            2e-5 * (1.0 + fabs((double)expected[column])), "scoped F32 result retains numerical bounds");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &completion, &err) == YVEX_OK,
+        "completion storage releases after the program barrier");
     for (unsigned int bad = 0u; bad < 2u; ++bad) {
         rc = yvex_backend_encoded_matvec(backend, mapped, sizeof(weights), YVEX_GGUF_QTYPE_F32,
             ROWS, WIDTH, WIDTH * sizeof(float), INPUT_ROWS, input, NULL, 0u, NULL, output,
             bad ? YVEX_ENCODED_INPUT_Q8 : YVEX_ENCODED_INPUT_F32,
-            bad ? YVEX_ENCODED_REDUCTION_ROW : (yvex_encoded_reduction_policy)2, &facts, &err);
+            bad ? YVEX_ENCODED_REDUCTION_ROW : (yvex_encoded_reduction_policy)99, &facts, &err);
         YVEX_TEST_ASSERT(rc == (bad ? YVEX_ERR_UNSUPPORTED : YVEX_ERR_INVALID_ARG) &&
                              facts.kernel_launches == 0u,
             "unknown reduction and unavailable Q8 row geometry refuse before device execution");
@@ -1032,22 +1195,6 @@ static int quant_cuda_f32_linear_policy(yvex_backend *backend)
     free(actual);
     free(inputs);
     return 0;
-}
-
-static int quant_cuda_tensor(yvex_backend *backend, const char *name,
-                             unsigned int dtype, const void *source,
-                             unsigned long long bytes,
-                             yvex_device_tensor **tensor, yvex_error *err)
-{
-    yvex_backend_tensor_desc descriptor = {0};
-    descriptor.name = name;
-    descriptor.dtype = dtype;
-    descriptor.rank = 1u;
-    descriptor.dims[0] = dtype == YVEX_DTYPE_F32 ? bytes / sizeof(float) : bytes;
-    descriptor.bytes = bytes;
-    return yvex_backend_tensor_alloc(backend, &descriptor, tensor, err) == YVEX_OK &&
-           (!source || yvex_backend_tensor_write(
-                           backend, *tensor, source, bytes, err) == YVEX_OK);
 }
 
 static int quant_cuda_compiled_dense_plan(yvex_backend *backend)
@@ -1475,10 +1622,84 @@ static int quant_cuda_packing_workspace(yvex_backend *backend, const unsigned ch
     return 0;
 }
 
-static int quant_cuda_wide_q8_rows(yvex_backend *backend, unsigned int qtype, int row_contract)
+/* Exercise production packing/dispatch, then independently launch the retained
+ * register-tile consumer over the same immutable operands and packed bytes. */
+static int quant_cuda_shared_matrix_control(yvex_backend *backend,
+    const unsigned char *mapped, yvex_device_tensor *resident, yvex_device_tensor *input,
+    yvex_device_tensor *output, unsigned long long width, unsigned long long rows,
+    unsigned long long inputs, unsigned long long row_bytes, const float *expected)
+{
+    yvex_cuda_work work = {0};
+    yvex_device_tensor *status = NULL;
+    yvex_backend_attention_failure failure;
+    yvex_error err;
+    int zero = 0, device_wide = 0, bf16 = 0;
+    unsigned qtype = YVEX_GGUF_QTYPE_MXFP4;
+    unsigned long long start = 0, groups = 1;
+    float *actual = malloc((size_t)(rows * inputs) * sizeof(float));
+    const yvex_cuda_attention_operations *ops = yvex_cuda_attention_operations_get();
+    yvex_backend_attention_weight weight = {.encoded = mapped, .encoded_bytes = rows * row_bytes,
+        .row_bytes = row_bytes, .row_width = width, .row_count = rows, .qtype = qtype, .present = 1};
+    YVEX_TEST_ASSERT(actual && quant_cuda_tensor(backend, "matrix_control_status", YVEX_DTYPE_I32,
+        &zero, sizeof(zero), &status, &err), "allocate exact matrix control");
+    work.backend = backend; work.state = yvex_cuda_state(backend);
+    work.variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED; work.activation_q8 = 1;
+    CUdeviceptr weights = yvex_cuda_tensor_ptr(resident), out = yvex_cuda_tensor_ptr(output);
+    CUdeviceptr status_ptr = yvex_cuda_tensor_ptr(status), additive = 0;
+    YVEX_TEST_ASSERT(ops->matvec(&work, &weight, weights, start, rows, inputs,
+        yvex_cuda_tensor_ptr(input), out, bf16, status_ptr, "cuda.test.matrix-cohort", &failure, &err) == YVEX_OK &&
+        yvex_cuda_launch_synchronize(backend, work.variant, &device_wide, "cuda.test.matrix-cohort", &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, output, actual, (size_t)(rows * inputs) * sizeof(float), &err) == YVEX_OK &&
+        !memcmp(actual, expected, (size_t)(rows * inputs) * sizeof(float)),
+        "attention and standalone projection consume identical cohort realization");
+    void *params[] = {&weights, &row_bytes, &width, &start, &rows, &inputs, &groups,
+        &rows, &qtype, &work.q8_input, &additive, &out, &bf16, &status_ptr};
+    unsigned grid = (unsigned)(((rows + 15) / 16) * ((inputs + 63) / 64));
+    YVEX_TEST_ASSERT(ops->launch(&work, work.state->mxfp4_tensorcore_wide_rows_function,
+        grid, 128u, 0u, params, "cuda.test.matrix-register-control", &failure, &err) == YVEX_OK &&
+        yvex_cuda_launch_synchronize(backend, work.variant, &device_wide,
+            "cuda.test.matrix-register-control", &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, output, actual, (size_t)(rows * inputs) * sizeof(float), &err) == YVEX_OK &&
+        !memcmp(actual, expected, (size_t)(rows * inputs) * sizeof(float)),
+        "cohort staging retains every original per-block F32 bit and both tails");
+    /* Reuse the admitted storage as two genuinely different input groups.
+     * The ordinary grouped path remains the reference; no inputs are replicated. */
+    unsigned long long grouped_rows = rows - rows % 128ull, grouped_inputs = inputs / 2ull;
+    unsigned long long group_rows = grouped_rows / 2ull;
+    groups = 2ull;
+    weight.row_count = grouped_rows;
+    weight.encoded_bytes = grouped_rows * row_bytes;
+    YVEX_TEST_ASSERT(ops->matvec_grouped(&work, &weight, weights, groups, group_rows,
+        grouped_inputs, yvex_cuda_tensor_ptr(input), groups * width, out, grouped_rows,
+        bf16, status_ptr, "cuda.test.matrix-groups", &failure, &err) == YVEX_OK &&
+        yvex_cuda_launch_synchronize(backend, work.variant, &device_wide,
+            "cuda.test.matrix-groups", &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, output, actual,
+            (size_t)(rows * inputs) * sizeof(float), &err) == YVEX_OK,
+        "retained grouped consumer reads distinct canonical input populations");
+    float *grouped = malloc((size_t)(rows * inputs) * sizeof(float));
+    YVEX_TEST_ASSERT(grouped, "allocate grouped publication control");
+    params[4] = &grouped_rows; params[5] = &grouped_inputs; params[7] = &group_rows;
+    grid = (unsigned)((grouped_rows / 64ull) * ((grouped_inputs + 31ull) / 32ull));
+    YVEX_TEST_ASSERT(ops->launch(&work, work.state->mxfp4_tensorcore_shared_rows_function,
+        grid, 256u, 0u, params, "cuda.test.matrix-shared-groups", &failure, &err) == YVEX_OK &&
+        yvex_cuda_launch_synchronize(backend, work.variant, &device_wide,
+            "cuda.test.matrix-shared-groups", &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, output, grouped,
+            (size_t)(rows * inputs) * sizeof(float), &err) == YVEX_OK &&
+        !memcmp(grouped, actual, (size_t)(grouped_rows * grouped_inputs) * sizeof(float)),
+        "shared cohorts preserve group association and exact block accumulation");
+    free(grouped);
+    YVEX_TEST_ASSERT(yvex_cuda_work_cleanup(&work, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &status, &err) == YVEX_OK, "release matrix control resources");
+    free(actual);
+    return 0;
+}
+
+static int quant_cuda_wide_q8_rows(yvex_backend *backend, unsigned int qtype,
+                                  int row_contract, unsigned int width)
 {
     enum { ROWS = 2051, INPUTS = 65, MAX_WIDTH = 4096, PATTERNS = 17 };
-    const unsigned int width = row_contract ? MAX_WIDTH : 256u;
     yvex_backend_tensor_desc descriptor = {0};
     yvex_device_tensor *resident = NULL, *input = NULL, *output = NULL;
     unsigned char *mapped = NULL, *encoded = NULL;
@@ -1548,7 +1769,7 @@ static int quant_cuda_wide_q8_rows(yvex_backend *backend, unsigned int qtype, in
     /* The independent decoded CPU tolerance covers the original one-block
      * projection fixture. The wider explicit-row fixture below instead has
      * an exact warp FMA/tree oracle; the two numerical classes are distinct. */
-    if (!row_contract) for (batch = 0u; batch < INPUTS; ++batch)
+    if (!row_contract && width == 256u) for (batch = 0u; batch < INPUTS; ++batch)
         for (row = 0u; row < ROWS; ++row) {
             double expected = reference[batch * PATTERNS + row % PATTERNS];
             YVEX_TEST_ASSERT(isfinite(actual[batch * ROWS + row]) &&
@@ -1558,23 +1779,9 @@ static int quant_cuda_wide_q8_rows(yvex_backend *backend, unsigned int qtype, in
         }
     if (qtype == YVEX_GGUF_QTYPE_MXFP4) {
         float scalar[ROWS];
-        if (!row_contract) {
-            yvex_cuda_backend_state *state = yvex_cuda_state(backend);
-            CUfunction specialized = state->mxfp4_tensorcore_wide_rows_function;
-            float *generic = malloc((size_t)INPUTS * ROWS * sizeof(float));
-            YVEX_TEST_ASSERT(generic, "allocate independent generic-kernel result");
-            state->mxfp4_tensorcore_wide_rows_function = state->qtype_tensorcore_wide_rows_function;
-            int generic_rc = yvex_backend_encoded_matvec(backend, mapped, descriptor.bytes,
-                qtype, ROWS, width, row_bytes, INPUTS, input, NULL, 0ull, NULL, output,
-                YVEX_ENCODED_INPUT_Q8, YVEX_ENCODED_REDUCTION_DEFAULT, &facts, &err);
-            state->mxfp4_tensorcore_wide_rows_function = specialized;
-            YVEX_TEST_ASSERT(generic_rc == YVEX_OK &&
-                yvex_backend_tensor_read(backend, output, generic,
-                    (size_t)INPUTS * ROWS * sizeof(float), &err) == YVEX_OK &&
-                !memcmp(generic, actual, (size_t)INPUTS * ROWS * sizeof(float)),
-                "fixed-format instantiation retains generic numerical bits, row and input tails");
-            free(generic);
-        }
+        if (!row_contract) YVEX_TEST_ASSERT(quant_cuda_shared_matrix_control(backend, mapped,
+            resident, input, output, width, ROWS, INPUTS, row_bytes, actual) == 0,
+            "shared MXFP4 matrix is bitwise equivalent to the register-tile control");
         YVEX_TEST_ASSERT(yvex_backend_encoded_matvec(
             backend, mapped, descriptor.bytes, qtype, ROWS, width, row_bytes,
             INPUTS, input, NULL, 0ull, NULL, output,
@@ -1823,6 +2030,7 @@ static int quant_cuda_q8_shared_rows(yvex_backend *backend, unsigned int input_c
     unsigned char *mapped = NULL, *encoded_row = NULL;
     float *vectors = NULL, *q8_vectors = NULL, *source = NULL;
     float *expected = NULL, *actual = NULL, *ordinary = NULL;
+    double *q8_absolute_products = NULL;
     yvex_quant_failure quant_failure;
     yvex_error err;
     size_t row_bytes = 0u, output_bytes = input_count * rows * sizeof(float);
@@ -1832,7 +2040,7 @@ static int quant_cuda_q8_shared_rows(yvex_backend *backend, unsigned int input_c
     int q8_input = 1, status_value = 0, rc;
     double maximum_error = 0.0;
 
-    YVEX_TEST_ASSERT(input_count && input_count <= 512u && width && width <= 8192u &&
+    YVEX_TEST_ASSERT(input_count && input_count <= YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH && width && width <= 8192u &&
         width % 256u == 0u, "bounded Q8 row oracle dimensions");
     vectors = malloc((size_t)input_count * width * sizeof(float));
     q8_vectors = malloc((size_t)input_count * width * sizeof(float));
@@ -1840,8 +2048,12 @@ static int quant_cuda_q8_shared_rows(yvex_backend *backend, unsigned int input_c
     expected = malloc(output_bytes);
     actual = malloc(output_bytes);
     ordinary = malloc(output_bytes);
+    if (qtype == YVEX_GGUF_QTYPE_Q8_0)
+        q8_absolute_products = calloc((size_t)input_count * rows, sizeof(double));
     YVEX_TEST_ASSERT(vectors && q8_vectors && source && expected && actual && ordinary,
                      "Q8 row shared-row host oracle allocates");
+    YVEX_TEST_ASSERT(qtype != YVEX_GGUF_QTYPE_Q8_0 || q8_absolute_products,
+                     "Q8 independent forward-error certificate allocates");
     for (input_row = 0u; input_row < input_count; ++input_row) {
         for (index = 0ull; index < width; ++index)
             vectors[input_row * width + index] =
@@ -1875,6 +2087,11 @@ static int quant_cuda_q8_shared_rows(yvex_backend *backend, unsigned int input_c
         memcpy(mapped + row * row_bytes, encoded_row, row_bytes);
         free(encoded_row);
         encoded_row = NULL;
+        if (q8_absolute_products) for (index = 0ull; index < width; index += 32ull)
+            YVEX_TEST_ASSERT(yvex_quant_decode_block(qtype,
+                mapped + row * row_bytes + index / 32ull * 34ull, 34u,
+                source + index, 32u, &quant_failure, &err) == YVEX_OK,
+                "independent Q8 error certificate decodes exact FP16-scaled operands");
         for (input_row = 0u; input_row < input_count; ++input_row) {
             YVEX_TEST_ASSERT(
                 yvex_quant_cpu_dot(
@@ -1883,6 +2100,9 @@ static int quant_cuda_q8_shared_rows(yvex_backend *backend, unsigned int input_c
                     &expected[input_row * rows + row], &quant_failure,
                     &err) == YVEX_OK,
                 "Q8 row shared-row independent Q8 oracle succeeds");
+            if (q8_absolute_products) for (index = 0ull; index < width; ++index)
+                q8_absolute_products[input_row * rows + row] +=
+                    fabs((double)source[index] * q8_vectors[input_row * width + index]);
         }
     }
     YVEX_TEST_ASSERT(
@@ -1941,8 +2161,9 @@ static int quant_cuda_q8_shared_rows(yvex_backend *backend, unsigned int input_c
             /* DEFAULT is distinct; probe ROW with its real BF16 publication. */
             unsigned int matrix_grid, matrix_block;
             params[13] = &row_output;
-            rc = yvex_cuda_q8_row_matrix_geometry(nrows, width, input_rows, &matrix_grid, &matrix_block)
-                ? operations->launch(&work, work.state->q8_row_matrix_function, matrix_grid,
+            CUfunction matrix = cuda_q8_row_matrix_select(backend, qtype, nrows, width,
+                input_rows, &matrix_grid, &matrix_block);
+            rc = matrix ? operations->launch(&work, matrix, matrix_grid,
                     matrix_block, 0u, params, "cuda.test.q8-row-matrix", &attention_failure, &err)
                 : YVEX_ERR_BOUNDS;
             params[13] = &ordinary_ptr;
@@ -1963,13 +2184,37 @@ static int quant_cuda_q8_shared_rows(yvex_backend *backend, unsigned int input_c
     YVEX_TEST_ASSERT(rc == YVEX_OK && work.launches == 3ull + (input_count >= 16u) &&
                          memcmp(actual, ordinary, output_bytes) == 0,
                      "shared activation rows are bit-identical to ordinary row dots");
+    if (qtype == YVEX_GGUF_QTYPE_Q8_0 && !output_bf16) {
+        yvex_backend_operation_facts facts;
+        YVEX_TEST_ASSERT(yvex_backend_encoded_matvec(
+            backend, mapped, descriptor.bytes, qtype, rows, width, row_bytes,
+            input_count, input, NULL, 0ull, NULL, output,
+            YVEX_ENCODED_INPUT_Q8, YVEX_ENCODED_REDUCTION_ROW, &facts, &err) == YVEX_OK &&
+            facts.kernel_launches == 2ull && facts.accelerated_matrix_launches == 1ull &&
+            yvex_backend_tensor_read(backend, output, actual, output_bytes, &err) == YVEX_OK &&
+            memcmp(actual, ordinary, output_bytes) == 0,
+            "Q8 ROW production dispatch preserves every original FMA/tree bit");
+    }
     for (index = 0ull; index < input_count * rows; ++index) {
         double difference = fabs((double)actual[index] - expected[index]);
         if (difference > maximum_error) maximum_error = difference;
-        /* Host F64 is unrounded; BF16 adds half an ULP. CUDA preservation above is bitwise. */
+        double tolerance = (output_bf16 ? 1.0 / 256.0 + 1e-5 : 1e-5) *
+                           (1.0 + fabs((double)expected[index]));
+        if (q8_absolute_products) {
+            /* ROW promises the original FMA/tree bits, not uniform relative
+             * error to a different F64 reduction under cancellation. Bound
+             * scale/product/activation rounding, eight FMAs and the five
+             * tree levels plus the F32 oracle publication by gamma_(3K+8).
+             * All fixture operands are finite, normal and away from overflow. */
+            double steps = 3.0 * width + 8.0, unit = 0x1p-24;
+            tolerance = steps * unit / (1.0 - steps * unit) *
+                        q8_absolute_products[index] + 0x1p-126;
+            if (output_bf16)
+                tolerance += (fabs((double)expected[index]) + tolerance) * 0x1p-8 + 0x1p-134;
+        }
+        /* Host F64 is unrounded; the primary CUDA preservation above is bitwise. */
         YVEX_TEST_ASSERT(
-            difference <= (output_bf16 ? 1.0 / 256.0 + 1e-5 : 1e-5) *
-                (1.0 + fabs((double)expected[index])),
+            difference <= tolerance,
             "Q8 row shared activation matches the independent Q8 reference");
     }
     printf("Q8 row locality: qtype=%u inputs=%u width=%u rows=%u bf16=%d values=%u bit_mismatches=0 "
@@ -1990,6 +2235,7 @@ static int quant_cuda_q8_shared_rows(yvex_backend *backend, unsigned int input_c
     free(ordinary);
     free(actual);
     free(expected);
+    free(q8_absolute_products);
     return 0;
 }
 
@@ -3926,24 +4172,34 @@ int yvex_cuda_test_quant_qtype(void)
         "decoded row/input tiling covers partial warps and refuses task overflow");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_tensorcore_geometry(
-            2048ull, 60ull, &matvec_grid, &matvec_block) &&
+            2048ull, 60ull, YVEX_GGUF_QTYPE_MXFP4, 2048ull, &matvec_grid, &matvec_block) &&
             matvec_grid == 256u && matvec_block == 128u,
         "wide Tensor Core rows map independent eight-input register tiles across four warps");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_tensorcore_geometry(
-            1024ull, 60ull, &matvec_grid, &matvec_block) &&
+            1024ull, 60ull, YVEX_GGUF_QTYPE_MXFP4, 1024ull, &matvec_grid, &matvec_block) &&
             matvec_grid == 128u && matvec_block == 128u,
         "Tensor Core rows cover each independent eight-input register tile");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_tensorcore_geometry(
-            2048ull, 64ull, &matvec_grid, &matvec_block) &&
+            2048ull, 64ull, YVEX_GGUF_QTYPE_Q2_K, 2048ull, &matvec_grid, &matvec_block) &&
             matvec_grid == 128u && matvec_block == 128u &&
         yvex_cuda_qtype_tensorcore_geometry(
-            2051ull, 65ull, &matvec_grid, &matvec_block) &&
+            2051ull, 65ull, YVEX_GGUF_QTYPE_Q2_K, 2051ull, &matvec_grid, &matvec_block) &&
             matvec_grid == 258u && matvec_block == 128u &&
         cuda_qtype_tensorcore_columns(2047ull, 512ull) == 8u &&
         cuda_qtype_tensorcore_columns(2048ull, 63ull) == 8u,
         "broad projections reuse fragments across paired tiles without dropping row or input tails");
+    YVEX_TEST_ASSERT(
+        yvex_cuda_qtype_tensorcore_geometry(2051ull, 65ull, YVEX_GGUF_QTYPE_MXFP4,
+            2051ull, &matvec_grid, &matvec_block) && matvec_grid == 99u && matvec_block == 256u &&
+        yvex_cuda_qtype_tensorcore_geometry(3072ull, 512ull, YVEX_GGUF_QTYPE_MXFP4,
+            48ull, &matvec_grid, &matvec_block) && matvec_grid == 1536u && matvec_block == 128u &&
+        !yvex_cuda_qtype_tensorcore_geometry(2051ull, 65ull, YVEX_GGUF_QTYPE_MXFP4,
+            64ull, &matvec_grid, &matvec_block) &&
+        !yvex_cuda_qtype_tensorcore_geometry(ULLONG_MAX, 65ull, YVEX_GGUF_QTYPE_MXFP4,
+            ULLONG_MAX, &matvec_grid, &matvec_block),
+        "shared cohort covers tails, retains narrow groups and refuses incomplete/overflowing geometry");
     YVEX_TEST_ASSERT(
         yvex_cuda_q8_row_matrix_geometry(4099ull, 1024ull, 6ull, &matvec_grid, &matvec_block) &&
             matvec_grid == 257u && matvec_block == 32u &&
@@ -3959,6 +4215,22 @@ int yvex_cuda_test_quant_qtype(void)
         !yvex_cuda_q8_row_matrix_geometry(131073ull, 1024ull, 6ull, &matvec_grid, &matvec_block) &&
         !yvex_cuda_q8_row_matrix_geometry(2051ull, 1024ull, 3ull, &matvec_grid, &matvec_block),
         "row matrix covers real narrow populations, partial tiles and bounded refusals");
+    {
+        int sm121 = backend->device_info.compute_capability_major == 12 &&
+                    backend->device_info.compute_capability_minor == 1;
+        YVEX_TEST_ASSERT(
+            (cuda_q8_row_matrix_select(backend, YVEX_GGUF_QTYPE_Q8_0, 256ull,
+                2048ull, 128ull, &matvec_grid, &matvec_block) != NULL) == sm121 &&
+            !cuda_q8_row_matrix_select(backend, YVEX_GGUF_QTYPE_Q8_0, 255ull,
+                2048ull, 128ull, &matvec_grid, &matvec_block) &&
+            !cuda_q8_row_matrix_select(backend, YVEX_GGUF_QTYPE_Q8_0, 256ull,
+                1024ull, 128ull, &matvec_grid, &matvec_block) &&
+            !cuda_q8_row_matrix_select(backend, YVEX_GGUF_QTYPE_Q8_0, 256ull,
+                2048ull, 127ull, &matvec_grid, &matvec_block) &&
+            !cuda_q8_row_matrix_select(backend, YVEX_GGUF_QTYPE_IQ2_XXS, 256ull,
+                2048ull, 128ull, &matvec_grid, &matvec_block),
+            "Q8 ROW tiles require measured width, population and device; other cases fall back");
+    }
     for (index = 0u; index < sizeof(cases) / sizeof(cases[0]); ++index) {
         double maximum_difference = 0.0;
         double maximum_relative_difference = 0.0;
@@ -3978,6 +4250,17 @@ int yvex_cuda_test_quant_qtype(void)
     for (index = 0u; index < 3u; ++index)
         YVEX_TEST_ASSERT(quant_cuda_dense_matvec(backend, cases[index].qtype) == 0,
                          "dense source qtype matvec specializes outside the inner dot");
+    const unsigned int decoded_inputs[] = {1u, 3u, 7u, 8u, 9u, 17u, 31u, 32u, 33u, 65u};
+    for (size_t i = 0u; i < sizeof(decoded_inputs) / sizeof(decoded_inputs[0]); ++i)
+        for (int publication = 0; publication <= 1; ++publication)
+            YVEX_TEST_ASSERT(quant_cuda_decoded_tiles(backend, decoded_inputs[i], 17ull, 37ull,
+                publication) == 0, "decoded pair tails retain literal F64 publication and failures");
+    const unsigned int wide_decoded_inputs[] = {513u, 1025u, 2048u};
+    for (size_t i = 0u; i < sizeof(wide_decoded_inputs) / sizeof(wide_decoded_inputs[0]); ++i)
+        for (int publication = 0; publication <= 1; ++publication)
+            YVEX_TEST_ASSERT(quant_cuda_decoded_tiles(backend, wide_decoded_inputs[i],
+                257ull, 4096ull, publication) == 0,
+                "wide decoded pair tiles retain full literal controls and independent F64 samples");
     YVEX_TEST_ASSERT(quant_cuda_q8_matvec(backend, YVEX_GGUF_QTYPE_Q8_0) == 0,
                      "Q8_0 production Q8 activation matvec");
     YVEX_TEST_ASSERT(quant_cuda_q8_matvec(backend, YVEX_GGUF_QTYPE_Q2_K) == 0,
@@ -3990,9 +4273,11 @@ int yvex_cuda_test_quant_qtype(void)
         const unsigned int qtypes[] = {YVEX_GGUF_QTYPE_Q8_0, YVEX_GGUF_QTYPE_Q2_K,
             YVEX_GGUF_QTYPE_IQ2_XXS, YVEX_GGUF_QTYPE_MXFP4};
         for (unsigned int q = 0u; q < sizeof(qtypes) / sizeof(qtypes[0]); ++q)
-            YVEX_TEST_ASSERT(quant_cuda_wide_q8_rows(backend, qtypes[q], 0) == 0,
+            YVEX_TEST_ASSERT(quant_cuda_wide_q8_rows(backend, qtypes[q], 0, 256u) == 0,
                 "wide register tiles retain every admitted quantized format");
-        YVEX_TEST_ASSERT(quant_cuda_wide_q8_rows(backend, YVEX_GGUF_QTYPE_MXFP4, 1) == 0,
+        YVEX_TEST_ASSERT(quant_cuda_wide_q8_rows(backend, YVEX_GGUF_QTYPE_MXFP4, 0, 4096u) == 0,
+            "wide cohort preserves source-ordered multiple-block accumulation");
+        YVEX_TEST_ASSERT(quant_cuda_wide_q8_rows(backend, YVEX_GGUF_QTYPE_MXFP4, 1, 4096u) == 0,
             "wide explicit-row matrix preserves the full-width warp reduction contract");
     }
     for (index = 4u; index < sizeof(cases) / sizeof(cases[0]); ++index) {
@@ -4020,18 +4305,48 @@ int yvex_cuda_test_quant_qtype(void)
         YVEX_TEST_ASSERT(quant_cuda_q8_shared_rows(backend, 6u, bf16,
             32769u, YVEX_GGUF_QTYPE_MXFP4, 1024u) == 0,
             "row matrix preserves broad output populations and partial final tile");
+    const unsigned int wide_row_inputs[] = {64u, 65u, 128u};
+    for (size_t i = 0u; i < sizeof(wide_row_inputs) / sizeof(wide_row_inputs[0]); ++i)
+        for (int bf16 = 0; bf16 <= 1; ++bf16)
+            YVEX_TEST_ASSERT(quant_cuda_q8_shared_rows(backend, wide_row_inputs[i], bf16,
+                65u, YVEX_GGUF_QTYPE_MXFP4, 4096u) == 0,
+                "wide shared ROW tiles retain old dot bits, tails and independent Q8 oracle");
     const unsigned int q2_row_inputs[] = {4u, 7u, 16u, 17u, 31u, 128u, 512u};
     for (size_t i = 0u; i < sizeof(q2_row_inputs) / sizeof(q2_row_inputs[0]); ++i)
         for (int bf16 = 0; bf16 <= 1; ++bf16)
             YVEX_TEST_ASSERT(quant_cuda_q8_shared_rows(backend, q2_row_inputs[i], bf16,
                 65u, YVEX_GGUF_QTYPE_Q2_K, 1024u) == 0,
                 "Q2_K row matrix retains ordinary dot bits and independent decoded oracle across prefill widths");
+    for (int bf16 = 0; bf16 <= 1; ++bf16) {
+        YVEX_TEST_ASSERT(quant_cuda_q8_shared_rows(backend, 2048u, bf16,
+            65u, YVEX_GGUF_QTYPE_MXFP4, 1024u) == 0 &&
+            quant_cuda_q8_shared_rows(backend, 2048u, bf16,
+            65u, YVEX_GGUF_QTYPE_Q2_K, 1024u) == 0,
+            "maximum prefill rows retain independent values, ordered dot bits and F64 bounds");
+        if (backend->device_info.compute_capability_major == 12 &&
+            backend->device_info.compute_capability_minor == 1)
+            YVEX_TEST_ASSERT(quant_cuda_q8_shared_rows(backend, 2048u, bf16,
+                257u, YVEX_GGUF_QTYPE_Q8_0, 2048u) == 0,
+                "maximum Q8 ROW geometry retains every independent source position");
+    }
+    YVEX_TEST_ASSERT(quant_cuda_q8_shared_rows(backend, 1025u, 0,
+        65u, YVEX_GGUF_QTYPE_MXFP4, 1024u) == 0,
+        "partial wide-prefill column tile retains bounds and ordinary row bits");
     const unsigned int q2_widths[] = {2048u, 4096u, 8192u};
     for (size_t i = 0u; i < sizeof(q2_widths) / sizeof(q2_widths[0]); ++i)
         for (int bf16 = 0; bf16 <= 1; ++bf16)
             YVEX_TEST_ASSERT(quant_cuda_q8_shared_rows(backend, 512u, bf16,
                 17u, YVEX_GGUF_QTYPE_Q2_K, q2_widths[i]) == 0,
                 "Q2_K row matrix preserves actual projection widths and maximum reduction tree");
+    if (backend->device_info.compute_capability_major == 12 &&
+        backend->device_info.compute_capability_minor == 1) {
+        const unsigned int q8_widths[] = {2048u, 4096u, 8192u};
+        for (size_t i = 0u; i < sizeof(q8_widths) / sizeof(q8_widths[0]); ++i)
+            for (int bf16 = 0; bf16 <= 1; ++bf16)
+                YVEX_TEST_ASSERT(quant_cuda_q8_shared_rows(backend, 128u + (unsigned int)i,
+                    bf16, 257u, YVEX_GGUF_QTYPE_Q8_0, q8_widths[i]) == 0,
+                    "Q8 ROW tiles preserve canonical FP16 scales, tails, publication and CPU reference");
+    }
     YVEX_TEST_ASSERT(quant_cuda_bf16_projection_pair(backend) == 0,
                      "paired BF16 projections reuse one exact activation load stream");
     YVEX_TEST_ASSERT(quant_cuda_bf16_gemm(backend) == 0,

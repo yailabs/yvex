@@ -847,7 +847,7 @@ static int attention_workspace_recipe_make(yvex_attention_workspace_recipe *reci
     yvex_attention_workspace_component *first, *second, *rolling, *evidence;
 
     memset(recipe, 0, sizeof(*recipe));
-    recipe->schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3;
+    recipe->schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5;
     recipe->layer_index = 7ull;
     recipe->token_capacity = token_capacity;
     recipe->prefix_checkpoint_capacity = token_capacity;
@@ -860,27 +860,27 @@ static int attention_workspace_recipe_make(yvex_attention_workspace_recipe *reci
     recipe->state_recipe_identity[YVEX_SHA256_HEX_BYTES - 1u] = '\0';
     first = &recipe->components[0];
     *first = (yvex_attention_workspace_component){
-        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3,
+        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5,
         .ordinal = 0u, .kind = YVEX_ATTENTION_WORKSPACE_STATUS,
         .lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION,
         .element_count = 3ull, .element_width = 4ull, .alignment = 8ull};
     second = &recipe->components[1];
     *second = (yvex_attention_workspace_component){
-        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3,
+        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5,
         .ordinal = 1u, .kind = YVEX_ATTENTION_WORKSPACE_QUERY,
         .lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION,
         .element_count = 5ull, .element_width = 8ull, .alignment = 16ull,
         .scales_with_tokens = 1};
     rolling = &recipe->components[2];
     *rolling = (yvex_attention_workspace_component){
-        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3,
+        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5,
         .ordinal = 2u, .kind = YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_VALUES,
         .lifetime = YVEX_ATTENTION_WORKSPACE_GRAPH_STABLE,
         .element_count = 2ull, .element_width = 4ull, .alignment = 8ull};
     if (evidence_level == YVEX_ATTENTION_EVIDENCE_FULL) {
         evidence = &recipe->components[3];
         *evidence = (yvex_attention_workspace_component){
-            .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3,
+            .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5,
             .ordinal = 3u, .kind = YVEX_ATTENTION_WORKSPACE_CORE_INPUT_EVIDENCE,
             .lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION,
             .element_count = 7ull, .element_width = sizeof(float),
@@ -925,6 +925,48 @@ static int test_attention_selection_workspace(void)
     return 0;
 }
 
+/* Prepared index views are backend-local costs derived from semantic extents.
+ * Key capacity is rounded for stable replay; no source/package fact changes. */
+static int test_attention_index_prepared_workspace(void)
+{
+    const unsigned long long tokens[] = {1ull, 7ull, 8ull, 31ull, 32ull, 33ull, 512ull};
+    yvex_error err = {0};
+    for (size_t i = 0u; i < sizeof(tokens) / sizeof(tokens[0]); ++i) {
+        unsigned long long t = tokens[i], query = t * 64ull * 128ull * 4ull;
+        unsigned long long keys = 129ull * 128ull * 4ull, device = 0ull, host = 0ull;
+        yvex_attention_workspace_recipe recipe = {
+            .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5,
+            .token_capacity = t, .component_count = 2u,
+            .evidence_level = YVEX_ATTENTION_EVIDENCE_FULL};
+        memset(recipe.state_recipe_identity, 'a', 64u);
+        recipe.components[0] = (yvex_attention_workspace_component){
+            .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5,
+            .kind = YVEX_ATTENTION_WORKSPACE_INDEX_QUERY,
+            .lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION,
+            .element_count = 64ull * 128ull, .element_width = 4ull,
+            .alignment = 256ull, .scales_with_tokens = 1};
+        recipe.components[1] = (yvex_attention_workspace_component){
+            .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5, .ordinal = 1u,
+            .kind = YVEX_ATTENTION_WORKSPACE_INDEXER_VALUES,
+            .lifetime = YVEX_ATTENTION_WORKSPACE_GRAPH_STABLE,
+            .element_count = 129ull, .element_width = 128ull * 4ull, .alignment = 256ull};
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK,
+            "seal semantic query/history extents independently of CUDA packing");
+        char identity[YVEX_SHA256_HEX_CAP];
+        (void)snprintf(identity, sizeof(identity), "%s", recipe.identity);
+        unsigned long long base = 2ull * query + keys;
+        unsigned long long prepared = t >= 8ull ? 2ull * (query + keys + 512ull) : 0ull;
+        unsigned long long expected = ((base + 255ull) & ~255ull) + prepared;
+        YVEX_TEST_ASSERT(yvex_backend_attention_workspace_required_from_recipe(&recipe, &device, &err) ==
+            YVEX_OK && device == expected && !strcmp(identity, recipe.identity),
+            "device bound charges one stream-reused key view and the conservative query/alignment extents");
+        YVEX_TEST_ASSERT(yvex_backend_attention_host_workspace_required_from_recipe(&recipe, 0, &host, &err) ==
+            YVEX_OK && host == base && !strcmp(identity, recipe.identity),
+            "device digit preparation cannot become duplicate host staging or immutable representation");
+    }
+    return 0;
+}
+
 /* Prove recipe lowering is exact, deterministic, identity-bound, and checked. */
 static int test_attention_host_ingress_bound(void)
 {
@@ -958,6 +1000,88 @@ static int test_attention_host_ingress_bound(void)
     return 0;
 }
 
+static int test_attention_prepared_workspace(void)
+{
+    yvex_attention_workspace_recipe recipe;
+    yvex_error err = {0};
+    unsigned long long device = 0ull, host = 0ull;
+    YVEX_TEST_ASSERT(attention_workspace_recipe_make(&recipe, 3ull,
+        YVEX_ATTENTION_EVIDENCE_FULL, &err) == YVEX_OK, "seed prepared attention budget");
+    const yvex_attention_workspace_component_kind kinds[] = {
+        YVEX_ATTENTION_WORKSPACE_QUERY, YVEX_ATTENTION_WORKSPACE_LOCAL_VALUES,
+        YVEX_ATTENTION_WORKSPACE_COMPRESSED_VALUES, YVEX_ATTENTION_WORKSPACE_BLOCK_REDUCTION};
+    const unsigned long long counts[] = {16ull * 512ull, 8ull, 7ull, 16ull};
+    const unsigned long long widths[] = {4ull, 512ull * 4ull, 512ull * 4ull, 780ull};
+    for (unsigned int i = 0; i < 4u; ++i) {
+        recipe.components[i] = (yvex_attention_workspace_component){
+            .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5,
+            .ordinal = i, .kind = kinds[i], .alignment = 256ull,
+            .element_count = counts[i], .element_width = widths[i],
+            .scales_with_tokens = i == 0u || i == 3u,
+            .lifetime = i == 0u || i == 3u ? YVEX_ATTENTION_WORKSPACE_EXECUTION :
+                YVEX_ATTENTION_WORKSPACE_GRAPH_STABLE};
+    }
+    YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK &&
+        yvex_backend_attention_workspace_required_from_recipe(&recipe, &device, &err) == YVEX_OK &&
+        yvex_backend_attention_host_workspace_required_from_recipe(&recipe, 0, &host, &err) == YVEX_OK,
+        "lower sealed prepared attention geometry without payload inspection");
+    /* F32 query + histories + doubled reduction = 302208; align 302336.
+     * Prepared: query 49152, 64 KV rows+flags 65792, causal map bound 2340.
+     * Execution scratch uses the existing two-live-range reserve. */
+    YVEX_TEST_ASSERT(device == 536904ull && host == 227328ull,
+        "BF16 preparation, row flags and causal map are device-only, bounded and accounted");
+    recipe.components[2].element_count = ~0ull;
+    YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) != YVEX_OK ||
+        (yvex_backend_attention_workspace_required_from_recipe(&recipe, &device, &err) != YVEX_OK &&
+         device == 0ull), "overflow cannot produce an admissible prepared budget");
+    return 0;
+}
+
+static int test_attention_query_lifetime(void)
+{
+    yvex_attention_workspace_recipe recipe;
+    yvex_error err = {0};
+    const unsigned long long widths[] = {1ull, 512ull, 2048ull};
+    for (unsigned int n = 0u; n < 3u; ++n) {
+        unsigned long long separate, reused, unchanged;
+        YVEX_TEST_ASSERT(attention_workspace_recipe_make(&recipe, widths[n],
+            YVEX_ATTENTION_EVIDENCE_NONE, &err) == YVEX_OK, "seed query lifetime recipe");
+        recipe.component_count = 2u;
+        for (unsigned int i = 0u; i < 2u; ++i)
+            recipe.components[i] = (yvex_attention_workspace_component){
+                .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5, .ordinal = i,
+                .kind = i ? YVEX_ATTENTION_WORKSPACE_ATTENTION_VALUES : YVEX_ATTENTION_WORKSPACE_QUERY,
+                .lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION,
+                .element_count = 128ull * 512ull, .element_width = sizeof(float),
+                .alignment = 256ull, .scales_with_tokens = 1};
+        recipe.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK &&
+            yvex_backend_attention_workspace_required_from_recipe(&recipe, &separate, &err) == YVEX_OK,
+            "reference attention retains independent query and result ranges");
+        recipe.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1;
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK &&
+            yvex_backend_attention_workspace_required_from_recipe(&recipe, &reused, &err) == YVEX_OK &&
+            separate - reused == 2ull * widths[n] * 128ull * 512ull * sizeof(float),
+            "packed-query realization removes only the accounted result range, preserving reserves");
+        recipe.compute_contract = YVEX_ATTENTION_COMPUTE_UNKNOWN;
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK &&
+            yvex_backend_attention_workspace_required_from_recipe(&recipe, &unchanged, &err) == YVEX_OK &&
+            unchanged == separate, "unresolved computation cannot claim an alias");
+        recipe.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1;
+        recipe.evidence_level = YVEX_ATTENTION_EVIDENCE_FULL;
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK &&
+            yvex_backend_attention_workspace_required_from_recipe(&recipe, &unchanged, &err) == YVEX_OK &&
+            unchanged >= 2ull * widths[n] * 128ull * 512ull * sizeof(float),
+            "forensic queries remain live independently of the result");
+        recipe.evidence_level = YVEX_ATTENTION_EVIDENCE_NONE;
+        recipe.components[1].element_count++;
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK &&
+            yvex_backend_attention_workspace_required_from_recipe(&recipe, &unchanged, &err) == YVEX_OK &&
+            unchanged > separate, "mismatched extents cannot acquire a smaller execution budget");
+    }
+    return 0;
+}
+
 static int test_attention_workspace_recipe_lowering(void)
 {
     yvex_attention_workspace_recipe recipe, full_recipe;
@@ -971,6 +1095,9 @@ static int test_attention_workspace_recipe_lowering(void)
 
     YVEX_TEST_ASSERT(test_attention_host_ingress_bound() == 0, "ingress placement bounds");
     YVEX_TEST_ASSERT(test_attention_selection_workspace() == 0, "bounded device selection tile capacity");
+    YVEX_TEST_ASSERT(test_attention_index_prepared_workspace() == 0, "bounded exact index preparation");
+    YVEX_TEST_ASSERT(test_attention_prepared_workspace() == 0, "prepared operand capacity");
+    YVEX_TEST_ASSERT(test_attention_query_lifetime() == 0, "computation-bound query lifetime");
     YVEX_TEST_ASSERT(
         attention_workspace_recipe_make(&recipe, 4ull, YVEX_ATTENTION_EVIDENCE_NONE,
                                         &err) == YVEX_OK,
@@ -1057,7 +1184,7 @@ static int test_attention_workspace_recipe_lowering(void)
         "host lowering rejects a stale recipe without publishing capacity");
     {
         /* Only the version prefix is addressable for an obsolete layout. */
-        _Alignas(yvex_attention_workspace_recipe) unsigned int old_schema = 1u;
+        _Alignas(yvex_attention_workspace_recipe) unsigned int old_schema = 4u;
         second = 99ull;
         YVEX_TEST_ASSERT(yvex_backend_attention_workspace_required_from_recipe(
             (const yvex_attention_workspace_recipe *)(const void *)&old_schema,

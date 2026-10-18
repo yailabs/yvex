@@ -189,8 +189,26 @@ typedef enum {
  * Compressor input projections are the architecture's explicit F32 exception. */
 typedef enum {
     YVEX_ATTENTION_COMPUTE_UNKNOWN = 0,
-    YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1
+    YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+    /* Causal 64-key online softmax, BF16 probabilities, F32 MMA; distinct
+     * numerical realization, never an equivalent replacement for V1. */
+    YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1
 } yvex_attention_compute_contract;
+
+/* Residual mixing projection only: all subsequent mHC operations retain
+ * their existing arithmetic. F32_ACC is a distinct numerical realization. */
+typedef enum {
+    YVEX_MHC_PROJECTION_ORDERED_F64 = 0,
+    YVEX_MHC_PROJECTION_F32_ACC_V1
+} yvex_mhc_projection_contract;
+
+/* Explicit attention projection classes; no parameter re-encoding. The
+ * prepared class additionally admits bounded wide MXFP4 contractions. */
+typedef enum {
+    YVEX_MATRIX_PROJECTION_ORDERED_F64 = 0,
+    YVEX_MATRIX_PROJECTION_BF16_F32_ACC_V1,
+    YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1
+} yvex_matrix_projection_contract;
 
 typedef struct {
     int required;

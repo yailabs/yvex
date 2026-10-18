@@ -404,12 +404,17 @@ static int mamba_semantic_model_build(yvex_semantic_model_ir **out,
 
 static int mamba_semantic_model_open(
     yvex_semantic_model_ir **out, const yvex_source_verification *verification,
-    yvex_error *err)
+    unsigned int attention_compute, unsigned int mhc_projection, unsigned int matrix_projection, yvex_error *err)
 {
     const yvex_mamba2_api *family = yvex_model_register_mamba2();
     yvex_mamba2_architecture architecture;
 
     if (out) *out = NULL;
+    if (attention_compute || mhc_projection || matrix_projection) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "mamba2.semantic-model",
+                       "pure SSM does not admit an attention numerical realization");
+        return YVEX_ERR_UNSUPPORTED;
+    }
     if (!out || !verification) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "mamba2.semantic-model",
                        "verified source facts are required");
@@ -745,7 +750,7 @@ static int mamba_speculation_policy(
 }
 
 static const yvex_family_binding_pipeline mamba_binding_pipeline = {
-    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1,
+    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V2,
     .source_open = mamba_compilation_source_open,
     .source_close = mamba_compilation_source_close,
     .artifact_admit = mamba_artifact_admit,

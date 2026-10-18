@@ -21,8 +21,13 @@ extern "C" {
 #define YVEX_GRAPH_ATTENTION_STATE_SCHEMA_V4 4u
 #define YVEX_ATTENTION_STATE_RECIPE_SCHEMA_V1 1u
 #define YVEX_ATTENTION_STATE_COMPONENT_CAP 8u
-#define YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3 3u
-#define YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP 41u
+#define YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5 5u
+#define YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP 42u
+
+/* Validate admitted execution capabilities against immutable layer arithmetic. */
+int yvex_attention_plan_capabilities_match(
+    const yvex_attention_summary *summary,
+    const yvex_attention_layer_plan *layers, unsigned long long count);
 
 typedef enum {
     YVEX_ATTENTION_STATE_COMPONENT_HISTORY = 0,
@@ -177,7 +182,8 @@ typedef enum {
     YVEX_ATTENTION_WORKSPACE_MAIN_PROJECTED_VALUES,
     YVEX_ATTENTION_WORKSPACE_MAIN_PROJECTED_SCORES,
     YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_VALUES,
-    YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_SCORES
+    YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_SCORES,
+    YVEX_ATTENTION_WORKSPACE_BLOCK_REDUCTION
 } yvex_attention_workspace_component_kind;
 typedef enum {
     YVEX_ATTENTION_WORKSPACE_EXECUTION = 0,
@@ -198,6 +204,9 @@ struct yvex_attention_workspace_recipe {
     yvex_attention_execution_mode mode;
     yvex_attention_operation_scope scope;
     yvex_attention_evidence_level evidence_level;
+    /* UNKNOWN retains conservative storage; only an exact admitted computation
+     * may authorize a backend lifetime alternative. Not a kernel selector. */
+    yvex_attention_compute_contract compute_contract;
     unsigned int component_count;
     yvex_attention_workspace_component components[YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP];
     char state_recipe_identity[YVEX_ATTENTION_IDENTITY_CAP];

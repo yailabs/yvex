@@ -2565,6 +2565,37 @@ static int test_probe_version_refusal(void)
     return 0;
 }
 
+static int test_backend_specific_attention_admission(void)
+{
+    yvex_attention_plan plan = {0};
+    yvex_attention_probe_request request = {0};
+    yvex_attention_probe_result result = {0};
+    yvex_error err = {0};
+    plan.summary.full_execution_ready = 1;
+    plan.summary.cuda_execution_ready = 1;
+    request.probe = YVEX_ATTENTION_PROBE_CANONICAL_V2;
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
+    request.operation_scope = YVEX_ATTENTION_OPERATION_CORE;
+    request.execution_phase = YVEX_EXECUTION_PHASE_PREFILL;
+    /* Missing materialization deliberately stops after capability admission,
+     * before any device/context open. This is a software refusal test. */
+    for (unsigned int i = 0u; i < 4u; ++i) {
+        request.backend = i == 0u ? YVEX_BACKEND_KIND_CPU : YVEX_BACKEND_KIND_CUDA;
+        request.compare_backends = i == 1u;
+        plan.summary.cuda_execution_ready = i != 3u;
+        yvex_error_clear(&err);
+        int rc = yvex_attention_execute(&yvex_attention_execution_api, &plan,
+            NULL, NULL, &request, &result, NULL, &err);
+        YVEX_TEST_ASSERT(rc == (i == 2u ? YVEX_ERR_INVALID_ARG : YVEX_ERR_UNSUPPORTED) &&
+            !strcmp(yvex_error_message(&err), i == 2u ?
+                "materialized attention session and descriptor are required" :
+                "requested production attention capability is not admitted") &&
+            !result.layers_executed,
+            "CUDA-only attention admits CUDA without inventing CPU/comparison/missing-device support");
+    }
+    return 0;
+}
+
 static int test_device_native_publication_identity_hash(void)
 {
     yvex_attention_publication publication = {
@@ -2619,6 +2650,7 @@ int yvex_test_deepseek_attention(void)
     if (test_attention_workspace_lifecycle() != 0) return 1;
     if (test_probe_seed_contract() != 0) return 1;
     if (test_probe_version_refusal() != 0) return 1;
+    if (test_backend_specific_attention_admission() != 0) return 1;
     if (test_device_native_publication_identity_hash() != 0) return 1;
     if (test_f32_comparison_contract() != 0) return 1;
     if (test_attention_state_comparison_contract() != 0) return 1;

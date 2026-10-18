@@ -1,0 +1,709 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "2978cb29bb05934efb6f95b8edea8e02ec5b40f29aa88fd8652520ece0a08d2b",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "e73b9f7d8775900b06d24f0b0447432a9c55cf2789847f99f7a6e8226f0d7e84",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/source.json",
+          "sha256": "3ab456ae53a9ce9c81755b9d08f64129856b9fbaa5ca1259559ea8853b96369a",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/build.json",
+          "sha256": "47c2cd5427eecafa6ac10afda1fb312bddd1e95c88e67b2f395e7ec70dd1e64c",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-profile-01/coding.hash-table/result.json",
+          "sha256": "e0719ccdac27ad4a0f1d32e255b10be60d7c342da82799a67c447aeb2e33f901",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/closed.json",
+          "sha256": "d96a910a1b91e993fd09039dae6644770d2edbf96a72bff33edbcd64a237d99b",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/operator-restored.json",
+          "sha256": "e49c906dd4950b94c72fd89a876c5fb0565b287479ee00547528f6afe87cd857",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "8946389075d7893c86da08ea6ff817f296711ae3250888617e2c2c59ae02003d",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/loaded-16384.json",
+          "sha256": "5b65ad8ac4df39a5bc02e2cbd3b61e3f20cd4de821c1080c6ec7d543746a18b2",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "2978cb29bb05934efb6f95b8edea8e02ec5b40f29aa88fd8652520ece0a08d2b",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "e73b9f7d8775900b06d24f0b0447432a9c55cf2789847f99f7a6e8226f0d7e84",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/source.json",
+          "sha256": "3ab456ae53a9ce9c81755b9d08f64129856b9fbaa5ca1259559ea8853b96369a",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/build.json",
+          "sha256": "47c2cd5427eecafa6ac10afda1fb312bddd1e95c88e67b2f395e7ec70dd1e64c",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-profile-01/coding.hash-table/result.json",
+          "sha256": "e0719ccdac27ad4a0f1d32e255b10be60d7c342da82799a67c447aeb2e33f901",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/closed.json",
+          "sha256": "d96a910a1b91e993fd09039dae6644770d2edbf96a72bff33edbcd64a237d99b",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/operator-restored.json",
+          "sha256": "e49c906dd4950b94c72fd89a876c5fb0565b287479ee00547528f6afe87cd857",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "8946389075d7893c86da08ea6ff817f296711ae3250888617e2c2c59ae02003d",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/loaded-16384.json",
+          "sha256": "5b65ad8ac4df39a5bc02e2cbd3b61e3f20cd4de821c1080c6ec7d543746a18b2",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "2978cb29bb05934efb6f95b8edea8e02ec5b40f29aa88fd8652520ece0a08d2b",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "e73b9f7d8775900b06d24f0b0447432a9c55cf2789847f99f7a6e8226f0d7e84",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/source.json",
+          "sha256": "3ab456ae53a9ce9c81755b9d08f64129856b9fbaa5ca1259559ea8853b96369a",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/build.json",
+          "sha256": "47c2cd5427eecafa6ac10afda1fb312bddd1e95c88e67b2f395e7ec70dd1e64c",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-profile-01/coding.hash-table/result.json",
+          "sha256": "e0719ccdac27ad4a0f1d32e255b10be60d7c342da82799a67c447aeb2e33f901",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/closed.json",
+          "sha256": "d96a910a1b91e993fd09039dae6644770d2edbf96a72bff33edbcd64a237d99b",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/operator-restored.json",
+          "sha256": "e49c906dd4950b94c72fd89a876c5fb0565b287479ee00547528f6afe87cd857",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "8946389075d7893c86da08ea6ff817f296711ae3250888617e2c2c59ae02003d",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/loaded-16384.json",
+          "sha256": "5b65ad8ac4df39a5bc02e2cbd3b61e3f20cd4de821c1080c6ec7d543746a18b2",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-cohort-target-only-prefill-promessi-2048-20261012",
+  "limitations": [
+    "Three fresh-session samples; median, range and MAD, not a confidence interval or universal speedup.",
+    "Same artifact/binding/numerical class; implementation/build/kernel differ. Instrumented traces excluded from timing.",
+    "No independent checkpoint-matched NLL/PPL/KL or held-out quality. High/maximum, HTTP and installed-product performance not qualified.",
+    "Client-visible fragment arrival is not PTY painting; server/client latency metrics have distinct boundaries.",
+    "Advisory locks and sampled clear GPU process observations do not establish uninterrupted exclusivity; clocks uncontrolled.",
+    "Exact internal output-byte agreement does not independently qualify model behavior.",
+    "4K coding and 16K prefill admitted after authorized operator-model unload; no 32K candidate admission or installed rollout claim."
+  ],
+  "measurements": [
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.499088084,
+        0.502899512,
+        0.503977322
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.503977322,
+        "median": 0.502899512,
+        "median_absolute_deviation": 0.0010778099999999569,
+        "minimum": 0.499088084
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        18.807998583,
+        19.046661835,
+        18.843915083
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 19.046661835,
+        "median": 18.843915083,
+        "median_absolute_deviation": 0.03591649999999902,
+        "minimum": 18.807998583
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        17.063203501,
+        17.29683305,
+        17.100225722
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 17.29683305,
+        "median": 17.100225722,
+        "median_absolute_deviation": 0.037022221000000854,
+        "minimum": 17.063203501
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.12413858899999752,
+        0.12671767899999864,
+        0.12282156499999886
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.12671767899999864,
+        "median": 0.12413858899999752,
+        "median_absolute_deviation": 0.0013170239999986677,
+        "minimum": 0.12282156499999886
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.1163098886666667,
+        0.11664818140000008,
+        0.11623617179999997
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.11664818140000008,
+        "median": 0.1163098886666667,
+        "median_absolute_deviation": 7.371686666672594e-05,
+        "minimum": 0.11623617179999997
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        16.564088409,
+        16.79404781,
+        16.59607624
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 16.79404781,
+        "median": 16.59607624,
+        "median_absolute_deviation": 0.03198783099999858,
+        "minimum": 16.564088409
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        16.564088409,
+        16.79404781,
+        16.59607624
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 16.79404781,
+        "median": 16.59607624,
+        "median_absolute_deviation": 0.03198783099999858,
+        "minimum": 16.564088409
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        17.063203501,
+        17.29683305,
+        17.100225722
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 17.29683305,
+        "median": 17.100225722,
+        "median_absolute_deviation": 0.037022221000000854,
+        "minimum": 17.063203501
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        8.57775118434257,
+        8.557349427248793,
+        8.590653416760691
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 8.590653416760691,
+        "median": 8.57775118434257,
+        "median_absolute_deviation": 0.012902232418120718,
+        "minimum": 8.557349427248793
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        124.55345023887776,
+        122.83161424421587,
+        124.29838703455796
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 124.55345023887776,
+        "median": 124.29838703455796,
+        "median_absolute_deviation": 0.25506320431979645,
+        "minimum": 122.83161424421587
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        16.442740013,
+        16.67323199,
+        16.476480901
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 16.67323199,
+        "median": 16.476480901,
+        "median_absolute_deviation": 0.03374088799999697,
+        "minimum": 16.442740013
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/source-capture",
+    "build": {
+      "build_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+      "build_identity": "d7bdb6fbe6abb229c9e4e3a53e88224facead81e61afb3cf7f152ee0a0e4f1b9",
+      "local_protocol_version": 25,
+      "registry_identity": "1762b4b32baa550b8396af6d786439189efa80ebfcf0580186ff4451a8040de2",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "faf6c6ad77a3576a3a83639ab1a18ec3b6bf4a135e8e16bb8ab7de3d7cf116dd",
+      "source_delta_identity": "77c25bba4225d2fb62d8c249a98bc2baafabc54180d3255446ea445a13f22efd",
+      "source_state": "dirty",
+      "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+      "version": "0.1.0"
+    },
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048-resources.jsonl",
+      "allowed_pids": [
+        441403
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 58,
+      "probe_seconds": 1.314682399155572,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 444379,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "client_build": "d7bdb6fbe6abb229c9e4e3a53e88224facead81e61afb3cf7f152ee0a0e4f1b9",
+    "checkpoint_relationship": {
+      "claims_inherited": false,
+      "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+      "source": "explicit-local-record",
+      "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+    },
+    "engine_record": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/loaded-16384.json",
+      "sha256": "5b65ad8ac4df39a5bc02e2cbd3b61e3f20cd4de821c1080c6ec7d543746a18b2",
+      "result": "PASS"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-profile-01/coding.hash-table/result.json",
+      "sha256": "e0719ccdac27ad4a0f1d32e255b10be60d7c342da82799a67c447aeb2e33f901",
+      "result": "PASS"
+    },
+    "device_uuid": "GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc",
+    "boot_id": "54835689-f267-4b02-be92-24be60646f9d",
+    "reproduction": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048-command.json",
+      "sha256": "c44ac7a6affa0a06e91fa54db22e5efba8025188186b5f95ed8fb9ee0fe07bff",
+      "result": "PASS"
+    },
+    "continuation_control": {
+      "baseline": {
+        "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+        "sha256": "e1ebcdc2fd71bd67b37d43173a9400ecad2ea05dba617df956a6cff43a0bd548",
+        "result": "PASS"
+      },
+      "equal_ordered_fragment_channels_lengths_hashes": true,
+      "scope": "Internal output regression; not upstream checkpoint conformance or independent model quality"
+    },
+    "diagnostics": [
+      {
+        "id": "post-load.rss",
+        "case": "prefill.promessi-2048",
+        "value": 104348483584,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss",
+        "case": "prefill.promessi-2048",
+        "value": 104337884160,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss_file",
+        "case": "prefill.promessi-2048",
+        "value": 103834792960,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss_anon",
+        "case": "prefill.promessi-2048",
+        "value": 458854400,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.locked",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "load.client",
+        "case": "prefill.promessi-2048",
+        "value": 5.523440649,
+        "unit": "s",
+        "definition": "One load command to ready; artifact authentication already read file pages; not cold-storage latency",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/load-16384.json"
+      },
+      {
+        "id": "native.prompt_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.reused_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.prefill_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.generated_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 16,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/cohort-geometry-native-01/target-only/16384-prefill.promessi-2048/events.jsonl"
+      }
+    ],
+    "same_artifact_comparison": {
+      "kind": "explicit-experiment",
+      "varying": [
+        "source_delta",
+        "build",
+        "executable",
+        "backend_implementation",
+        "kernel_bundle"
+      ],
+      "left": "f768f7a889048aba909fd95e84daffff260205326e4abb950e0b028954668807",
+      "right": "99e63375798a24ce722ed1e582902bc24b6466bd7b91ecfda700bc5a4f8ac465",
+      "automatic_ranking": false
+    }
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; cohort executable realization",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "build": "d7bdb6fbe6abb229c9e4e3a53e88224facead81e61afb3cf7f152ee0a0e4f1b9",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 16384,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "0fdacecf85222c9626928793d976314b6dc42faa19936872d92cd15163139ed7",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "a9991d87a2d83742c833e66c148e78e05ffc7f98dcd8eb3b45ea21803a5ba723",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v25",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "77c25bba4225d2fb62d8c249a98bc2baafabc54180d3255446ea445a13f22efd",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+    "strategy": "target-only",
+    "suite": "ba06670744e623b715778ff9f208f54da79ac0d9899184436ca4b7b229c04c1e",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "99e63375798a24ce722ed1e582902bc24b6466bd7b91ecfda700bc5a4f8ac465",
+  "title": "0731 MXFP4/Q2 native cohort realization: target-only / prefill.promessi-2048 / three fresh sessions"
+}

@@ -241,6 +241,16 @@ void yvex_backend_workspace_detach(yvex_backend *backend)
     backend->workspace_peak = 0ull;
     backend->workspace_generation = 0ull;
 }
+
+int yvex_backend_workspace_summary_get(
+    const yvex_backend *backend, yvex_backend_workspace_summary *summary)
+{
+    if (!backend || !summary) return 0;
+    *summary = (yvex_backend_workspace_summary){backend->workspace_device_tensor != NULL,
+        backend->workspace_bytes, backend->workspace_cursor, backend->workspace_peak,
+        backend->workspace_generation};
+    return 1;
+}
 /*
  * Acquire one aligned stable subrange without allocating or resizing the workspace.
  *

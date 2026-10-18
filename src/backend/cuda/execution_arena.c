@@ -7,6 +7,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+static int attention_recipe_query_reusable(const yvex_attention_workspace_recipe *recipe)
+{
+    const yvex_attention_workspace_component *query = NULL, *values = NULL;
+    if (recipe->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1 ||
+        !attention_query_reusable(YVEX_BACKEND_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1,
+                                  recipe->evidence_level)) return 0;
+    for (unsigned int i = 0u; i < recipe->component_count; ++i) {
+        const yvex_attention_workspace_component *part = &recipe->components[i];
+        if (part->kind == YVEX_ATTENTION_WORKSPACE_QUERY) query = part;
+        if (part->kind == YVEX_ATTENTION_WORKSPACE_ATTENTION_VALUES) values = part;
+    }
+    return query && values && query->element_width == sizeof(float) &&
+        values->element_width == query->element_width &&
+        values->element_count == query->element_count &&
+        values->alignment == query->alignment &&
+        values->scales_with_tokens == query->scales_with_tokens &&
+        values->lifetime == query->lifetime;
+}
+
 /*
  * Lower one sealed family-neutral workspace recipe to a checked byte extent.
  *
@@ -19,11 +38,13 @@ static int attention_workspace_required_from_recipe(
     unsigned long long *required_bytes, int host, int device_input, yvex_error *err)
 {
     yvex_attention_workspace_recipe candidate;
-    unsigned long long cursor = 0ull;
+    unsigned long long cursor = 0ull, packed_query = 0ull, packed_rows = 0ull, map_budget = 0ull;
+    unsigned long long index_queries = 0ull, index_keys = 0ull;
+    int reuse_query;
     unsigned int index;
     if (required_bytes) *required_bytes = 0ull;
     if (!recipe || !required_bytes || (device_input != 0 && device_input != 1) ||
-        recipe->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3 ||
+        recipe->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5 ||
         !yvex_sha256_hex_valid(recipe->identity)) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cuda.attention.workspace",
                        "one sealed attention workspace recipe is required");
@@ -37,6 +58,7 @@ static int attention_workspace_required_from_recipe(
                        "attention workspace recipe identity is stale");
         return YVEX_ERR_STATE;
     }
+    reuse_query = !host && attention_recipe_query_reusable(recipe);
     for (index = 0u; index < recipe->component_count; ++index) {
         const yvex_attention_workspace_component *component = &recipe->components[index];
         unsigned long long count = component->element_count, bytes, aligned;
@@ -50,6 +72,9 @@ static int attention_workspace_required_from_recipe(
             scale = recipe->token_capacity < YVEX_CUDA_ATTENTION_SELECTION_ROWS
                 ? recipe->token_capacity : YVEX_CUDA_ATTENTION_SELECTION_ROWS;
         unsigned long long mask = component->alignment - 1ull;
+        if (host && component->kind == YVEX_ATTENTION_WORKSPACE_BLOCK_REDUCTION) continue;
+        if (reuse_query && component->kind == YVEX_ATTENTION_WORKSPACE_ATTENTION_VALUES)
+            continue;
         /* CUDA ingress is borrowed from the admitted device activation. Host
          * input jobs retain this component; forensic evidence is unchanged. */
         if (host && device_input && recipe->evidence_level == YVEX_ATTENTION_EVIDENCE_NONE &&
@@ -87,9 +112,48 @@ static int attention_workspace_required_from_recipe(
              !(host && recipe->evidence_level == YVEX_ATTENTION_EVIDENCE_NONE) &&
              !yvex_core_u64_add(bytes, bytes, &bytes)) ||
             cursor > ULLONG_MAX - mask) goto overflow;
+        if (!host && component->kind == YVEX_ATTENTION_WORKSPACE_QUERY &&
+            !yvex_core_u64_mul(count, sizeof(unsigned short), &packed_query)) goto overflow;
+        /* Exact index digits use 3*D+16 bytes per vector, bounded by the
+         * authored F32 extent 4*D for every admitted D>=32. Query tiles reuse
+         * one stream-ordered range; history is prepared again for each tile.
+         * These are backend scratch, not another persisted state component. */
+        if (!host && component->kind == YVEX_ATTENTION_WORKSPACE_INDEX_QUERY &&
+            !yvex_core_u64_mul(count, component->element_width, &index_queries)) goto overflow;
+        if (!host && component->kind == YVEX_ATTENTION_WORKSPACE_INDEXER_VALUES &&
+            !yvex_core_u64_mul(count, component->element_width, &index_keys)) goto overflow;
+        if (!host && (component->kind == YVEX_ATTENTION_WORKSPACE_LOCAL_VALUES ||
+                      component->kind == YVEX_ATTENTION_WORKSPACE_COMPRESSED_VALUES) &&
+            !yvex_core_u64_add(packed_rows, count, &packed_rows)) goto overflow;
+        /* The sealed reduction row bounds the causal map (one U32 per key,
+         * independent of heads). Its existing row extent is a conservative
+         * bound; do not infer key geometry by decoding a byte-size formula. */
+        if (!host && component->kind == YVEX_ATTENTION_WORKSPACE_BLOCK_REDUCTION &&
+            !yvex_core_u64_mul(scale, component->element_width, &map_budget)) goto overflow;
         aligned = (cursor + mask) & ~mask;
         if (aligned > ULLONG_MAX - bytes) goto overflow;
         cursor = aligned + bytes;
+    }
+    if (!host && index_queries && index_keys && recipe->token_capacity >= 8ull) {
+        unsigned long long prepared;
+        /* One stream-ordered range is overwritten after each score/rank
+         * consumer. Retain the full phase-query bound conservatively, but
+         * never charge one persistent copy of the same keys for every tile. */
+        if (!yvex_core_u64_add(index_keys, index_queries, &prepared) ||
+            !yvex_core_u64_add(prepared, 512ull, &prepared) ||
+            !yvex_core_u64_mul(prepared, 2ull, &prepared) ||
+            !yvex_core_u64_add(cursor, 255ull, &cursor) ||
+            !yvex_core_u64_add(cursor & ~255ull, prepared, &cursor)) goto overflow;
+    }
+    if (!host && map_budget) {
+        unsigned long long prepared;
+        if (!yvex_core_u64_add(packed_rows, 63ull, &packed_rows) ||
+            !yvex_core_u64_mul(packed_rows & ~63ull, 1028ull, &prepared) ||
+            !yvex_core_u64_add(prepared, packed_query, &prepared) ||
+            !yvex_core_u64_add(prepared, map_budget, &prepared) ||
+            !yvex_core_u64_mul(prepared, 2ull, &prepared) ||
+            !yvex_core_u64_add(cursor, 255ull, &cursor) ||
+            !yvex_core_u64_add(cursor & ~255ull, prepared, &cursor)) goto overflow;
     }
     if (!host && recipe->evidence_level < YVEX_ATTENTION_EVIDENCE_FULL) {
         unsigned long long decoded = yvex_cuda_decoded_workspace(recipe->token_capacity);
@@ -285,6 +349,10 @@ int yvex_cuda_work_cleanup(yvex_cuda_work *work, yvex_error *err)
             result = rc;
             if (err) *err = cleanup;
         }
+    }
+    if (!work->count) {
+        work->index_workspace = 0ull;
+        work->index_capacity = 0ull;
     }
     if (result == YVEX_OK) yvex_error_clear(err);
     return result;

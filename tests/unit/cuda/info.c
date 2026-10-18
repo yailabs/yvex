@@ -1786,9 +1786,31 @@ int yvex_cuda_test_info(void)
         "yvex_q8_row_matrix") == 0,
         "row-class matrix resolves its distinct exact kernel identity");
     YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
+        yvex_cuda_state(backend), yvex_cuda_state(backend)->mxfp4_row_matrix_shared_function),
+        "yvex_mxfp4_row_matrix_shared") == 0,
+        "shared ROW topology resolves its own immutable kernel identity");
+    YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
         yvex_cuda_state(backend), yvex_cuda_state(backend)->attention_reduce_native_warp_function),
         "yvex_attention_reduce_native_warp") == 0,
         "warp-permuted attention resolves its distinct exact kernel identity");
+    YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
+        yvex_cuda_state(backend), yvex_cuda_state(backend)->attention_reduce_native_candidates_function),
+        "yvex_attention_reduce_native_candidates") == 0,
+        "ordered candidate pipeline retains its exact graph kernel identity");
+    YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
+        yvex_cuda_state(backend), yvex_cuda_state(backend)->attention_reduce_native_warp_512_function),
+        "yvex_attention_reduce_native_warp_512") == 0 &&
+        strcmp(yvex_cuda_kernel_function_identity(yvex_cuda_state(backend),
+        yvex_cuda_state(backend)->mxfp4_tensorcore_shared_rows_function),
+        "yvex_mxfp4_tensorcore_shared_rows") == 0,
+        "specialized geometry and shared cohorts retain exact graph kernel identities");
+    YVEX_TEST_ASSERT(strcmp(yvex_cuda_kernel_function_identity(
+        yvex_cuda_state(backend), yvex_cuda_state(backend)->moe_grouped_up_q2_rows_function),
+        "yvex_moe_grouped_up_q2_rows") == 0 &&
+        strcmp(yvex_cuda_kernel_function_identity(yvex_cuda_state(backend),
+        yvex_cuda_state(backend)->moe_grouped_down_q2_rows_function),
+        "yvex_moe_grouped_down_q2_rows") == 0,
+        "encoded row specialization has a recoverable graph kernel identity");
     if (required_native && required_native[0]) {
         YVEX_TEST_ASSERT(kernel_summary.kernel_bundle_native,
                          "native CUDA validation refuses a PTX-only bundle");

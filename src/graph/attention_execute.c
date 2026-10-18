@@ -260,6 +260,11 @@ context->rc = graph_execution_admit(
     "attention CPU execution cancelled before mutation",
     &context->layer_plan, context->failure, context->err);
 if (context->rc != YVEX_OK) return context->rc;
+if (context->layer_plan->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1)
+    return cpu_chunk_reject(context, YVEX_ATTENTION_FAILURE_NUMERIC, NULL,
+        YVEX_TENSOR_ROLE_UNKNOWN, YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+        context->layer_plan->compute_contract, YVEX_ERR_UNSUPPORTED,
+        "CPU attention does not implement the selected numerical realization");
 context->q_a = yvex_attention_binding_find(
     context->descriptor, YVEX_TENSOR_ROLE_ATTENTION_Q_A, context->layer_plan);
 context->q_a_norm = yvex_attention_binding_find(
@@ -1438,14 +1443,19 @@ if (context->trace.input) {
 static int cuda_token_project(attention_cuda_context *context)
 {
     yvex_backend_host_workspace_summary workspace;
+    yvex_backend_workspace_summary device_workspace;
 if (context->layer->compute_contract !=
-    YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1)
+    YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 && context->layer->compute_contract !=
+    YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1)
     return yvex_attention_cuda_reject(
         context, YVEX_ATTENTION_FAILURE_NUMERIC,
         YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
         context->layer->compute_contract, YVEX_ERR_UNSUPPORTED,
         "CUDA attention compute contract has no backend projection");
-context->job.compute_contract = YVEX_BACKEND_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
+context->job.compute_contract = context->layer->compute_contract ==
+    YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1
+    ? YVEX_BACKEND_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1
+    : YVEX_BACKEND_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
 context->job.schema = YVEX_BACKEND_ATTENTION_JOB_SCHEMA;
 context->job.phase = (yvex_backend_attention_phase)context->opts->execution_phase;
 context->job.candidate_block_visible = context->opts->candidate_block_visible;
@@ -1495,6 +1505,8 @@ context->job.residual_stream_count = context->layer->residual_stream_count;
 context->job.residual_stream_width = context->layer->residual_stream_width;
 context->job.residual_expanded_width = context->layer->residual_expanded_width;
 context->job.mhc_mixing_rows = context->layer->mhc_mixing_rows;
+context->job.mhc_projection = context->layer->mhc_projection;
+context->job.matrix_projection = context->layer->matrix_projection;
 context->job.mhc_sinkhorn_iterations = context->layer->mhc_sinkhorn_iterations;
 context->job.rms_epsilon = context->layer->rms_norm_epsilon;
 context->job.mhc_epsilon = context->layer->mhc_epsilon;
@@ -1561,7 +1573,12 @@ if (!yvex_backend_host_workspace_summary_get(context->backend, &workspace) ||
         YVEX_ERR_STATE,
         "CUDA attention requires its sealed session-owned pinned staging workspace");
 context->job.max_host_bytes = workspace.capacity;
-context->job.max_device_bytes = 1024ull * 1024ull * 1024ull;
+if (!yvex_backend_workspace_summary_get(context->backend, &device_workspace) ||
+    !device_workspace.attached || !device_workspace.capacity || !device_workspace.generation)
+    return yvex_attention_cuda_reject(
+        context, YVEX_ATTENTION_FAILURE_SCRATCH, 1ull, 0ull, YVEX_ERR_STATE,
+        "CUDA attention requires its sealed session-owned device workspace");
+context->job.max_device_bytes = device_workspace.capacity;
 for (context->i = 0u; context->i < sizeof(cuda_roles) / sizeof(cuda_roles[0]);
      ++context->i) {
     const attention_cuda_role *role = &cuda_roles[context->i];

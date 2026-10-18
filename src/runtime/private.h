@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <yvex/internal/backend.h>
+#include <yvex/internal/execution_batch.h>
 #include <yvex/internal/decoder_plan.h>
 #include <yvex/internal/decoder_execution.h>
 #include <yvex/internal/decode.h>
@@ -275,21 +276,22 @@ int yvex_runtime_private_residency_backing_bytes(
     yvex_runtime_weight_placement placement, unsigned long long *bytes,
     yvex_error *err);
 
-#define YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3 3u
+#define YVEX_ENGINE_SPECIALIZATION_SCHEMA_V4 4u
 #define YVEX_ENGINE_IMPLEMENTATION_CAP 8u
-#define YVEX_ENGINE_PREFILL_MAXIMUM_WIDTH 1024ull
+#define YVEX_ENGINE_PREFILL_MAXIMUM_WIDTH YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH
 typedef struct {
     unsigned int schema_version;
     yvex_engine_implementation implementation, fallback_implementation;
     yvex_execution_activation_class activation, fallback_activation;
     unsigned long long supported_width_mask, worklist_width_mask, matrix_tile_minimum;
+    unsigned long long prefill_matrix_tile_minimum;
     unsigned long long prefill_width_mask, prefill_worklist_width_mask;
     unsigned long long prefill_maximum_width;
     char identity[YVEX_SHA256_HEX_CAP];
 } yvex_engine_implementation_record;
 unsigned long long yvex_runtime_specialization_phase_width_mask(
     const yvex_engine_implementation_record *record,
-    yvex_execution_phase phase, int worklist);
+    yvex_execution_phase phase, int worklist, unsigned long long *matrix_minimum);
 typedef struct {
     unsigned int schema_version;
     yvex_backend_kind backend;

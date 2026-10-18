@@ -4,13 +4,11 @@
  */
 #ifndef INCLUDE_YVEX_INTERNAL_COMPILATION_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_COMPILATION_H_INCLUDED
-
 #include <stddef.h>
 #include <yvex/core.h>
 #include <yvex/model.h>
 #include <yvex/source.h>
 #include <yvex/internal/source_payload.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -569,6 +567,8 @@ typedef struct yvex_compilation_runtime_binding_request {
     unsigned long long family_adapter_id;
     unsigned long long family_adapter_version;
     unsigned int source_stream_count;
+    /* Zero preserves the family's default; a nonzero class must be admitted. */
+    unsigned int attention_compute, mhc_projection, matrix_projection;
     int rebind_existing_artifact;
     /* Borrowed complete production proof; NULL retains family catalog admission. */
     const struct yvex_artifact_admission_request *artifact_production;

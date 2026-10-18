@@ -334,7 +334,8 @@ static int worklist_test_multi_session_sources(void)
 
 static int worklist_test_prompt_population(unsigned int count)
 {
-    enum { MAX_ROWS = 256, TOPK = 2, MAX_PAIRS = MAX_ROWS * TOPK };
+    enum { MAX_ROWS = YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH,
+           TOPK = 2, MAX_PAIRS = MAX_ROWS * TOPK };
     const unsigned int ROWS = count, PAIRS = count * TOPK;
     unsigned long long selected[MAX_PAIRS], experts[2], offsets[3], populations[2];
     unsigned long long pairs[MAX_PAIRS], rows[MAX_PAIRS], destinations[MAX_PAIRS];
@@ -385,7 +386,7 @@ static int worklist_test_prompt_population(unsigned int count)
             !yvex_expert_worklist_width_admitted(&policy, YVEX_EXECUTION_PHASE_PREFILL, ROWS + 1ull) &&
             !yvex_expert_worklist_width_admitted(&policy, YVEX_EXECUTION_PHASE_VERIFY, ROWS),
             "wide admission is bounded and phase-specific");
-        changed.prefill_maximum_width++;
+        changed.prefill_maximum_width = ROWS == MAX_ROWS ? ROWS - 1ull : ROWS + 1ull;
         YVEX_TEST_ASSERT(yvex_expert_worklist_policy_validate(&changed, &err) == YVEX_ERR_FORMAT,
             "dense extent belongs to the sealed identity");
         changed.prefill_maximum_width = YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH + 1ull;
@@ -438,5 +439,6 @@ int yvex_test_expert_worklist(void)
     if (worklist_test_multi_session_sources() != 0) return 1;
     if (worklist_test_prompt_population(32u) != 0) return 1;
     if (worklist_test_prompt_population(256u) != 0) return 1;
+    if (worklist_test_prompt_population(YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH) != 0) return 1;
     return worklist_test_observation();
 }

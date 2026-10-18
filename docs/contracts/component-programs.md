@@ -216,7 +216,7 @@ separate. Unsupported types, effects, operations, shapes or duplicate output
 bindings refuse during compilation/import.
 
 Compiled model-plan **v8** persists the physical token-forward and optional output
-programs plus the canonical operator schedule inside runtime binding v17, without
+programs plus the canonical operator schedule inside runtime binding v18, without
 a redundant standalone FFN program. Model-plan v7 introduced the physical
 forward/output representation and remains an authenticated import format; v8 is
 the current native producer. Its version is independent from package PEIR v5

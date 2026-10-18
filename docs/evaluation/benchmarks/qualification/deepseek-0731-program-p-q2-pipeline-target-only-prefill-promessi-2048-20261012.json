@@ -1,0 +1,713 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "d9c9363d708c7bdee39e95f8ef2bf5811d87786c4813bbcc8704577310ff4780",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "c3ff9ec67ec6ffec175d6d42be7f61f184cc3190ced614b44967234e189aea50",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/source.json",
+          "sha256": "6b9c65f74157a0c3b52e3014c74f23a754febbb1fd3da1468f642e8426c7a081",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/build.json",
+          "sha256": "03bccca88d09c0efc240a2c51e18499b2b01e0e1cea4cfa1afa194c8799d725c",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-kernel-identity-01/stdout.jsonl",
+          "sha256": "47825e7d73a98527ec0bd04c555c74f46dc2adaa756ccb1465d3dabf82208d27",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/closed.json",
+          "sha256": "c337b0566bee1728db6d9baa89c1fedb825c3bfd9d1b51c895926fc8a27605e3",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/operator-restored.json",
+          "sha256": "64881aab3a94a0e84dc7875ae9737273eab851c1b90ea4f730c69b75c541f9e7",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "b393e377c1698db8c255048111e9f8f109897f1dedf50b23aaf7be4878784dab",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/loaded-16384.json",
+          "sha256": "86acf9607cb1f1fee413a3cb418b2b7b91150884f97e9dfb008963072f838f8b",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "d9c9363d708c7bdee39e95f8ef2bf5811d87786c4813bbcc8704577310ff4780",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "c3ff9ec67ec6ffec175d6d42be7f61f184cc3190ced614b44967234e189aea50",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/source.json",
+          "sha256": "6b9c65f74157a0c3b52e3014c74f23a754febbb1fd3da1468f642e8426c7a081",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/build.json",
+          "sha256": "03bccca88d09c0efc240a2c51e18499b2b01e0e1cea4cfa1afa194c8799d725c",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-kernel-identity-01/stdout.jsonl",
+          "sha256": "47825e7d73a98527ec0bd04c555c74f46dc2adaa756ccb1465d3dabf82208d27",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/closed.json",
+          "sha256": "c337b0566bee1728db6d9baa89c1fedb825c3bfd9d1b51c895926fc8a27605e3",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/operator-restored.json",
+          "sha256": "64881aab3a94a0e84dc7875ae9737273eab851c1b90ea4f730c69b75c541f9e7",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "b393e377c1698db8c255048111e9f8f109897f1dedf50b23aaf7be4878784dab",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/loaded-16384.json",
+          "sha256": "86acf9607cb1f1fee413a3cb418b2b7b91150884f97e9dfb008963072f838f8b",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/receipt.json",
+          "sha256": "d9c9363d708c7bdee39e95f8ef2bf5811d87786c4813bbcc8704577310ff4780",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+          "sha256": "c3ff9ec67ec6ffec175d6d42be7f61f184cc3190ced614b44967234e189aea50",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/source.json",
+          "sha256": "6b9c65f74157a0c3b52e3014c74f23a754febbb1fd3da1468f642e8426c7a081",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/build.json",
+          "sha256": "03bccca88d09c0efc240a2c51e18499b2b01e0e1cea4cfa1afa194c8799d725c",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-kernel-identity-01/stdout.jsonl",
+          "sha256": "47825e7d73a98527ec0bd04c555c74f46dc2adaa756ccb1465d3dabf82208d27",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/closed.json",
+          "sha256": "c337b0566bee1728db6d9baa89c1fedb825c3bfd9d1b51c895926fc8a27605e3",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/operator-restored.json",
+          "sha256": "64881aab3a94a0e84dc7875ae9737273eab851c1b90ea4f730c69b75c541f9e7",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048-resources.jsonl.summary.json",
+          "sha256": "b393e377c1698db8c255048111e9f8f109897f1dedf50b23aaf7be4878784dab",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/loaded-16384.json",
+          "sha256": "86acf9607cb1f1fee413a3cb418b2b7b91150884f97e9dfb008963072f838f8b",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-q2-pipeline-target-only-prefill-promessi-2048-20261012",
+  "limitations": [
+    "Three fresh-session samples; median, range and MAD, not a confidence interval or universal speedup.",
+    "Same artifact/binding/numerical class; implementation/build/kernel differ. Instrumented traces excluded from timing.",
+    "No independent checkpoint-matched NLL/PPL/KL or held-out quality. High/maximum, HTTP and installed-product performance not qualified.",
+    "Client-visible fragment arrival is not PTY painting; server/client latency metrics have distinct boundaries.",
+    "Advisory locks and sampled clear GPU process observations do not establish uninterrupted exclusivity; clocks uncontrolled.",
+    "Exact internal output-byte agreement does not independently qualify model behavior.",
+    "4K coding and 16K prefill admitted after authorized operator-model unload; no 32K candidate admission or installed rollout claim."
+  ],
+  "measurements": [
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.471413617,
+        0.485425953,
+        0.50461772
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.50461772,
+        "median": 0.485425953,
+        "median_absolute_deviation": 0.014012336000000014,
+        "minimum": 0.471413617
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        15.946778946,
+        15.957594552,
+        15.995150729
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 15.995150729,
+        "median": 15.957594552,
+        "median_absolute_deviation": 0.010815605999999534,
+        "minimum": 15.946778946
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        14.351557116,
+        14.370735433,
+        14.411183565
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 14.411183565,
+        "median": 14.370735433,
+        "median_absolute_deviation": 0.019178316999999723,
+        "minimum": 14.351557116
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.12664028299999863,
+        0.11061168099999996,
+        0.11208782799999994
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.12664028299999863,
+        "median": 0.11208782799999994,
+        "median_absolute_deviation": 0.0014761469999999832,
+        "minimum": 0.11061168099999996
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        0.10633967706666662,
+        0.10578431660000003,
+        0.1055905414666667
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.10633967706666662,
+        "median": 0.10578431660000003,
+        "median_absolute_deviation": 0.00019377513333332375,
+        "minimum": 0.1055905414666667
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        13.880090011,
+        13.885249478,
+        13.906529828
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 13.906529828,
+        "median": 13.885249478,
+        "median_absolute_deviation": 0.005159467000000362,
+        "minimum": 13.880090011
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        13.880090011,
+        13.885249478,
+        13.906529828
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 13.906529828,
+        "median": 13.885249478,
+        "median_absolute_deviation": 0.005159467000000362,
+        "minimum": 13.880090011
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        14.351557116,
+        14.370735433,
+        14.411183565
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 14.411183565,
+        "median": 14.370735433,
+        "median_absolute_deviation": 0.019178316999999723,
+        "minimum": 14.351557116
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        9.376154259527752,
+        9.427970916489253,
+        9.386152231936922
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 9.427970916489253,
+        "median": 9.386152231936922,
+        "median_absolute_deviation": 0.00999797240917033,
+        "minimum": 9.376154259527752
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        148.75103408788183,
+        148.68376629401638,
+        148.5675955241478
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 148.75103408788183,
+        "median": 148.68376629401638,
+        "median_absolute_deviation": 0.06726779386545445,
+        "minimum": 148.5675955241478
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-2048/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 16,
+      "prompt_identity": "251b45cde252f1b5947c7b875e62244085767361337574ca87116c8d71c5ca32",
+      "reference_identity": null,
+      "samples": [
+        13.767971514,
+        13.774200446,
+        13.784971028
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 13.784971028,
+        "median": 13.774200446,
+        "median_absolute_deviation": 0.006228932000000853,
+        "minimum": 13.767971514
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/source-capture",
+    "build": {
+      "build_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+      "build_identity": "aad663f4c196b49f52bca1b6e71160fdc66deb231ea782bf76d32a614638d666",
+      "local_protocol_version": 25,
+      "registry_identity": "1762b4b32baa550b8396af6d786439189efa80ebfcf0580186ff4451a8040de2",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "0c5ba0c36c3aa79952aab60ad1b073a1ffd0604a4114da69db504613f1011095",
+      "source_delta_identity": "0c7c95cf3ee71b51ac56861940abff3040d17b8487d65b875cd4edb1f6128913",
+      "source_state": "dirty",
+      "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+      "version": "0.1.0"
+    },
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048-resources.jsonl",
+      "allowed_pids": [
+        954726
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 49,
+      "probe_seconds": 1.1210516850405838,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 957930,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "client_build": "aad663f4c196b49f52bca1b6e71160fdc66deb231ea782bf76d32a614638d666",
+    "checkpoint_relationship": {
+      "claims_inherited": false,
+      "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+      "source": "explicit-local-record",
+      "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+    },
+    "engine_record": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/loaded-16384.json",
+      "sha256": "86acf9607cb1f1fee413a3cb418b2b7b91150884f97e9dfb008963072f838f8b",
+      "result": "PASS"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-kernel-identity-01/stdout.jsonl",
+      "sha256": "47825e7d73a98527ec0bd04c555c74f46dc2adaa756ccb1465d3dabf82208d27",
+      "result": "PASS"
+    },
+    "device_uuid": "GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc",
+    "boot_id": "54835689-f267-4b02-be92-24be60646f9d",
+    "reproduction": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048-command.json",
+      "sha256": "11829c00b0f9a711dfdd3c4c1eac6add80ad73d525398d12ea3047914bf24d41",
+      "result": "PASS"
+    },
+    "continuation_control": {
+      "baseline": {
+        "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/target-only/16384-prefill.promessi-2048/events.jsonl",
+        "sha256": "e1ebcdc2fd71bd67b37d43173a9400ecad2ea05dba617df956a6cff43a0bd548",
+        "result": "PASS"
+      },
+      "equal_ordered_fragment_channels_lengths_hashes": true,
+      "scope": "Internal output regression; not upstream checkpoint conformance or independent model quality"
+    },
+    "diagnostics": [
+      {
+        "id": "post-load.rss",
+        "case": "prefill.promessi-2048",
+        "value": 104355524608,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss",
+        "case": "prefill.promessi-2048",
+        "value": 104345170944,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss_file",
+        "case": "prefill.promessi-2048",
+        "value": 103841879040,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss_anon",
+        "case": "prefill.promessi-2048",
+        "value": 459055104,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.locked",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "load.client",
+        "case": "prefill.promessi-2048",
+        "value": 5.507824477,
+        "unit": "s",
+        "definition": "One load command to ready; artifact authentication already read file pages; not cold-storage latency",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/load-16384.json"
+      },
+      {
+        "id": "native.prompt_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.reused_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.prefill_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 2048,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl"
+      },
+      {
+        "id": "native.generated_tokens",
+        "case": "prefill.promessi-2048",
+        "value": 16,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-pipeline-native-01/target-only/16384-prefill.promessi-2048/events.jsonl"
+      }
+    ],
+    "selection": {
+      "state": "retained_characterized",
+      "reason": "Same-artifact three-sample complete-model prefill improvement with unchanged ordered output fragments. Sequential campaign, not paired confidence evidence; decode remains below target. No independent checkpoint quality or automatic recommendation."
+    },
+    "predecessor_comparison": {
+      "kind": "explicit-experiment",
+      "varying": [
+        "source_delta",
+        "build",
+        "executable",
+        "backend_implementation",
+        "kernel_bundle"
+      ],
+      "left": "5ae7210b37049487874622cdc516765bbbb8cc673109cc40f130fe044f53df2c",
+      "right": "086daed7474aa8b3d411df615ff7643323d33dcec78e8a03fb450587776e39e2",
+      "automatic_ranking": false
+    }
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; q2-pipeline executable realization",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "build": "aad663f4c196b49f52bca1b6e71160fdc66deb231ea782bf76d32a614638d666",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 16384,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "95ec1ba0d94b272d379db6a30c53f2067326c0701f235d8f64dbaf3db7cc7b2f",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "17cbe4c8f5c2bbc394f083fb5f451abe68ff57030b9882fd94545bd99f7c29dc",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v25",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "0c7c95cf3ee71b51ac56861940abff3040d17b8487d65b875cd4edb1f6128913",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+    "strategy": "target-only",
+    "suite": "ba06670744e623b715778ff9f208f54da79ac0d9899184436ca4b7b229c04c1e",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "086daed7474aa8b3d411df615ff7643323d33dcec78e8a03fb450587776e39e2",
+  "title": "0731 MXFP4/Q2 native q2-pipeline realization: target-only / prefill.promessi-2048 / three fresh sessions"
+}

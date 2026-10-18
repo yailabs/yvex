@@ -95,6 +95,8 @@ int yvex_moe_ingress_program_import(yvex_program_physical **out, const yvex_moe_
     unsigned long long expanded, mixing;
     if (out) *out = NULL;
     if (!out || !l || !maximum_rows || !l->routed_experts ||
+        l->mhc_projection > YVEX_MHC_PROJECTION_F32_ACC_V1 ||
+        (l->mhc_projection && l->qtypes[YVEX_MOE_WEIGHT_MHC_FUNCTION] != YVEX_GGUF_QTYPE_F32) ||
         !yvex_core_u64_mul(l->hidden_width, l->residual_streams, &expanded) ||
         expanded != l->expanded_width || !yvex_core_u64_add(l->residual_streams, 2u, &mixing) ||
         !yvex_core_u64_mul(mixing, l->residual_streams, &mixing) || mixing != l->mhc_mixing_rows)
@@ -155,8 +157,10 @@ int yvex_moe_ingress_program_import(yvex_program_physical **out, const yvex_moe_
             .operand_count = step == 1u || step == 4u || step == 6u ? 2u : 1u,
             .result_types = types + destinations[step], .result_count = 1u};
         yvex_ir_attribute reduction = {.name = "reduction", .kind = YVEX_IR_ATTR_U64,
-            .value.integer = YVEX_IR_REDUCTION_ROW_DOT};
-        if (step == 1u || step == 6u) { r.attributes = &reduction; r.attribute_count = 1u; }
+            .value.integer = step == 1u && l->mhc_projection ? YVEX_IR_REDUCTION_F32_ACC : YVEX_IR_REDUCTION_ROW_DOT};
+        if (step == 1u || step == 6u) {
+            r.attributes = &reduction; r.attribute_count = 1u;
+        }
         if (step == 3u) {
             args[1] = values[3]; args[2] = values[5]; args[3] = values[6];
             r.operand_count = 4u; r.result_count = 3u; r.attributes = attrs; r.attribute_count = 4u;

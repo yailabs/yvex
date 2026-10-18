@@ -1,8 +1,5 @@
-/*
- * Compile irreducible DeepSeek model semantics into generic transformation and execution plans.
- * Mutable plan storage and validation remain owned by generic compiler sinks; this projection
- * supplies only source roles, topology, numerical policy, and operator composition.
- */
+/* Project DeepSeek source roles, topology, numerical policy and composition.
+ * Generic compiler sinks own mutable plan storage and validation. */
 #include "src/graph/private.h"
 #include <yvex/internal/artifact_lowering.h>
 #include <yvex/internal/compiler_source.h>
@@ -22,6 +19,12 @@
 #include <string.h>
 
 static const yvex_family_descriptor yvex_graph_family_descriptor_deepseek_v4;
+typedef struct {
+    const yvex_deepseek_v4_ir *ir;
+    unsigned int attention_compute;
+    unsigned int mhc_projection;
+    unsigned int matrix_projection;
+} deepseek_semantic_context;
 
 static int graph_recipe_project(const yvex_deepseek_v4_layer_spec *layer,
                                 unsigned long long ordinal, yvex_tensor_scope scope,
@@ -97,16 +100,22 @@ static int graph_recipe_project(const yvex_deepseek_v4_layer_spec *layer,
 static int graph_recipe_layer(const void *context, unsigned long long index,
                               yvex_semantic_attention_layer *out)
 {
-    const yvex_deepseek_v4_ir *ir = context;
-    return graph_recipe_project(yvex_model_register_deepseek_v4()->ir.layer_at(ir, index),
+    const deepseek_semantic_context *selected = context;
+    int rc = graph_recipe_project(yvex_model_register_deepseek_v4()->ir.layer_at(selected->ir, index),
                                 index, YVEX_TENSOR_SCOPE_MAIN_LAYER,
                                 YVEX_ATTENTION_NO_TENSOR_INDEX, out);
+    if (rc && selected->attention_compute)
+        out->compute_contract = (yvex_attention_compute_contract)selected->attention_compute;
+    if (rc) out->mhc_projection = (yvex_mhc_projection_contract)selected->mhc_projection;
+    if (rc) out->matrix_projection = (yvex_matrix_projection_contract)selected->matrix_projection;
+    return rc;
 }
 static int graph_recipe_draft_layer(const void *context, unsigned long long index,
                                     yvex_semantic_attention_layer *out)
 {
+    const deepseek_semantic_context *selected = context;
     const yvex_deepseek_v4_auxiliary_spec *draft =
-        yvex_model_register_deepseek_v4()->ir.auxiliary_at(context, index);
+        yvex_model_register_deepseek_v4()->ir.auxiliary_at(selected->ir, index);
     return draft && graph_recipe_project(&draft->layer, index, YVEX_TENSOR_SCOPE_DRAFT,
                                          draft->predictor_index, out);
 }
@@ -163,6 +172,8 @@ static int deepseek_moe_layer(unsigned long long index, const yvex_runtime_descr
     out->residual_streams = attention->residual_stream_count;
     out->expanded_width = attention->residual_expanded_width; out->mhc_mixing_rows = attention->mhc_mixing_rows;
     out->mhc_sinkhorn_iterations = attention->mhc_sinkhorn_iterations;
+    out->mhc_projection = attention->mhc_projection;
+    if (out->mhc_projection) out->schema_version = YVEX_MOE_PLAN_SCHEMA_V2;
     out->rms_epsilon = attention->rms_norm_epsilon; out->mhc_epsilon = attention->mhc_epsilon;
     out->mhc_post_multiplier = attention->mhc_residual_post_multiplier;
     out->routed_experts = runtime->routed_experts; out->shared_experts = model->shared_experts;
@@ -314,7 +325,8 @@ static int deepseek_0731_source_open(yvex_family_compilation_source *out,
 static void deepseek_compilation_source_close(void *owner);
 static int deepseek_compilation_semantic_model(
     yvex_semantic_model_ir **out,
-    const yvex_source_verification *verification, yvex_error *err);
+    const yvex_source_verification *verification, unsigned int attention_compute,
+    unsigned int mhc_projection, unsigned int matrix_projection, yvex_error *err);
 static int deepseek_compilation_descriptor(
     yvex_runtime_descriptor **out, const yvex_complete_artifact_admission *admission,
     yvex_materialization_session *materialization, const void *lowering_context,
@@ -329,7 +341,7 @@ static int deepseek_compilation_quant_policy(
     const yvex_quant_policy *policy, const char *imatrix_identity,
     yvex_error *err);
 #define DEEPSEEK_PIPELINE_FIELDS \
-    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1, \
+    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V2, \
     .source_close = deepseek_compilation_source_close, \
     .artifact_admit = yvex_artifact_admit_deepseek, \
     .semantic_model_build = deepseek_compilation_semantic_model, \
@@ -1359,13 +1371,14 @@ int yvex_runtime_descriptor_build_deepseek(
 
 static int deepseek_semantic_model_build(
     yvex_semantic_model_ir **out, const yvex_deepseek_v4_ir *semantic,
-    yvex_error *err)
+    unsigned int attention_compute, unsigned int mhc_projection, unsigned int matrix_projection, yvex_error *err)
 {
     const yvex_model_family_api *model = yvex_model_register_deepseek_v4();
     yvex_runtime_descriptor_failure failure = {0};
     yvex_model_execution_descriptor execution = {0};
     yvex_semantic_numeric_contract numeric = {0};
     yvex_semantic_model_ir_request request = {0};
+    deepseek_semantic_context selected = {semantic, attention_compute, mhc_projection, matrix_projection};
     yvex_semantic_reference_request references[3];
     const yvex_deepseek_v4_model_spec *facts = model ? model->ir.model(semantic) : NULL;
     char logical[YVEX_SHA256_HEX_CAP];
@@ -1376,6 +1389,15 @@ static int deepseek_semantic_model_build(
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "deepseek.semantic-model",
                        "semantic model output and family architecture are required");
         return YVEX_ERR_INVALID_ARG;
+    }
+    if ((attention_compute && attention_compute != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) ||
+        mhc_projection > YVEX_MHC_PROJECTION_F32_ACC_V1 ||
+        matrix_projection > YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1 ||
+        ((attention_compute || mhc_projection || matrix_projection) &&
+         strcmp(facts->target_id, YVEX_DEEPSEEK_0731_TARGET))) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "deepseek.semantic-model",
+                       "requested numerical realization is not admitted for this checkpoint");
+        return YVEX_ERR_UNSUPPORTED;
     }
     rc = model->transform.architecture_identity(semantic, logical)
              ? YVEX_OK : YVEX_ERR_STATE;
@@ -1389,6 +1411,49 @@ static int deepseek_semantic_model_build(
     if (rc == YVEX_OK)
         rc = deepseek_numeric_contract_build(
             semantic, &numeric, &failure, err);
+    if (rc == YVEX_OK && attention_compute) {
+        yvex_sha256 hash;
+        unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+        yvex_sha256_init(&hash);
+        yvex_sha256_update_text(&hash, "yvex.numeric.attention-online64.target.v1");
+        yvex_sha256_update_text(&hash, numeric.identity);
+        yvex_sha256_update_text(&hash, "59b325083d7103975cba025bd0d60ea343bb82d8fff53088afb7c04bd380c0c2");
+        yvex_sha256_update_u64(&hash, attention_compute);
+        if (!yvex_sha256_final(&hash, digest)) {
+            yvex_error_set(err, YVEX_ERR_STATE, "deepseek.semantic-model",
+                           "selected attention numeric identity derivation failed");
+            return YVEX_ERR_STATE;
+        }
+        yvex_sha256_hex(digest, numeric.identity);
+        numeric.numeric_schema_version = 3u;
+        numeric.compute_policy_count = 2ull; /* Target online64; draft retains V1. */
+    }
+    if (rc == YVEX_OK && matrix_projection) {
+        yvex_sha256 hash;
+        unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+        yvex_sha256_init(&hash);
+        yvex_sha256_update_text(&hash, matrix_projection == YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1
+            ? "yvex.numeric.matrix-prepared-bf16-f32-acc.target.v1" : "yvex.numeric.matrix-bf16-f32-acc.target.v1");
+        yvex_sha256_update_text(&hash, numeric.identity);
+        yvex_sha256_update_u64(&hash, matrix_projection);
+        if (!yvex_sha256_final(&hash, digest)) return YVEX_ERR_STATE;
+        yvex_sha256_hex(digest, numeric.identity);
+        numeric.numeric_schema_version = matrix_projection == YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1 ? 6u : 5u;
+        numeric.compute_policy_count++;
+    }
+    if (rc == YVEX_OK && mhc_projection) {
+        yvex_sha256 hash;
+        unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+        yvex_sha256_init(&hash);
+        yvex_sha256_update_text(&hash, "yvex.numeric.mhc-f32-acc.target.v1");
+        yvex_sha256_update_text(&hash, numeric.identity);
+        yvex_sha256_update_u64(&hash, mhc_projection);
+        if (!yvex_sha256_final(&hash, digest)) return YVEX_ERR_STATE;
+        yvex_sha256_hex(digest, numeric.identity);
+        numeric.numeric_schema_version = matrix_projection == YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1
+            ? 6u : matrix_projection ? 5u : 4u;
+        numeric.compute_policy_count++;
+    }
     if (rc == YVEX_OK) {
         references[0] = (yvex_semantic_reference_request){
             "architecture-paper", facts->paper_revision};
@@ -1405,7 +1470,7 @@ static int deepseek_semantic_model_build(
         request.semantic_payload_identity = execution.identity;
         request.execution_descriptor = &execution;
         request.numeric_contract = &numeric;
-        request.attention_context = semantic;
+        request.attention_context = &selected;
         request.attention_layer = graph_recipe_layer;
         request.attention_layer_count = model->ir.layer_count(semantic);
         request.draft_attention_layer = graph_recipe_draft_layer;
@@ -1420,7 +1485,8 @@ static int deepseek_semantic_model_build(
 
 static int deepseek_compilation_semantic_model(
     yvex_semantic_model_ir **out,
-    const yvex_source_verification *verification, yvex_error *err)
+    const yvex_source_verification *verification, unsigned int attention_compute,
+    unsigned int mhc_projection, unsigned int matrix_projection, yvex_error *err)
 {
     const yvex_model_family_api *model = yvex_model_register_deepseek_v4();
     yvex_deepseek_v4_ir_failure failure = {0};
@@ -1430,7 +1496,7 @@ static int deepseek_compilation_semantic_model(
     if (out) *out = NULL;
     rc = model->ir.build(&semantic, verification, &failure, err);
     if (rc == YVEX_OK)
-        rc = deepseek_semantic_model_build(out, semantic, err);
+        rc = deepseek_semantic_model_build(out, semantic, attention_compute, mhc_projection, matrix_projection, err);
     model->ir.close(semantic);
     return rc;
 }
@@ -1471,46 +1537,6 @@ static int deepseek_compilation_quant_policy(
     return yvex_quant_plan_build_deepseek_policy(
         out, transform, binding, (const yvex_artifact_lowering_map *)lowering_context,
         policy, imatrix_identity, NULL, &failure, err);
-}
-
-static const yvex_quant_artifact_lowering_rule deepseek_quant_lowering_rules[] = {
-    {YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT, YVEX_TRANSFORM_OP_IDENTITY,
-     YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_Q8_0, 0, YVEX_NATIVE_DTYPE_UNKNOWN},
-    {YVEX_ARTIFACT_LOWERING_TRANSFORM_FP8_E4M3_E8M0,
-     YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR,
-     YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_Q8_0, 0, YVEX_NATIVE_DTYPE_UNKNOWN},
-    {YVEX_ARTIFACT_LOWERING_TRANSFORM_EXPERT_MXFP4,
-     YVEX_TRANSFORM_OP_EXPERT_AGGREGATE,
-     YVEX_GGUF_QTYPE_MXFP4, YVEX_GGUF_QTYPE_Q2_K, 1, YVEX_NATIVE_DTYPE_UNKNOWN},
-    {YVEX_ARTIFACT_LOWERING_TRANSFORM_I64_TO_I32, YVEX_TRANSFORM_OP_CHECKED_CAST,
-     YVEX_GGUF_QTYPE_I32, YVEX_GGUF_QTYPE_I32, 1, YVEX_NATIVE_DTYPE_UNKNOWN}};
-
-static const yvex_quant_artifact_lowering_policy deepseek_quant_lowering_policy = {
-    YVEX_DEEPSEEK_QUANT_SOURCE_PROFILE_NAME,
-    YVEX_DEEPSEEK_QUANT_RELEASE_PROFILE_NAME,
-    deepseek_quant_lowering_rules,
-    sizeof(deepseek_quant_lowering_rules) / sizeof(deepseek_quant_lowering_rules[0])};
-
-int yvex_quant_plan_build_deepseek_profile(
-    yvex_quant_plan **out, const yvex_transform_ir *ir,
-    const yvex_transform_binding *binding, const yvex_artifact_lowering_map *map,
-    yvex_quant_profile_kind profile, const yvex_quant_plan_options *options,
-    yvex_quant_failure *failure, yvex_error *err)
-{
-    return yvex_quant_plan_build_artifact_lowering_profile(
-        out, ir, binding, map, &deepseek_quant_lowering_policy,
-        profile, options, failure, err);
-}
-
-int yvex_quant_plan_build_deepseek_policy(
-    yvex_quant_plan **out, const yvex_transform_ir *ir,
-    const yvex_transform_binding *binding, const yvex_artifact_lowering_map *map,
-    const yvex_quant_policy *policy, const char *imatrix_identity,
-    const yvex_quant_plan_options *options, yvex_quant_failure *failure, yvex_error *err)
-{
-    return yvex_quant_plan_build_artifact_lowering_policy(
-        out, ir, binding, map, &deepseek_quant_lowering_policy,
-        policy, imatrix_identity, options, failure, err);
 }
 
 static void deepseek_preset_rule(

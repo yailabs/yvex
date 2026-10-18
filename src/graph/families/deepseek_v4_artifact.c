@@ -4,10 +4,53 @@
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
 #include <yvex/internal/artifact.h>
+#include <yvex/internal/artifact_lowering.h>
+#include <yvex/internal/compilation.h>
+#include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/families/deepseek_v4.h>
 #include <yvex/internal/gguf.h>
 #include <string.h>
+
+static const yvex_quant_artifact_lowering_rule deepseek_quant_lowering_rules[] = {
+    {YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT, YVEX_TRANSFORM_OP_IDENTITY,
+     YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_Q8_0, 0, YVEX_NATIVE_DTYPE_UNKNOWN},
+    {YVEX_ARTIFACT_LOWERING_TRANSFORM_FP8_E4M3_E8M0,
+     YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR,
+     YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_Q8_0, 0, YVEX_NATIVE_DTYPE_UNKNOWN},
+    {YVEX_ARTIFACT_LOWERING_TRANSFORM_EXPERT_MXFP4,
+     YVEX_TRANSFORM_OP_EXPERT_AGGREGATE,
+     YVEX_GGUF_QTYPE_MXFP4, YVEX_GGUF_QTYPE_Q2_K, 1, YVEX_NATIVE_DTYPE_UNKNOWN},
+    {YVEX_ARTIFACT_LOWERING_TRANSFORM_I64_TO_I32, YVEX_TRANSFORM_OP_CHECKED_CAST,
+     YVEX_GGUF_QTYPE_I32, YVEX_GGUF_QTYPE_I32, 1, YVEX_NATIVE_DTYPE_UNKNOWN}};
+
+static const yvex_quant_artifact_lowering_policy deepseek_quant_lowering_policy = {
+    YVEX_DEEPSEEK_QUANT_SOURCE_PROFILE_NAME,
+    YVEX_DEEPSEEK_QUANT_RELEASE_PROFILE_NAME,
+    deepseek_quant_lowering_rules,
+    sizeof(deepseek_quant_lowering_rules) / sizeof(deepseek_quant_lowering_rules[0])};
+
+int yvex_quant_plan_build_deepseek_profile(
+    yvex_quant_plan **out, const yvex_transform_ir *ir,
+    const yvex_transform_binding *binding, const yvex_artifact_lowering_map *map,
+    yvex_quant_profile_kind profile, const yvex_quant_plan_options *options,
+    yvex_quant_failure *failure, yvex_error *err)
+{
+    return yvex_quant_plan_build_artifact_lowering_profile(
+        out, ir, binding, map, &deepseek_quant_lowering_policy,
+        profile, options, failure, err);
+}
+
+int yvex_quant_plan_build_deepseek_policy(
+    yvex_quant_plan **out, const yvex_transform_ir *ir,
+    const yvex_transform_binding *binding, const yvex_artifact_lowering_map *map,
+    const yvex_quant_policy *policy, const char *imatrix_identity,
+    const yvex_quant_plan_options *options, yvex_quant_failure *failure, yvex_error *err)
+{
+    return yvex_quant_plan_build_artifact_lowering_policy(
+        out, ir, binding, map, &deepseek_quant_lowering_policy,
+        policy, imatrix_identity, options, failure, err);
+}
 
 typedef struct {
     unsigned long long snapshot, mapping;

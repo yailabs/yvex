@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 740" role="img" aria-labelledby="title desc">
+<title id="title">DeepSeek 0731 / same-executable numerical binding ablation</title>
+<desc id="desc">characterization; Same-build binding ablation, not equivalent-arithmetic kernel A/B.. Values are printed beside each bar.</desc>
+<style>text{fill:#292434}.bar{fill:#7541ba}@media(prefers-color-scheme:dark){text{fill:#ede8f5}.bar{fill:#ba97f2}}</style>
+<g font-family="Arial, sans-serif">
+<text x="30" y="38" font-size="23" font-weight="700">DeepSeek 0731 / same-executable numerical binding ablation</text>
+<text x="30" y="67" font-size="16">CHARACTERIZATION · tok/s · not an automatic capability promotion</text>
+<text x="30" y="129" font-size="18">original / 2048 tokens</text>
+<rect class="bar" x="330" y="110" width="313.016" height="27" rx="4"/>
+<text x="663.016" y="129" font-size="17">157.616</text>
+<text x="30" y="187" font-size="18">original / 8192 tokens</text>
+<rect class="bar" x="330" y="168" width="286.562" height="27" rx="4"/>
+<text x="636.562" y="187" font-size="17">144.295</text>
+<text x="30" y="245" font-size="18">online64 / 2048 tokens</text>
+<rect class="bar" x="330" y="226" width="345.396" height="27" rx="4"/>
+<text x="695.396" y="245" font-size="17">173.92</text>
+<text x="30" y="303" font-size="18">online64 / 8192 tokens</text>
+<rect class="bar" x="330" y="284" width="332.355" height="27" rx="4"/>
+<text x="682.355" y="303" font-size="17">167.354</text>
+<text x="30" y="361" font-size="18">mhc-f32 / 2048 tokens</text>
+<rect class="bar" x="330" y="342" width="386.381" height="27" rx="4"/>
+<text x="736.381" y="361" font-size="17">194.558</text>
+<text x="30" y="419" font-size="18">mhc-f32 / 8192 tokens</text>
+<rect class="bar" x="330" y="400" width="370.711" height="27" rx="4"/>
+<text x="720.711" y="419" font-size="17">186.668</text>
+<text x="30" y="477" font-size="18">bf16-matrix / 2048 tokens</text>
+<rect class="bar" x="330" y="458" width="434.147" height="27" rx="4"/>
+<text x="784.147" y="477" font-size="17">218.61</text>
+<text x="30" y="535" font-size="18">bf16-matrix / 8192 tokens</text>
+<rect class="bar" x="330" y="516" width="414.059" height="27" rx="4"/>
+<text x="764.059" y="535" font-size="17">208.495</text>
+<text x="30" y="593" font-size="18">phase-prepared / 2048 tokens</text>
+<rect class="bar" x="330" y="574" width="470.000" height="27" rx="4"/>
+<text x="820.000" y="593" font-size="17">236.663</text>
+<text x="30" y="651" font-size="18">phase-prepared / 8192 tokens</text>
+<rect class="bar" x="330" y="632" width="443.583" height="27" rx="4"/>
+<text x="793.583" y="651" font-size="17">223.361</text>
+</g></svg>

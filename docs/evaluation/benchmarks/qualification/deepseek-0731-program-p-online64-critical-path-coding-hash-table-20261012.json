@@ -1,0 +1,498 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-online64-critical-path-coding-hash-table-20261012",
+  "limitations": [
+    "Profiled diagnostic with exact input/output population, not an uninstrumented performance sample.",
+    "Overlapping host scopes and GPU intervals cannot be summed as disjoint request phases.",
+    "Kernel duration/population does not establish physical bandwidth, occupancy or a hardware ceiling.",
+    "No independent checkpoint quality or installed-runtime promotion."
+  ],
+  "measurements": [],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": true,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/source-capture",
+    "restoration": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/operator-restored.json",
+      "sha256": "c5453fc53b15d9771ddf5091c85d427c7b585469802bd543d14fce3e2639b9e6",
+      "result": "PASS"
+    },
+    "traces": [
+      {
+        "case": "coding.hash-table",
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/identity.json",
+          "sha256": "ea9eeb29c4a0320d8d2542fc1a08d3b4b861bca4dc445b1054cd0051ac06cc23",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/closed.json",
+          "sha256": "49edb9dada03eb7c4caf464f85f876a25b812b770d3f815cef88d80af1280fa7",
+          "result": "PASS"
+        },
+        "trace": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv",
+          "sha256": "1e138a3e186e413f9dcd26486b81d1360a211c4166eb9ff266f4cfda312ed76b",
+          "result": "PASS"
+        },
+        "result": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/result.json",
+          "sha256": "78763e130fc205ae229dcd8f88acf35240327b7dd5098d54f53fd3185bfd32b6",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/resources.jsonl.summary.json",
+          "sha256": "91efbbc3fed8207e5be608a47f686675b73aebcabf4a29812f0d575fbb2c6b81",
+          "result": "PASS"
+        },
+        "context": 4096,
+        "prompt_tokens": 31,
+        "generated_tokens": 64,
+        "kernel_sum_ns": 6216013194,
+        "kernels": [
+          {
+            "name": "yvex_qtype_matvec",
+            "nanoseconds": 2228079443,
+            "count": 34386
+          },
+          {
+            "name": "yvex_moe_grouped_up_q2_rows",
+            "nanoseconds": 777138642,
+            "count": 2795
+          },
+          {
+            "name": "yvex_decoded_mxfp4_rows",
+            "nanoseconds": 486599388,
+            "count": 2752
+          },
+          {
+            "name": "yvex_mxfp4_q8_rows",
+            "nanoseconds": 439455283,
+            "count": 4096
+          },
+          {
+            "name": "yvex_moe_grouped_down_q2_rows",
+            "nanoseconds": 420957924,
+            "count": 2795
+          },
+          {
+            "name": "yvex_attention_block_qk",
+            "nanoseconds": 399177156,
+            "count": 2795
+          },
+          {
+            "name": "yvex_residual_mhc_pre",
+            "nanoseconds": 376421099,
+            "count": 5590
+          },
+          {
+            "name": "yvex_attention_yarn_rope",
+            "nanoseconds": 195791274,
+            "count": 10464
+          },
+          {
+            "name": "yvex_attention_activation_quantize",
+            "nanoseconds": 138002784,
+            "count": 4874
+          },
+          {
+            "name": "yvex_attention_weighted_norm",
+            "nanoseconds": 132473298,
+            "count": 11894
+          },
+          {
+            "name": "yvex_qtype_tensorcore_rows",
+            "nanoseconds": 94447419,
+            "count": 236
+          },
+          {
+            "name": "yvex_attention_block_pv",
+            "nanoseconds": 89007746,
+            "count": 2795
+          },
+          {
+            "name": "yvex_q8_quantize",
+            "nanoseconds": 62080190,
+            "count": 26563
+          },
+          {
+            "name": "yvex_expert_worklist_build_cuda",
+            "nanoseconds": 46235449,
+            "count": 2795
+          },
+          {
+            "name": "yvex_moe_route_rows",
+            "nanoseconds": 42853046,
+            "count": 2795
+          },
+          {
+            "name": "yvex_moe_grouped_up_shared",
+            "nanoseconds": 31304189,
+            "count": 43
+          },
+          {
+            "name": "yvex_q8_row_matrix",
+            "nanoseconds": 24262963,
+            "count": 129
+          },
+          {
+            "name": "yvex_residual_mhc_post",
+            "nanoseconds": 22606190,
+            "count": 5590
+          },
+          {
+            "name": "yvex_attention_candidate_scores",
+            "nanoseconds": 21513957,
+            "count": 1365
+          },
+          {
+            "name": "yvex_encoded_row_decode",
+            "nanoseconds": 21370889,
+            "count": 12418
+          },
+          {
+            "name": "yvex_transformer_final",
+            "nanoseconds": 20795923,
+            "count": 65
+          },
+          {
+            "name": "yvex_decoded_prepare",
+            "nanoseconds": 20378790,
+            "count": 2752
+          },
+          {
+            "name": "yvex_attention_rolling_state",
+            "nanoseconds": 18948509,
+            "count": 3968
+          },
+          {
+            "name": "yvex_attention_unit_norm",
+            "nanoseconds": 18446659,
+            "count": 2795
+          },
+          {
+            "name": "yvex_attention_bf16_round",
+            "nanoseconds": 15729119,
+            "count": 5696
+          },
+          {
+            "name": "yvex_moe_grouped_down_shared",
+            "nanoseconds": 15212637,
+            "count": 43
+          },
+          {
+            "name": "yvex_moe_swiglu",
+            "nanoseconds": 11519782,
+            "count": 2795
+          },
+          {
+            "name": "yvex_attention_topk",
+            "nanoseconds": 11047637,
+            "count": 1365
+          },
+          {
+            "name": "yvex_argmax_f32",
+            "nanoseconds": 10848696,
+            "count": 64
+          },
+          {
+            "name": "yvex_attention_block_softmax",
+            "nanoseconds": 10098224,
+            "count": 2795
+          },
+          {
+            "name": "yvex_moe_reduce_rows",
+            "nanoseconds": 4904998,
+            "count": 2795
+          },
+          {
+            "name": "yvex_attention_rolling_rows",
+            "nanoseconds": 4443528,
+            "count": 62
+          },
+          {
+            "name": "yvex_moe_combine_rows",
+            "nanoseconds": 3860363,
+            "count": 2795
+          }
+        ],
+        "profile": {
+          "counters": {
+            "accelerated_matrix_launches": 322,
+            "accepted_draft_tokens": 0,
+            "cache_evictions": 0,
+            "cache_hits": 11180,
+            "cache_misses": 0,
+            "d2d_bytes": 3529473412,
+            "d2h_bytes": 804179564,
+            "device_allocations": 0,
+            "device_synchronizations": 65,
+            "discarded_candidate_rows": 0,
+            "downloads": 8450,
+            "draft_forwards": 0,
+            "draft_rows": 0,
+            "event_synchronizations": 0,
+            "expert_bytes": 253282267392,
+            "expert_subviews": 0,
+            "full_array_host_scan_bytes": 0,
+            "generated_tokens": 64,
+            "graph_captures": 320,
+            "graph_launches": 5590,
+            "graph_replays": 5590,
+            "h2d_bytes": 819781500,
+            "host_allocations": 0,
+            "host_payload_reads": 0,
+            "kernel_launches": 165119,
+            "logits_d2d_bytes": 0,
+            "logits_d2h_bytes": 1536,
+            "logits_h2d_bytes": 0,
+            "managed_prefetch_bytes": 0,
+            "mapped_bytes_touched": 0,
+            "new_prefill_tokens": 31,
+            "output_head_rows": 64,
+            "promoted_target_rows": 0,
+            "prompt_tokens": 31,
+            "queue_synchronizations": 8579,
+            "replayed_accepted_target_rows": 0,
+            "reused_tokens": 0,
+            "row_expert_pairs": 24510,
+            "target_extensions": 0,
+            "target_forwards": 65,
+            "target_rows": 95,
+            "target_verifications": 0,
+            "unique_experts": 19132,
+            "uploads": 2860,
+            "verified_rows": 0,
+            "workspace_resets": 0
+          },
+          "identity": "d6b04c93ad805f8aea893e135034cff739a0d2a5de60a5fd77c96815bddc54b5",
+          "mode": "summary",
+          "phases_ns": {
+            "attention": 7500469223,
+            "detokenization": 257409,
+            "embedding": 10940563,
+            "final_normalization": 21981290,
+            "first_decode": 135938085,
+            "kv_commit": 0,
+            "logits_publication": 157008,
+            "moe_ingress": 0,
+            "moe_post": 0,
+            "moe_total": 6380807376,
+            "output_head": 419121086,
+            "prompt_rendering": 0,
+            "provider_publication": 0,
+            "queue": 0,
+            "routed_experts": 0,
+            "router_projection": 0,
+            "router_topk": 0,
+            "sampling": 14232929,
+            "selected_expert_preparation": 0,
+            "shared_experts": 0,
+            "state_validation": 0,
+            "subsequent_decode": 6764322819,
+            "synchronization_wait": 0,
+            "tokenizer": 287392,
+            "total_generation": 8140389012,
+            "total_prefill": 805332712
+          },
+          "schema": 4
+        },
+        "execution_profile": "827548dc35c272c7c9e98e25c1cd9ec4df66891c23c894c6e9ef5ec4e65cd944"
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "coding.hash-table.kernel-sum",
+        "case": "coding.hash-table",
+        "value": 6.216013194,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_qtype_matvec",
+        "case": "coding.hash-table",
+        "value": 2.228079443,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_moe_grouped_up_q2_rows",
+        "case": "coding.hash-table",
+        "value": 0.777138642,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_decoded_mxfp4_rows",
+        "case": "coding.hash-table",
+        "value": 0.486599388,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_mxfp4_q8_rows",
+        "case": "coding.hash-table",
+        "value": 0.439455283,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_moe_grouped_down_q2_rows",
+        "case": "coding.hash-table",
+        "value": 0.420957924,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_attention_block_qk",
+        "case": "coding.hash-table",
+        "value": 0.399177156,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_residual_mhc_pre",
+        "case": "coding.hash-table",
+        "value": 0.376421099,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_attention_yarn_rope",
+        "case": "coding.hash-table",
+        "value": 0.195791274,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_attention_activation_quantize",
+        "case": "coding.hash-table",
+        "value": 0.138002784,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_attention_weighted_norm",
+        "case": "coding.hash-table",
+        "value": 0.132473298,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_qtype_tensorcore_rows",
+        "case": "coding.hash-table",
+        "value": 0.094447419,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      },
+      {
+        "id": "coding.hash-table.yvex_attention_block_pv",
+        "case": "coding.hash-table",
+        "value": 0.089007746,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/coding.hash-table/cupti.tsv"
+      }
+    ]
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; online64 executable realization",
+    "binding": "44c8bf1dc9cd3275f840aaf06efbab70dadf0f72a24af92b17aa60c14b31c236",
+    "build": "3161e5573f566279f257007362cd56f971a96ce26384678437b5e311f2d995ee",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "efad2cb2738c76e3b7b656ffff18f417a6c46074bae2113cdca94397b87246ed",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "2e0d07ff17219fa290bc4de8348c8769c2cf8de93ec6b083fc309df9544e75a3",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "controlled-engine CUPTI diagnostic",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "controlled fresh engine; bounded diagnostic output; instrumented",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "b8eba206553630f77bdfddc80b85051e28e566580c16f86b07cf7f8a66fc62c2",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": null,
+    "strategy": "target-only",
+    "suite": "d5d9eb417abe63fc2d2c242317479cfc785ce46688e25cc7e936501111393f9d",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "1df98afc5d525782716ab3839c339cecd0c72d41372bb88056ca2dcf1d455436",
+  "title": "0731 online64 realization CUPTI attribution: coding.hash-table (not timing evidence)"
+}

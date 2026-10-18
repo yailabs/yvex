@@ -15,6 +15,42 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## 0731 alternative and integrated source boundary — 2026-10-18
+
+The operator separately authorizes an isolated alternative-checkpoint check.
+The first two attempts use the retained diagnostic executable `997b9cea…`,
+artifact `25d29155…` and binding `091f933e…`, with 16K context and chunk 512.
+Neither attempt establishes a successful 0731 provider result:
+
+| Attempt | Observed result | Claim boundary |
+| --- | --- | --- |
+| First harness | Model loads and preflight admits 8,055 input positions plus the requested output; exclusive evidence-file creation then refuses a duplicate path before inference | Harness defect, zero dispatched inference requests |
+| Corrected harness | One counterfactual request is dispatched; the external conservative reserve guard cancels it before any completed prefill or generated token | Resource-guard interruption, not native capacity refusal, numerical reproduction or OOM |
+| Restoration | Original DSpark returns at generation 7 after the first attempt and generation 8 after the second, both 32K; installed Host and management remain unchanged | Independent health/catalog observation, not a new model-quality result |
+
+The second guard subtracts the full artifact extent from observed available
+memory before preserving the system reserve. That conservative test is not a
+measurement of physical residency or a complete runtime resource model. Its
+failing memory snapshot was not retained; no exact deficit is claimed. The
+last passing sample and cancellation records remain available. Any subsequent
+experiment must reconcile authoritative capacity and non-overlapping memory
+accounting rather than silently relaxing this guard.
+
+Private evidence root: `0731-provider-alternative-20261018.Gdi1Rvi1` under the
+existing model-evidence directory. Receipt SHA-256 values are
+`d7091eef463c9ee67cee10321602c73336dfe983b4c32998e24898d1fbd8e13b`
+and `42428f29680721bb0df6bbc209f0ac4596297ef8db64a42b711a2aa612c8c68d`.
+No YAI SEND, historical Work replay, tool execution or installed rollout occurs.
+
+The operator subsequently requires the updated YVEX producer, not the
+historical diagnostic binary, for the new checkpoint. Mainline integration
+therefore precedes a new immutable candidate build. The retained compact
+artifact `a54c74cd…` and binding `c730fa87…` are a different physical/numerical
+realization; the old diagnostic reader refuses that binding. A newer compatible
+reader is necessary but does not itself establish safe admission, equivalent
+arithmetic, model quality or tool-call success. Program P's retained performance
+observations cannot be transferred to a new executable without measurement.
+
 ## Original-binary control and call-cardinality defect — 2026-10-18
 
 One separately authorized exact-wire control used the **original installed

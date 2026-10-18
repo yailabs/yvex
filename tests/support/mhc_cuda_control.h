@@ -3,6 +3,7 @@
 #ifndef TESTS_SUPPORT_MHC_CUDA_CONTROL_H
 #define TESTS_SUPPORT_MHC_CUDA_CONTROL_H
 #include "src/backend/cuda/attention_ops.h"
+#include "src/backend/cuda/component_ops.h"
 #include <yvex/internal/program_stage.h>
 #include <yvex/internal/moe.h>
 #include <yvex/internal/quant_numeric.h>
@@ -141,7 +142,7 @@ static int test_mhc_sinkhorn_order(unsigned int streams)
     return 0;
 }
 
-static int test_mhc_cuda_control(unsigned int router_qtype)
+static int test_mhc_cuda_control(unsigned int router_qtype, unsigned int projection)
 {
     enum { WIDTH = 4096, STREAMS = 4, EXPANDED = WIDTH * STREAMS,
         MIXES = (STREAMS + 2) * STREAMS, ROWS = 3, ROUTES = 4,
@@ -159,6 +160,7 @@ static int test_mhc_cuda_control(unsigned int router_qtype)
     yvex_backend_attention_weight weights[5] = {0};
     CUdeviceptr addresses[5] = {0}, x, mixes, normalized, gates, matrix, logits, status;
     yvex_moe_layer_plan layer = {.hidden_width = WIDTH, .residual_streams = STREAMS,
+        .mhc_projection = projection,
         .expanded_width = EXPANDED, .mhc_mixing_rows = MIXES, .mhc_sinkhorn_iterations = 20u,
         .rms_epsilon = 1e-6, .mhc_epsilon = 1e-6, .mhc_post_multiplier = 2.0, .routed_experts = ROUTES};
     yvex_error err = {0};
@@ -220,8 +222,9 @@ static int test_mhc_cuda_control(unsigned int router_qtype)
     void *args[] = {&x, &mixes, &addresses[1], &addresses[2], &streams, &width, &mix_count,
         &layer.mhc_sinkhorn_iterations, &layer.rms_epsilon, &layer.mhc_epsilon, &layer.mhc_post_multiplier,
         &normalized, &gates, &matrix, &rows, &status};
-    int rc = ops->matvec(&work, &weights[0], addresses[0], 0u, MIXES, ROWS, x, mixes, 0,
-        status, "test.ingress.projection", &failure, &err);
+    int rc = projection ? yvex_cuda_f32_matrix(backend, addresses[0], MIXES, EXPANDED, ROWS,
+        x, mixes, 0, 1, &err) : ops->matvec(&work, &weights[0], addresses[0], 0u, MIXES, ROWS,
+        x, mixes, 0, status, "test.ingress.projection", &failure, &err);
     if (rc == YVEX_OK) rc = ops->launch(&work, state->residual_mhc_pre_function, ROWS, 256u,
         (STREAMS + 1u + 256u) * sizeof(double), args, "test.ingress.pre", &failure, &err);
     if (rc == YVEX_OK) rc = ops->weighted_norm(&work, normalized, WIDTH, ROWS, &weights[3], addresses[3],
@@ -278,13 +281,29 @@ static int test_mhc_cuda_control(unsigned int router_qtype)
     YVEX_TEST_ASSERT(!memcmp(expected, actual, ROWS * RESULT * sizeof(float)),
         "device ingress preserves all retained output bytes");
     printf("CUDA ingress device preservation: values=%u exact=1 tolerance=0\n", ROWS * RESULT);
-    printf("CUDA router projection representation: qtype=%u rows=%u logits=%u exact=1\n",
-        router_qtype, ROWS, ROWS * ROUTES);
+    printf("CUDA router projection representation: qtype=%u rows=%u logits=%u mhc_class=%u exact=1\n",
+        router_qtype, ROWS, ROWS * ROUTES, projection);
     for (size_t i = 0u; i < 4u; ++i)
         YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &device_outputs[i], &err) == YVEX_OK,
             "device output owner releases");
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &device_input, &err) == YVEX_OK,
         "device input owner releases");
+    if (projection) {
+        float saved = ((float *)mapped)[0];
+        ((float *)mapped)[0] = INFINITY;
+        memcpy(actual, expected, ROWS * RESULT * sizeof(float));
+        rc = yvex_program_stage_host(stage, ROWS, (const float *[]){input}, 1u,
+            (float *[]){actual, actual + ROWS * WIDTH, actual + ROWS * (WIDTH + STREAMS),
+                actual + ROWS * (RESULT - ROUTES)}, 4u, NULL, NULL, &facts, &err);
+        YVEX_TEST_ASSERT(rc != YVEX_OK && !memcmp(actual, expected, ROWS * RESULT * sizeof(float)),
+            "infinite affine mix is refused before sigmoid can hide it; host results remain unpublished");
+        ((float *)mapped)[0] = saved;
+        YVEX_TEST_ASSERT(yvex_program_stage_host(stage, ROWS, (const float *[]){input}, 1u,
+            (float *[]){actual, actual + ROWS * WIDTH, actual + ROWS * (WIDTH + STREAMS),
+                actual + ROWS * (RESULT - ROUTES)}, 4u, NULL, NULL, &facts, &err) == YVEX_OK &&
+            !memcmp(actual, expected, ROWS * RESULT * sizeof(float)),
+            "recoverable numerical refusal leaves a reusable stage and exact successful retry");
+    }
     YVEX_TEST_ASSERT(yvex_cuda_work_cleanup(&work, &err) == YVEX_OK && yvex_program_stage_close(&stage, &err) == YVEX_OK,
         "CUDA ingress control stages and private work release");
     yvex_program_physical_close(&program);

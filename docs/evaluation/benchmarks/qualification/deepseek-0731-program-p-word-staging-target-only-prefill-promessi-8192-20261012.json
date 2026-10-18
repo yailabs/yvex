@@ -1,0 +1,713 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/receipt.json",
+          "sha256": "7826db42a9183813f2fd0910fd82aca03a4ad23cfd0379b2c73a840709c8d640",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+          "sha256": "8ba07b6e102a24b240ed1c85fc634bf4a4bbe322cc7b670e8fa5549ba789a5df",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/source.json",
+          "sha256": "812e86a5ce672229fe9f63f8872df0a0852f9aecc4e9826043097f2ccc9994f5",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/build.json",
+          "sha256": "31c47050698e24d60641fb951fdd9869ef9e46df87fbe334b90a49a83d443c44",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-kernel-identity-01/stdout.jsonl",
+          "sha256": "73fb5e97df01fa98364c8c9d5b5ab9e4979f743ac1747f4f274326e509781fcf",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/closed.json",
+          "sha256": "bdff1c0650ea0149f920e0b33ebafaa933bc9889444818bf481eef66219ba361",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/operator-restored.json",
+          "sha256": "71215cda2d0d98edca90b779a8d6d2f3156dba662fef6a07209da4b51458a191",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192-resources.jsonl.summary.json",
+          "sha256": "90444f0127abe6e6bc319b205c2ce21b1fba0b19f2078d10ec5818e282089fdf",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/loaded-16384.json",
+          "sha256": "535cc0432ca7bf5cf02c59177447f096b48825968102f837925d57f41e9d500b",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/receipt.json",
+          "sha256": "7826db42a9183813f2fd0910fd82aca03a4ad23cfd0379b2c73a840709c8d640",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+          "sha256": "8ba07b6e102a24b240ed1c85fc634bf4a4bbe322cc7b670e8fa5549ba789a5df",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/source.json",
+          "sha256": "812e86a5ce672229fe9f63f8872df0a0852f9aecc4e9826043097f2ccc9994f5",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/build.json",
+          "sha256": "31c47050698e24d60641fb951fdd9869ef9e46df87fbe334b90a49a83d443c44",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-kernel-identity-01/stdout.jsonl",
+          "sha256": "73fb5e97df01fa98364c8c9d5b5ab9e4979f743ac1747f4f274326e509781fcf",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/closed.json",
+          "sha256": "bdff1c0650ea0149f920e0b33ebafaa933bc9889444818bf481eef66219ba361",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/operator-restored.json",
+          "sha256": "71215cda2d0d98edca90b779a8d6d2f3156dba662fef6a07209da4b51458a191",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192-resources.jsonl.summary.json",
+          "sha256": "90444f0127abe6e6bc319b205c2ce21b1fba0b19f2078d10ec5818e282089fdf",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/loaded-16384.json",
+          "sha256": "535cc0432ca7bf5cf02c59177447f096b48825968102f837925d57f41e9d500b",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/receipt.json",
+          "sha256": "7826db42a9183813f2fd0910fd82aca03a4ad23cfd0379b2c73a840709c8d640",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+          "sha256": "8ba07b6e102a24b240ed1c85fc634bf4a4bbe322cc7b670e8fa5549ba789a5df",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/source.json",
+          "sha256": "812e86a5ce672229fe9f63f8872df0a0852f9aecc4e9826043097f2ccc9994f5",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/build.json",
+          "sha256": "31c47050698e24d60641fb951fdd9869ef9e46df87fbe334b90a49a83d443c44",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-kernel-identity-01/stdout.jsonl",
+          "sha256": "73fb5e97df01fa98364c8c9d5b5ab9e4979f743ac1747f4f274326e509781fcf",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/closed.json",
+          "sha256": "bdff1c0650ea0149f920e0b33ebafaa933bc9889444818bf481eef66219ba361",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/operator-restored.json",
+          "sha256": "71215cda2d0d98edca90b779a8d6d2f3156dba662fef6a07209da4b51458a191",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192-resources.jsonl.summary.json",
+          "sha256": "90444f0127abe6e6bc319b205c2ce21b1fba0b19f2078d10ec5818e282089fdf",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/loaded-16384.json",
+          "sha256": "535cc0432ca7bf5cf02c59177447f096b48825968102f837925d57f41e9d500b",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-word-staging-target-only-prefill-promessi-8192-20261012",
+  "limitations": [
+    "Three fresh-session samples; median, range and MAD, not a confidence interval or universal speedup.",
+    "Same artifact/binding/numerical class; implementation/build/kernel differ. Instrumented traces excluded from timing.",
+    "No independent checkpoint-matched NLL/PPL/KL or held-out quality. High/maximum, HTTP and installed-product performance not qualified.",
+    "Client-visible fragment arrival is not PTY painting; server/client latency metrics have distinct boundaries.",
+    "Advisory locks and sampled clear GPU process observations do not establish uninterrupted exclusivity; clocks uncontrolled.",
+    "Exact internal output-byte agreement does not independently qualify model behavior.",
+    "4K coding and 16K prefill admitted after authorized operator-model unload; no 32K candidate admission or installed rollout claim."
+  ],
+  "measurements": [
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        0.511652362,
+        0.505572998,
+        0.538363249
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.538363249,
+        "median": 0.511652362,
+        "median_absolute_deviation": 0.006079363999999976,
+        "minimum": 0.505572998
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        68.611594022,
+        68.808444757,
+        68.685070339
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 68.808444757,
+        "median": 68.685070339,
+        "median_absolute_deviation": 0.07347631700000079,
+        "minimum": 68.611594022
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        66.928784643,
+        67.131450327,
+        67.005048926
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 67.131450327,
+        "median": 67.005048926,
+        "median_absolute_deviation": 0.07626428300000043,
+        "minimum": 66.928784643
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        0.12135212799999806,
+        0.11782893900000602,
+        0.12418891800000154
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.12418891800000154,
+        "median": 0.12135212799999806,
+        "median_absolute_deviation": 0.002836790000003475,
+        "minimum": 0.11782893900000602
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        0.11218012613333314,
+        0.1117915262666666,
+        0.11199406333333287
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.11218012613333314,
+        "median": 0.11199406333333287,
+        "median_absolute_deviation": 0.00018606280000027509,
+        "minimum": 0.1117915262666666
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        66.417098009,
+        66.625815233,
+        66.466612366
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 66.625815233,
+        "median": 66.466612366,
+        "median_absolute_deviation": 0.049514357000006726,
+        "minimum": 66.417098009
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        66.417098009,
+        66.625815233,
+        66.466612366
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 66.625815233,
+        "median": 66.466612366,
+        "median_absolute_deviation": 0.049514357000006726,
+        "minimum": 66.417098009
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        66.928784643,
+        67.131450327,
+        67.005048926
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 67.131450327,
+        "median": 67.005048926,
+        "median_absolute_deviation": 0.07626428300000043,
+        "minimum": 66.928784643
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        8.891003055808298,
+        8.929382602189282,
+        8.914834956375893
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 8.929382602189282,
+        "median": 8.914834956375893,
+        "median_absolute_deviation": 0.014547645813388854,
+        "minimum": 8.891003055808298
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        123.56354871335151,
+        123.17222550454494,
+        123.46757346096871
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 123.56354871335151,
+        "median": 123.46757346096871,
+        "median_absolute_deviation": 0.09597525238280014,
+        "minimum": 123.17222550454494
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "prefill.promessi-8192/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 16,
+      "prompt_identity": "75fd57f9c3a245f4bd0ee259b7583cf5cd31f8e928f9783cb49283356725c4cc",
+      "reference_identity": null,
+      "samples": [
+        66.297869277,
+        66.508500325,
+        66.349404709
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 66.508500325,
+        "median": 66.349404709,
+        "median_absolute_deviation": 0.05153543199999433,
+        "minimum": 66.297869277
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/source-capture",
+    "build": {
+      "build_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+      "build_identity": "fb89bd20d3fd748f64ffd4c8bc8e1ab1a5e4065011ff52046f84edd906fd2f93",
+      "local_protocol_version": 25,
+      "registry_identity": "1762b4b32baa550b8396af6d786439189efa80ebfcf0580186ff4451a8040de2",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "9fb2d146bfdcd75c8aea5704aca928731f3795b9d378086710c7c4feaa01be7d",
+      "source_delta_identity": "911cc8a772365e6272e83260d7e623449cf7dd71760467e691b656b20a194e1c",
+      "source_state": "dirty",
+      "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+      "version": "0.1.0"
+    },
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192-resources.jsonl",
+      "allowed_pids": [
+        932484
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 204,
+      "probe_seconds": 4.623354088893393,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 936749,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "client_build": "fb89bd20d3fd748f64ffd4c8bc8e1ab1a5e4065011ff52046f84edd906fd2f93",
+    "checkpoint_relationship": {
+      "claims_inherited": false,
+      "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+      "source": "explicit-local-record",
+      "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+    },
+    "engine_record": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/loaded-16384.json",
+      "sha256": "535cc0432ca7bf5cf02c59177447f096b48825968102f837925d57f41e9d500b",
+      "result": "PASS"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-kernel-identity-01/stdout.jsonl",
+      "sha256": "73fb5e97df01fa98364c8c9d5b5ab9e4979f743ac1747f4f274326e509781fcf",
+      "result": "PASS"
+    },
+    "device_uuid": "GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc",
+    "boot_id": "54835689-f267-4b02-be92-24be60646f9d",
+    "reproduction": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192-command.json",
+      "sha256": "1680d768cc511e853a1c262bf03e968d3e0a2ed63be7feb3deed79e8003e118a",
+      "result": "PASS"
+    },
+    "continuation_control": {
+      "baseline": {
+        "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/target-only/16384-prefill.promessi-8192/events.jsonl",
+        "sha256": "842da2235c84149f5f07708fe5fbfdcc2ab2f4168b0ea2f634b7f761ac6b6851",
+        "result": "PASS"
+      },
+      "equal_ordered_fragment_channels_lengths_hashes": true,
+      "scope": "Internal output regression; not upstream checkpoint conformance or independent model quality"
+    },
+    "diagnostics": [
+      {
+        "id": "post-load.rss",
+        "case": "prefill.promessi-8192",
+        "value": 104211165184,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss",
+        "case": "prefill.promessi-8192",
+        "value": 104200740864,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss_file",
+        "case": "prefill.promessi-8192",
+        "value": 103696887808,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.pss_anon",
+        "case": "prefill.promessi-8192",
+        "value": 459616256,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "post-load.locked",
+        "case": "prefill.promessi-8192",
+        "value": 0,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/memory-post-load-16384.json"
+      },
+      {
+        "id": "load.client",
+        "case": "prefill.promessi-8192",
+        "value": 6.854578074,
+        "unit": "s",
+        "definition": "One load command to ready; artifact authentication already read file pages; not cold-storage latency",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/load-16384.json"
+      },
+      {
+        "id": "native.prompt_tokens",
+        "case": "prefill.promessi-8192",
+        "value": 8192,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl"
+      },
+      {
+        "id": "native.reused_tokens",
+        "case": "prefill.promessi-8192",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl"
+      },
+      {
+        "id": "native.prefill_tokens",
+        "case": "prefill.promessi-8192",
+        "value": 8192,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl"
+      },
+      {
+        "id": "native.generated_tokens",
+        "case": "prefill.promessi-8192",
+        "value": 16,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/word-staging-native-01/target-only/16384-prefill.promessi-8192/events.jsonl"
+      }
+    ],
+    "selection": {
+      "state": "retained_characterized",
+      "reason": "Same-artifact three-sample complete-model prefill improvement with unchanged ordered output fragments. Sequential campaign, not paired confidence evidence; decode remains below target. No independent checkpoint quality or automatic recommendation."
+    },
+    "predecessor_comparison": {
+      "kind": "explicit-experiment",
+      "varying": [
+        "source_delta",
+        "build",
+        "executable",
+        "backend_implementation",
+        "kernel_bundle"
+      ],
+      "left": "bfda73d161383c89e3645cb1b8acf1a9d7a26024fa90e3502b535d9e412aadc6",
+      "right": "5ae7210b37049487874622cdc516765bbbb8cc673109cc40f130fe044f53df2c",
+      "automatic_ranking": false
+    }
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; word-staging executable realization",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "build": "fb89bd20d3fd748f64ffd4c8bc8e1ab1a5e4065011ff52046f84edd906fd2f93",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 16384,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "50e854ac4b7d618049072d34129c3db157adc549e70e67efec9aa083cfae3576",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "0743fb8f1dd6d79d01f459391b2ca626d14e6cdfedb0642c0c5cec29a28bf2ad",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v25",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "911cc8a772365e6272e83260d7e623449cf7dd71760467e691b656b20a194e1c",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+    "strategy": "target-only",
+    "suite": "ba06670744e623b715778ff9f208f54da79ac0d9899184436ca4b7b229c04c1e",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "5ae7210b37049487874622cdc516765bbbb8cc673109cc40f130fe044f53df2c",
+  "title": "0731 MXFP4/Q2 native word-staging realization: target-only / prefill.promessi-8192 / three fresh sessions"
+}

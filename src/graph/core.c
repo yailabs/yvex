@@ -718,7 +718,8 @@ int yvex_attention_output_project(
     int rc;
     if (!session || !out_a || !out_b || !attention_values || !out || !token_count || !group_count ||
         !group_input_width || !rank || !hidden_width || output_stride < hidden_width ||
-        compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1)
+        (compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+         compute_contract != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1))
         return yvex_attention_reject(
             failure, YVEX_ATTENTION_FAILURE_INVALID_ARGUMENT, out_a,
             YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_ATTENTION_OUT_A, 1ull, 0ull, err,

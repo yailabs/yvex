@@ -362,6 +362,36 @@ static int test_ingress_composition(yvex_backend *backend, unsigned int norm_qty
     YVEX_TEST_ASSERT(yvex_moe_ingress_program_import(&refused, &layer, identity, identity, 3u, &err) !=
         YVEX_OK && !refused, "row-dot obligation cannot admit an unknown parameter numerical representation");
     layer.qtypes[YVEX_MOE_WEIGHT_MHC_FUNCTION] = YVEX_GGUF_QTYPE_F32;
+    layer.mhc_projection = YVEX_MHC_PROJECTION_F32_ACC_V1;
+    YVEX_TEST_ASSERT(yvex_moe_ingress_program_import(&refused, &layer, identity, identity, 3u, &err) ==
+        YVEX_OK && strcmp(yvex_program_physical_summary_get(refused)->identity,
+            yvex_program_physical_summary_get(program)->identity),
+        "explicit matrix accumulation seals a distinct executable program");
+    unsigned int matrix_count = 0u, row_count = 0u;
+    for (size_t i = 0u; i < yvex_program_physical_summary_get(refused)->step_count; ++i) {
+        const char *implementation = yvex_program_physical_step_at(refused, i)->implementation;
+        matrix_count += !strcmp(implementation, "linear.f32_acc.v1");
+        row_count += !strcmp(implementation, "linear.row_dot.f32.v1");
+        if (!strcmp(implementation, "linear.f32_acc.v1")) {
+            yvex_program_physical *wrong = NULL;
+            yvex_program_target_choice choice = {.step = i, .implementation = "linear.encoded.f32.v1"};
+            YVEX_TEST_ASSERT(yvex_program_physical_target_compile(&wrong, refused, &choice, 1u, &err) !=
+                YVEX_OK && !wrong, "explicit accumulation cannot silently specialize to the legacy default class");
+        }
+    }
+    YVEX_TEST_ASSERT(matrix_count == 1u && row_count == 1u,
+        "only mixing projection changes class; routing retains its exact row-dot contract");
+    if (yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CPU) {
+        yvex_program_stage *unsupported = NULL;
+        YVEX_TEST_ASSERT(yvex_program_stage_open(&unsupported, refused, parameters, 5u,
+            backend, 3u, 1, 0u, 0u, &err) == YVEX_ERR_UNSUPPORTED && !unsupported,
+            "CPU refuses the new F32 physical consumer before execution instead of substituting F64");
+    }
+    yvex_program_physical_close(&refused);
+    layer.mhc_projection = (yvex_mhc_projection_contract)99u;
+    YVEX_TEST_ASSERT(yvex_moe_ingress_program_import(&refused, &layer, identity, identity, 3u, &err) !=
+        YVEX_OK && !refused, "unknown mixing class cannot enter a default linear implementation");
+    layer.mhc_projection = YVEX_MHC_PROJECTION_ORDERED_F64;
     if (yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA) {
         unsigned char *mapped = NULL;
         yvex_backend_tensor_desc d = {.name = "ingress-function", .dtype = YVEX_DTYPE_I8,

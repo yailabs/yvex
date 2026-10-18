@@ -161,7 +161,7 @@ static int runtime_moe_worklist_contract(
                                     physical, binding->tensor_id)
                               : NULL;
         if (!decisions[slot] ||
-            decisions[slot]->schema_version != YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3 ||
+            decisions[slot]->schema_version != YVEX_ENGINE_SPECIALIZATION_SCHEMA_V4 ||
             !decisions[slot]->worklist_width_mask ||
             !decisions[slot]->prefill_worklist_width_mask ||
             (slot && (decisions[slot]->worklist_width_mask !=
@@ -172,6 +172,8 @@ static int runtime_moe_worklist_contract(
                           decisions[0]->prefill_maximum_width ||
                       decisions[slot]->matrix_tile_minimum !=
                           decisions[0]->matrix_tile_minimum ||
+                      decisions[slot]->prefill_matrix_tile_minimum !=
+                          decisions[0]->prefill_matrix_tile_minimum ||
                       decisions[slot]->implementation !=
                           decisions[0]->implementation)))
             return runtime_moe_refuse(
@@ -181,13 +183,9 @@ static int runtime_moe_worklist_contract(
     memset(policy, 0, sizeof(*policy));
     policy->schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V3;
     policy->supported_width_mask = yvex_runtime_specialization_phase_width_mask(
-        decisions[0], rows->phase, 1);
+        decisions[0], rows->phase, 1, &policy->matrix_tile_minimum);
     policy->prefill_maximum_width = rows->phase == YVEX_EXECUTION_PHASE_PREFILL
         ? decisions[0]->prefill_maximum_width : 0ull;
-    policy->matrix_tile_minimum = decisions[0]->matrix_tile_minimum;
-    if (policy->matrix_tile_minimum &&
-        !(policy->supported_width_mask & (1ull << policy->matrix_tile_minimum)))
-        policy->matrix_tile_minimum = 0ull;
     policy->row_implementation = decisions[0]->implementation;
     policy->matrix_implementation = policy->matrix_tile_minimum
                                       ? YVEX_ENGINE_IMPLEMENTATION_DEVICE_MATRIX_TILE

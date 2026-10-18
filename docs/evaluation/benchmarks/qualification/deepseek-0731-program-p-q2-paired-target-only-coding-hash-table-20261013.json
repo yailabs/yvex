@@ -1,0 +1,918 @@
+{
+  "claims": {
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Three isolated native requests; equivalent Q2 paired traversal and CTA geometry over the same admitted numerical class; no installed rollout or independent checkpoint quality",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/receipt.json",
+          "sha256": "c874c26d6b714a855499b08bbadab6c9fa9780584a8dd8110e910cf5212f713b",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+          "sha256": "26105a0a8e5308c4a5eb0f646e2d487421850fb689b8f9f4c38845793985d406",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/source.json",
+          "sha256": "d547a7b6a44ffdb2d74047fc9fb49072658ed7cc9083ec73c2357025d6e29078",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/build.json",
+          "sha256": "b009339aef54f991eb8bba10ed4c445ccd75925d135e027117bbf50c24b7fc25",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-v3-kernel-identity-01/stdout.jsonl",
+          "sha256": "29cda8304316646620b2348fdd8ab3c64e6817482dd121ccee2b889ced4fd2bc",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/closed.json",
+          "sha256": "976558a186f12fb461c64a6dec918f5d57bf17be88915b97c022fda22c7d4c3a",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/operator-restored.json",
+          "sha256": "0e14e99d9b27d2222ce33aaa0754bd7cd39adce140aa16bf80b274e70303e01e",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "1ce0215e9146b86c7d725a37ee92d5608f96357ad6d5c6759db54d5cf825278c",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Local native measurement only; independent reference and producer provenance incomplete",
+      "state": "UNQUALIFIED"
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Three isolated native requests; equivalent Q2 paired traversal and CTA geometry over the same admitted numerical class; no installed rollout or independent checkpoint quality",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/receipt.json",
+          "sha256": "c874c26d6b714a855499b08bbadab6c9fa9780584a8dd8110e910cf5212f713b",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+          "sha256": "26105a0a8e5308c4a5eb0f646e2d487421850fb689b8f9f4c38845793985d406",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/source.json",
+          "sha256": "d547a7b6a44ffdb2d74047fc9fb49072658ed7cc9083ec73c2357025d6e29078",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/build.json",
+          "sha256": "b009339aef54f991eb8bba10ed4c445ccd75925d135e027117bbf50c24b7fc25",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-v3-kernel-identity-01/stdout.jsonl",
+          "sha256": "29cda8304316646620b2348fdd8ab3c64e6817482dd121ccee2b889ced4fd2bc",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/closed.json",
+          "sha256": "976558a186f12fb461c64a6dec918f5d57bf17be88915b97c022fda22c7d4c3a",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/operator-restored.json",
+          "sha256": "0e14e99d9b27d2222ce33aaa0754bd7cd39adce140aa16bf80b274e70303e01e",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "1ce0215e9146b86c7d725a37ee92d5608f96357ad6d5c6759db54d5cf825278c",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "family-conformance": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Local native measurement only; independent reference and producer provenance incomplete",
+      "state": "UNQUALIFIED"
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Three isolated native requests; equivalent Q2 paired traversal and CTA geometry over the same admitted numerical class; no installed rollout or independent checkpoint quality",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/receipt.json",
+          "sha256": "c874c26d6b714a855499b08bbadab6c9fa9780584a8dd8110e910cf5212f713b",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+          "sha256": "26105a0a8e5308c4a5eb0f646e2d487421850fb689b8f9f4c38845793985d406",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/source.json",
+          "sha256": "d547a7b6a44ffdb2d74047fc9fb49072658ed7cc9083ec73c2357025d6e29078",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/build.json",
+          "sha256": "b009339aef54f991eb8bba10ed4c445ccd75925d135e027117bbf50c24b7fc25",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-v3-kernel-identity-01/stdout.jsonl",
+          "sha256": "29cda8304316646620b2348fdd8ab3c64e6817482dd121ccee2b889ced4fd2bc",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/closed.json",
+          "sha256": "976558a186f12fb461c64a6dec918f5d57bf17be88915b97c022fda22c7d4c3a",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/operator-restored.json",
+          "sha256": "0e14e99d9b27d2222ce33aaa0754bd7cd39adce140aa16bf80b274e70303e01e",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "1ce0215e9146b86c7d725a37ee92d5608f96357ad6d5c6759db54d5cf825278c",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "representation-quality": {
+      "blockers": [],
+      "evidence": {},
+      "required_evidence": [],
+      "scope": "Local native measurement only; independent reference and producer provenance incomplete",
+      "state": "UNQUALIFIED"
+    }
+  },
+  "id": "deepseek-0731-program-p-q2-paired-target-only-coding-hash-table-20261013",
+  "limitations": [
+    "Three fresh-session samples, not a confidence interval.",
+    "Same artifact, binding and numerical class as the prepared-attention control; only paired Q2 traversal, CTA geometry and register admission change.",
+    "No independent full-model quality, high/maximum reasoning, HTTP or installed-product performance qualification.",
+    "Advisory locks plus sampled clear resource observations do not prove continuous exclusivity.",
+    "Native first-fragment arrival is not terminal painting.",
+    "4K coding/16K prefill admission does not qualify 32K candidate execution."
+  ],
+  "measurements": [
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.438146705,
+        0.436104797,
+        0.437128636
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.438146705,
+        "median": 0.437128636,
+        "median_absolute_deviation": 0.0010180690000000103,
+        "minimum": 0.436104797
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        26.851870954,
+        26.4204971,
+        26.482873183
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 26.851870954,
+        "median": 26.482873183,
+        "median_absolute_deviation": 0.06237608300000019,
+        "minimum": 26.4204971
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.172889088,
+        1.119663328,
+        1.136681614
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.172889088,
+        "median": 1.136681614,
+        "median_absolute_deviation": 0.017018286000000105,
+        "minimum": 1.119663328
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.11573099299999967,
+        0.11669533799999954,
+        0.11592961999999929
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.11669533799999954,
+        "median": 0.11592961999999929,
+        "median_absolute_deviation": 0.0001986269999996182,
+        "minimum": 0.11573099299999967
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.10070020320784313,
+        0.0992172555764706,
+        0.09939511190980392
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.10070020320784313,
+        "median": 0.09939511190980392,
+        "median_absolute_deviation": 0.0001778563333333233,
+        "minimum": 0.0992172555764706
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.734638735,
+        0.683435219,
+        0.699515058
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.734638735,
+        "median": 0.699515058,
+        "median_absolute_deviation": 0.016079838999999985,
+        "minimum": 0.683435219
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.734638735,
+        0.683435219,
+        0.699515058
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.734638735,
+        "median": 0.699515058,
+        "median_absolute_deviation": 0.016079838999999985,
+        "minimum": 0.683435219
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.172889088,
+        1.119663328,
+        1.136681614
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.172889088,
+        "median": 1.136681614,
+        "median_absolute_deviation": 0.017018286000000105,
+        "minimum": 1.119663328
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        9.91899710681685,
+        10.074524036202446,
+        10.056073004429239
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 10.074524036202446,
+        "median": 10.056073004429239,
+        "median_absolute_deviation": 0.01845103177320695,
+        "minimum": 9.91899710681685
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "committed tokens after first / elapsed decode wall after first",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "decode.post-first.committed",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        9.930456351362128,
+        10.078873085345709,
+        10.060836125465203
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 10.078873085345709,
+        "median": 10.060836125465203,
+        "median_absolute_deviation": 0.01803695988050613,
+        "minimum": 9.930456351362128
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        53.63208819324249,
+        54.08621606642145,
+        52.72577780148964
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 54.08621606642145,
+        "median": 53.63208819324249,
+        "median_absolute_deviation": 0.45412787317896175,
+        "minimum": 52.72577780148964
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.578012176,
+        0.573158972,
+        0.587947704
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.587947704,
+        "median": 0.578012176,
+        "median_absolute_deviation": 0.004853204,
+        "minimum": 0.573158972
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "checkpoint_relationship": {
+      "claims_inherited": false,
+      "record_identity": "6fe7f940cab4d312fac5b1b485e30ec27d6f3dcbf02c1947aa32c5db4617f887",
+      "source": "explicit-local-record",
+      "target_identity": "88e1ce1a5d3ee66c3af97ae4e6e582e1101cfcb893650dd0cc747abe2b44258a"
+    },
+    "cleanup": "owned sessions closed; generation/count checked",
+    "client_build": "a663cac19f591c422b3a91143ff060485ef90a735b896840070eec162c99ad81",
+    "engine": {
+      "active_work": 0,
+      "activity": "idle",
+      "alias": "program-p-0731-convergence",
+      "artifact_identity": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+      "attached_clients": 0,
+      "backend": 1,
+      "capabilities": {
+        "input_mask": 1,
+        "inputs": [
+          "text"
+        ],
+        "maximum_input_parts": 32,
+        "output_mask": 1,
+        "outputs": [
+          "text"
+        ],
+        "properties": 15
+      },
+      "capacity": {
+        "compatible_operation_batching": false,
+        "continuous_batching": false,
+        "cooperative_scheduling": false,
+        "physical_sequence_width": 1,
+        "runnable_work": 1,
+        "sessions": 8
+      },
+      "capacity_plan_identity": "26c1d389799828a257c25686fed6951ff69b75c8bb20d1fae35c57ab450f24aa",
+      "configured_physical_sequence_width": 1,
+      "context_capacity": 4096,
+      "continuous_batching": false,
+      "engine_kind": "text",
+      "execution_ready": true,
+      "execution_strategy": "target-only",
+      "generation": 1,
+      "mapped_package_bytes": 103728880544,
+      "maximum_new_tokens": 4096,
+      "maximum_sessions": 8,
+      "model_identity": "a4db753c1b918c8d8afe517fee9d1a19b0b56328eabf891caad59a1cab2e8377",
+      "model_leases": 0,
+      "prefill_chunk_tokens": 512,
+      "prepared_bytes": 0,
+      "resident_device_bytes": 0,
+      "resident_host_bytes": 0,
+      "resources": {
+        "activation_arena_current_bytes": 0,
+        "activation_arena_peak_bytes": 0,
+        "available": 129,
+        "components": 1,
+        "logical_download_bytes": 0,
+        "logical_upload_bytes": 0,
+        "model_artifact_bytes": 103728880544,
+        "model_device_addressable_bytes": 103728880544,
+        "model_explicit_device_bytes": 0,
+        "model_explicit_host_bytes": 0,
+        "model_mapped_bytes": 103728880544,
+        "model_prepared_bytes": 0,
+        "physical_residency_known": false,
+        "placement": "mapped-device-addressable",
+        "process_rss_current_bytes": 0,
+        "process_rss_peak_bytes": 0,
+        "schema_version": 1,
+        "session_attention_allocated_bytes": 0,
+        "session_attention_page_table_bytes": 0,
+        "session_attention_resident_bytes": 0,
+        "session_attention_virtual_bytes": 0,
+        "session_candidate_state_bytes": 0,
+        "session_convolution_state_bytes": 0,
+        "session_physical_state_bytes": 0,
+        "session_recurrent_state_bytes": 0,
+        "transient_current_bytes": 0,
+        "transient_peak_bytes": 0,
+        "unified_memory": true,
+        "workspace_current_bytes": 0,
+        "workspace_peak_bytes": 0
+      },
+      "runtime_binding_identity": "0884e68a1ccb6362323bd27241c7b1bd2ed96d0fd712684a1dea7b6c2ce30c37",
+      "sessions": 0,
+      "specialization_identity": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+      "state": "loaded",
+      "target": "deepseek4-v4-flash-0731"
+    },
+    "evidence_class": "local-characterization",
+    "observations": [
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.438146705,
+        "client_complete_seconds": 26.851870954,
+        "client_first_final_seconds": 1.172889088,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.172889088,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.11573099299999967,
+        "client_visible_gap_mean_seconds": 0.10070020320784313,
+        "commit_seconds": 0.0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0.0,
+        "final_phase_rate": 9.91899710681685,
+        "final_seconds": 25.80906086,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "post_first_decode_ns": 25678578202,
+        "post_first_decode_rate": 9.930456351362128,
+        "post_first_decode_units": 255,
+        "prefill_rate": 53.63208819324249,
+        "prefill_seconds": 0.578012176,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0.0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 0,
+        "sampling": {
+          "min_p": 0.0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0.0,
+          "top_k": 0,
+          "top_p": 1.0,
+          "typical_p": 1.0
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.734638735,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.734638735,
+        "session": "bench-09e0be2b7f352b1bb329f470",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "01274e361b726b04ebe945bc41aa0297ce78b51d8b3887d1e8edc4bcf11a384f",
+        "total_completion_seconds": 26.413430617,
+        "turn_identity": "e7ef92fb178039636b14ec4f0a8733960d4545ba42c6636166d252cd6a55432e",
+        "turn_index": 0,
+        "verification_seconds": 0.0
+      },
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.436104797,
+        "client_complete_seconds": 26.4204971,
+        "client_first_final_seconds": 1.119663328,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.119663328,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.11669533799999954,
+        "client_visible_gap_mean_seconds": 0.0992172555764706,
+        "commit_seconds": 0.0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0.0,
+        "final_phase_rate": 10.074524036202446,
+        "final_seconds": 25.410629731,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "post_first_decode_ns": 25300447564,
+        "post_first_decode_rate": 10.078873085345709,
+        "post_first_decode_units": 255,
+        "prefill_rate": 54.08621606642145,
+        "prefill_seconds": 0.573158972,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0.0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 1,
+        "sampling": {
+          "min_p": 0.0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0.0,
+          "top_k": 0,
+          "top_p": 1.0,
+          "typical_p": 1.0
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.683435219,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.683435219,
+        "session": "bench-19a0f1158e212e00e688ab0c",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "01274e361b726b04ebe945bc41aa0297ce78b51d8b3887d1e8edc4bcf11a384f",
+        "total_completion_seconds": 25.984111807,
+        "turn_identity": "e7ef92fb178039636b14ec4f0a8733960d4545ba42c6636166d252cd6a55432e",
+        "turn_index": 0,
+        "verification_seconds": 0.0
+      },
+      {
+        "accepted_tokens": 0,
+        "case": "coding.hash-table",
+        "client_admitted_seconds": 0.437128636,
+        "client_complete_seconds": 26.482873183,
+        "client_first_final_seconds": 1.136681614,
+        "client_first_reasoning_seconds": null,
+        "client_first_visible_seconds": 1.136681614,
+        "client_visible_fragments": 256,
+        "client_visible_gap_max_seconds": 0.11592961999999929,
+        "client_visible_gap_mean_seconds": 0.09939511190980392,
+        "commit_seconds": 0.0,
+        "correction_or_bonus_tokens": 0,
+        "discarded_tokens": 0,
+        "draft_cycles": 0,
+        "draft_forwards": 0,
+        "draft_seconds": 0.0,
+        "final_phase_rate": 10.056073004429239,
+        "final_seconds": 25.457253531,
+        "final_tokens": 256,
+        "first_fragment_publication_seconds": null,
+        "generated_tokens": 256,
+        "input_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+        "kind": "turn",
+        "maximum_accepted_prefix": 0,
+        "mean_accepted_prefix": 0.0,
+        "post_first_decode_ns": 25345805937,
+        "post_first_decode_rate": 10.060836125465203,
+        "post_first_decode_units": 255,
+        "prefill_rate": 52.72577780148964,
+        "prefill_seconds": 0.587947704,
+        "prefill_tokens": 31,
+        "prompt_tokens": 31,
+        "proposed_tokens": 0,
+        "reasoning_phase_rate": null,
+        "reasoning_seconds": 0.0,
+        "reasoning_to_final_transition_seconds": null,
+        "reasoning_tokens": 0,
+        "rejected_tokens": 0,
+        "reused_tokens": 0,
+        "sample": 2,
+        "sampling": {
+          "min_p": 0.0,
+          "seed": null,
+          "seed_present": 0,
+          "stochastic": 0,
+          "temperature": 0.0,
+          "top_k": 0,
+          "top_p": 1.0,
+          "typical_p": 1.0
+        },
+        "selected_verification_tokens": 0,
+        "server_first_final_seconds": 0.699515058,
+        "server_first_reasoning_seconds": null,
+        "server_first_token_seconds": 0.699515058,
+        "session": "bench-bf92f79b5f88e7e0d221413f",
+        "stop_reason": 3,
+        "target_verifications": 0,
+        "token_identity": "01274e361b726b04ebe945bc41aa0297ce78b51d8b3887d1e8edc4bcf11a384f",
+        "total_completion_seconds": 26.045536787,
+        "turn_identity": "e7ef92fb178039636b14ec4f0a8733960d4545ba42c6636166d252cd6a55432e",
+        "turn_index": 0,
+        "verification_seconds": 0.0
+      }
+    ],
+    "raw_evidence_sha256": "26105a0a8e5308c4a5eb0f646e2d487421850fb689b8f9f4c38845793985d406",
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table-resources.jsonl",
+      "allowed_pids": [
+        2693600
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 80,
+      "probe_seconds": 1.996196173131466,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 2694860,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "sampling_selection": "greedy",
+    "separated_inputs": [],
+    "source_stability": "frozen",
+    "profiled": false,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/source-capture",
+    "build": {
+      "build_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+      "build_identity": "a663cac19f591c422b3a91143ff060485ef90a735b896840070eec162c99ad81",
+      "local_protocol_version": 25,
+      "registry_identity": "fe51b45caeb481dfccd48130507f70207b235ffb471792f9c62025011a7ecd93",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "dc435a63b81eda402b146425198d28cb33531b05b73a78b6ef53812b66bae076",
+      "source_delta_identity": "48d1f56a0a747b899ddfbc2835f54627fd6a180722e595f61f09edd72423a968",
+      "source_state": "dirty",
+      "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+      "version": "0.1.0"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-v3-kernel-identity-01/stdout.jsonl",
+      "sha256": "29cda8304316646620b2348fdd8ab3c64e6817482dd121ccee2b889ced4fd2bc",
+      "result": "PASS"
+    },
+    "restoration": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/operator-restored.json",
+      "sha256": "0e14e99d9b27d2222ce33aaa0754bd7cd39adce140aa16bf80b274e70303e01e",
+      "result": "PASS"
+    },
+    "selection": {
+      "state": "characterized_not_recommended",
+      "reason": "Complete-model performance is characterized; no competitive exit or automatic recommendation without independent checkpoint quality. This series completed after explicit original-service restoration; installed service availability is separately reported."
+    },
+    "component_numerical_scope": "Distinct gate/up payloads; independent CPU decoded-weight F64 dots plus declared BF16 publication; exact old matrix and scalar row controls, true selected populations and partial tiles, nonfinite recovery/refusal, memory/init/sync checks. These do not establish independent whole-checkpoint quality.",
+    "separate_warmup": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-chat.short/receipt.json",
+      "sha256": "abeea730d92b30cd58b06cf116f0050ea520c99c4a144de8835fe1ac2ecb5bb9",
+      "result": "PASS"
+    },
+    "explicit_comparison": {
+      "kind": "explicit-experiment",
+      "varying": [
+        "source_delta",
+        "build",
+        "executable",
+        "backend_implementation",
+        "kernel_bundle"
+      ],
+      "left": "4a8e3d15994b5e18fe9faedfab3bb699608712b1afc952efa304c794cb5c4edf",
+      "right": "69b04daf8a53cc4bd9009b7ffbd27cc2f41dc326e74e5085e7f2123c88e8f334",
+      "automatic_ranking": false
+    },
+    "client_output_preservation": {
+      "control": {
+        "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/attention-prepared-native-01/target-only/4096-coding.hash-table/events.jsonl",
+        "sha256": "22b4654c14d776b011a74a955e9fd729f1836f3e268999ea6c80aa727059de86",
+        "result": "PASS"
+      },
+      "candidate": {
+        "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-paired-native-01/target-only/4096-coding.hash-table/events.jsonl",
+        "sha256": "26105a0a8e5308c4a5eb0f646e2d487421850fb689b8f9f4c38845793985d406",
+        "result": "PASS"
+      },
+      "count": 768,
+      "result": "exact ordered channel/byte-count/fragment-digest equality; no upstream model-quality oracle"
+    }
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; admitted mHC F32 and phase-prepared BF16/MXFP4 matrix; q2-paired executable realization",
+    "binding": "0884e68a1ccb6362323bd27241c7b1bd2ed96d0fd712684a1dea7b6c2ce30c37",
+    "build": "a663cac19f591c422b3a91143ff060485ef90a735b896840070eec162c99ad81",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "73cd494be3f829b92b1d01cdb3f34da1bbf4c8211639590d9614d11034e07911",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "a22675f812e5b96f44920f72a1e822e7d6c01233bd1bf54c216c364bc14c7f48",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v25",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; target-only; no prefix reuse",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "48d1f56a0a747b899ddfbc2835f54627fd6a180722e595f61f09edd72423a968",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+    "strategy": "target-only",
+    "suite": "d5d9eb417abe63fc2d2c242317479cfc785ce46688e25cc7e936501111393f9d",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "69b04daf8a53cc4bd9009b7ffbd27cc2f41dc326e74e5085e7f2123c88e8f334",
+  "title": "0731 paired Q2 gate/up traversal: q2-paired / target-only / coding.hash-table"
+}

@@ -115,6 +115,16 @@ executable binding of an emitted out-of-catalog artifact without encoding
 all weights again. Production proof, prior admission and legacy representation
 rebinding are mutually exclusive authorities. No engine operation follows.
 
+The offline binding compiler can select an explicit attention arithmetic
+realization through `bench attention prepare --attention-compute
+bf16-online64-f32-mma-v1`. Selection enters the family semantic projection
+before materialization, not a runtime environment switch. Exact source and
+parameter lineage remain unchanged; numerical identity, compiled attention and
+binding change. The current admitted source is 0731 target attention; unrelated
+families/checkpoints refuse. This bounded production mechanism is not yet an
+automatically qualified optimizer recommendation. See the
+[numerical contract](../contracts/numerical-abi.md#explicit-block-online-bf16-attention-class).
+
 `compile quant emit --json` projects the typed
 [physical production result](../contracts/artifacts.md#physical-production-result)
 without converting emission into admission or qualification evidence.
@@ -361,6 +371,16 @@ is authoritative for complete geometry. Before a binding exists, omitted
 workspace or session-state costs make fit **incomplete**, not admissible. The
 Q8/Q2 0731 pre-residency refusal remains a regression for this distinction.
 
+The internal attention workspace recipe v5 carries its already admitted
+numerical computation as a sealed fact, not a new kernel policy. That fact lets
+backend lowering cost a compatible packed-query lifetime without inferring the
+algorithm from tensor names or byte counts. Unknown computation keeps separate
+ranges. CUDA online64 may consume packed queries before writing attention values
+into the original F32 query range; retained query evidence and other algorithms
+do not admit that alias. Resource-plan identity changes, while immutable weight
+and binding identities do not. Wider physical execution still needs its own
+complete workspace/state admission and measured qualification.
+
 ### Reproducible engineering workflow
 
 The same request may be retained in a bounded (64 KiB), strict
@@ -560,7 +580,7 @@ the broader replay and independent evidence campaign.
 | Consumer | Compiler/runtime authority after refoundation .1 | Remaining evidence or later breadth |
 | --- | --- | --- |
 | Qwen 3.5 | Forward/output entries share compiler lineage; the slot runner executes physical SSA and legacy decoder bytes normalize only at cold admission. Attention providers and reports are one-way derived views. | Whole-model before/after preservation and authoritative upstream conformance. |
-| DeepSeek V4 / DSpark | Canonical operator graph owns embedding, heterogeneous attention/MoE pairs, target/draft data and state dependencies, final/output and draft projections. Binding v17/model-plan v8 retains it; runtime schedules from it and uses separately authenticated physical implementation plans. | Independent upstream conformance and performance qualification. The later bounded decoded-forensic CPU/CUDA repair is recorded in Evaluation. |
+| DeepSeek V4 / DSpark | Canonical operator graph owns embedding, heterogeneous attention/MoE pairs, target/draft data and state dependencies, final/output and draft projections. Binding v19/model-plan v8 retains it; runtime schedules from it and uses separately authenticated physical implementation plans. | Independent upstream conformance and performance qualification. The later bounded decoded-forensic CPU/CUDA repair is recorded in Evaluation. |
 | MiniMax H3 | Text, multimodal text, vision, visual dense/prefix, audio signal and joint prepare/step/forward compile to physical SSA; common component owners execute admitted work; old procedural neural executors are removed. | Asset-dependent trajectory/full-scale qualification; bounded component preservation is not full-model or upstream conformance. |
 | Mamba2 | Exact pure-SSM forward/output program, artifact and binding execute common CPU physical SSA and transactional state without attention/KV/RoPE/dense FFN | Independent all-layer/whole-model numerics and hosted conversation remain open; A01 stays PARTIAL |
 
@@ -613,7 +633,7 @@ second, flattened compiler pipeline.
 | PEIR package terminal truth | Authenticated terminal roles, identities, qtypes, row geometry, encoded ranges, layout and sharing | Built from admitted artifact materialization and runtime-descriptor facts; no backend/device/activation/kernel/residency decision. |
 | Program-parameter join | One identity-preserving package realization for each used computational parameter | Transformation terminal lineage and PEIR decisions resolve symbolic constants before invocation; payload lookup is not deferred to execution. |
 | Physical computational program / target choice | Admitted operation implementations, dependencies, exact populations and physical value contracts after exact parameter join | Serial physical SSA owns Qwen/MiniMax program work; DeepSeek runtime resolves scheduled attention/MoE work from the retained canonical graph and separately authenticated implementation plans. |
-| Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Runtime binding v17 and model-plan v8 carry canonical schedules plus physical programs/plans; v17 also records explicit attention absence. Historical forms import only at the schema boundary; warm execution does not invoke family importers. |
+| Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Runtime binding v19 and model-plan v8 carry canonical schedules plus physical programs/plans; v17 records explicit attention absence, v18 adds the opt-in mixing-projection class, and v19 independently records the BF16-stored projection class. Historical forms import only at the schema boundary; warm execution does not invoke family importers. |
 | State providers / backends / evidence | Physical state mechanisms and CPU/CUDA execution publish typed results and observations | Existing owners and producer-owned transient-result lifetimes preserved |
 
 The retained canonical graph, PEIR and physical computational programs answer

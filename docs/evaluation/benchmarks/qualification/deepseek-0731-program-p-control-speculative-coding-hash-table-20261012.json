@@ -1,0 +1,1057 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/receipt.json",
+          "sha256": "1ff264201c296c3234faf8abdf4891f37c1ab96128c3a039a4ddc3d84e79bf45",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+          "sha256": "f4a198fd8da315bdd1fcd41c1c206a0329fe2b9becd80a54b6fa7bc99f477f98",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/source.json",
+          "sha256": "787331375fecfc9baf45395d8a80b94de210e62957eeb3373105c6fef95c4ea8",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/build.json",
+          "sha256": "fefe01e7ba2cbf81c97d4d541b86e5dace5d59d856faeb9618145fedc426e3bd",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/control-kernel-identity-01/stdout.jsonl",
+          "sha256": "6a6326f5eaee24455d16640d8de6bff10e35e01a58f067970d91bd6dc29cd621",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/closed.json",
+          "sha256": "0461d8b1fe5c8379cb8a87a7f2699c6306ce96f4fde8243629e52afeb6ca4ba1",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/operator-restored.json",
+          "sha256": "0eeac6c800540dc925ae6d3b08b9ee64f617faa608263871a47f36673698f383",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "447d53b4668b0b4c2943d494605492281df4cf38b7000c079f00a91b4cec40ae",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/loaded-4096.json",
+          "sha256": "b05513ca0f5733283e931e9a25936383c6f5582ad1648e294df6417df1ec4c4f",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/receipt.json",
+          "sha256": "1ff264201c296c3234faf8abdf4891f37c1ab96128c3a039a4ddc3d84e79bf45",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+          "sha256": "f4a198fd8da315bdd1fcd41c1c206a0329fe2b9becd80a54b6fa7bc99f477f98",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/source.json",
+          "sha256": "787331375fecfc9baf45395d8a80b94de210e62957eeb3373105c6fef95c4ea8",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/build.json",
+          "sha256": "fefe01e7ba2cbf81c97d4d541b86e5dace5d59d856faeb9618145fedc426e3bd",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/control-kernel-identity-01/stdout.jsonl",
+          "sha256": "6a6326f5eaee24455d16640d8de6bff10e35e01a58f067970d91bd6dc29cd621",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/closed.json",
+          "sha256": "0461d8b1fe5c8379cb8a87a7f2699c6306ce96f4fde8243629e52afeb6ca4ba1",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/operator-restored.json",
+          "sha256": "0eeac6c800540dc925ae6d3b08b9ee64f617faa608263871a47f36673698f383",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "447d53b4668b0b4c2943d494605492281df4cf38b7000c079f00a91b4cec40ae",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/loaded-4096.json",
+          "sha256": "b05513ca0f5733283e931e9a25936383c6f5582ad1648e294df6417df1ec4c4f",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/receipt.json",
+          "sha256": "1ff264201c296c3234faf8abdf4891f37c1ab96128c3a039a4ddc3d84e79bf45",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+          "sha256": "f4a198fd8da315bdd1fcd41c1c206a0329fe2b9becd80a54b6fa7bc99f477f98",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/source.json",
+          "sha256": "787331375fecfc9baf45395d8a80b94de210e62957eeb3373105c6fef95c4ea8",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/build.json",
+          "sha256": "fefe01e7ba2cbf81c97d4d541b86e5dace5d59d856faeb9618145fedc426e3bd",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/control-kernel-identity-01/stdout.jsonl",
+          "sha256": "6a6326f5eaee24455d16640d8de6bff10e35e01a58f067970d91bd6dc29cd621",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/closed.json",
+          "sha256": "0461d8b1fe5c8379cb8a87a7f2699c6306ce96f4fde8243629e52afeb6ca4ba1",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/operator-restored.json",
+          "sha256": "0eeac6c800540dc925ae6d3b08b9ee64f617faa608263871a47f36673698f383",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "447d53b4668b0b4c2943d494605492281df4cf38b7000c079f00a91b4cec40ae",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/loaded-4096.json",
+          "sha256": "b05513ca0f5733283e931e9a25936383c6f5582ad1648e294df6417df1ec4c4f",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-control-speculative-coding-hash-table-20261012",
+  "limitations": [
+    "Three fresh-session samples; median, range and MAD, not a confidence interval or universal speedup.",
+    "Same artifact/binding/numerical class; implementation/build/kernel differ. Instrumented traces excluded from timing.",
+    "No independent checkpoint-matched NLL/PPL/KL or held-out quality. High/maximum, HTTP and installed-product performance not qualified.",
+    "Client-visible fragment arrival is not PTY painting; server/client latency metrics have distinct boundaries.",
+    "Advisory locks and sampled clear GPU process observations do not establish uninterrupted exclusivity; clocks uncontrolled.",
+    "Exact internal output-byte agreement does not independently qualify model behavior.",
+    "4K coding and 16K prefill admitted after authorized operator-model unload; no 32K candidate admission or installed rollout claim."
+  ],
+  "measurements": [
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.497786818,
+        0.507884626,
+        0.518658033
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.518658033,
+        "median": 0.507884626,
+        "median_absolute_deviation": 0.01009780799999993,
+        "minimum": 0.497786818
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        19.379727935,
+        19.360649538,
+        19.356849337
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 19.379727935,
+        "median": 19.360649538,
+        "median_absolute_deviation": 0.003800201000000669,
+        "minimum": 19.356849337
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.7464839319999999,
+        1.7428952199999999,
+        1.7325683170000001
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.7464839319999999,
+        "median": 1.7428952199999999,
+        "median_absolute_deviation": 0.003588711999999994,
+        "minimum": 1.7325683170000001
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.44933078100000046,
+        0.45061845600000083,
+        0.45207462400000153
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.45207462400000153,
+        "median": 0.45061845600000083,
+        "median_absolute_deviation": 0.0012876750000003767,
+        "minimum": 0.44933078100000046
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.0691485501490196,
+        0.06908785196470589,
+        0.06911254145882353
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.0691485501490196,
+        "median": 0.06911254145882353,
+        "median_absolute_deviation": 2.4689494117643984e-05,
+        "minimum": 0.06908785196470589
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.248682282,
+        1.235001762,
+        1.213913452
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.248682282,
+        "median": 1.235001762,
+        "median_absolute_deviation": 0.013680520000000085,
+        "minimum": 1.213913452
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.248682282,
+        1.235001762,
+        1.213913452
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.248682282,
+        "median": 1.235001762,
+        "median_absolute_deviation": 0.013680520000000085,
+        "minimum": 1.213913452
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.7464839319999999,
+        1.7428952199999999,
+        1.7325683170000001
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.7464839319999999,
+        "median": 1.7428952199999999,
+        "median_absolute_deviation": 0.003588711999999994,
+        "minimum": 1.7325683170000001
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        14.147617876542084,
+        14.166970001093878,
+        14.170211229457607
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 14.170211229457607,
+        "median": 14.166970001093878,
+        "median_absolute_deviation": 0.0032412283637288652,
+        "minimum": 14.147617876542084
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "committed tokens after first / elapsed decode wall after first",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "decode.post-first.committed",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        14.461685750950398,
+        14.474422380524624,
+        14.469231789513262
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 14.474422380524624,
+        "median": 14.469231789513262,
+        "median_absolute_deviation": 0.005190591011361434,
+        "minimum": 14.461685750950398
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        39.41726742672296,
+        39.64279351937054,
+        40.189720736578586
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 40.189720736578586,
+        "median": 39.64279351937054,
+        "median_absolute_deviation": 0.22552609264758416,
+        "minimum": 39.41726742672296
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.786457358,
+        0.781983237,
+        0.771341513
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.786457358,
+        "median": 0.781983237,
+        "median_absolute_deviation": 0.004474120999999998,
+        "minimum": 0.771341513
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/source-capture",
+    "build": {
+      "build_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+      "build_identity": "443c6f3c2317525e116ac2a11d4825dd5e9c32469e4c0e41b83da472d995f07b",
+      "local_protocol_version": 25,
+      "registry_identity": "1762b4b32baa550b8396af6d786439189efa80ebfcf0580186ff4451a8040de2",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "1e55c4e5ddf668e68db051b1270becf32eca7226464eb61892ce6c8ccf19e353",
+      "source_delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_state": "clean",
+      "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+      "version": "0.1.0"
+    },
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table-resources.jsonl",
+      "allowed_pids": [
+        276668
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 60,
+      "probe_seconds": 1.3924856489757076,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 277146,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "client_build": "443c6f3c2317525e116ac2a11d4825dd5e9c32469e4c0e41b83da472d995f07b",
+    "checkpoint_relationship": {
+      "claims_inherited": false,
+      "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+      "source": "explicit-local-record",
+      "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+    },
+    "engine_record": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/loaded-4096.json",
+      "sha256": "b05513ca0f5733283e931e9a25936383c6f5582ad1648e294df6417df1ec4c4f",
+      "result": "PASS"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/control-kernel-identity-01/stdout.jsonl",
+      "sha256": "6a6326f5eaee24455d16640d8de6bff10e35e01a58f067970d91bd6dc29cd621",
+      "result": "PASS"
+    },
+    "device_uuid": "GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc",
+    "boot_id": "54835689-f267-4b02-be92-24be60646f9d",
+    "reproduction": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table-command.json",
+      "sha256": "bf361f65b39025c3ba3f2c0ee3b4539a64733afac937b2d79b64992fc6ca69ec",
+      "result": "PASS"
+    },
+    "continuation_control": {
+      "baseline": {
+        "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+        "sha256": "f4a198fd8da315bdd1fcd41c1c206a0329fe2b9becd80a54b6fa7bc99f477f98",
+        "result": "PASS"
+      },
+      "equal_ordered_fragment_channels_lengths_hashes": true,
+      "scope": "Internal output regression; not upstream checkpoint conformance or independent model quality"
+    },
+    "diagnostics": [
+      {
+        "id": "post-load.rss",
+        "case": "coding.hash-table",
+        "value": 104084054016,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "post-load.pss",
+        "case": "coding.hash-table",
+        "value": 104073328640,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "post-load.pss_file",
+        "case": "coding.hash-table",
+        "value": 103833475072,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "post-load.pss_anon",
+        "case": "coding.hash-table",
+        "value": 195616768,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "post-load.locked",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "load.client",
+        "case": "coding.hash-table",
+        "value": 5.53204354,
+        "unit": "s",
+        "definition": "One load command to ready; artifact authentication already read file pages; not cold-storage latency",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/load-4096.json"
+      },
+      {
+        "id": "native.prompt_tokens",
+        "case": "coding.hash-table",
+        "value": 31,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "native.reused_tokens",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "native.prefill_tokens",
+        "case": "coding.hash-table",
+        "value": 31,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "native.generated_tokens",
+        "case": "coding.hash-table",
+        "value": 256,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_cycles.0",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_forwards.0",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.proposed_tokens.0",
+        "case": "coding.hash-table",
+        "value": 215,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.selected_verification_tokens.0",
+        "case": "coding.hash-table",
+        "value": 211,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.target_verifications.0",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.accepted_tokens.0",
+        "case": "coding.hash-table",
+        "value": 170,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.rejected_tokens.0",
+        "case": "coding.hash-table",
+        "value": 41,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.discarded_tokens.0",
+        "case": "coding.hash-table",
+        "value": 4,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.correction_or_bonus_tokens.0",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.mean_accepted_prefix.0",
+        "case": "coding.hash-table",
+        "value": 3.953488372093023,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.maximum_accepted_prefix.0",
+        "case": "coding.hash-table",
+        "value": 5,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_seconds.0",
+        "case": "coding.hash-table",
+        "value": 1.232668471,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.verification_seconds.0",
+        "case": "coding.hash-table",
+        "value": 11.509696812,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.commit_seconds.0",
+        "case": "coding.hash-table",
+        "value": 5.029236348,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_cycles.1",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_forwards.1",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.proposed_tokens.1",
+        "case": "coding.hash-table",
+        "value": 215,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.selected_verification_tokens.1",
+        "case": "coding.hash-table",
+        "value": 211,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.target_verifications.1",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.accepted_tokens.1",
+        "case": "coding.hash-table",
+        "value": 170,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.rejected_tokens.1",
+        "case": "coding.hash-table",
+        "value": 41,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.discarded_tokens.1",
+        "case": "coding.hash-table",
+        "value": 4,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.correction_or_bonus_tokens.1",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.mean_accepted_prefix.1",
+        "case": "coding.hash-table",
+        "value": 3.953488372093023,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.maximum_accepted_prefix.1",
+        "case": "coding.hash-table",
+        "value": 5,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_seconds.1",
+        "case": "coding.hash-table",
+        "value": 1.222673747,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.verification_seconds.1",
+        "case": "coding.hash-table",
+        "value": 11.479889194,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.commit_seconds.1",
+        "case": "coding.hash-table",
+        "value": 5.043850747,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_cycles.2",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_forwards.2",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.proposed_tokens.2",
+        "case": "coding.hash-table",
+        "value": 215,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.selected_verification_tokens.2",
+        "case": "coding.hash-table",
+        "value": 211,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.target_verifications.2",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.accepted_tokens.2",
+        "case": "coding.hash-table",
+        "value": 170,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.rejected_tokens.2",
+        "case": "coding.hash-table",
+        "value": 41,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.discarded_tokens.2",
+        "case": "coding.hash-table",
+        "value": 4,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.correction_or_bonus_tokens.2",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.mean_accepted_prefix.2",
+        "case": "coding.hash-table",
+        "value": 3.953488372093023,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.maximum_accepted_prefix.2",
+        "case": "coding.hash-table",
+        "value": 5,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_seconds.2",
+        "case": "coding.hash-table",
+        "value": 1.225149671,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.verification_seconds.2",
+        "case": "coding.hash-table",
+        "value": 11.506688258,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.commit_seconds.2",
+        "case": "coding.hash-table",
+        "value": 5.011026532,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      }
+    ]
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; control executable realization",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "build": "443c6f3c2317525e116ac2a11d4825dd5e9c32469e4c0e41b83da472d995f07b",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "74156f01129ac1766ae55fb8d4bb905a4112638f17c68e79be46323e0a5feb6a",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "458dee5cae70a91fb19b1b5d10f9d36459fd6ea0386ab283c6a5cc35cfff3fc0",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v25",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; speculative; no prefix reuse",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+    "strategy": "speculative",
+    "suite": "d5d9eb417abe63fc2d2c242317479cfc785ce46688e25cc7e936501111393f9d",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "488072edbbf9a4d6a0efeea469160f9d9a2f8e22c5d7aec4190b3e9b971999d3",
+  "title": "0731 MXFP4/Q2 native control realization: speculative / coding.hash-table / three fresh sessions"
+}

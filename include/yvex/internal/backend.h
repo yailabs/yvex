@@ -15,7 +15,7 @@ typedef struct yvex_backend_moe_operations yvex_backend_moe_operations;
 typedef struct yvex_backend_sampling_operations yvex_backend_sampling_operations;
 typedef struct yvex_backend_transformer_operations yvex_backend_transformer_operations;
 /* Encoded attention is a private graph/backend ABI, never installed capability surface. */
-#define YVEX_BACKEND_ATTENTION_JOB_SCHEMA 4u
+#define YVEX_BACKEND_ATTENTION_JOB_SCHEMA 6u
 typedef enum {
     YVEX_BACKEND_ATTENTION_WEIGHT_Q_A = 0,
     YVEX_BACKEND_ATTENTION_WEIGHT_Q_A_NORM,
@@ -65,7 +65,8 @@ typedef enum {
 } yvex_backend_attention_class;
 typedef enum {
     YVEX_BACKEND_ATTENTION_COMPUTE_UNKNOWN = 0,
-    YVEX_BACKEND_ATTENTION_COMPUTE_BF16_F32_RNE_V1
+    YVEX_BACKEND_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+    YVEX_BACKEND_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1
 } yvex_backend_attention_compute;
 typedef enum {
     YVEX_BACKEND_ATTENTION_SCOPE_CORE = 0,
@@ -104,6 +105,9 @@ typedef struct {
     unsigned long long indexer_heads, indexer_head_dimension, indexer_topk;
     unsigned long long residual_stream_count, residual_stream_width, residual_expanded_width;
     unsigned long long mhc_mixing_rows, mhc_sinkhorn_iterations;
+    /* 0: ordered F64 publication; 1: explicitly selected F32 accumulation. */
+    unsigned int mhc_projection;
+    unsigned int matrix_projection;
     double rms_epsilon, mhc_epsilon, mhc_residual_post_multiplier;
     yvex_backend_attention_position position;
     yvex_backend_attention_activation attention_kv_activation, compressor_activation;
@@ -277,6 +281,10 @@ typedef struct {
     int attached, owned, pinned;
     unsigned long long capacity, used, peak, generation, allocation_count;
 } yvex_backend_host_workspace_summary;
+typedef struct {
+    int attached;
+    unsigned long long capacity, used, peak, generation;
+} yvex_backend_workspace_summary;
 int yvex_backend_resident_attach(yvex_backend *, const unsigned char *, unsigned long long,
                                  const yvex_device_tensor *, unsigned long long, yvex_error *);
 int yvex_backend_resident_detach(yvex_backend *backend, yvex_error *err);
@@ -298,10 +306,12 @@ typedef enum {
     YVEX_ENCODED_INPUT_BF16 = 2
 } yvex_encoded_input_policy;
 /* Accumulation is independent of input precision. ROW fixes the retained
- * encoded row-dot reduction; DEFAULT permits an admitted matrix implementation. */
+ * encoded row-dot reduction; DEFAULT retains its admitted matrix implementation.
+ * F32_ACC explicitly admits reordered F32 contraction over unsplit F32 operands. */
 typedef enum {
     YVEX_ENCODED_REDUCTION_DEFAULT = 0,
-    YVEX_ENCODED_REDUCTION_ROW = 1
+    YVEX_ENCODED_REDUCTION_ROW = 1,
+    YVEX_ENCODED_REDUCTION_F32_ACC = 2
 } yvex_encoded_reduction_policy;
 struct yvex_backend_encoded_operations {
     int (*workspace_bytes)(unsigned int qtype, unsigned long long row_width,
@@ -358,6 +368,7 @@ int yvex_backend_state_residency_resolve(const yvex_backend *backend, const void
 int yvex_backend_workspace_attach(yvex_backend *, const yvex_device_tensor *,
                                   unsigned long long, yvex_error *);
 void yvex_backend_workspace_detach(yvex_backend *backend);
+int yvex_backend_workspace_summary_get(const yvex_backend *, yvex_backend_workspace_summary *);
 int yvex_backend_workspace_acquire(yvex_backend *backend, unsigned long long bytes,
                                    unsigned long long alignment, unsigned long long *device_address);
 int yvex_backend_host_workspace_prepare_owned(yvex_backend *backend, unsigned long long bytes,

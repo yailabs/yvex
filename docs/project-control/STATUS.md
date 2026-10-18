@@ -22,6 +22,15 @@ publication: {html: true, pdf: true, index: true}
 
 ## Active goal-driven Physical Model Compiler
 
+On 2026-10-18 the operator selects consolidation of the accumulated Program P
+implementation and retained evidence on `main`, together with the already
+published provider corrections. This source integration is not a competitive
+exit, an installed rollout or YAI acceptance. The subsequent provider candidate
+must use the updated executable and an explicitly compatible 0731 binding;
+the [earlier isolated attempts](../evaluation/provider-output-recovery.md#0731-alternative-and-integrated-source-boundary-2026-10-18)
+did not complete inference. Original DSpark is restored at generation 8/32K;
+the historical installed Host is unchanged.
+
 The 2026-10-17 local CPU continuation composes IQ2 producer alternatives with
 canonical parameter plans and unchanged calibration/compatibility owners.
 Default search and public management are unchanged; the opt-in CLI projection
@@ -48,21 +57,158 @@ four independent CPU replays and nine bounded device-tool checks remain
 component evidence, not a production prepared layout or competitive exit.
 No installed rollout follows from that campaign.
 
+The 2026-10-16 continuation retains two new numerical refusals in the frozen07
+control; candidate08 was not reached by those comparisons. Separate short and
+coding repetition controls succeed, but do not explain or close that inherited
+repeatability gate. An isolated first-status-writer diagnostic completes its
+bounded model cases without a refusal and is ineligible for performance claims.
+The subsequent frozen08/10 native comparison completes three fresh samples
+per measured cell, including separately admitted prefill widths. Workspace v5
+binds attention computation to query/result lifetime reuse; projection consumes
+the attached runtime-admitted workspace rather than a fixed 1-GiB ceiling.
+The checked prefill envelope reaches 2,048 real positions, with the default
+unchanged. Width 1,024 is fastest in this examined uncached population;
+width 2,048 regresses and is not selected merely because it fits. CPU runtime
+sanitizers and bounded device safety controls remain separate from those
+complete-model observations. The corrected original Host/profile is independently
+restored at generation 30 and explicit 32K, with its catalog verified from Exon
+and no installed candidate rollout. The latest trace isolates a wide decoded-
+projection scheduling cost; an equivalent tiled candidate passes three
+registered integration repetitions and bounded device safety checks, while
+its same-width complete-model effect is now characterized above. Original DSpark 32K remains
+available to the separate YAI consumer; no tool-call acceptance is inherited
+from that availability. Program P remains IN PROGRESS;
+independent model quality and the 20/700 exits remain unearned.
+
 The selective 2026-10-15 representation continuation admits a source/file/context-
 bound calibration profile through the existing CLI and an explicitly versioned,
 independently checked IQ2 encoding producer. Complete real gate/up observations
-select 28 layers; other weights remain controls. Native planning succeeds, while
-experimental artifact completion, full execution, quality and throughput remain
-unfinished. Lower parameter reconstruction loss is not an inference speedup.
+select 28 layers; other weights remain controls. Canonical artifact/binding
+production and native characterization are retained below their exact evidence
+boundary; independent quality and competitive throughput remain unfinished.
+Lower parameter reconstruction loss is not an inference speedup.
 The same continuation now supports offline reuse of exact package admission
 when compiling another executable realization. A real produced Mamba package
 recompiles and replays through the native CLI without a catalog bypass or model
 load.
+A generic SM121 Q8_0 ROW matrix consumer passes bounded component controls;
+neither result closes DeepSeek execution, held-out quality or throughput gates.
+
+The 2026-10-15 continuation has refreshed complete-request attribution and a
+source-stable native-API 512/1024-position comparison with fresh sessions and
+controlled restoration. Those experimental geometry results are not an installed
+default or a competitive exit. A new equivalent SM121 MXFP4 ROW tile passes
+bounded byte controls, an independent literal arithmetic reference, small
+memcheck/synchronization/race controls and registered changed-owner CUDA QA.
+Three fresh-session public-native-API cells now characterize its full-model
+prefill benefit, separately from the still-open complete capacity-plan comparison
+and first-control coding repeatability gates. A subsequent profiling attempt
+was cancelled before inference on unavailable GPU observations; verified recovery
+restored original DSpark 32K at generation 6 on unchanged corrected Host `228cf6dd`.
+The revised observer passes bounded CPU lifecycle controls and refuses inference
+until a fresh strict accelerator witness. Its candidate decode later refuses
+with a MoE numerical status after 25 committed tokens, while a separate
+legacy-selector short control reaches EOS. The new ROW kernel is absent from
+the failing trace; causality remains unresolved. Both private runs are retired
+and the original 32K service is subsequently verified at generation 11.
+Fresh canonical 2K/8K attribution now covers the latest retained ROW executable;
+its separate narrow numerical repeatability gate remains open. A block-interleaved
+Q2 layout stays component-only. A larger transient preparation arena executes
+larger tiles and fewer submissions but establishes no complete-model prefill
+benefit in three fresh sessions per cell. It is rejected; only its owned hunks
+are removed, reproducing the preceding source delta without discarding other
+Program P work. Exact controls and limits remain in Evaluation.
+A fresh canonical coding trace now resolves the retained executable's narrow
+matrix populations and host/device gaps. CUDA Graph parameter updates alone
+are too small in that trace to explain the remaining deficit. A graph-aware
+experimental observer captures actual native MoE operands without changing
+the executed arithmetic; its first public 2K corpus covers 9,556 of 11,008
+layer/expert populations, so no complete importance matrix is published.
+The existing native importance-matrix owner now provides bounded CPU sufficient
+statistics with independent arithmetic, refusal and sanitizer controls. A
+subsequent seven-request public-corpus capture executes 26,000 uncached input
+tokens, retains 43 population-aware statistics owners and improves observed
+coverage to 10,983 of 11,008 layer/expert populations (28 complete layers).
+No complete importance matrix or independently qualified recipe is published;
+the 25 missing populations remain explicit. Authenticated production and
+independent checkpoint quality are separate gates. The original DSpark 32K
+service is subsequently restored and observed at generation 15, with the
+installed Host and management unchanged.
+No independent model-quality recommendation
+or 20/700 result is earned. The [current evidence](../evaluation/compiler-evidence.md#current-native-attribution-and-row-realization-2026-10-15)
+keeps computational candidates, measured scope and protected service state separate.
+
+The phase-specific Q2 continuation now retains native N=3 coding/2K/8K/DSpark
+receipts and a fixed-executable five-binding prefill ablation. Global minimum-one
+dispatch is rejected for decode regression; the prefill-only selection has a
+bounded model prefill benefit, not a decode breakthrough. Latest separate CUPTI
+traces resolve real matrix geometry and retain distributed matrix/MoE/attention
+costs. An arena-derived prepared-projection candidate passes component numerical,
+capacity and publication/refusal controls; its complete-model effect remains
+unmeasured. A source-geometry RoPE candidate now admits the 0731 plan's 64
+rotary components, with exact cohort controls, independent rotation references
+and graph refusal/recovery. Its isolated kernel benefit is not a new model
+measurement. [Current convergence evidence](../evaluation/compiler-evidence.md#phase-specific-q2-execution)
+does not earn independent model quality, automatic recommendation, installed
+rollout or the 20/700 exits. Program P remains IN PROGRESS.
+
+The current projection continuation has complete-model mHC F32 and stream/graph
+controls, plus a separately admitted BF16-stored matrix candidate with three
+fresh native samples per workload. Compact scalar-MoE dispatch is rejected for
+complete-model regression despite component wins. The phase-prepared matrix
+class has three fresh native samples per workload and numerical/resource
+controls; it improves prefill against the BF16-stored control without earning
+a target-only decode gain. Binding v19 preserves the distinct numerical selection and imports older
+bindings without changing their arithmetic. [Projection evidence](../evaluation/compiler-evidence.md#projection-numerical-realizations)
+does not earn independent whole-model quality, automatic selection or 20/700.
+
+The experimental attention candidate introduces an explicit online-64
+BF16/F32-MMA numerical realization, with a separate binding and unchanged
+encoded weights. Bounded official-reference publications and CUDA memory checks
+pass. Three fresh-session native controls now characterize full-model execution:
+prefill improves but target-only decode regresses against the retained Q2
+pipeline. It is not a selected default or independently quality-qualified model;
+the competitive gates remain unearned.
+CPU, draft and incompatible geometry do not inherit this capability. The
+[exact evidence boundary](../evaluation/compiler-evidence.md#block-online-attention-realization)
+is separate from earlier equivalent-kernel improvements and from installed service state.
+
+The subsequent phase-local attention operand preparation passes bounded official
+0731 reference, replay/refusal, memory and uninitialized-read controls. Its
+same-binding complete-model comparison now has three fresh samples per native
+coding, 2K, 8K and DSpark case, retained in generated qualification views.
+No competitive exit or independent model-quality gate follows. On 2026-10-13, full-fixture synchronization
+instrumentation with an excessive barrier-tracking allocation caused global
+memory pressure; the kernel killed the installed Host and management process.
+The operator subsequently authorized restoration of the original service units
+and original DeepSeek 32K profile. Host `337e7e73` and management `c0ccd7f1` are
+running with unchanged executables and TLS pin; the recovery first restored
+DeepSeek generation 1 in the new Host lifetime. Health, catalog and one bounded HTTP generation pass, with
+zero remaining sessions/work. The failing instrumentation invocation is disabled;
+subsequent native characterization and separate CUPTI attribution restored the
+original 32K profile at generations 2 and 3. The paired Q2 gate/up traversal now
+has independent component controls, zero-error memory/init/synchronization
+checks and three fresh native samples per coding/2K/8K/DSpark case. Its small
+prefill benefit does not close the competitive gates or establish a decode or
+DSpark breakthrough. Weights, binding and committed output fragments are
+preserved; the original 32K profile was restored at generation 4. The [incident and earned
+scope](../evaluation/compiler-evidence.md#attention-operand-preparation-and-instrumentation-incident)
+remain separate from the earlier completed model measurements.
 
 `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` now owns generic physical
 configuration search and the next DeepSeek implementation. `.5` retains its
 historical evidence and unearned 20/700 exits, BLOCKED on this selected owner;
-it is not COMPLETE. The initial native search implements typed requests, bounded
+it is not COMPLETE. The latest selective weighted-IQ2 native comparison and
+equivalent cooperative execution are [characterized separately](../evaluation/compiler-evidence.md#iq2-cooperative-execution-and-native-controls-2026-10-16):
+the consumer improves prefill against the same-artifact register control,
+without establishing a decode breakthrough, independent held-out quality or
+automatic recommendation. The original 32K service is restored; no candidate
+rollout follows. Later exact normalization and fused online64 controls retain
+bounded native improvements without earning the competitive exit. Narrow
+BF16/F32 physical projection and stream-reused index scratch are under
+[separate qualification](../evaluation/compiler-evidence.md#narrow-projection-and-physical-width-controls-2026-10-16);
+neither component results nor a changed narrow implementation qualify model
+quality. The initial native search implements typed requests, bounded
 policy synthesis, canonical initial reserve/operand checks and identity-bound
 policy export to the existing quant plan/emit pipeline. Static goal-specific
 experiment ordering does not predict throughput or rank approximate quality.
@@ -176,6 +322,26 @@ unexecuted new complete-model comparison. No target-only decode improvement,
 20/700 acceptance or independently qualified recommendation follows from this
 candidate; the operator Host and generation remain protected. See
 [compiler evidence](../evaluation/compiler-evidence.md#indexed-moe-tile-realization).
+
+The separately authorized 2026-10-12 convergence campaign now retains three
+fresh-session native samples per same-artifact coding target-only/DSpark and
+uncached 2K/8K case for the control and equivalent cooperative/narrow CUDA
+realizations. The measured benefit is primarily prefill; the competitive
+20/700 requirements and independent checkpoint quality are still open.
+Ordered output-fragment equality is an internal regression fact only.
+The original 32K profile is restored between full-model arms; Host, listener,
+grant and installed binary identities remain protected. Fixed-input projection
+geometry was rejected after full-model measurement. Alternating A/B/B/A controls
+retain a bounded coding benefit from candidate-parallel attention; four-vector
+RoPE reuse has passed component numerics, without an attributable full-model
+gain in the retained native geometry. Aligned MXFP4 word staging and pipelined
+Q2 block consumption now retain same-artifact complete-model prefill benefits;
+decode and both competitive prefill gates remain unearned. A separate
+source-authored attention oracle qualifies bounded experimental publications,
+not a new deployed numerical class or complete-model quality. None is an
+independently qualified automatic recommendation.
+Source-bound results and rejected alternatives belong to
+[convergence evidence](../evaluation/compiler-evidence.md#encoded-execution-convergence).
 
 ## Retained computational architecture reconstruction
 

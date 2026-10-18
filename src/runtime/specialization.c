@@ -199,6 +199,11 @@ static int execution_profile_facts_open(
         cuda.kernel_bundle_native && evidence == YVEX_EXECUTION_EVIDENCE_PRODUCTION
             ? YVEX_EXECUTION_CLASS_DEVICE_NATIVE
             : YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
+    if (model_view->binding->capabilities.attention_core_ready &&
+        !model_view->binding->capabilities.cpu_prefill_eager_ready &&
+        facts->execution_class != YVEX_EXECUTION_CLASS_DEVICE_NATIVE)
+        return specialization_refuse(err, YVEX_ERR_UNSUPPORTED,
+            "bound attention arithmetic has no portable or forensic realization");
     facts->attention_resolution =
         facts->execution_class == YVEX_EXECUTION_CLASS_DEVICE_NATIVE &&
                 model_view->binding->capabilities.cuda_full_graph_implemented &&
@@ -490,14 +495,17 @@ static int implementation_equal(const yvex_engine_implementation_record *left,
            left->prefill_width_mask == right->prefill_width_mask &&
            left->prefill_worklist_width_mask == right->prefill_worklist_width_mask &&
            left->prefill_maximum_width == right->prefill_maximum_width &&
-           left->matrix_tile_minimum == right->matrix_tile_minimum;
+           left->matrix_tile_minimum == right->matrix_tile_minimum &&
+           left->prefill_matrix_tile_minimum == right->prefill_matrix_tile_minimum;
 }
 
 unsigned long long yvex_runtime_specialization_phase_width_mask(
     const yvex_engine_implementation_record *record,
-    yvex_execution_phase phase, int worklist)
+    yvex_execution_phase phase, int worklist, unsigned long long *matrix_minimum)
 {
-    if (!record || record->schema_version != YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3 ||
+    unsigned long long widths, minimum;
+    if (matrix_minimum) *matrix_minimum = 0ull;
+    if (!record || record->schema_version != YVEX_ENGINE_SPECIALIZATION_SCHEMA_V4 ||
         (unsigned int)phase > YVEX_EXECUTION_PHASE_CORRECTION ||
         !(record->supported_width_mask & 2ull) || !(record->prefill_width_mask & 2ull) ||
         ((record->supported_width_mask | record->prefill_width_mask) & 1ull) ||
@@ -508,9 +516,15 @@ unsigned long long yvex_runtime_specialization_phase_width_mask(
          (record->prefill_maximum_width < 63ull ||
           record->prefill_maximum_width > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH ||
           record->prefill_width_mask != 0x7ffffffffffffffeull))) return 0ull;
+    widths = phase == YVEX_EXECUTION_PHASE_PREFILL
+        ? record->prefill_worklist_width_mask : record->worklist_width_mask;
+    minimum = phase == YVEX_EXECUTION_PHASE_PREFILL
+        ? record->prefill_matrix_tile_minimum : record->matrix_tile_minimum;
+    if (minimum >= 63ull || (minimum && !(widths & (1ull << minimum)))) return 0ull;
+    if (matrix_minimum) *matrix_minimum = minimum;
     if (phase == YVEX_EXECUTION_PHASE_PREFILL)
-        return worklist ? record->prefill_worklist_width_mask : record->prefill_width_mask;
-    return worklist ? record->worklist_width_mask : record->supported_width_mask;
+        return worklist ? widths : record->prefill_width_mask;
+    return worklist ? widths : record->supported_width_mask;
 }
 
 static int implementation_seal(yvex_engine_implementation_record *record,
@@ -534,12 +548,15 @@ static int implementation_seal(yvex_engine_implementation_record *record,
         (record->matrix_tile_minimum &&
          (record->matrix_tile_minimum >= 63ull ||
           !((record->worklist_width_mask | record->prefill_worklist_width_mask) &
-            (1ull << record->matrix_tile_minimum)))))
+            (1ull << record->matrix_tile_minimum)))) ||
+        (record->prefill_matrix_tile_minimum &&
+         (record->prefill_matrix_tile_minimum >= 63ull ||
+          !(record->prefill_worklist_width_mask & (1ull << record->prefill_matrix_tile_minimum)))))
         return specialization_refuse(err, YVEX_ERR_INVALID_ARG,
                                      "implementation record is incomplete");
-    record->schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3;
+    record->schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V4;
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.engine.implementation.v3") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.engine.implementation.v4") ||
         !yvex_sha256_update_u64(&hash, record->schema_version) ||
         !yvex_sha256_update_u64(&hash, record->implementation) ||
         !yvex_sha256_update_u64(&hash, record->fallback_implementation) ||
@@ -551,6 +568,7 @@ static int implementation_seal(yvex_engine_implementation_record *record,
         !yvex_sha256_update_u64(&hash, record->prefill_worklist_width_mask) ||
         !yvex_sha256_update_u64(&hash, record->prefill_maximum_width) ||
         !yvex_sha256_update_u64(&hash, record->matrix_tile_minimum) ||
+        !yvex_sha256_update_u64(&hash, record->prefill_matrix_tile_minimum) ||
         !hash_finish(&hash, record->identity))
         return specialization_refuse(err, YVEX_ERR_STATE,
                                      "implementation identity derivation failed");
@@ -581,7 +599,8 @@ static int implementation_select(
     yvex_engine_specialization *specialization,
     const yvex_physical_execution_decision *package,
     const yvex_backend_device_info *device, unsigned long long width_mask,
-    unsigned long long prefill_width_mask, unsigned long long prefill_width, int matrix_experts,
+    unsigned long long prefill_width_mask, unsigned long long prefill_width,
+    unsigned long long matrix_expert_minimum,
     unsigned int *handle, yvex_error *err)
 {
     yvex_engine_implementation_record candidate = {0};
@@ -607,8 +626,11 @@ static int implementation_select(
                                        ? YVEX_ENGINE_IMPLEMENTATION_DEVICE_ENCODED_ROW
                                        : YVEX_ENGINE_IMPLEMENTATION_DEVICE_F32;
         candidate.fallback_implementation = YVEX_ENGINE_IMPLEMENTATION_DEVICE_F32;
-        if (routed && encoded && matrix_experts && (prefill_width_mask & (1ull << 4u)))
-            candidate.matrix_tile_minimum = 4ull;
+        if (routed && encoded && matrix_expert_minimum) {
+            if (prefill_width_mask & (1ull << 4u)) candidate.matrix_tile_minimum = 4ull;
+            if (prefill_width_mask & (1ull << matrix_expert_minimum))
+                candidate.prefill_matrix_tile_minimum = matrix_expert_minimum;
+        }
     } else {
         return specialization_refuse(err, YVEX_ERR_UNSUPPORTED,
                                      "backend has no admitted implementation class");
@@ -627,7 +649,7 @@ static int specialization_seal(yvex_engine_specialization *specialization,
         return specialization_refuse(err, YVEX_ERR_INVALID_ARG,
                                      "engine specialization is incomplete");
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.engine.specialization.v3") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.engine.specialization.v4") ||
         !yvex_sha256_update_u64(&hash, summary->schema_version) ||
         !yvex_sha256_update_text(&hash, summary->package_execution_identity) ||
         !yvex_sha256_update_u64(&hash, summary->backend) ||
@@ -651,13 +673,13 @@ failed:
 
 /* One coherent routed triplet policy; a mixed or unsupported expert program
  * retains its admitted row realization. No family identity participates. */
-static int specialization_matrix_experts(const yvex_physical_execution_ir *ir,
+static unsigned long long specialization_matrix_minimum(const yvex_physical_execution_ir *ir,
                                          const yvex_physical_execution_decision *owner,
                                          const yvex_backend_device_info *device)
 {
     const yvex_physical_execution_summary *summary = yvex_physical_execution_ir_summary(ir);
     unsigned int roles = 0u;
-    unsigned int gate_qtype = 0u, up_qtype = 0u;
+    unsigned int gate_qtype = 0u, up_qtype = 0u, down_qtype = 0u;
     if (!summary || !owner || !consumer_is_routed(owner->consumer) ||
         device->kind != YVEX_BACKEND_KIND_CUDA ||
         device->compute_capability_major < 8) return 0;
@@ -682,10 +704,20 @@ static int specialization_matrix_experts(const yvex_physical_execution_ir *ir,
             else return 0;
         } else {
             if (decision->role != YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN) return 0;
-            roles |= 4u;
+            roles |= 4u; down_qtype = decision->canonical_qtype;
         }
     }
-    return roles == 7u && gate_qtype == up_qtype;
+    if (roles != 7u || gate_qtype != up_qtype) return 0ull;
+    /* Resolve one threshold for the complete triplet from sealed operands,
+     * not independently from a down parameter in an IQ2/Q2 program. The
+     * admitted SM121 prefill realizations include single-pair buckets. Decode,
+     * draft, verify and correction keep their independently measured width-four
+     * control; other arithmetic and hardware retain that control in all phases. */
+    if ((gate_qtype == YVEX_GGUF_QTYPE_Q2_K || gate_qtype == YVEX_GGUF_QTYPE_IQ2_XXS) &&
+        down_qtype == YVEX_GGUF_QTYPE_Q2_K &&
+        device->compute_capability_major == 12 && device->compute_capability_minor == 1)
+        return 1ull;
+    return 4ull;
 }
 
 static int specialization_build(
@@ -734,7 +766,7 @@ static int specialization_build(
         return specialization_refuse(err, YVEX_ERR_NOMEM,
                                      "specialization allocation failed");
     }
-    specialization->summary.schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3;
+    specialization->summary.schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V4;
     specialization->summary.backend = device.kind;
     specialization->summary.device_index = device.device_index;
     specialization->summary.compute_major = device.compute_capability_major;
@@ -754,7 +786,7 @@ static int specialization_build(
             yvex_physical_execution_ir_decision_at(package_execution, index);
         rc = decision ? implementation_select(
                             specialization, decision, &device, width_mask, prefill_width_mask,
-                            prefill_width, specialization_matrix_experts(package_execution, decision, &device),
+                            prefill_width, specialization_matrix_minimum(package_execution, decision, &device),
                             &specialization->decision_handles[index], err)
                       : YVEX_ERR_FORMAT;
         if (rc != YVEX_OK) {
@@ -801,7 +833,7 @@ int yvex_runtime_private_specializations_phase_width(
             if (!package || !decision ||
                 (package->consumer != YVEX_EXECUTION_CONSUMER_ROUTED_GATE_UP &&
                  package->consumer != YVEX_EXECUTION_CONSUMER_ROUTED_DOWN)) continue;
-            admitted = yvex_runtime_specialization_phase_width_mask(decision, phase, 1);
+            admitted = yvex_runtime_specialization_phase_width_mask(decision, phase, 1, NULL);
             if (!admitted)
                 return specialization_refuse(err, YVEX_ERR_STATE,
                                              "runtime model phase-width policy is invalid");
@@ -825,6 +857,24 @@ int yvex_runtime_private_specializations_phase_width(
     return YVEX_OK;
 }
 
+static int binding_backend_admit(
+    const yvex_runtime_binding *binding, yvex_backend_kind kind,
+    const yvex_backend *backend, yvex_error *err)
+{
+    yvex_backend_device_info device = {0};
+    if (!binding || !binding->summary.layer_count || binding->attention.cpu_reference_ready)
+        return YVEX_OK;
+    if (kind != YVEX_BACKEND_KIND_CUDA)
+        return specialization_refuse(err, YVEX_ERR_UNSUPPORTED,
+            "bound attention arithmetic requires its admitted CUDA consumer");
+    int rc = yvex_backend_get_device_info(backend, &device, err);
+    if (rc != YVEX_OK) return rc;
+    if (device.compute_capability_major < 8)
+        return specialization_refuse(err, YVEX_ERR_UNSUPPORTED,
+            "bound BF16 MMA attention requires compute capability 8 or newer");
+    return YVEX_OK;
+}
+
 int yvex_runtime_private_binding_prefill_width(
     const yvex_runtime_binding *binding, yvex_backend_kind kind,
     yvex_backend *backend, unsigned long long *width, yvex_error *err)
@@ -836,6 +886,8 @@ int yvex_runtime_private_binding_prefill_width(
     if (!binding || !width)
         return specialization_refuse(err, YVEX_ERR_INVALID_ARG,
                                      "binding and planned width are required");
+    rc = binding_backend_admit(binding, kind, backend, err);
+    if (rc != YVEX_OK) return rc;
     if (!binding->physical_execution) {
         yvex_error_clear(err);
         return YVEX_OK;
@@ -867,6 +919,8 @@ int yvex_runtime_private_model_specialization_prepare(
         (backend && yvex_backend_kind_of(backend) != backend_kind))
         return specialization_refuse(err, YVEX_ERR_INVALID_ARG,
                                      "matching engine and backend are required");
+    rc = binding_backend_admit(model->binding, backend_kind, backend, err);
+    if (rc != YVEX_OK) return rc;
     if (pthread_mutex_lock(&model->lifecycle_mutex) != 0)
         return specialization_refuse(err, YVEX_ERR_STATE,
                                      "specialization lock is unavailable");

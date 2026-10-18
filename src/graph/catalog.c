@@ -269,7 +269,7 @@ static int catalog_execution_source_compile(
     const yvex_semantic_model_ir_summary *semantic;
     int rc;
 
-    if (!pipeline || pipeline->schema_version != YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1 ||
+    if (!pipeline || pipeline->schema_version != YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V2 ||
         !pipeline->source_open || !pipeline->source_close || !pipeline->semantic_model_build) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "family.source-catalog",
                        "family has no complete source compiler adapter");
@@ -285,7 +285,8 @@ static int catalog_execution_source_compile(
     rc = pipeline->source_open(&owner->source, request, err);
     if (rc == YVEX_OK)
         rc = pipeline->semantic_model_build(
-            &owner->semantic_model, owner->source.verification, err);
+            &owner->semantic_model, owner->source.verification,
+            request->attention_compute, request->mhc_projection, request->matrix_projection, err);
     semantic = rc == YVEX_OK
                    ? yvex_semantic_model_ir_summary_get(owner->semantic_model) : NULL;
     if (rc != YVEX_OK || !semantic) {

@@ -90,7 +90,7 @@ int yvex_runtime_execution_profile_admit(
     const struct yvex_runtime_execution_session *session,
     yvex_error *err);
 #define YVEX_RUNTIME_REASON_CAP 256u
-#define YVEX_RUNTIME_BINDING_SCHEMA_CURRENT 17u
+#define YVEX_RUNTIME_BINDING_SCHEMA_CURRENT 19u
 #define YVEX_RUNTIME_BINDING_SUFFIX ".yvex-runtime-binding"
 typedef enum {
     YVEX_RUNTIME_BINDING_FAILURE_NONE = 0, YVEX_RUNTIME_BINDING_FAILURE_INVALID_ARGUMENT,

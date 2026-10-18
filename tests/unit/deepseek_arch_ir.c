@@ -266,6 +266,146 @@ static int test_checkpoint_compiler_separation(void)
     return 0;
 }
 
+static int test_attention_realization_identity(void)
+{
+    const yvex_source_target_identity *target = yvex_source_target_identity_find(YVEX_DEEPSEEK_0731_TARGET);
+    const yvex_graph_execution_binding *execution = yvex_graph_execution_find(0, 0, YVEX_DEEPSEEK_0731_TARGET);
+    const yvex_family_binding_pipeline *pipeline = execution->compiler->binding_pipeline;
+    yvex_source_verification source;
+    yvex_semantic_model_ir *baseline = NULL, *candidate = NULL, *refused = NULL;
+    yvex_error error = {0};
+    const yvex_semantic_attention_layer *layers;
+    unsigned long long count;
+    arch_ir_verification_fixture(&source);
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&refused, &source,
+        YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1, 0u, 0u, &error) == YVEX_ERR_UNSUPPORTED && !refused,
+        "new numerical realization does not inherit previous checkpoint admission");
+    arch_ir_copy(source.manifest_target_id, sizeof(source.manifest_target_id), target->target_id);
+    arch_ir_copy(source.repository_id, sizeof(source.repository_id), target->upstream_repo_id);
+    arch_ir_copy(source.revision, sizeof(source.revision), target->upstream_revision);
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&baseline, &source, 0u, 0u, 0u, &error) == YVEX_OK &&
+        pipeline->semantic_model_build(&candidate, &source,
+            YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1, 0u, 0u, &error) == YVEX_OK,
+        "same authenticated model can explicitly select distinct attention arithmetic");
+    const yvex_semantic_model_ir_summary *a = yvex_semantic_model_ir_summary_get(baseline);
+    const yvex_semantic_model_ir_summary *b = yvex_semantic_model_ir_summary_get(candidate);
+    YVEX_TEST_ASSERT(!strcmp(a->source_model_identity, b->source_model_identity) &&
+        !strcmp(a->logical_model_identity, b->logical_model_identity) &&
+        strcmp(a->numeric_contract.identity, b->numeric_contract.identity) &&
+        b->numeric_contract.compute_policy_count == 2ull,
+        "source and mathematics stay fixed; numerical identity changes explicitly");
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_attention_view(candidate, YVEX_TENSOR_SCOPE_MAIN_LAYER,
+        &layers, &count) && count == 43ull, "selected realization keeps all main layers");
+    for (unsigned long long i = 0; i < count; ++i)
+        YVEX_TEST_ASSERT(layers[i].compute_contract == YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1,
+            "main attention lowers selected numerical class");
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_attention_view(candidate, YVEX_TENSOR_SCOPE_DRAFT,
+        &layers, &count) && count == 3ull, "draft topology remains separately admitted");
+    for (unsigned long long i = 0; i < count; ++i)
+        YVEX_TEST_ASSERT(layers[i].compute_contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+            "noncausal draft cannot silently inherit causal attention arithmetic");
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&refused, &source, 999u, 0u, 0u, &error) ==
+        YVEX_ERR_UNSUPPORTED && !refused, "unknown numerical request is refused");
+    yvex_semantic_model_ir_close(&baseline);
+    yvex_semantic_model_ir_close(&candidate);
+    return 0;
+}
+
+static int test_matrix_realization_identity(yvex_matrix_projection_contract selected)
+{
+    const yvex_source_target_identity *target = yvex_source_target_identity_find(YVEX_DEEPSEEK_0731_TARGET);
+    const yvex_family_binding_pipeline *pipeline = yvex_graph_execution_find(
+        0, 0, YVEX_DEEPSEEK_0731_TARGET)->compiler->binding_pipeline;
+    yvex_source_verification source;
+    yvex_semantic_model_ir *baseline = NULL, *candidate = NULL, *refused = NULL;
+    const yvex_semantic_attention_layer *layers;
+    unsigned long long count;
+    yvex_error error = {0};
+    arch_ir_verification_fixture(&source);
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&refused, &source, 0u, 0u,
+        selected, &error) == YVEX_ERR_UNSUPPORTED && !refused,
+        "matrix precision cannot inherit an older checkpoint's admission");
+    arch_ir_copy(source.manifest_target_id, sizeof(source.manifest_target_id), target->target_id);
+    arch_ir_copy(source.repository_id, sizeof(source.repository_id), target->upstream_repo_id);
+    arch_ir_copy(source.revision, sizeof(source.revision), target->upstream_revision);
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&baseline, &source, 0u, 0u, 0u, &error) == YVEX_OK &&
+        pipeline->semantic_model_build(&candidate, &source, 0u, 0u,
+            selected, &error) == YVEX_OK,
+        "one compiler selects a distinct matrix realization without changing attention reduction");
+    const yvex_semantic_model_ir_summary *a = yvex_semantic_model_ir_summary_get(baseline);
+    const yvex_semantic_model_ir_summary *b = yvex_semantic_model_ir_summary_get(candidate);
+    YVEX_TEST_ASSERT(!strcmp(a->source_model_identity, b->source_model_identity) &&
+        !strcmp(a->logical_model_identity, b->logical_model_identity) &&
+        strcmp(a->numeric_contract.identity, b->numeric_contract.identity) &&
+        b->numeric_contract.numeric_schema_version == (selected == YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1 ? 6u : 5u),
+        "checkpoint and topology remain fixed; arithmetic has explicit identity");
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_attention_view(candidate, YVEX_TENSOR_SCOPE_MAIN_LAYER,
+        &layers, &count) && count == 43u, "all target layers retained");
+    for (unsigned long long i = 0u; i < count; ++i)
+        YVEX_TEST_ASSERT(layers[i].matrix_projection == selected &&
+            !layers[i].mhc_projection && layers[i].compute_contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+            "matrix selection does not silently select mHC or online attention classes");
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_attention_view(candidate, YVEX_TENSOR_SCOPE_DRAFT,
+        &layers, &count) && count == 3u, "independent draft topology retained");
+    for (unsigned long long i = 0u; i < count; ++i)
+        YVEX_TEST_ASSERT(!layers[i].matrix_projection, "draft numerical class remains unchanged");
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&refused, &source, 0u, 0u, 99u, &error) ==
+        YVEX_ERR_UNSUPPORTED && !refused, "unknown matrix numerical realization refuses");
+    yvex_semantic_model_ir_close(&baseline);
+    yvex_semantic_model_ir_close(&candidate);
+    return 0;
+}
+
+static int test_mhc_realization_identity(void)
+{
+    const yvex_source_target_identity *target = yvex_source_target_identity_find(YVEX_DEEPSEEK_0731_TARGET);
+    const yvex_family_binding_pipeline *pipeline = yvex_graph_execution_find(
+        0, 0, YVEX_DEEPSEEK_0731_TARGET)->compiler->binding_pipeline;
+    yvex_source_verification source;
+    yvex_semantic_model_ir *baseline = NULL, *candidate = NULL, *combined = NULL, *refused = NULL;
+    const yvex_semantic_attention_layer *layers;
+    unsigned long long count;
+    yvex_error error = {0};
+    arch_ir_verification_fixture(&source);
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&refused, &source, 0u,
+        YVEX_MHC_PROJECTION_F32_ACC_V1, 0u, &error) == YVEX_ERR_UNSUPPORTED && !refused,
+        "F32 mixing cannot inherit another checkpoint's admission");
+    arch_ir_copy(source.manifest_target_id, sizeof(source.manifest_target_id), target->target_id);
+    arch_ir_copy(source.repository_id, sizeof(source.repository_id), target->upstream_repo_id);
+    arch_ir_copy(source.revision, sizeof(source.revision), target->upstream_revision);
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&baseline, &source, 0u, 0u, 0u, &error) == YVEX_OK &&
+        pipeline->semantic_model_build(&candidate, &source, 0u, YVEX_MHC_PROJECTION_F32_ACC_V1,
+            0u, &error) == YVEX_OK && pipeline->semantic_model_build(&combined, &source,
+            YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1, YVEX_MHC_PROJECTION_F32_ACC_V1,
+            0u, &error) == YVEX_OK, "numerical alternatives compose explicitly through one compiler");
+    const yvex_semantic_model_ir_summary *a = yvex_semantic_model_ir_summary_get(baseline);
+    const yvex_semantic_model_ir_summary *b = yvex_semantic_model_ir_summary_get(candidate);
+    const yvex_semantic_model_ir_summary *c = yvex_semantic_model_ir_summary_get(combined);
+    YVEX_TEST_ASSERT(!strcmp(a->source_model_identity, b->source_model_identity) &&
+        !strcmp(a->logical_model_identity, b->logical_model_identity) &&
+        strcmp(a->numeric_contract.identity, b->numeric_contract.identity) &&
+        strcmp(b->numeric_contract.identity, c->numeric_contract.identity) &&
+        b->numeric_contract.compute_policy_count == 2u && c->numeric_contract.compute_policy_count == 3u,
+        "mixed precision changes numerical lineage, never checkpoint or mathematical topology");
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_attention_view(candidate, YVEX_TENSOR_SCOPE_MAIN_LAYER,
+        &layers, &count) && count == 43u, "all real target layers remain present");
+    for (unsigned long long i = 0u; i < count; ++i)
+        YVEX_TEST_ASSERT(layers[i].mhc_projection == YVEX_MHC_PROJECTION_F32_ACC_V1 &&
+            layers[i].compute_contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+            "selecting mixing precision alone does not alter attention precision");
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_attention_view(candidate, YVEX_TENSOR_SCOPE_DRAFT,
+        &layers, &count) && count == 3u, "draft remains distinct");
+    for (unsigned long long i = 0u; i < count; ++i)
+        YVEX_TEST_ASSERT(layers[i].mhc_projection == YVEX_MHC_PROJECTION_ORDERED_F64,
+            "draft mixing retains its independently admitted class");
+    YVEX_TEST_ASSERT(pipeline->semantic_model_build(&refused, &source, 0u, 2u, 0u, &error) ==
+        YVEX_ERR_UNSUPPORTED && !refused, "unknown mixing numerical class fails closed");
+    yvex_semantic_model_ir_close(&baseline);
+    yvex_semantic_model_ir_close(&candidate);
+    yvex_semantic_model_ir_close(&combined);
+    return 0;
+}
+
 static int test_arch_ir_golden_topology(void)
 {
     yvex_source_verification source;
@@ -910,7 +1050,7 @@ static int test_arch_ir_report_consumer_and_family_preservation(void)
         "DeepSeek compiler exposes semantic lowering without deployment policy");
     YVEX_TEST_ASSERT(compiler->binding_pipeline &&
                          compiler->binding_pipeline->semantic_model_build(
-                             &semantic, &source, &err) == YVEX_OK,
+                             &semantic, &source, 0u, 0u, 0u, &err) == YVEX_OK,
                      "DeepSeek fixture compiles to generic Semantic Model IR");
     memset(&report, 0, sizeof(report));
     YVEX_TEST_ASSERT(
@@ -1052,6 +1192,10 @@ int yvex_test_deepseek_arch_ir(void)
 {
     if (test_arch_ir_checkpoint_separation() != 0) return 1;
     if (test_checkpoint_compiler_separation() != 0) return 1;
+    if (test_attention_realization_identity() != 0) return 1;
+    if (test_mhc_realization_identity() != 0) return 1;
+    if (test_matrix_realization_identity(YVEX_MATRIX_PROJECTION_BF16_F32_ACC_V1) != 0 ||
+        test_matrix_realization_identity(YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1) != 0) return 1;
     if (test_arch_ir_golden_topology() != 0) return 1;
     if (test_arch_ir_position_authority() != 0) return 1;
     if (test_arch_ir_refusal_matrix() != 0) return 1;

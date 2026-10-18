@@ -96,12 +96,17 @@ resources.
 
 ## Package and specialization
 
-The engine authenticates package facts from runtime binding v17 and PEIR v5.
+The engine authenticates package facts from runtime binding v19 and PEIR v5.
 Package facts include model/operator identities, terminal tensor roles and
 encoded ranges, canonical qtype/layout, the retained canonical operator
 schedule, compiled physical plans/programs, tokenizer/conversation policy, and
 numerical obligations. Binding v17 authenticates attention presence explicitly;
 an admitted pure-SSM program therefore carries no fabricated attention plan.
+Binding v18 adds an explicit mixing-projection numerical class; accepted older
+bindings retain ordered-F64 mixing and do not inherit the new F32 alternative.
+Binding v19 independently adds the explicit BF16-stored projection class;
+v14–v18 imports retain their original projection arithmetic. Neither selection
+changes artifact bytes or establishes held-out model quality.
 
 The engine then seals a backend/device specialization. It binds package
 decisions to admitted implementation classes, activation representations, real

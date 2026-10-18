@@ -661,7 +661,8 @@ static int numeric_bf16_round(float *values, unsigned long long count)
 int yvex_attention_compute_round(yvex_attention_compute_contract contract,
                                  float *values, unsigned long long count)
 {
-    return contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 && numeric_bf16_round(values, count);
+    return (contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 ||
+            contract == YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) && numeric_bf16_round(values, count);
 }
 
 static int attention_rms_norm_apply(float *values, unsigned long long count,
@@ -873,7 +874,8 @@ int yvex_attention_mhc_pre(const yvex_attention_mhc_pre_args *args,
             layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
             YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION, 1u, 0u, err, YVEX_ERR_BOUNDS,
             "attention mHC ingress geometry is invalid");
-    if (layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1)
+    if (layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+        layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1)
         return yvex_attention_reject(failure, YVEX_ATTENTION_FAILURE_NUMERIC, NULL,
             layer->layer_index, YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION, 1u, 0u,
             err, YVEX_ERR_FORMAT, "attention mHC ingress compute contract is unsupported");

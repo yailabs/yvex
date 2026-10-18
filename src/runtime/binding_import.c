@@ -1,5 +1,6 @@
 /* Instantiate authenticated binding records without reopening family compilation. */
 #include "src/runtime/private.h"
+#include <yvex/internal/graph_state.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -414,7 +415,8 @@ int yvex_runtime_private_binding_attention_ready(
 {
     return attention && attention->history_contract_ready &&
            attention->state_delta_contract_ready &&
-           attention->cpu_reference_ready && attention->cuda_execution_ready &&
+           (attention->cpu_reference_ready == 0 || attention->cpu_reference_ready == 1) &&
+           attention->cuda_execution_ready &&
            attention->full_execution_ready;
 }
 
@@ -577,6 +579,11 @@ static const char *binding_canonical_records_mismatch(
     if (!compiled_plan_valid(binding)) return "compiled-model-plan";
     if (!program_only &&
         (!yvex_runtime_private_binding_attention_ready(&binding->attention) ||
+         !yvex_attention_plan_capabilities_match(&binding->attention,
+             binding->layers, binding->summary.layer_count) ||
+         (!binding->attention.cpu_reference_ready &&
+          (binding->summary.capabilities.cpu_prefill_eager_ready ||
+           binding->summary.capabilities.cpu_decode_eager_ready)) ||
          binding->attention.tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
          !binding->attention.required_binding_count ||
          binding->attention.missing_binding_count ||
@@ -588,6 +595,8 @@ static const char *binding_canonical_records_mismatch(
         return "identity-chain";
     if (binding->summary.draft_layer_count &&
         (!yvex_runtime_private_binding_attention_ready(&binding->draft_attention) ||
+         !yvex_attention_plan_capabilities_match(&binding->draft_attention,
+             binding->draft_layers, binding->summary.draft_layer_count) ||
          binding->draft_attention.tensor_scope != YVEX_TENSOR_SCOPE_DRAFT ||
          !yvex_runtime_private_binding_identity_chain_valid(
              &binding->admission, &binding->materialization,

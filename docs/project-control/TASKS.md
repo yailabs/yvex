@@ -63,7 +63,32 @@ the historical numerical refusal. Original DSpark returns at generation 6/32K.
 Numerical causality, a numerical repair, installed correction and real YAI
 acceptance remain unearned; no further inference follows from these results.
 
+The operator's subsequent 2026-10-18 authorization selects an isolated 0731
+alternative-provider check within this recovery boundary, not a production
+replacement or a new Program P Task. The first harness attempt stops before
+inference; the second is cancelled by its conservative external resource guard
+before completing any prefill. Original DSpark is restored at generation 8/32K.
+These attempts establish neither a numerical repair nor 0731 provider readiness.
+The operator then selects publication of the accumulated Program P source,
+contracts and evidence on the existing mainline before preparing an updated
+producer with the 0731 artifact/binding. The historical diagnostic executable
+is no longer the selected delivery candidate. Verify the integrated source,
+binding-reader compatibility and exact built executable before any deployment;
+publication alone neither installs a service nor authorizes a YAI Work replay.
+Availability, numerical repair, model quality and YAI acceptance remain
+separate; no Program P speedup is inherited by a checkpoint substitution.
+
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
+The selected continuation includes the opt-in block-online attention numerical
+class and its compiler/binding/resource integration. Bounded official-reference
+and component checks do not close full-model performance, independent quality
+or automatic selection. See [evidence](../evaluation/compiler-evidence.md#block-online-attention-realization).
+The same Task owns the [projection continuation](../evaluation/compiler-evidence.md#projection-numerical-realizations):
+explicit mHC F32 realization and graph-compatible narrow execution, followed by
+BF16-stored matrix execution with an independent numerical class. Component
+qualification and complete-model characterization remain distinct; no new Task,
+automatic recommendation, installed rollout or performance exit is selected.
+
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on
 2026-10-10. This is the sole active implementation authority for physical
 configuration search and the associated DeepSeek representation/backend work.
@@ -236,6 +261,14 @@ through Evaluation, and qualify the native guided/file CLI and real 0731 executi
 The existing Mamba proof remains the non-Transformer control. Technique references
 are not implemented capabilities; 20/700 and independent quality remain unearned.
 No second implementation Task or installed-engine replacement is selected.
+
+The 2026-10-17 CPU continuation connects admitted IQ2 reconstruction producers
+to the same physical-policy search, checked canonical plans and policy export.
+The opt-in local request/result are versioned separately; default search and
+public management remain compatible. Reconstruction is not a new quantization
+format, quality certificate or measured recommendation. Source/CPU qualification
+and complete-model performance remain separate; Program P stays IN PROGRESS.
+
 The 2026-10-17 operator handoff releases the YAI-exclusive GPU window for the
 reserved Program P campaign. Frozen R10/R12 comparisons retain equivalent
 workloads and separate implementation, geometry and layout axes. Fresh resource
@@ -246,14 +279,6 @@ with three sessions per measured cell, current phase attribution and original
 32K restoration. The observed wide-geometry continuation difference, independent
 quality gate and competitive exits remain open. Subsequent lossless-layout,
 algorithm/raw and narrow controls are retained at component scope only.
-
-The 2026-10-17 CPU continuation connects admitted IQ2 reconstruction producers
-to the same physical-policy search, checked canonical plans and policy export.
-The opt-in local request/result are versioned separately; default search and
-public management remain compatible. Reconstruction is not a new quantization
-format, quality certificate or measured recommendation. Source/CPU qualification
-and complete-model performance remain separate; Program P stays IN PROGRESS.
-
 
 The operator's 2026-10-16 end-to-end qualification extension remains in this
 Task. Extend the existing typed measurement and qualification owners across
@@ -301,6 +326,39 @@ before/after comparison; the previous unload permission is not reused.
 Program P remains IN PROGRESS and no installed rollout is implied. See
 [candidate evidence](../evaluation/compiler-evidence.md#indexed-moe-tile-realization).
 
+The operator subsequently authorized the continuous 2026-10-12 Program P
+campaign, with zero-user activity checks, isolated candidates and restoration
+of the original 32K model after each complete-model arm. Same-artifact native
+control/cooperative/narrow-geometry samples, alternating attention controls and
+separate CUPTI diagnostics now
+supersede the earlier missing-window prerequisite, not its historical record.
+Encoded MoE/projection/attention realizations improve measured prefill, but
+target-only decode, both prefill gates and independent model quality remain
+unearned. Fixed-input projection specialization was rejected on the complete
+tradeoff; exact RoPE angle reuse did not establish an attributable model gain.
+Word staging and Q2 block pipelining have complete-model prefill observations,
+while a source-equation attention alternative now has separately identified
+full-model characterization: prefill improves, target-only decode regresses,
+and independent model quality remains open. It is not a default promotion or
+an equivalent-arithmetic comparison. Subsequent equivalent attention preparation
+and paired Q2 traversal have complete native characterization and bounded
+numerical/resource controls. Paired traversal yields only a small complete-model
+prefill effect, not its larger component ratio or a decode/DSpark breakthrough.
+The original 32K profile is restored; new architectural candidates continue
+inside this Task. No installed rollout or
+new public optimization capability is implied. See
+[convergence evidence](../evaluation/compiler-evidence.md#encoded-execution-convergence).
+
+The phase-specific Q2 continuation retains a rejected universal minimum-one arm,
+native characterization of prefill-only selection, a same-executable numerical
+binding ablation and separate latest complete-request attribution. Resource
+costing still uses the existing worklist/decoded-arena owners. The next
+arena-derived preparation candidate and 64-component RoPE angle reuse have
+independent component controls, including graph replay/refusal/recovery, but no
+new complete-model measurement. Original services are restored and protected
+during the operator's YAI acceptance window; new exclusive model experiments
+require coordination. No competitive, quality or broader Program P exit follows.
+
 The computational-graph continuation uses sealed operator/program facts to
 select executable alternatives, not just weight policies. Its first bounded
 candidate is input-backed, read-only physical view lowering: eliminate redundant
@@ -310,6 +368,17 @@ resource and complete-model gates remain independent; an eliminated copy is
 not a throughput certificate. The inherited CUDA preparation experiment remains
 unaccepted and recoverable outside the active tree after main reconciliation.
 Operator engines are protected during qualification.
+
+The 2026-10-16 continuation completes authenticated selective weighted-IQ2
+production, native R0/R2a comparison and a same-artifact cooperative IQ2
+execution comparison. The new consumer uses CTA-local packing and the existing
+phase-specific deployment policy, not a second resident representation. Native
+prefill improves relative to the IQ2 register control; decode, independent
+held-out quality, complete costing/recommendation and competitive exits remain
+open. Numerical, sanitizer, raw-logit, profile and restoration scopes are
+separate in [Evaluation](../evaluation/compiler-evidence.md#iq2-cooperative-execution-and-native-controls-2026-10-16).
+Program P stays IN PROGRESS; `.5` remains BLOCKED on this owner. No installed
+candidate, producer rollout or YAI acceptance follows.
 
 The authenticated Q8_0/Q2_K baseline remains a candidate, not a selected optimum.
 Initial-memory fit, qtype readability, coupled-kernel compatibility, full runtime

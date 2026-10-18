@@ -177,7 +177,7 @@ static void workspace_recipe_add(
 {
     if (!count) return;
     recipe->components[recipe->component_count] = (yvex_attention_workspace_component){
-        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3,
+        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5,
         .ordinal = recipe->component_count++, .kind = slot->kind,
         .lifetime = slot->lifetime,
         .element_count = count, .element_width = width, .alignment = 256ull,
@@ -284,11 +284,12 @@ int yvex_attention_workspace_recipe_build(
     selected = candidates < layer->indexer_topk ? candidates : layer->indexer_topk;
     if (layer->indexer_required && !selected) selected = 1ull;
     memset(recipe, 0, sizeof(*recipe));
-    recipe->schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3;
+    recipe->schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5;
     recipe->layer_index = layer->layer_index;
     recipe->mode = mode;
     recipe->scope = scope;
     recipe->evidence_level = evidence_level;
+    recipe->compute_contract = layer->compute_contract;
     recipe->token_capacity = token_capacity;
     recipe->prefix_checkpoint_capacity = token_capacity;
     yvex_core_text_copy(recipe->state_recipe_identity,
@@ -356,6 +357,23 @@ int yvex_attention_workspace_recipe_build(
          ++slot)
         workspace_recipe_add(recipe, &workspace_recipe_layout[slot],
                              counts[slot], widths[slot]);
+    if (layer->compute_contract == YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) {
+        unsigned long long columns = layer->attention_class == YVEX_ATTENTION_CLASS_CSA
+            ? selected : compressed ? compressed->capacity : 0ull;
+        unsigned long long pitch, row_bytes, metadata;
+        const workspace_recipe_slot reduction = {
+            YVEX_ATTENTION_WORKSPACE_BLOCK_REDUCTION, YVEX_ATTENTION_WORKSPACE_EXECUTION, 1};
+        if (layer->head_dimension != 512ull || !layer->query_heads ||
+            layer->query_heads > 128ull || layer->query_heads % 16ull ||
+            token_capacity > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH ||
+            !yvex_core_u64_add(columns, layer->sliding_window, &columns) ||
+            !yvex_core_u64_add(columns, 63ull, &pitch)) goto malformed;
+        pitch &= ~63ull;
+        if (!yvex_core_u64_mul(pitch, 6ull, &row_bytes) ||
+            !yvex_core_u64_mul(pitch / 64ull + 1ull, sizeof(float), &metadata) ||
+            !yvex_core_u64_add(row_bytes, metadata, &row_bytes)) goto malformed;
+        workspace_recipe_add(recipe, &reduction, layer->query_heads, row_bytes);
+    }
     return yvex_attention_workspace_recipe_seal(recipe, err);
 malformed:
     return yvex_attention_reject(
@@ -387,6 +405,7 @@ int yvex_attention_publication_workspace_required(
         const yvex_attention_workspace_component *c = &recipe->components[i];
         unsigned long long count = c->element_count, scale = c->scales_with_tokens ? recipe->token_capacity : 1ull;
         unsigned long long extent;
+        if (c->kind == YVEX_ATTENTION_WORKSPACE_BLOCK_REDUCTION) continue;
         /* Histories are borrowed from committed state, never copied into the
          * graph trace. CUDA owns projection scratch; this arena owns only
          * publication/evidence and transactional state deltas. */
@@ -614,6 +633,45 @@ static const yvex_attention_summary attention_ready_summary = {
     .full_execution_ready = 1,
 };
 
+/* Capabilities are derived from the sealed arithmetic, never from a family
+ * name or a caller-supplied ready flag. The online64 class has no CPU consumer. */
+int yvex_attention_plan_capabilities_match(
+    const yvex_attention_summary *summary,
+    const yvex_attention_layer_plan *layers, unsigned long long count)
+{
+    int cpu = 1;
+    if (!summary || !layers || !count || summary->layer_count != count) return 0;
+    for (unsigned long long i = 0ull; i < count; ++i) {
+        const yvex_attention_layer_plan *layer = layers + i;
+        if (layer->matrix_projection) {
+            if (layer->matrix_projection > YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1 ||
+                layer->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER) return 0;
+            cpu = 0;
+        }
+        if (layer->mhc_projection) {
+            if (layer->mhc_projection != YVEX_MHC_PROJECTION_F32_ACC_V1 ||
+                !layer->mhc_attention_pre_and_post ||
+                layer->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER) return 0;
+            cpu = 0;
+        }
+        if (layer->compute_contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1)
+            continue;
+        if (layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1 ||
+            layer->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
+            layer->head_dimension != 512ull || !layer->query_heads ||
+            layer->query_heads > 128ull || layer->query_heads % 16ull ||
+            attention_uses_dense_qkv(layer) || !layer->sliding_window ||
+            !((layer->attention_class == YVEX_ATTENTION_CLASS_SWA && !layer->compression_ratio) ||
+              (layer->attention_class == YVEX_ATTENTION_CLASS_CSA && layer->compression_ratio == 4ull) ||
+              (layer->attention_class == YVEX_ATTENTION_CLASS_HCA && layer->compression_ratio == 128ull)))
+            return 0;
+        cpu = 0;
+    }
+    return summary->history_contract_ready == 1 && summary->state_delta_contract_ready == 1 &&
+        summary->cpu_reference_ready == cpu && summary->cuda_execution_ready == 1 &&
+        summary->full_execution_ready == 1;
+}
+
 #undef PLAN_FIELD
 void yvex_attention_plan_close(yvex_attention_plan *plan);
 
@@ -755,6 +813,12 @@ static int attention_plan_identity_compute(
     (void)attention_hash_u64(&hash, summary->required_envelope_binding_count);
     for (i = 0ull; i < layer_count; ++i) {
         const yvex_attention_layer_plan *layer = &layers[i];
+        if (layer->mhc_projection &&
+            (!yvex_sha256_update_text(&hash, "mhc-projection.v1") ||
+             !yvex_sha256_update_u64(&hash, layer->mhc_projection))) return 0;
+        if (layer->matrix_projection &&
+            (!yvex_sha256_update_text(&hash, "matrix-projection.v1") ||
+             !yvex_sha256_update_u64(&hash, layer->matrix_projection))) return 0;
         plan_hash_fields(&hash, layer, plan_layer_fields,
                          sizeof(plan_layer_fields) / sizeof(plan_layer_fields[0]));
         (void)yvex_model_position_identity_update(&hash, &layer->position);
@@ -936,7 +1000,7 @@ int yvex_attention_plan_import(yvex_attention_plan **out,
         !materialization->committed || !runtime ||
         runtime->status != YVEX_RUNTIME_DESCRIPTOR_STATUS_READY ||
         summary->status != YVEX_ATTENTION_STATUS_EXECUTION_READY ||
-        summary->layer_count != layer_count ||
+        !yvex_attention_plan_capabilities_match(summary, layers, layer_count) ||
         strcmp(summary->artifact_identity, runtime->artifact_identity) != 0 ||
         strcmp(summary->materialization_plan_identity, materialization->plan_identity) != 0 ||
         strcmp(summary->runtime_descriptor_identity,
@@ -958,7 +1022,8 @@ int yvex_attention_plan_import(yvex_attention_plan **out,
         const yvex_attention_layer_plan *layer = &plan->layers[i];
         if (layer->ordinal != i || layer->tensor_scope != summary->tensor_scope ||
             layer->tensor_scope == YVEX_TENSOR_SCOPE_GLOBAL ||
-            layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 ||
+            (layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+             layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) ||
             !yvex_core_u64_add(required, layer->required_binding_count, &required) ||
             !yvex_core_u64_add(payload, layer->payload_bytes_bound, &payload) ||
             !yvex_core_u64_add(refused, layer->qtype_compute_refusal_count, &refused)) {
@@ -1110,6 +1175,8 @@ static int semantic_attention_layer(
         .mhc_epsilon = input->mhc_epsilon,
         .mhc_residual_post_multiplier = input->mhc_residual_post_multiplier,
         .mhc_entry_policy = input->mhc_entry_policy,
+        .mhc_projection = input->mhc_projection,
+        .matrix_projection = input->matrix_projection,
         .mhc_attention_pre_and_post = input->mhc_attention_pre_and_post,
         .attention_input_norm_required = input->attention_input_norm_required,
         .attention_input_norm_role = input->attention_input_norm_role,
@@ -1259,7 +1326,8 @@ static int attention_plan_build(
             return rc;
         }
         if (layer->compute_contract !=
-            YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1) {
+            YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 && layer->compute_contract !=
+            YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) {
             rc = yvex_attention_reject(
                 failure, YVEX_ATTENTION_FAILURE_NUMERIC, NULL,
                 layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
@@ -1302,6 +1370,15 @@ static int attention_plan_build(
             return rc;
         }
         plan->summary.qtype_compute_refusal_count = total;
+        if (layer->compute_contract == YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1 ||
+            layer->mhc_projection || layer->matrix_projection)
+            plan->summary.cpu_reference_ready = 0;
+    }
+    if (!yvex_attention_plan_capabilities_match(&plan->summary, plan->layers, layer_count)) {
+        yvex_attention_plan_close(plan);
+        return yvex_attention_reject(failure, YVEX_ATTENTION_FAILURE_NUMERIC, NULL,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
+            err, YVEX_ERR_UNSUPPORTED, "attention numerical class has no admitted geometry");
     }
     rc = attention_envelope_binding_count(
         plan, descriptor, &plan->summary.required_envelope_binding_count,

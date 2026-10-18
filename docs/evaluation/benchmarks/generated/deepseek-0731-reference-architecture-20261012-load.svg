@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 508" role="img" aria-labelledby="title desc">
+<title id="title">DeepSeek 0731 external CUDA architecture controls / load_seconds</title>
+<desc id="desc">characterization; External ablations are not same-artifact YVEX comparisons or independent model-quality qualification.. Values are printed beside each bar.</desc>
+<style>text{fill:#292434}.bar{fill:#7541ba}@media(prefers-color-scheme:dark){text{fill:#ede8f5}.bar{fill:#ba97f2}}</style>
+<g font-family="Arial, sans-serif">
+<text x="30" y="38" font-size="23" font-weight="700">DeepSeek 0731 external CUDA architecture controls / load_seconds</text>
+<text x="30" y="67" font-size="16">CHARACTERIZATION · s · not an automatic capability promotion</text>
+<text x="30" y="129" font-size="18">control-prefill load</text>
+<rect class="bar" x="330" y="110" width="378.405" height="27" rx="4"/>
+<text x="728.405" y="129" font-size="17">132.605</text>
+<text x="30" y="187" font-size="18">no-d2r-prefill load</text>
+<rect class="bar" x="330" y="168" width="401.374" height="27" rx="4"/>
+<text x="751.374" y="187" font-size="17">140.654</text>
+<text x="30" y="245" font-size="18">no-dense-d2r-prefill load</text>
+<rect class="bar" x="330" y="226" width="427.592" height="27" rx="4"/>
+<text x="777.592" y="245" font-size="17">149.842</text>
+<text x="30" y="303" font-size="18">no-mmq-prefill load</text>
+<rect class="bar" x="330" y="284" width="413.398" height="27" rx="4"/>
+<text x="763.398" y="303" font-size="17">144.868</text>
+<text x="30" y="361" font-size="18">control-coding load</text>
+<rect class="bar" x="330" y="342" width="470.000" height="27" rx="4"/>
+<text x="820.000" y="361" font-size="17">164.703</text>
+<text x="30" y="419" font-size="18">no-graphs-coding load</text>
+<rect class="bar" x="330" y="400" width="450.279" height="27" rx="4"/>
+<text x="800.279" y="419" font-size="17">157.792</text>
+</g></svg>

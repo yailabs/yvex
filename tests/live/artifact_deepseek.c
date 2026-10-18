@@ -856,7 +856,7 @@ static int artifact_semantic_model_build(
         adapter ? adapter->binding_pipeline : NULL;
 
     if (!pipeline || !pipeline->semantic_model_build) return YVEX_ERR_STATE;
-    return pipeline->semantic_model_build(out, verification, err);
+    return pipeline->semantic_model_build(out, verification, 0u, 0u, 0u, err);
 }
 
 static int artifact_variant_bind(

@@ -61,7 +61,7 @@ fact, not the model's semantic limit. The public capacity contract reports the
 exact loaded deployment rather than projecting a repository default as
 execution truth.
 
-Runtime binding v17 persists the canonical operator graph identity, Physical
+Runtime binding v19 persists the canonical operator graph identity, Physical
 Execution IR v5 package records, and pointer-free compiled tokenizer,
 conversation, and model/operator plans. Source-owned syntax and exact tokenizer
 component identities enter through the family compiler adapter; tokenizer,
@@ -69,14 +69,22 @@ runtime, and server consume the authenticated record without enumerating a
 concrete family. Version 17 makes attention presence explicit so a verified
 pure-SSM program can authenticate absence rather than fabricate an empty
 attention plan.
+Version 18 additionally authenticates the opt-in target mixing-projection
+numerical class. Storage artifact identity is unchanged by this selection.
+Version 19 independently authenticates the BF16-stored projection class. Its
+CUDA realization consumes the same artifact and uses CTA-local tiles, not a
+second resident weight representation. The numerical ABI defines its checked
+operand envelope; executable admission is not independent model qualification.
 
-The v17 reader also authenticates accepted v14/v15/v16 bindings. It imports a v14
+The v19 reader also authenticates accepted v14/v15/v16/v17/v18 bindings. Versions
+14–17 retain ordered-F64 mixing; version 18 retains its explicit mixing selection.
+All retain their original matrix projection contract. It imports a v14
 physical record only when the legacy record names canonical package storage and
 does not require its retired derived-layout/runtime-policy fields; the importer
 then normalizes that package truth to PEIR v5 before engine specialization.
 Unsupported legacy derived assets fail closed. Bindings v7 through v13 remain
 explicit rebuild boundaries because they predate the canonical operator graph.
-Old bytes are never reinterpreted as v17.
+Old bytes are never reinterpreted as v19.
 
 The non-persisted runtime execution profile binds an exact engine generation
 and specialization to workload, kernel bundle, generation mode, evidence class,
@@ -91,8 +99,10 @@ claims. It is not a second permanent execution plan.
 
 The non-persisted implementation catalog admits prompt-position widths
 separately from source-authored speculative verification widths. Catalog schema
-v2 seals both policies into specialization identity; a stale schema or malformed
-mask refuses before dispatch. The current generic prompt implementation admits
+v4 additionally seals each phase's expert-matrix minimum into specialization
+identity. Width and minimum are projected together by the existing specialization
+owner; stale schemas, malformed masks or a minimum absent from its phase mask
+refuse before dispatch. The current generic prompt implementation admits
 at most 1,024 real positions per physical batch, independently of verification
 and cross-sequence scheduling. This is an implementation envelope, not a model
 context limit. Routed gate/up and down consumers must agree; arena planning
@@ -101,6 +111,24 @@ does not widen a draft proposal or its target-verification population.
 The exact selected catalog mask, configured chunk and capacity admission may
 choose a smaller width. A configured chunk alone is not evidence that every
 operator executes all positions together.
+
+For an admitted homogeneous Q2_K or IQ2_XXS gate/up pair with Q2_K down on
+SM121, prefill may use matrix execution for every nonempty expert bucket. Decode and speculative
+verification retain the preceding minimum of four. Other operand/backend
+classes do not inherit this choice. All three operands must agree on phase
+widths and minima before the worklist consumer is selected. The catalog is
+engine-local, not a new binding, public ABI or stored artifact fact. Existing
+capacity owners still charge the real worklist and matrix arenas; a threshold
+does not invent token/expert pairs. The global minimum-one experiment was
+rejected for decode regression; the [phase-specific evidence](../evaluation/compiler-evidence.md#phase-specific-q2-execution)
+supports a prefill characterization only.
+
+The IQ2_XXS cooperative consumer additionally checks actual input width,
+operand alignment and even encoded-block extent below this boundary. Its local
+packing is an equivalent backend mechanism, not another immutable artifact or
+numerical class. The prefill threshold does change the sealed engine-local
+implementation identity. Neither choice transfers checkpoint-quality evidence
+or installs a different Engine; see the [controlled IQ2 observations](../evaluation/compiler-evidence.md#iq2-cooperative-execution-and-native-controls-2026-10-16).
 
 Durable generation checkpoints bind a plan-compatibility projection rather
 than the current engine-generation profile identity. After engine reopen, the

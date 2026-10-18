@@ -109,6 +109,111 @@ cover cancellation-sensitive magnitudes, signed zero, subnormals, odd row
 populations, unaligned weights and nonfinite/overflow refusal. No installed ABI,
 representation identity or physical-program numerical selection changes.
 
+## Explicit F32 contraction
+
+`YVEX_IR_REDUCTION_F32_ACC` is an opt-in `nn.linear` obligation over F32
+input, parameter storage and output. Lowering selects `linear.f32_acc.v1`;
+substitution by the legacy default or ordered-row implementation refuses.
+It permits F32 fused multiply-add and reordered F32 accumulation, not TF32
+operand conversion. It does not promise bitwise agreement with ordered F64
+or with a different legal F32 reduction. CPU/Metal have no admitted consumer
+for this explicit implementation; their existing programs remain unchanged.
+
+CUDA uses an owned, graph-rebindable reduction for at most 16 actual input
+rows and an F32 cuBLAS contraction for wider populations, on the execution
+stream with zero library workspace. No weight re-encoding or full-model
+prepared copy is introduced. The enclosing physical program may own the final
+barrier; standalone calls retain completion. Result finiteness and publication
+remain obligations of the consuming operation. The mHC consumer rejects
+nonfinite affine mixtures before sigmoid can conceal them.
+
+The 0731 compiler can explicitly select `mhc-projection=f32-acc-v1` for target
+attention/MoE mixing projections, with separate numerical and binding identity.
+Router, normalization, Sinkhorn, final head and draft arithmetic are unchanged.
+Binding v18 records this choice; v14–v17 import with ordered-F64 mixing.
+For finite, non-overflowing contractions the operation oracle checks error
+against `gamma_K * sum(abs(x_k*w_k)) + K*2^-149`, where
+`gamma_K = (K*2^-24)/(1-K*2^-24)`. Original checkpoint F32 matrices and an
+independent F64/PyTorch operation reference bound this arithmetic test; synthetic
+activations do **not** establish complete mHC or held-out model quality.
+Automatic quality-qualified recommendation remains unavailable.
+
+## Explicit BF16-stored projection class
+
+`MATRIX_PROJECTION_BF16_F32_ACC_V1` independently selects BF16-stored target
+attention projections. It does not select the mHC mixing or attention-reduction
+class, change encoded weights, or alter MXFP4/Q2 consumers. The compiler records
+the choice in semantic/numerical identity and binding v19; v14–v18 import with
+the original projection contract. Draft, CPU and Metal do not inherit it.
+
+The CUDA candidate uses BF16 operands with F32 MMA accumulation for 32 or more
+real input rows, and independent four-chain F32 SIMT dots for 1–31 rows,
+without TF32 or a persistent prepared-weight copy. Inputs must
+already be exactly BF16 and finite, with each nonzero operand's unbiased exponent
+in `[-56, 55]`. This checked envelope makes every product a multiple of `2^-126`
+and bounds the absolute sum below `2^126` for the admitted `K <= 16384`, avoiding
+subnormal-product and overflow assumptions about MMA. Precision conversion,
+out-of-envelope operands and nonfinite results refuse. Narrow projections used
+to retain the ordered implementation; the explicit class now admits the same
+finite-error envelope across physical widths. This is not bitwise equivalence
+to that former narrow fallback, nor a change to the ordered reference class.
+The F32 output
+bound is `gamma_K * sum(abs(x_k*w_k)) + K*2^-149`; an explicitly requested final
+BF16 publication adds its own rounding error, never an implied F32-bitwise claim.
+Temporary tiles and the uniform refusal guard occupy 14,340 static shared bytes per CTA and introduce no
+global workspace. Construction and storage lifetime are confined to that CTA.
+Narrow SIMT launches are not counted as Tensor Core execution. Artifact,
+binding and numerical-class identity remain unchanged; executable identity and
+the characterized physical realization do not.
+
+This is an experimental class with bounded operation tests, not an automatic
+quality-qualified recommendation. Independent full-checkpoint quality and
+complete-model performance remain separate required evidence.
+
+## Experimental phase-prepared projection class
+
+`MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1` is a separate numerical choice
+(`prepared-bf16-f32-acc-v1` in binding preparation). It retains the preceding
+BF16 class and additionally admits direct decoded-BF16/F32 contractions for
+BF16 or MXFP4 attention weights at 256–1024 real input rows, `K <= 8192` and
+`K % 32 == 0`. Other geometries retain their preceding consumers. It does not
+change shared/routed experts, draft, encoded artifact, or their qualifications.
+The numerical identity has schema 6; binding v19 encodes the distinct enum.
+An older reader rejects that unknown enum rather than treating it as class 1.
+
+This path decodes one arena-bounded weight tile at a time and prepares
+activations once per contraction. Tile extent is an execution decision, not
+a change to the immutable encoded parameters. Exact BF16 conversion and the same
+`[-56,55]` exponent envelope are checked before transactional publication.
+F32 accumulation has the preceding `gamma_K` bound, not Q8-activation or
+ordered-F64 equivalence. Invalid scratch operands are initialized to zero;
+queued BLAS work may write private intermediates, but status prevents state
+commit. Final precision publication is separately checked. No TF32 is used.
+
+The actual graph/stream decision also owns input, history and status
+initialization. A wide library-backed phase selected under a graph-capable
+configuration uses the complete eager preparation path; it may not leave those
+initializers in an unexecuted graph callback. Whole-phase eager/configured-graph
+controls cover changed inputs, nonfinite refusal, unpublished state and recovery,
+separately from the matrix arithmetic oracle.
+
+The tiles and activations reuse the capacity owner's existing decoded arena:
+`B = (1024 + N) * 4096 * 25 / 8` bytes at wide `N`. After reserving `2*K*N`
+bytes for the actual input, the backend derives the fitting row extent
+`R = floor((B - 2*K*N) / (2*K))`, rounded down to a multiple of 64 when
+`R >= 64`. A tile contains `min(M,R)` actual rows; the last contraction
+consumes its exact tail. Admission requires at least one fitting row and
+`2*K*(N + min(M,R)) <= B` before allocation. No larger arena or fabricated
+input population follows from choosing a larger tile. The encoded
+mapping is retained; prepared tiles replace each other on the owning stream,
+with zero explicit BLAS workspace. There is no second model representation.
+Wide attention uses stream submission because the current graph rebinder
+cannot safely patch opaque library kernels. Both preparation and this scheduling
+tradeoff require complete-request measurements; neither implies a speedup.
+
+The class is opt-in and experimental. Operation conformance, complete-model
+performance and independent checkpoint quality remain distinct gates.
+
 ## Ordered decoded-dot publication
 
 The ordinary decoded CUDA projection publishes F32 from a source-ordered F64
@@ -186,6 +291,57 @@ production gather control checks all finite encodings bitwise against the
 independent CPU decoder, plus exceptional/prior-status refusal, output canaries
 and immutable input. Complete-model characterization does not replace
 independent checkpoint or representation-quality evidence.
+
+## Explicit block-online BF16 attention class
+
+`BF16_ONLINE64_F32_MMA_V1` is a distinct, opt-in numerical realization, not
+equivalence to `BF16_F32_RNE_V1`. The latter remains the default and the
+regression control. The compiler currently admits the new class only for the
+authenticated 0731 target attention; draft attention retains its original class.
+Qwen and Mamba refuse this request rather than inheriting a fabricated consumer.
+
+The source-equation authority is the authenticated 0731 `inference/kernel.py`
+(SHA-256 `59b325083d7103975cba025bd0d60ea343bb82d8fff53088afb7c04bd380c0c2`).
+The realization consumes causal local history followed by the exact selected
+compressed rows, preserving masked slots and selected-row order. Each 64-key
+block performs BF16 QK products with F32 MMA accumulation, online maximum and
+denominator updates, BF16/RNE publication of **unnormalized** probabilities,
+and BF16 probability/value MMA into the rescaled F32 accumulator. The sink
+contributes to the denominator after the key blocks; final output is BF16/RNE.
+The fixed within-block sum order is part of this class. A different reduction
+tree cannot inherit its bitwise reference observations.
+
+The current CUDA consumer admits 512-wide heads in complete 16-head cohorts
+(up to 128), causal SWA/CSA/HCA and up to 1,024 real positions. It does not
+admit noncausal draft visibility, CPU, portable/forensic substitution, arbitrary
+head geometry or non-BF16/nonfinite operands. Unsupported requests refuse before
+execution; integrity/numerical failure does not fall back to the older class.
+Status, private scratch and output remain inside the existing transaction.
+
+This selection changes the runtime numeric identity, attention plans and binding,
+not encoded parameter bytes. Binding import re-derives capability flags from
+the layer contracts. The family binding pipeline is internal schema v2; stale
+callbacks refuse. Workspace recipe v5 binds the declared attention computation
+before accounting for device QK scores,
+BF16 probabilities, block rescale values and denominators. For `T` positions,
+`H` heads and padded candidate extent `P` (a multiple of 64), its execution
+scratch is `T * H * (6*P + 4*(P/64 + 1))` bytes, before the existing conservative
+arena-lifetime envelope. No duplicate host publication or weight layout is implied.
+
+That expression bounds the staged implementation. An equivalent admitted
+fused CUDA realization retains its K16 MMA order, adjacent-key butterfly,
+per-block BF16 probabilities, F32 rescale/accumulation and sink publication
+inside each CTA. It omits those global score/probability/recurrence ranges;
+packed operands and the causal map are still charged. The existing sealed
+workspace bound remains conservative for either implementation. Kernel bundle,
+device admission and real operation geometry select this backend-local choice;
+they do not create another parameter representation or numerical class.
+
+Independent bounded comparison invokes the unmodified official kernel in
+16-head cohorts. It qualifies those publications, not the resource-inadmissible
+upstream wider-head specialization or whole-checkpoint quality. Full-model
+performance and held-out representation/model quality remain separate gates.
+See [the experiment boundary](../evaluation/compiler-evidence.md#block-online-attention-realization).
 
 ## Internal Activation-Prefill Boundary
 
@@ -291,6 +447,95 @@ retains its original per-block F32 operations, 32-leaf reduction tree and
 optional BF16 publication; source-ordered F64 exceptional recovery remains
 available. This does not substitute the ordinary wide-matrix reduction for an
 explicit row reduction, or relax ordered-F64 decoded projection semantics.
+
+The SM121 MXFP4 ROW alternative stages a 64-row by 32-input CTA. It retains
+each K256 block's eight source-ordered `fmaf` terms, the bit-reversed 32-leaf
+F32 tree including absent zero leaves, optional additive/BF16 publication and
+ordered-F64 exceptional recovery. It is not the DEFAULT matrix reduction.
+Selection requires at least 64 actual rows and inputs; narrow populations,
+Q2 and other hardware retain the preceding consumer. The CTA uses 18,052
+static shared bytes, with no persistent layout or additional global workspace.
+Artifact and binding identities remain unchanged; kernel/build identity does
+not. Component conformance does not establish full-model performance or quality.
+
+Q8_0 storage also admits an SM121 ROW register-tile consumer for at least 256
+output rows, 128 real inputs and K in `[2048,8192]`, divisible by 256. Each
+32-element signed-I8 product is exact in I32; its canonical FP16 weight scale
+and Q8_K activation scale enter the original eight ordered F32 FMAs per K256
+block. The original 32-leaf tree, additive/BF16 publication and ordered-F64
+exceptional recovery remain unchanged. Smaller geometries, other devices and
+unsupported qtypes retain the existing consumer. This is not the DEFAULT
+matrix numerical class. It adds no persistent prepared layout or workspace;
+existing activation packing and resource ownership apply. An admitted Q8_0
+format alone did not previously imply this ROW matrix implementation. Component
+qualification does not establish that a Q8 model representation has better
+quality, memory fit or complete-model performance than another representation.
+
+## Equivalent encoded geometry and exact candidate products
+
+CUDA physical geometry may change register allocation, cooperating warps and
+CTA staging without changing an admitted dot's arithmetic. Q2_K minimum terms
+can use separate low-byte unsigned and high-byte signed integer matrix products:
+sixteen products of a 4-bit minimum and signed I16 activation subtotal have
+absolute sum below `16 * 15 * 32768 < 2^23`. Recombination is exact before the
+existing scale operations. Gate/up/down retain original expert associations,
+per-block F32 operations, the 32-leaf reduction including zero leaves, BF16/RNE
+publication and exceptional ordered-F64 recovery. Shared staging does not
+authorize another reduction order.
+
+IQ2_XXS cooperative gate/up staging also preserves the original signed-code
+parity, odd group scales, exact I32 products, F32 scale expression and
+bit-reversed 32-leaf tree. A 68-byte aligned load envelope is legal only for
+aligned rows with an even population of 66-byte blocks: the final odd block
+ends inside its row, not beyond the payload. Malformed alignment or extent
+refuses in the specialized consumer. The existing register consumer remains
+available to other admitted geometries. This lossless CTA-local rearrangement
+is not the rejected persistent prepared-IQ2 representation and does not alter
+encoded weights, routing, the clamped-SwiGLU operation or BF16 publication.
+Full-model fragment/logit agreement is regression evidence, not an independent
+checkpoint-quality certificate.
+
+The bounded BF16 candidate-score alternative accepts only finite operands in
+the checked exponent range with at most fourteen exponent steps per tile.
+Three balanced signed-byte digits represent each admitted operand exactly.
+Integer products and their checked I64 reconstruction remain below the exact
+F64 integer bound. The existing ReLU, head reduction, causal prefix and stable
+ranking consume the same values. An unsupported digit span executes the
+original ordered-F64 path, not an approximate score.
+
+The same exact digit representation may be prepared once per query/key vector
+in phase-local CUDA scratch. Its exponent metadata and three signed-byte
+planes contain the same integers as register-local construction, without a
+new quantization or reduction class. Unsupported operands retain their
+original F32 values for ordered-F64 recovery. Preparation alone neither
+admits a nonfinite vector nor rejects an invisible key. Causal visibility,
+head reduction order, scale operations, F32 scores and stable ties remain
+the consumer's obligations. Reusing a scratch range requires stream-ordered
+consumption; a graph must not omit preparation because its initial history
+was empty.
+
+Attention head-size specialization retains the runtime scaling expression:
+a separately rounded constant reciprocal square root failed the exact control
+and is not admitted. Computing eight candidate scores concurrently does not
+permit reordering the subsequent softmax or value recurrence. Each score retains
+the original FMA/addition tree, including zero leaves; candidates are consumed
+sequentially before BF16 publication.
+
+RoPE may reuse a computed angle across vectors with exactly the same admitted
+position, coordinate and YaRN parameters. CTA cohorts of eight real vectors for
+64 rotary components, or four for 128, preserve the
+original F64 frequency, trigonometric functions, inverse sign, two-coordinate
+arithmetic and F32/BF16 publication. Each token owns separate cohorts; incomplete
+head tails are masked after angle preparation and do not access another token.
+Smaller or other rotary populations retain the separate-angle realization.
+No table interpolation or approximate
+trigonometric implementation is admitted. Bitwise separate-vector controls and
+an independent scaled/inverse F64 oracle retain the existing BF16 tolerance
+`abs(reference)/256 + 2e-5`; neither replaces checkpoint-level evidence.
+
+These proofs and component oracles do not establish independent checkpoint
+logits, representation quality or held-out model behavior. See the separate
+[convergence evidence](../evaluation/compiler-evidence.md#encoded-execution-convergence).
 
 ## Internal Transformer Execution Boundary
 

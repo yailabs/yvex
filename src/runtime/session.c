@@ -453,6 +453,18 @@ static int runtime_session_workspace_rollback(
     return status;
 }
 
+static int runtime_session_workspace_matches(yvex_runtime_execution_session *session,
+    const runtime_workspace_requirements *requirements,
+    yvex_backend_host_workspace_summary *host)
+{
+    yvex_backend_workspace_summary device;
+    return yvex_backend_workspace_summary_get(session->backend, &device) &&
+        device.attached && device.capacity == requirements->device_required &&
+        yvex_backend_host_workspace_summary_get(session->backend, host) &&
+        host->attached && host->owned && host->pinned &&
+        host->capacity == requirements->required;
+}
+
 int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_session *session,
     yvex_runtime_execution_mode mode, yvex_runtime_execution_scope scope,
     yvex_attention_evidence_level evidence_level, int device_input, const yvex_graph_attention_capacity_plan *capacity,
@@ -553,9 +565,7 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
             !session->summary.host_workspace_pinned ||
             session->summary.host_workspace_bytes != requirements.required ||
             session->summary.device_workspace_bytes != requirements.device_required ||
-            !yvex_backend_host_workspace_summary_get(session->backend, &workspace) ||
-            !workspace.attached || !workspace.owned || !workspace.pinned ||
-            workspace.capacity != requirements.required) {
+            !runtime_session_workspace_matches(session, &requirements, &workspace)) {
             rc = yvex_runtime_private_reject(
                 failure, YVEX_MODEL_ENGINE_FAILURE_BUSY, "host-workspace",
                 requirements.required, session->summary.host_workspace_bytes,
@@ -608,9 +618,7 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
             requirements.required, 0ull, "CUDA pinned workspace allocation failed");
         goto rollback;
     }
-    if (!yvex_backend_host_workspace_summary_get(session->backend, &workspace) ||
-        !workspace.owned || !workspace.pinned ||
-        workspace.capacity != requirements.required) {
+    if (!runtime_session_workspace_matches(session, &requirements, &workspace)) {
         rc = YVEX_ERR_STATE;
         yvex_error_set(err, rc, "runtime.session.workspace",
                        "prepared CUDA pinned workspace did not match its plan");

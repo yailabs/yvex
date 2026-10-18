@@ -386,7 +386,7 @@ static int test_workspace_recipe_identity(void)
     unsigned int index;
 
     memset(&recipe, 0, sizeof(recipe));
-    recipe.schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3;
+    recipe.schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5;
     recipe.layer_index = 1ull;
     recipe.token_capacity = 4ull;
     recipe.mode = YVEX_ATTENTION_EXECUTION_FULL;
@@ -396,7 +396,7 @@ static int test_workspace_recipe_identity(void)
                    sizeof(recipe.state_recipe_identity), "%064x", 0x713u);
     for (index = 0u; index < recipe.component_count; ++index) {
         recipe.components[index].schema_version =
-            YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3;
+            YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5;
         recipe.components[index].ordinal = index;
         recipe.components[index].kind = index == 0u
                                             ? YVEX_ATTENTION_WORKSPACE_INGRESS
@@ -412,6 +412,14 @@ static int test_workspace_recipe_identity(void)
         yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK,
         "pointer-free workspace recipe seals deterministically");
     (void)snprintf(baseline, sizeof(baseline), "%s", recipe.identity);
+    changed = recipe;
+    changed.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1;
+    YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&changed, &err) == YVEX_OK &&
+        strcmp(baseline, changed.identity) != 0,
+        "admitted attention arithmetic changes the workspace lifetime authority");
+    changed.compute_contract = (yvex_attention_compute_contract)99;
+    YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&changed, &err) ==
+        YVEX_ERR_INVALID_ARG, "unknown numerical realization cannot authorize workspace lowering");
     changed = recipe;
     changed.token_capacity++;
     changed.identity[0] = '\0';
@@ -433,7 +441,7 @@ static int test_workspace_recipe_identity(void)
             strcmp(baseline, changed.identity) != 0,
         "component-extent mutation changes workspace recipe identity");
     changed = recipe;
-    changed.schema_version = 1u;
+    changed.schema_version = 4u;
     YVEX_TEST_ASSERT(
         yvex_attention_workspace_recipe_seal(&changed, &err) == YVEX_ERR_INVALID_ARG,
         "superseded workspace recipe layout refuses before reading its components");
@@ -2662,7 +2670,7 @@ static int session_identity_open(
     session_identity_text(engine->summary.runtime_model_identity, 'a');
     session_identity_text(engine->summary.runtime_binding_identity, 'b');
     specialization->summary.schema_version =
-        YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3;
+        YVEX_ENGINE_SPECIALIZATION_SCHEMA_V4;
     specialization->summary.backend = YVEX_BACKEND_KIND_CPU;
     session_identity_text(specialization->summary.identity, 'c');
     engine->specializations[YVEX_BACKEND_KIND_CPU] = specialization;
@@ -3182,11 +3190,87 @@ static int test_cuda_publication_arena_bound(const state_plan_fixture *fixture)
     return 0;
 }
 
+static int test_online64_admission_and_cost(const state_plan_fixture *fixture)
+{
+    for (unsigned int i = 0u; i < 3u; ++i) {
+        yvex_attention_layer_plan layer = fixture->layers[i];
+        yvex_attention_summary summary = {.layer_count = 1ull,
+            .history_contract_ready = 1, .state_delta_contract_ready = 1,
+            .cuda_execution_ready = 1, .full_execution_ready = 1};
+        yvex_attention_state_recipe_request request = {.layer_ordinal = i,
+            .final_position = 16384ull,
+            .attention_plan_identity = fixture->plan.summary.attention_plan_identity};
+        yvex_attention_state_recipe state;
+        yvex_attention_workspace_recipe baseline, candidate;
+        yvex_attention_failure failure = {0};
+        yvex_error err = {0};
+        unsigned long long old_host = 0ull, new_host = 0ull;
+        layer.tensor_scope = YVEX_TENSOR_SCOPE_MAIN_LAYER;
+        layer.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
+        layer.sliding_window = 512ull;
+        layer.head_dimension = 512ull;
+        layer.query_heads = 64ull;
+        YVEX_TEST_ASSERT(state_recipe_project(&layer, &request, &state, &failure, &err) == YVEX_OK &&
+            yvex_attention_workspace_recipe_build(&layer, &state, YVEX_ATTENTION_EXECUTION_FULL,
+                YVEX_ATTENTION_OPERATION_CORE, YVEX_ATTENTION_EVIDENCE_NONE, 512ull,
+                &baseline, &failure, &err) == YVEX_OK &&
+            yvex_attention_publication_workspace_required(&baseline, 1, &old_host, &err) == YVEX_OK,
+            "reference workspace is independently admitted");
+        layer.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1;
+        YVEX_TEST_ASSERT(yvex_attention_plan_capabilities_match(&summary, &layer, 1ull),
+            "online64 derives CUDA-only capability for all three causal attention classes");
+        summary.cpu_reference_ready = 1;
+        YVEX_TEST_ASSERT(!yvex_attention_plan_capabilities_match(&summary, &layer, 1ull),
+            "promoted CPU capability refuses");
+        summary.cpu_reference_ready = 0;
+        layer.tensor_scope = YVEX_TENSOR_SCOPE_DRAFT;
+        YVEX_TEST_ASSERT(!yvex_attention_plan_capabilities_match(&summary, &layer, 1ull),
+            "draft semantics do not inherit the causal realization");
+        layer.tensor_scope = YVEX_TENSOR_SCOPE_MAIN_LAYER;
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_build(&layer, &state,
+            YVEX_ATTENTION_EXECUTION_FULL, YVEX_ATTENTION_OPERATION_CORE,
+            YVEX_ATTENTION_EVIDENCE_NONE, 512ull, &candidate, &failure, &err) == YVEX_OK &&
+            yvex_attention_publication_workspace_required(&candidate, 1, &new_host, &err) == YVEX_OK &&
+            old_host == new_host, "new device scratch does not duplicate the host publication arena");
+        const yvex_attention_workspace_component *scratch = NULL;
+        for (unsigned int j = 0u; j < candidate.component_count; ++j)
+            if (candidate.components[j].kind == YVEX_ATTENTION_WORKSPACE_BLOCK_REDUCTION)
+                scratch = candidate.components + j;
+        const unsigned long long pitch = i == 0u ? 512ull : i == 1u ? 1024ull : 640ull;
+        YVEX_TEST_ASSERT(scratch && scratch->element_count == 64ull &&
+            scratch->element_width == pitch * 6ull + (pitch / 64ull + 1ull) * 4ull &&
+            scratch->lifetime == YVEX_ATTENTION_WORKSPACE_EXECUTION && scratch->scales_with_tokens,
+            "exact QK F32, probability BF16, block rescale and denominator costs are token-scaled");
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_build(&layer, &state,
+            YVEX_ATTENTION_EXECUTION_FULL, YVEX_ATTENTION_OPERATION_CORE,
+            YVEX_ATTENTION_EVIDENCE_NONE, YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH,
+            &candidate, &failure, &err) == YVEX_OK &&
+            candidate.compute_contract == layer.compute_contract &&
+            candidate.token_capacity == YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH,
+            "wide workspace retains exact computation and requested real row capacity");
+        YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_build(&layer, &state,
+            YVEX_ATTENTION_EXECUTION_FULL, YVEX_ATTENTION_OPERATION_CORE,
+            YVEX_ATTENTION_EVIDENCE_NONE, YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH + 1ull,
+            &candidate, &failure, &err) != YVEX_OK,
+            "unimplemented physical widths do not gain a resource certificate");
+    }
+    yvex_runtime_binding binding = {0};
+    yvex_error err = {0};
+    unsigned long long width = 99ull;
+    binding.summary.layer_count = 1ull;
+    binding.attention.cuda_execution_ready = 1;
+    YVEX_TEST_ASSERT(yvex_runtime_private_binding_prefill_width(&binding,
+        YVEX_BACKEND_KIND_CPU, NULL, &width, &err) == YVEX_ERR_UNSUPPORTED && !width,
+        "CPU capacity refuses CUDA-only arithmetic before model residency");
+    return 0;
+}
+
 int yvex_test_runtime_state(void)
 {
     state_plan_fixture fixture;
 
     state_plan_open(&fixture);
+    if (test_online64_admission_and_cost(&fixture) != 0) return 1;
     if (test_cpu_stateful_attention() != 0) return 1;
     if (test_state_recipe_identity(&fixture) != 0) return 1;
     if (test_activation_state_identity_rows() != 0) return 1;

@@ -80,6 +80,10 @@ int yvex_cuda_driver_load(yvex_cuda_driver *driver, yvex_error *err)
     YVEX_LOAD_REQUIRED(driver, cuModuleLoadData);
     YVEX_LOAD_REQUIRED(driver, cuModuleGetFunction);
     YVEX_LOAD_REQUIRED(driver, cuModuleUnload);
+    load_optional_symbol(driver->library, (void **)&driver->cuFuncGetAttribute,
+                         "cuFuncGetAttribute", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuFuncSetAttribute,
+                         "cuFuncSetAttribute", NULL);
     YVEX_LOAD_REQUIRED(driver, cuLaunchKernel);
     YVEX_LOAD_REQUIRED(driver, cuGetErrorName);
     YVEX_LOAD_REQUIRED(driver, cuGetErrorString);

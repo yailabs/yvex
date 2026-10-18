@@ -1,6 +1,182 @@
-/* Lossless signed-digit preparation and certified ordered-F64 publication.
- * This is an execution workspace, not a new weight format or numerical class. */
+/* Decoded contractions: explicit F32 accumulation, or lossless signed digits
+ * with certified ordered-F64 publication. Dispatch keeps the classes distinct. */
 #include "src/backend/cuda/dot_recovery.h"
+#include <cuda_bf16.h>
+#include <mma.h>
+
+/* Exact phase-local layout preparation. Initialize every element even after
+ * refusal: an already queued library contraction must never read undefined
+ * scratch. The owning transaction, not this temporary, controls publication. */
+extern "C" __global__ void yvex_bf16_prepare(const unsigned char *source,
+    unsigned long long row_bytes, unsigned width, unsigned rows, unsigned qtype,
+    __nv_bfloat16 *prepared, int *status)
+{
+    unsigned long long at = (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (at >= (unsigned long long)rows * width) return;
+    float value = qtype_value(source + at / width * row_bytes, at % width, qtype);
+    __nv_bfloat16 packed = __float2bfloat16_rn(value);
+    unsigned bits = __float_as_uint(value) & 0x7fffffffu, exponent = bits >> 23u;
+    bool valid = isfinite(value) && __bfloat162float(packed) == value &&
+        (!bits || (exponent >= 71u && exponent <= 182u));
+    if (!valid) atomicCAS(status, 0, 3);
+    prepared[at] = valid ? packed : __float2bfloat16_rn(0.0f);
+}
+
+extern "C" __global__ void yvex_matrix_finish(float *values,
+    unsigned long long count, int output_bf16, int *status)
+{
+    unsigned long long at = (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (at >= count || !status || *status) return;
+    float value = output_bf16 ? float_to_bf16_rne(values[at]) : values[at];
+    if (!isfinite(value)) atomicCAS(status, 0, 1);
+    else values[at] = value;
+}
+
+/* Small physical widths use independent F32 SIMT contractions, not a padded
+ * 32-column MMA or the ordered-F64 reference class. One warp owns one dot;
+ * four FMA chains and a fixed tree stay inside the admitted gamma_K bound. */
+static __device__ void bf16_narrow_rows(const unsigned short *weights,
+    unsigned width, unsigned rows, unsigned inputs, const float *input,
+    float *output, int output_bf16, int *status)
+{
+    unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
+    unsigned groups = (rows + 7u) / 8u;
+    unsigned row = blockIdx.x % groups * 8u + warp, column = blockIdx.x / groups;
+    if (row >= rows || column >= inputs) return;
+    float sums[4] = {};
+    for (unsigned k = lane * 4u; k < width; k += 128u) {
+#pragma unroll
+        for (unsigned j = 0u; j < 4u; ++j) if (k + j < width) {
+            unsigned short encoded = weights[(unsigned long long)row * width + k + j];
+            unsigned we = (encoded >> 7u) & 255u;
+            float w = __uint_as_float((unsigned)encoded << 16u);
+            float x = input[(unsigned long long)column * width + k + j];
+            unsigned bits = __float_as_uint(x) & 0x7fffffffu, xe = bits >> 23u;
+            bool valid = isfinite(w) && isfinite(x) &&
+                (!(encoded & 0x7fffu) || (we >= 71u && we <= 182u)) &&
+                !(bits & 65535u) && (!bits || (xe >= 71u && xe <= 182u));
+            if (!valid) atomicCAS(status, 0, 4);
+            sums[j] = __fmaf_rn(valid ? w : 0.0f, valid ? x : 0.0f, sums[j]);
+        }
+    }
+    float value = __fadd_rn(__fadd_rn(sums[0], sums[1]), __fadd_rn(sums[2], sums[3]));
+    for (unsigned shift = 16u; shift; shift >>= 1u)
+        value = __fadd_rn(value, __shfl_down_sync(0xffffffffu, value, shift));
+    if (!lane) {
+        value = output_bf16 ? float_to_bf16_rne(value) : value;
+        if (!isfinite(value)) atomicCAS(status, 0, 1);
+        else if (!atomicAdd(status, 0)) output[(unsigned long long)column * rows + row] = value;
+    }
+}
+
+/* Explicit BF16/F32 contraction, not ordered-dot equivalence. Activations
+ * already carry semantic BF16; reject an accidental precision conversion.
+ * CTA-local tiles replace lossless digit preparation, not artifact storage. */
+extern "C" __global__ void yvex_bf16_matrix_rows(
+    const unsigned short *weights, unsigned width, unsigned rows, unsigned inputs,
+    const float *input, float *output, int output_bf16, int *status)
+{
+    if (!status) return;
+    __shared__ int refused;
+    if (!threadIdx.x) refused = atomicAdd(status, 0);
+    __syncthreads();
+    if (refused) return;
+#if __CUDA_ARCH__ >= 800
+    if (!weights || !input || !output || !width || width > 16384u || width % 32u ||
+        !rows || rows > 16384u || !inputs || inputs > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH ||
+        blockDim.x != 256u ||
+        (output_bf16 != 0 && output_bf16 != 1)) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
+    if (inputs < 32u) {
+        bf16_narrow_rows(weights, width, rows, inputs, input, output, output_bf16, status);
+        return;
+    }
+    using namespace nvcuda;
+    __shared__ __align__(32) __nv_bfloat16 a[64 * 32], b[32 * 32];
+    __shared__ __align__(32) float y[64 * 32];
+    unsigned groups = (inputs + 31u) / 32u;
+    unsigned rb = blockIdx.x / groups * 64u, cb = blockIdx.x % groups * 32u;
+    unsigned warp = threadIdx.x >> 5u, wr = warp / 2u * 16u, wc = warp % 2u * 16u;
+    nvcuda::wmma::fragment<wmma::accumulator,16,16,16,float> sum;
+    wmma::fill_fragment(sum, 0.0f);
+    for (unsigned k = 0u; k < width; k += 32u) {
+        for (unsigned i = threadIdx.x; i < 64u * 32u; i += 256u) {
+            unsigned r = rb + i / 32u;
+            unsigned bits = r < rows ? weights[(unsigned long long)r * width + k + i % 32u] : 0u;
+            float value = __uint_as_float(bits << 16u);
+            unsigned exponent = (bits >> 7u) & 255u;
+            if (!isfinite(value) || ((bits & 0x7fffu) && (exponent < 71u || exponent > 182u)))
+                atomicCAS(status, 0, 3);
+            a[i] = __float2bfloat16_rn(value);
+        }
+        for (unsigned i = threadIdx.x; i < 32u * 32u; i += 256u) {
+            unsigned c = cb + i / 32u;
+            float value = c < inputs ? input[(unsigned long long)c * width + k + i % 32u] : 0.0f;
+            __nv_bfloat16 packed = __float2bfloat16_rn(value);
+            unsigned bits = __float_as_uint(value) & 0x7fffffffu;
+            unsigned exponent = bits >> 23u;
+            if (!isfinite(value) || __bfloat162float(packed) != value ||
+                (bits && (exponent < 71u || exponent > 182u))) atomicCAS(status, 0, 4);
+            b[i] = packed;
+        }
+        __syncthreads();
+        for (unsigned half = 0u; half < 2u; ++half) {
+            wmma::fragment<wmma::matrix_a,16,16,16,__nv_bfloat16,wmma::row_major> af;
+            wmma::fragment<wmma::matrix_b,16,16,16,__nv_bfloat16,wmma::col_major> bf;
+            wmma::load_matrix_sync(af, a + wr * 32u + half * 16u, 32u);
+            wmma::load_matrix_sync(bf, b + wc * 32u + half * 16u, 32u);
+            wmma::mma_sync(sum, af, bf, sum);
+        }
+        __syncthreads();
+    }
+    wmma::store_matrix_sync(y + wr * 32u + wc, sum, 32u, wmma::mem_row_major);
+    __syncthreads();
+    for (unsigned i = threadIdx.x; i < 64u * 32u; i += 256u) {
+        unsigned r = rb + i / 32u, c = cb + i % 32u;
+        if (r < rows && c < inputs) {
+            float value = output_bf16 ? float_to_bf16_rne(y[i]) : y[i];
+            if (!isfinite(value)) atomicCAS(status, 0, 1);
+            else if (!*status) output[(unsigned long long)c * rows + r] = value;
+        }
+    }
+#else
+    if (!threadIdx.x) atomicCAS(status, 0, 2);
+#endif
+}
+
+/* Row-major weights and activations, no packing/allocation. Four independent
+ * F32 accumulators per lane followed by a fixed F32 tree; no TF32 conversion.
+ * The caller owns finite-result validation and transactional publication. */
+extern "C" __global__ __launch_bounds__(128) void yvex_f32_matrix_rows(
+    const float *weights, const float *input, float *output,
+    unsigned long long rows, unsigned long long width, unsigned long long inputs,
+    int additive)
+{
+    unsigned long long row = blockIdx.x % rows, batch = blockIdx.x / rows;
+    if (batch >= inputs) return;
+    const float *w = weights + row * width, *x = input + batch * width;
+    float sums[4] = {};
+    for (unsigned long long k = threadIdx.x; k < width; k += 512ull) {
+        #pragma unroll
+        for (unsigned j = 0u; j < 4u; ++j)
+            if (k + j * 128ull < width)
+                sums[j] = __fmaf_rn(w[k + j * 128ull], x[k + j * 128ull], sums[j]);
+    }
+    float value = __fadd_rn(__fadd_rn(sums[0], sums[1]), __fadd_rn(sums[2], sums[3]));
+    unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
+    for (unsigned offset = 16u; offset; offset >>= 1u)
+        value = __fadd_rn(value, __shfl_down_sync(~0u, value, offset));
+    __shared__ float partial[4];
+    if (!lane) partial[warp] = value;
+    __syncthreads();
+    if (!threadIdx.x) {
+        value = __fadd_rn(__fadd_rn(partial[0], partial[1]), __fadd_rn(partial[2], partial[3]));
+        unsigned long long index = batch * rows + row;
+        output[index] = additive ? __fadd_rn(value, output[index]) : value;
+    }
+}
 
 static __device__ __forceinline__ int decoded_prepare_block(
     const unsigned char *source, unsigned qtype, unsigned width, unsigned row,
@@ -197,7 +373,8 @@ extern "C" __global__ void yvex_decoded_rows(
     if (!status || *status) return;
     if (!left || !left_metadata || !right || !right_metadata || !output ||
         !weights || !input || !width || width % 32u || !rows || !inputs ||
-        width > 4096u || rows > 1024u || inputs > 1024u || blockDim.x != 128u ||
+        width > 4096u || rows > 1024u || inputs > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH ||
+        blockDim.x != 128u ||
         (qtype != YVEX_GGUF_QTYPE_BF16 && qtype != YVEX_GGUF_QTYPE_F32) ||
         (output_bf16 != 0 && output_bf16 != 1)) {
         if (!threadIdx.x) atomicCAS(status, 0, 2);

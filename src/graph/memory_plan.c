@@ -323,25 +323,29 @@ int yvex_attention_workspace_recipe_seal(yvex_attention_workspace_recipe *recipe
     unsigned long long seen = 0ull;
     unsigned int index;
     if (!recipe ||
-        recipe->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3 ||
+        recipe->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5 ||
         !recipe->token_capacity || !recipe->component_count ||
         recipe->prefix_checkpoint_capacity > recipe->token_capacity ||
         recipe->component_count > YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP ||
         recipe->mode > YVEX_ATTENTION_EXECUTION_FULL ||
         recipe->scope > YVEX_ATTENTION_OPERATION_RELEASE_SET ||
         recipe->evidence_level > YVEX_ATTENTION_EVIDENCE_FULL ||
+        (recipe->compute_contract != YVEX_ATTENTION_COMPUTE_UNKNOWN &&
+         recipe->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+         recipe->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) ||
         !yvex_sha256_hex_valid(recipe->state_recipe_identity)) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "graph.attention.workspace.recipe",
                        "complete bounded workspace recipe facts are required");
         return YVEX_ERR_INVALID_ARG;
     }
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.graph.attention.workspace-recipe.v3") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.graph.attention.workspace-recipe.v5") ||
         !yvex_sha256_update_u64(&hash, recipe->schema_version) ||
         !yvex_sha256_update_u64(&hash, recipe->layer_index) ||
         !yvex_sha256_update_u64(&hash, recipe->mode) ||
         !yvex_sha256_update_u64(&hash, recipe->scope) ||
         !yvex_sha256_update_u64(&hash, recipe->evidence_level) ||
+        !yvex_sha256_update_u64(&hash, recipe->compute_contract) ||
         !yvex_sha256_update_u64(&hash, recipe->token_capacity) ||
         !yvex_sha256_update_u64(&hash, recipe->prefix_checkpoint_capacity) ||
         !yvex_sha256_update_u64(&hash, recipe->component_count) ||
@@ -350,9 +354,9 @@ int yvex_attention_workspace_recipe_seal(yvex_attention_workspace_recipe *recipe
     for (index = 0u; index < recipe->component_count; ++index) {
         yvex_attention_workspace_component *component = &recipe->components[index];
         unsigned long long bit;
-        if (component->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V3 ||
+        if (component->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V5 ||
             component->ordinal != index ||
-            component->kind > YVEX_ATTENTION_WORKSPACE_INDEXER_PROJECTED_SCORES ||
+            component->kind > YVEX_ATTENTION_WORKSPACE_BLOCK_REDUCTION ||
             component->lifetime > YVEX_ATTENTION_WORKSPACE_GRAPH_STABLE ||
             !component->element_count || !component->element_width ||
             !component->alignment ||

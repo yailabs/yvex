@@ -1,6 +1,8 @@
 /* Private stream/graph primitives shared by encoded attention and MoE execution.
  * This owner validates and submits; callers retain transactional publication. */
 #include "src/backend/cuda/attention_ops.h"
+#include "src/backend/cuda/component_ops.h"
+#include "src/backend/cuda/attention_block.h"
 #include "src/backend/cuda/transformer_ops.h"
 #include <yvex/internal/graph_state.h>
 #include <yvex/internal/transformer.h>
@@ -278,6 +280,16 @@ static int attention_matvec(yvex_cuda_work *work,
     unsigned int matvec_grid, matvec_block, tensorcore_grid = 0u, tensorcore_block = 0u;
     unsigned int shared_q8_grid = 0u, shared_q8_block = 0u, shared_q8_bytes = 0u;
     unsigned int row_matrix_grid = 0u, row_matrix_block = 0u;
+    CUfunction row_matrix_function = NULL;
+    if (weight && work->matrix_projection == YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1 &&
+        input_rows >= 256ull && input_rows <= YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH &&
+        weight->row_width <= 8192ull &&
+        (weight->qtype == YVEX_GGUF_QTYPE_BF16 || weight->qtype == YVEX_GGUF_QTYPE_MXFP4))
+        return yvex_cuda_prepared_matrix(work, weight, device_weight, start_row, rows,
+            input_rows, vector, out, output_bf16, status, err);
+    if (weight && work->matrix_projection && weight->qtype == YVEX_GGUF_QTYPE_BF16)
+        return yvex_cuda_bf16_matrix(work, weight, device_weight, start_row, rows,
+            input_rows, vector, out, output_bf16, status, err);
     q8_path = weight && work->activation_q8 && !work->forensic_numeric &&
               weight->row_width % 256ull == 0ull &&
               yvex_cuda_q8_activation_eligible(weight->qtype) &&
@@ -285,10 +297,8 @@ static int attention_matvec(yvex_cuda_work *work,
     tensorcore_path = q8_path && work->state->qtype_tensorcore_rows_function &&
                       cuda_qtype_tensorcore_eligible(input_rows);
     row_matrix_path = q8_path && !tensorcore_path &&
-        (weight->qtype == YVEX_GGUF_QTYPE_MXFP4 || weight->qtype == YVEX_GGUF_QTYPE_Q2_K) &&
-        work->state->q8_row_matrix_function &&
-        yvex_cuda_q8_row_matrix_geometry(rows, weight->row_width, input_rows,
-            &row_matrix_grid, &row_matrix_block);
+        (row_matrix_function = cuda_q8_row_matrix_select(work->backend, weight->qtype,
+            rows, weight->row_width, input_rows, &row_matrix_grid, &row_matrix_block)) != NULL;
     shared_q8_path = q8_path && !tensorcore_path && !row_matrix_path &&
                      work->state->mxfp4_q8_rows_function &&
                      attention_mxfp4_q8_rows_geometry(
@@ -306,7 +316,7 @@ static int attention_matvec(yvex_cuda_work *work,
             weight ? weight->row_count : 0ull, start_row + rows, err,
             YVEX_ERR_BOUNDS, "CUDA attention matvec geometry is invalid");
     if (tensorcore_path && !yvex_cuda_qtype_tensorcore_geometry(
-                               rows, input_rows, &tensorcore_grid,
+                               rows, input_rows, weight->qtype, rows, &tensorcore_grid,
                                &tensorcore_block))
         return attention_fail(
             failure, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT, stage,
@@ -348,7 +358,7 @@ static int attention_matvec(yvex_cuda_work *work,
                 &group_count, &group_rows, (void *)&weight->qtype, &quantized,
                 &additive, &out, &output_bf16, &status};
             rc = attention_launch(
-                work, cuda_qtype_tensorcore_function(work->state, rows, input_rows, weight->qtype),
+                work, cuda_qtype_tensorcore_function(work->state, rows, input_rows, weight->qtype, tensorcore_block),
                 tensorcore_grid, tensorcore_block, 0u, params, stage,
                 failure, err);
             if (rc == YVEX_OK) work->tensor_core_launches++;
@@ -359,7 +369,7 @@ static int attention_matvec(yvex_cuda_work *work,
                 (void *)&weight->qtype, &quantized, (void *)&weight->row_width,
                 &q8_input, &block_row, &work->forensic_numeric, &additive,
                 &out, &rows, &output_bf16, &status};
-            rc = attention_launch(work, work->state->q8_row_matrix_function,
+            rc = attention_launch(work, row_matrix_function,
                 row_matrix_grid, row_matrix_block, 0u, params, stage, failure, err);
             if (rc == YVEX_OK) work->tensor_core_launches++;
         } else if (rc == YVEX_OK && shared_q8_path) {
@@ -447,7 +457,7 @@ static int attention_matvec_grouped(
             !yvex_core_u64_mul(quantized_rows, blocks, &quantize_tasks) ||
             !yvex_core_u64_mul(quantize_tasks, 292ull, &quantized_bytes) ||
             !yvex_cuda_qtype_tensorcore_geometry(
-                rows, input_rows, &tensorcore_grid, &tensorcore_block) ||
+                rows, input_rows, weight->qtype, group_rows, &tensorcore_grid, &tensorcore_block) ||
             quantize_tasks > UINT_MAX ||
             quantized_bytes > SIZE_MAX)
             return attention_fail(
@@ -479,7 +489,7 @@ static int attention_matvec_grouped(
                 &groups, &group_rows, (void *)&weight->qtype, &quantized,
                 &additive, &out, &output_bf16, &status};
             rc = attention_launch(
-                work, cuda_qtype_tensorcore_function(work->state, rows, input_rows, weight->qtype),
+                work, cuda_qtype_tensorcore_function(work->state, rows, input_rows, weight->qtype, tensorcore_block),
                 tensorcore_grid, tensorcore_block, 0u, params, stage,
                 failure, err);
             if (rc == YVEX_OK) work->tensor_core_launches++;
@@ -653,12 +663,14 @@ static int attention_unit_norm(yvex_cuda_work *work,
             1ull, vectors, err, YVEX_ERR_BOUNDS,
             "CUDA attention unit-norm geometry is invalid");
     {
+        int cohort = vectors >= 512ull && width <= 1024ull;
         void *params[] = {&values, &vectors, &width, &epsilon, &status};
         return attention_launch(
-            work, work->state->attention_unit_norm_function,
-            (unsigned int)vectors, CUDA_ATTENTION_BLOCK,
-            CUDA_ATTENTION_BLOCK * (unsigned int)sizeof(double), params, stage,
-            failure, err);
+            work, cohort ? work->state->attention_unit_norm_cohort_function
+                         : work->state->attention_unit_norm_function,
+            (unsigned int)(cohort ? (vectors + 7ull) / 8ull : vectors), CUDA_ATTENTION_BLOCK,
+            cohort ? 0u : CUDA_ATTENTION_BLOCK * (unsigned int)sizeof(double),
+            params, stage, failure, err);
     }
 }
 static int attention_rope(yvex_cuda_work *work,
@@ -679,7 +691,7 @@ static int attention_rope(yvex_cuda_work *work,
     unsigned int grid;
     if (!position || !position_step || !token_count ||
         token_count - 1ull > (ULLONG_MAX - token_position) / position_step ||
-        !position->rope_dimensions ||
+        !position->rope_dimensions || (position->rope_dimensions & 1ull) ||
         position->rope_dimensions > width ||
         !yvex_core_u64_mul(vectors_per_token, token_count, &total_vectors) ||
         total_vectors > ULLONG_MAX / (position->rope_dimensions / 2ull))
@@ -695,6 +707,20 @@ static int attention_rope(yvex_cuda_work *work,
             "CUDA attention RoPE launch extent is invalid");
     grid = (unsigned int)((total + CUDA_ATTENTION_BLOCK - 1ull) /
                           CUDA_ATTENTION_BLOCK);
+    if (position->rope_dimensions == 64ull || position->rope_dimensions == 128ull) {
+        unsigned long long cohort_width = CUDA_ATTENTION_BLOCK /
+            (position->rope_dimensions / 2ull);
+        if (vectors_per_token >= cohort_width) {
+            unsigned long long cohorts = vectors_per_token / cohort_width +
+                (vectors_per_token % cohort_width != 0ull);
+            if (!yvex_core_u64_mul(cohorts, token_count, &total) || total > UINT_MAX)
+                return attention_fail(failure,
+                    YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT, stage,
+                    UINT_MAX, total, err, YVEX_ERR_BOUNDS,
+                    "CUDA attention RoPE cohort launch extent is invalid");
+            grid = (unsigned int)total;
+        }
+    }
     {
         void *params[] = {
             &values, &vectors_per_token, &token_count, &width,
@@ -804,13 +830,29 @@ static int attention_validate_job(yvex_backend_attention_job *job,
             "cuda.attention.validate.compressed_history", job->head_dimension,
             job->compressed_stride, err, YVEX_ERR_FORMAT,
             "CUDA attention compressed history is incomplete");
-    if (job->compute_contract != YVEX_BACKEND_ATTENTION_COMPUTE_BF16_F32_RNE_V1)
+    if (job->matrix_projection > YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1 ||
+        (job->matrix_projection && (!job->native_execution || job->evidence_level >= 3u ||
+                                   job->candidate_block_visible)))
+        return attention_fail(failure, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT,
+            "cuda.attention.validate.matrix_projection",
+            YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1, job->matrix_projection,
+            err, YVEX_ERR_UNSUPPORTED, "selected matrix class requires native target execution");
+    if (job->compute_contract != YVEX_BACKEND_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+        job->compute_contract != YVEX_BACKEND_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1)
         return attention_fail(
             failure, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT,
             "cuda.attention.validate.compute_contract",
             YVEX_BACKEND_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
             job->compute_contract, err, YVEX_ERR_UNSUPPORTED,
             "CUDA attention compute contract is unavailable");
+    if (job->compute_contract == YVEX_BACKEND_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1 &&
+        (!job->native_execution || job->evidence_level >= 3u || job->candidate_block_visible ||
+         job->head_dimension != 512ull || job->query_heads < 16ull ||
+         job->query_heads > 128ull || job->query_heads % 16ull ||
+         job->token_count > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH))
+        return attention_fail(failure, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT,
+            "cuda.attention.validate.online64", 512ull, job->head_dimension,
+            err, YVEX_ERR_UNSUPPORTED, "online64 requires native causal BF16 512-wide head cohorts");
     if (job->attention_class < YVEX_BACKEND_ATTENTION_SWA ||
         job->attention_class > YVEX_BACKEND_ATTENTION_HCA)
         return attention_fail(
@@ -1268,6 +1310,47 @@ static int attention_state_stage(
     yvex_error_clear(err);
     return YVEX_OK;
 }
+/* Lower the same exact score operands once per real query tile. The packed
+ * digits and rejection metadata are transaction-private executable views;
+ * unsupported source values retain the ordered-F64 dot in the consumer. */
+static int attention_index_prepare(yvex_cuda_work *work,
+    const yvex_cuda_attention_selection_phase *p, CUdeviceptr *query, CUdeviceptr *keys,
+    const char *stage, yvex_backend_attention_failure *failure, yvex_error *err)
+{
+    unsigned long long vectors, words, query_bytes, key_bytes, total, query_stride = p->dimension;
+    unsigned int width = (unsigned int)p->dimension;
+    if (!yvex_core_u64_mul(p->rows, p->heads, &vectors) ||
+        !yvex_core_u64_mul(p->dimension / 4ull, 3ull, &words) ||
+        !yvex_core_u64_add(words, 4ull, &words) ||
+        !yvex_core_u64_mul(words, sizeof(int), &words) ||
+        !yvex_core_u64_mul(vectors, words, &query_bytes) ||
+        !yvex_core_u64_add(query_bytes, 255ull, &query_bytes) ||
+        !yvex_core_u64_mul(p->score_grid, words, &key_bytes) ||
+        !yvex_core_u64_add(query_bytes & ~255ull, key_bytes, &total) || total > SIZE_MAX)
+        return attention_fail(failure, YVEX_BACKEND_ATTENTION_FAILURE_BUDGET,
+            stage, SIZE_MAX, p->candidates, err, YVEX_ERR_BOUNDS,
+            "attention index preparation extent overflowed");
+    /* Score and rank consume this tile before the next overwrite on the same
+     * stream. Reuse allocation only, not prepared values or causal evidence.
+     * Every invocation prepares its exact operands again, including replay. */
+    int rc = YVEX_OK;
+    if (total > work->index_capacity) {
+        rc = attention_allocate(work, &work->index_workspace, (size_t)total,
+            NULL, 0, stage, failure, err);
+        if (rc == YVEX_OK) work->index_capacity = total;
+    }
+    if (rc != YVEX_OK) return rc;
+    *query = work->index_workspace;
+    *keys = *query + (query_bytes & ~255ull);
+    void *queries[] = {(void *)&p->query, &vectors, &query_stride, &width, query, (void *)&p->status};
+    void *indexer[] = {(void *)&p->indexer, (void *)&p->candidates,
+        (void *)&p->indexer_stride, &width, keys, (void *)&p->status};
+    rc = attention_launch(work, work->state->attention_index_prepare_function,
+        (unsigned int)((vectors + 31ull) / 32ull), 128u, 0u, queries, stage, failure, err);
+    return rc == YVEX_OK ? attention_launch(work, work->state->attention_index_prepare_function,
+        (unsigned int)((p->score_grid + 31ull) / 32ull), 128u, 0u, indexer, stage, failure, err) : rc;
+}
+
 /* All normalized emissions through this tile already exist on the stream.
  * Per-query visibility still filters their exact positions, so batching is
  * submission/layout only: no future row enters a causal selected population. */
@@ -1296,13 +1379,33 @@ static int attention_selection_phase(yvex_cuda_work *work,
         return attention_fail(failure, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT,
             stage, UINT_MAX, p ? p->candidates : 0ull, err, YVEX_ERR_BOUNDS,
             "bounded attention selection row geometry is invalid");
+    CUdeviceptr prepared_query = 0ull, prepared_keys = 0ull;
     void *scores[] = {(void *)&p->query, (void *)&p->weights, (void *)&p->indexer,
         (void *)&p->positions, (void *)&p->candidates, (void *)&p->indexer_stride,
         &absent, &absent, &zero, (void *)&p->dimension, (void *)&p->heads,
         (void *)&p->dimension, (void *)&p->ratio, (void *)&p->first_position,
-        (void *)&p->scores, (void *)&p->status, (void *)&p->rows, (void *)&p->score_grid};
-    int rc = attention_launch(work, work->state->attention_candidate_scores_function,
-        (unsigned int)grid, CUDA_ATTENTION_BLOCK, CUDA_ATTENTION_BLOCK * sizeof(double),
+        (void *)&p->scores, (void *)&p->status, (void *)&p->rows, (void *)&p->score_grid,
+        &prepared_query, &prepared_keys};
+    /* Equivalent score implementation, selected by the sealed operation's real
+     * head/row geometry. Register lattice proof or ordered-F64 fallback stays
+     * inside the existing numerical class. No state or prepared-weight storage. */
+    int matrix = p->rows >= 8ull && p->score_grid >= 64ull &&
+        p->heads <= 128ull && p->heads % 16ull == 0ull &&
+        p->dimension <= 256ull && p->dimension % 32ull == 0ull;
+    /* Capture topology follows admitted capacity, not a changing visible
+     * population. Empty/future candidates cannot remove preparation nodes. */
+    int prepared = matrix;
+    int rc = prepared ? attention_index_prepare(work, p, &prepared_query, &prepared_keys,
+        stage, failure, err) : YVEX_OK;
+    if (rc != YVEX_OK) return rc;
+    CUfunction function = prepared ? work->state->attention_candidate_scores_prepared_function
+        : matrix ? work->state->attention_candidate_scores_matrix_function
+                                 : work->state->attention_candidate_scores_function;
+    unsigned int block = matrix ? (unsigned int)p->heads * 2u : CUDA_ATTENTION_BLOCK;
+    unsigned int shared = matrix ? (unsigned int)p->heads * 8u * sizeof(double)
+                                 : CUDA_ATTENTION_BLOCK * sizeof(double);
+    if (matrix) grid = p->rows * ((p->score_grid + 7ull) / 8ull);
+    rc = attention_launch(work, function, (unsigned int)grid, block, shared,
         scores, stage, failure, err);
     if (rc != YVEX_OK) return rc;
     void *rank[] = {(void *)&p->positions, (void *)&p->candidates, &absent, &zero,
@@ -1312,6 +1415,138 @@ static int attention_selection_phase(yvex_cuda_work *work,
         (void *)&p->status, (void *)&p->rows, (void *)&p->score_grid, (void *)&p->selected_stride};
     return attention_launch(work, work->state->attention_topk_function,
         (unsigned int)p->rows, CUDA_ATTENTION_BLOCK, 0u, rank, stage, failure, err);
+}
+
+static int attention_online64(yvex_cuda_work *work,
+    const yvex_cuda_attention_reduction_phase *phase, const char *stage,
+    yvex_backend_attention_failure *failure, yvex_error *err)
+{
+    const yvex_backend_attention_job *job = phase->job;
+    unsigned long long local, columns, pitch, rows, cells, bytes, metadata, grid;
+    unsigned long long kv_rows, query_bytes, kv_bytes, map_bytes, prepared_bytes;
+    CUdeviceptr scratch = 0;
+    if (!attention_block_geometry(job, phase->selected_stride,
+            phase->compressed_count, &local, &columns, &pitch)) goto overflow;
+    if (!pitch || pitch > UINT_MAX || columns > UINT_MAX || local > UINT_MAX ||
+        job->sliding_window > UINT_MAX || job->token_count > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH ||
+        !yvex_core_u64_mul(job->token_count, job->query_heads, &rows) || rows > UINT_MAX ||
+        !yvex_core_u64_mul(rows, pitch, &cells) ||
+        !yvex_core_u64_mul(rows, pitch / 64ull + 1ull, &metadata) ||
+        !yvex_core_u64_mul(metadata, sizeof(float), &metadata) ||
+        !yvex_core_u64_mul(cells, sizeof(float) + sizeof(unsigned short), &bytes) ||
+        !yvex_core_u64_add(bytes, metadata, &bytes) || bytes > SIZE_MAX ||
+        !yvex_core_u64_mul(rows / 16ull, pitch / 64ull, &grid) || grid > UINT_MAX)
+        goto overflow;
+    /* A 64-row preparation bucket keeps graph topology stable while exact
+     * history counts remain launch parameters. No unpopulated row is read. */
+    if (!yvex_core_u64_add(phase->initial_local_count, job->token_count, &kv_rows) ||
+        !yvex_core_u64_add(kv_rows, phase->compressed_count, &kv_rows) ||
+        !yvex_core_u64_add(kv_rows, 63ull, &kv_rows)) goto overflow;
+    kv_rows &= ~63ull;
+    if (kv_rows > UINT_MAX || rows + kv_rows > UINT_MAX ||
+        !yvex_core_u64_mul(rows, 1024ull, &query_bytes) ||
+        !yvex_core_u64_mul(kv_rows, 1028ull, &kv_bytes) ||
+        !yvex_core_u64_mul(job->token_count, pitch, &map_bytes) || map_bytes > UINT_MAX ||
+        !yvex_core_u64_mul(map_bytes, sizeof(unsigned int), &map_bytes) ||
+        !yvex_core_u64_add(query_bytes, kv_bytes, &prepared_bytes) ||
+        !yvex_core_u64_add(prepared_bytes, map_bytes, &prepared_bytes) ||
+        !yvex_core_u64_add(bytes, prepared_bytes, &prepared_bytes) || prepared_bytes > SIZE_MAX)
+        goto overflow;
+    /* The same admitted operation has phase-specific physical realizations.
+     * Narrow/short-key work retains the staged implementation. The measured
+     * SM121 fused geometry keeps recurrence and intermediates CTA-local. */
+    int fused = work->state->attention_block_fused_shared_bytes &&
+        job->token_count >= 16ull && pitch >= 256ull;
+    if (fused) { prepared_bytes -= bytes; bytes = 0ull; }
+    int rc = attention_allocate(work, &scratch, (size_t)prepared_bytes, NULL, 0, stage, failure, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_cuda_attention_block p = {0};
+    p.query = (const float *)(uintptr_t)phase->query;
+    p.local = (const float *)(uintptr_t)phase->local;
+    p.local_positions = (const unsigned long long *)(uintptr_t)phase->local_positions;
+    p.compressed = (const float *)(uintptr_t)(phase->compressed ? phase->compressed : phase->local);
+    p.compressed_positions = (const unsigned long long *)(uintptr_t)
+        (phase->compressed_positions ? phase->compressed_positions : phase->local_positions);
+    p.selected = (const unsigned long long *)(uintptr_t)phase->selected;
+    p.selected_count = (const unsigned long long *)(uintptr_t)phase->selected_count;
+    p.sinks = (const float *)(uintptr_t)phase->sinks;
+    p.output = (float *)(uintptr_t)phase->output;
+    p.status = (int *)(uintptr_t)phase->status;
+    p.initial_local_count = phase->initial_local_count;
+    p.local_stride = job->local_stride; p.compressed_stride = job->head_dimension;
+    p.compressed_count = phase->compressed_count; p.selected_stride = phase->selected_stride;
+    p.first_position = job->token_position; p.tokens = (unsigned int)job->token_count;
+    p.heads = (unsigned int)job->query_heads; p.window = (unsigned int)job->sliding_window;
+    p.local_columns = (unsigned int)local; p.columns = (unsigned int)columns; p.pitch = (unsigned int)pitch;
+    p.ratio = (unsigned int)job->compression_ratio; p.attention_class = (unsigned int)job->attention_class;
+    if (!fused) {
+        p.scores = (float *)(uintptr_t)scratch;
+        p.probabilities = (unsigned short *)(uintptr_t)(scratch + cells * sizeof(float));
+        p.scales = (float *)(uintptr_t)(scratch + cells * 6ull);
+        p.denominators = p.scales + rows * (pitch / 64ull);
+    }
+    p.packed_query = (unsigned short *)(uintptr_t)(scratch + bytes);
+    p.packed_kv = p.packed_query + query_bytes / sizeof(unsigned short);
+    p.invalid_kv = (unsigned int *)(p.packed_kv + kv_rows * 512ull);
+    p.indices = p.invalid_kv + kv_rows;
+    p.prepared_rows = (unsigned int)kv_rows;
+    void *args[] = {&p};
+    rc = attention_launch(work, work->state->attention_block_prepare_function,
+        (unsigned int)((rows + kv_rows + 3ull) / 4ull), 128u, 0u, args, stage, failure, err);
+    if (rc == YVEX_OK) rc = attention_launch(work, work->state->attention_block_map_function,
+        (unsigned int)((job->token_count * pitch + 127ull) / 128ull), 128u, 0u, args, stage, failure, err);
+    if (fused) return rc == YVEX_OK ? attention_launch(work, work->state->attention_block_fused_function,
+        (unsigned int)(rows / 16ull), 512u, work->state->attention_block_fused_shared_bytes,
+        args, stage, failure, err) : rc;
+    if (rc == YVEX_OK) rc = attention_launch(work, work->state->attention_block_qk_function,
+        (unsigned int)grid, 128u, 0u, args, stage, failure, err);
+    if (rc == YVEX_OK) rc = attention_launch(work, work->state->attention_block_softmax_function,
+        (unsigned int)((rows + 3ull) / 4ull), 128u, 0u, args, stage, failure, err);
+    if (rc == YVEX_OK) rc = attention_launch(work, work->state->attention_block_pv_function,
+        (unsigned int)(rows / 2ull), 128u, 0u, args, stage, failure, err);
+    return rc;
+overflow:
+    return attention_fail(failure, YVEX_BACKEND_ATTENTION_FAILURE_BUDGET,
+        stage, 0ull, job->token_count, err, YVEX_ERR_BOUNDS,
+        "online64 scratch or launch geometry exceeds representable bounds");
+}
+
+static int attention_reduction_phase(yvex_cuda_work *work,
+    const yvex_cuda_attention_reduction_phase *phase, const char *stage,
+    yvex_backend_attention_failure *failure, yvex_error *err)
+{
+    const yvex_backend_attention_job *job = phase ? phase->job : NULL;
+    unsigned long long blocks;
+    if (!work || !work->state || !job ||
+        !yvex_core_u64_mul(job->token_count, job->query_heads, &blocks) || !blocks || blocks > UINT_MAX)
+        return attention_fail(failure, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT,
+            stage, UINT_MAX, job ? job->token_count : 0ull, err, YVEX_ERR_BOUNDS,
+            "CUDA attention row grid exceeds launch bounds");
+    if (job->compute_contract == YVEX_BACKEND_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1)
+        return attention_online64(work, phase, stage, failure, err);
+    unsigned int attention_class = (unsigned int)job->attention_class;
+    void *params[] = {
+        (void *)&phase->query, (void *)&phase->local, (void *)&phase->local_positions,
+        (void *)&phase->initial_local_count, (void *)&job->local_stride,
+        (void *)&phase->compressed, (void *)&phase->compressed_positions, (void *)&job->compressed_stride,
+        (void *)&phase->selected, (void *)&phase->selected_count, (void *)&phase->selected_stride,
+        (void *)&phase->sinks, (void *)&job->query_heads, (void *)&job->head_dimension,
+        (void *)&job->sliding_window, (void *)&job->compression_ratio, &attention_class,
+        (void *)&job->token_position, (void *)&job->token_count, (void *)&job->candidate_block_visible,
+        (void *)&phase->output, (void *)&phase->status};
+    CUfunction reduce = work->activation_q8 ? work->state->attention_reduce_native_function
+                                            : work->state->attention_reduce_function;
+    if (work->activation_q8 && job->head_dimension == 512ull && job->token_count <= 4ull &&
+        job->query_heads >= 32ull && job->query_heads <= 128ull)
+        reduce = work->state->attention_reduce_native_candidates_function;
+    else if (work->activation_q8 && job->head_dimension <= 512ull && job->token_count >= 16ull &&
+             blocks >= 1024ull) {
+        reduce = job->head_dimension == 512ull ? work->state->attention_reduce_native_warp_512_function
+                                              : work->state->attention_reduce_native_warp_function;
+        blocks = (blocks + 7ull) / 8ull;
+    }
+    return attention_launch(work, reduce, (unsigned int)blocks, CUDA_ATTENTION_BLOCK,
+        work->activation_q8 ? 0u : CUDA_ATTENTION_BLOCK * sizeof(double), params, stage, failure, err);
 }
 
 /*
@@ -1330,6 +1565,7 @@ const yvex_cuda_attention_operations *yvex_cuda_attention_operations_get(void)
         attention_allocate, attention_initialize, attention_download,
         attention_launch, attention_round_bf16, attention_matvec,
         attention_matvec_grouped, attention_decode, attention_rolling_phase, attention_selection_phase,
+        attention_reduction_phase,
         attention_weighted_norm, attention_unit_norm, attention_rope,
         attention_activation, attention_state_stage
     };

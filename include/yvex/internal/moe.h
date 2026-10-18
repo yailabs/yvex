@@ -17,6 +17,7 @@
 extern "C" {
 #endif
 #define YVEX_MOE_PLAN_SCHEMA_V1 1u
+#define YVEX_MOE_PLAN_SCHEMA_V2 2u
 #define YVEX_MOE_INPUT_SCHEMA_V1 1u
 #define YVEX_MOE_ROW_BATCH_SCHEMA_V2 2u
 #define YVEX_MOE_ROW_BATCH_RESULT_SCHEMA_V4 4u
@@ -71,6 +72,7 @@ typedef struct {
     yvex_moe_activation activation;
     unsigned long long hidden_width, residual_streams, expanded_width;
     unsigned long long mhc_mixing_rows, mhc_sinkhorn_iterations;
+    yvex_mhc_projection_contract mhc_projection;
     unsigned long long routed_experts, shared_experts, experts_per_token;
     unsigned long long expert_intermediate_width, shared_intermediate_width;
     unsigned long long hash_table_rows, hash_table_columns, correction_bias_width;

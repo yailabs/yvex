@@ -8,13 +8,48 @@
 #include "src/backend/cuda/private.h"
 #include "src/backend/cuda/component_ops.h"
 #include "src/backend/cuda/transformer_ops.h"
+#include "src/backend/cuda/attention_block.h"
 #include <yvex/internal/convolution.h>
 #include <yvex/qtype.h>
+#include <limits.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* The launch consumer and geometry form one backend implementation choice.
+ * Encoded projection and attention consume the same checked selection. */
+int yvex_cuda_qtype_tensorcore_geometry(
+    unsigned long long rows, unsigned long long input_rows,
+    unsigned int qtype, unsigned long long group_rows,
+    unsigned int *grid, unsigned int *block)
+{
+    unsigned long long row_tiles, input_tiles, input_groups, blocks;
+    unsigned int warps;
+    if (!rows || !input_rows || !grid || !block ||
+        rows > ULLONG_MAX - 63ull || input_rows > ULLONG_MAX - 31ull ||
+        !group_rows || rows % group_rows) return 0;
+    if (qtype == YVEX_GGUF_QTYPE_MXFP4 && rows >= 2048ull && input_rows >= 64ull &&
+        (group_rows == rows || group_rows % 64ull == 0ull)) {
+        if (!yvex_core_u64_mul((rows + 63ull) / 64ull, (input_rows + 31ull) / 32ull, &blocks) ||
+            blocks > UINT_MAX) return 0;
+        *grid = (unsigned int)blocks;
+        *block = 256u;
+        return 1;
+    }
+    row_tiles = (rows + 15ull) / 16ull;
+    input_tiles = (input_rows + cuda_qtype_tensorcore_columns(rows, input_rows) - 1ull) /
+                  cuda_qtype_tensorcore_columns(rows, input_rows);
+    warps = input_tiles > 4ull ? 4u : (unsigned int)input_tiles;
+    input_groups = (input_tiles + warps - 1ull) / warps;
+    if (!yvex_core_u64_mul(row_tiles, input_groups, &blocks) ||
+        !blocks || blocks > UINT_MAX) return 0;
+    *grid = (unsigned int)blocks;
+    *block = warps * 32u;
+    return 1;
+}
+
 #ifdef YVEX_HAVE_CUDA_KERNEL_PTX
 #include <cuda_kernels_ptx.inc>
 #include <cuda_kernel_exports.inc>
@@ -243,10 +278,22 @@ static const cuda_kernel_binding cuda_kernel_bindings[] = {
      CUDA_HANDLE_OFFSET(qtype_tensorcore_wide_rows_function)},
     {"yvex_mxfp4_tensorcore_wide_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(mxfp4_tensorcore_wide_rows_function)},
+    {"yvex_mxfp4_tensorcore_shared_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(mxfp4_tensorcore_shared_rows_function)},
     {"yvex_decoded_prepare", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(decoded_prepare_function)},
+    {"yvex_f32_matrix_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(f32_matrix_function)},
+    {"yvex_bf16_matrix_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(bf16_matrix_function)},
+    {"yvex_bf16_prepare", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(bf16_prepare_function)},
+    {"yvex_matrix_finish", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(matrix_finish_function)},
     {"yvex_q8_row_matrix", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(q8_row_matrix_function)},
+    {"yvex_mxfp4_row_matrix_shared", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(mxfp4_row_matrix_shared_function)},
     {"yvex_decoded_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(decoded_rows_function)},
     {"yvex_decoded_mxfp4_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
@@ -267,6 +314,8 @@ static const cuda_kernel_binding cuda_kernel_bindings[] = {
      CUDA_HANDLE_OFFSET(attention_weighted_norm_function)},
     {"yvex_attention_unit_norm", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(attention_unit_norm_function)},
+    {"yvex_attention_unit_norm_cohort", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_unit_norm_cohort_function)},
     {"yvex_attention_yarn_rope", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(attention_yarn_rope_function)},
     {"yvex_attention_activation_quantize", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
@@ -287,12 +336,34 @@ static const cuda_kernel_binding cuda_kernel_bindings[] = {
      CUDA_HANDLE_OFFSET(attention_topk_function)},
     {"yvex_attention_candidate_scores", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(attention_candidate_scores_function)},
+    {"yvex_attention_candidate_scores_matrix", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_candidate_scores_matrix_function)},
+    {"yvex_attention_candidate_scores_prepared", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_candidate_scores_prepared_function)},
+    {"yvex_attention_index_prepare", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_index_prepare_function)},
     {"yvex_attention_reduce", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(attention_reduce_function)},
     {"yvex_attention_reduce_native", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(attention_reduce_native_function)},
     {"yvex_attention_reduce_native_warp", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(attention_reduce_native_warp_function)},
+    {"yvex_attention_reduce_native_warp_512", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_reduce_native_warp_512_function)},
+    {"yvex_attention_reduce_native_candidates", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_reduce_native_candidates_function)},
+    {"yvex_attention_block_qk", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_block_qk_function)},
+    {"yvex_attention_block_prepare", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_block_prepare_function)},
+    {"yvex_attention_block_map", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_block_map_function)},
+    {"yvex_attention_block_softmax", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_block_softmax_function)},
+    {"yvex_attention_block_pv", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_block_pv_function)},
+    {"yvex_attention_block_fused", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_block_fused_function)},
     {"yvex_moe_route", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(moe_route_function)},
     {"yvex_moe_route_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
@@ -309,8 +380,18 @@ static const cuda_kernel_binding cuda_kernel_bindings[] = {
      CUDA_HANDLE_OFFSET(moe_grouped_up_tensorcore_function)},
     {"yvex_moe_grouped_down_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(moe_grouped_down_rows_function)},
+    {"yvex_moe_grouped_up_q2_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(moe_grouped_up_q2_rows_function)},
+    {"yvex_moe_grouped_down_q2_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(moe_grouped_down_q2_rows_function)},
     {"yvex_moe_grouped_down_tensorcore", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(moe_grouped_down_tensorcore_function)},
+    {"yvex_moe_grouped_up_shared", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(moe_grouped_up_shared_function)},
+    {"yvex_moe_grouped_up_iq2_shared", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(moe_grouped_up_iq2_shared_function)},
+    {"yvex_moe_grouped_down_shared", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(moe_grouped_down_shared_function)},
     {"yvex_moe_reduce_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(moe_reduce_rows_function)},
     {"yvex_moe_combine_rows", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
@@ -424,6 +505,7 @@ static void cuda_bundle_clear_handles(yvex_cuda_backend_state *state)
         *cuda_function_slot(state, cuda_kernel_bindings[index].state_offset) = NULL;
     }
     state->kernel_bundle_native = 0;
+    state->attention_block_fused_shared_bytes = 0u;
     state->kernel_bundle_identity[0] = '\0';
     state->kernel_bundle_architecture[0] = '\0';
 }
@@ -515,6 +597,36 @@ static int cuda_test_failure_matches(const char *name,
            (strcmp(value, "all") == 0 ||
             strcmp(value, yvex_backend_operation_variant_name(variant)) == 0);
 }
+
+#ifdef YVEX_HAVE_CUDA_KERNEL_PTX
+/* Equivalent fusion is optional on other devices. Insufficient shared memory
+ * retains the admitted staged consumer; an actual attribute API error refuses
+ * admission instead of concealing a failed configuration. */
+static int cuda_attention_fusion_admit(yvex_backend *backend, yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    int maximum = 0, fixed = 0, rc;
+    enum { maximum_shared_optin = 97, function_static_shared = 1, function_dynamic_shared = 8 };
+    if (backend->device_info.compute_capability_major != 12 ||
+        backend->device_info.compute_capability_minor != 1 ||
+        !state->driver.cuFuncGetAttribute || !state->driver.cuFuncSetAttribute) return YVEX_OK;
+    rc = yvex_cuda_status(&state->driver,
+        state->driver.cuDeviceGetAttribute(&maximum, maximum_shared_optin, state->device),
+        "cuda.attention.fusion-capacity", err);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_cuda_status(&state->driver,
+        state->driver.cuFuncGetAttribute(&fixed, function_static_shared, state->attention_block_fused_function),
+        "cuda.attention.fusion-static", err);
+    if (rc != YVEX_OK) return rc;
+    if (fixed < 0 || maximum < fixed ||
+        (unsigned int)(maximum - fixed) < YVEX_CUDA_ATTENTION_FUSED_SHARED_BYTES) return YVEX_OK;
+    rc = yvex_cuda_status(&state->driver,
+        state->driver.cuFuncSetAttribute(state->attention_block_fused_function, function_dynamic_shared,
+            (int)YVEX_CUDA_ATTENTION_FUSED_SHARED_BYTES), "cuda.attention.fusion-configure", err);
+    if (rc == YVEX_OK) state->attention_block_fused_shared_bytes = YVEX_CUDA_ATTENTION_FUSED_SHARED_BYTES;
+    return rc;
+}
+#endif
 
 static CUfunction cuda_variant_function(const yvex_cuda_backend_state *state,
                                         yvex_backend_operation_variant variant)
@@ -711,6 +823,13 @@ int yvex_cuda_kernel_bundle_admit(yvex_backend *backend, yvex_error *err)
         state->module_count = loaded;
         for (index = 0; index < CUDA_KERNEL_BINDING_COUNT; ++index) {
             *cuda_function_slot(state, cuda_kernel_bindings[index].state_offset) = functions[index];
+        }
+        rc = cuda_attention_fusion_admit(backend, err);
+        if (rc != YVEX_OK) {
+            state->kernel_bundle_state = YVEX_CUDA_KERNEL_BUNDLE_REJECTED;
+            state->kernel_bundle_reason = YVEX_BACKEND_CAPABILITY_REASON_KERNEL_BUNDLE_REJECTED;
+            state->kernel_bundle_failure_variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED;
+            goto reject;
         }
         state->kernel_bundle_state = YVEX_CUDA_KERNEL_BUNDLE_ADMITTED;
         state->kernel_bundle_reason = YVEX_BACKEND_CAPABILITY_REASON_NONE;

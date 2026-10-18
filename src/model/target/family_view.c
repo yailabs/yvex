@@ -183,12 +183,13 @@ static int deepseek_from_verification(
     execution = yvex_graph_execution_find(0ull, 0ull, request->target_id);
     pipeline = execution && execution->compiler
                    ? execution->compiler->binding_pipeline : NULL;
-    if (!pipeline || !pipeline->semantic_model_build) {
+    if (!pipeline || pipeline->schema_version != YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V2 ||
+        !pipeline->semantic_model_build) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "deepseek_architecture_profile",
                        "target has no semantic compiler adapter");
         rc = YVEX_ERR_UNSUPPORTED;
     } else {
-        rc = pipeline->semantic_model_build(&semantic, verification, err);
+        rc = pipeline->semantic_model_build(&semantic, verification, 0u, 0u, 0u, err);
     }
     if (rc != YVEX_OK) {
         report->status = "architecture-ir-refused";

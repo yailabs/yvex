@@ -14,57 +14,90 @@
 
 #include "src/runtime/private.h"
 
+static unsigned long long generation_phase_matrix_minimum(
+    const yvex_engine_implementation_record *policy, yvex_execution_phase phase)
+{
+    unsigned long long minimum = 99ull;
+    (void)yvex_runtime_specialization_phase_width_mask(policy, phase, 1, &minimum);
+    return minimum;
+}
+
 /* A transient policy fixture, not an executable model or generation oracle. */
 static int generation_phase_width_policy(void)
 {
     yvex_engine_implementation_record policy = {0}, changed;
     const unsigned long long verification = (1ull << 7u) - 2ull;
     const unsigned long long prefill = (1ull << 33u) - 2ull;
-    policy.schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V3;
+    policy.schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V4;
     policy.supported_width_mask = policy.worklist_width_mask = verification;
     policy.prefill_width_mask = policy.prefill_worklist_width_mask = prefill;
+    policy.matrix_tile_minimum = 4ull;
+    policy.prefill_matrix_tile_minimum = 1ull;
+    YVEX_TEST_ASSERT(generation_phase_matrix_minimum(
+        &policy, YVEX_EXECUTION_PHASE_PREFILL) == 1ull,
+        "prefill admits the independently characterized single-pair matrix geometry");
+    for (unsigned int phase = YVEX_EXECUTION_PHASE_DECODE;
+         phase <= YVEX_EXECUTION_PHASE_CORRECTION; ++phase)
+        YVEX_TEST_ASSERT(generation_phase_matrix_minimum(
+            &policy, (yvex_execution_phase)phase) == 4ull,
+            "prefill selection does not silently change decode/draft/verify/correction");
     YVEX_TEST_ASSERT(yvex_runtime_specialization_phase_width_mask(
-        &policy, YVEX_EXECUTION_PHASE_PREFILL, 1) == prefill,
+        &policy, YVEX_EXECUTION_PHASE_PREFILL, 1, NULL) == prefill,
         "prefill must admit its own real row population independently of proposals");
     for (unsigned int phase = YVEX_EXECUTION_PHASE_DECODE;
          phase <= YVEX_EXECUTION_PHASE_CORRECTION; ++phase)
         YVEX_TEST_ASSERT(yvex_runtime_specialization_phase_width_mask(
-            &policy, (yvex_execution_phase)phase, 1) == verification,
+            &policy, (yvex_execution_phase)phase, 1, NULL) == verification,
             "wider prompt work must not widen decode, draft, verification or correction");
     changed = policy;
-    changed.schema_version = 1u;
+    changed.schema_version = 3u;
+    YVEX_TEST_ASSERT(!generation_phase_matrix_minimum(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL),
+        "v3 implementation layout refuses before accessing its absent matrix phase field");
     YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
-        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1),
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1, NULL),
         "old layouts must refuse before accessing phase-specific fields");
     changed = policy;
     changed.prefill_worklist_width_mask |= 1ull << 34u;
     YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
-        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1),
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1, NULL),
         "worklist widths outside their implementation envelope must refuse");
+    changed = policy;
+    changed.prefill_matrix_tile_minimum = 63ull;
+    YVEX_TEST_ASSERT(!generation_phase_matrix_minimum(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL), "unrepresentable matrix threshold refuses");
+    changed = policy;
+    changed.prefill_matrix_tile_minimum = 34ull;
+    YVEX_TEST_ASSERT(!generation_phase_matrix_minimum(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL), "matrix threshold outside phase widths refuses");
     changed = policy;
     changed.prefill_width_mask |= 1ull << 63u;
     YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
-        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1),
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1, NULL),
         "unrepresentable physical widths must refuse");
     changed = policy;
     changed.prefill_width_mask |= 1ull;
     YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
-        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1), "zero-row admission must refuse");
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1, NULL), "zero-row admission must refuse");
     changed = policy;
     changed.prefill_width_mask = changed.prefill_worklist_width_mask = 0x7ffffffffffffffeull;
     changed.prefill_maximum_width = 256ull;
     YVEX_TEST_ASSERT(yvex_runtime_specialization_phase_width_mask(
-        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1) == 0x7ffffffffffffffeull &&
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1, NULL) == 0x7ffffffffffffffeull &&
         yvex_runtime_specialization_phase_width_mask(
-        &changed, YVEX_EXECUTION_PHASE_VERIFY, 1) == verification,
+        &changed, YVEX_EXECUTION_PHASE_VERIFY, 1, NULL) == verification,
         "dense prompt extent does not widen source verification");
     changed.prefill_maximum_width = YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH + 1ull;
     YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
-        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1), "excessive dense extent refuses");
-    YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(NULL, YVEX_EXECUTION_PHASE_PREFILL, 1) &&
-        !yvex_runtime_specialization_phase_width_mask(&policy, YVEX_EXECUTION_PHASE_MIXED, 1) &&
-        !yvex_runtime_specialization_phase_width_mask(&policy, (yvex_execution_phase)-1, 1),
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1, NULL), "excessive dense extent refuses");
+    YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(NULL, YVEX_EXECUTION_PHASE_PREFILL, 1, NULL) &&
+        !yvex_runtime_specialization_phase_width_mask(&policy, YVEX_EXECUTION_PHASE_MIXED, 1, NULL) &&
+        !yvex_runtime_specialization_phase_width_mask(&policy, (yvex_execution_phase)-1, 1, NULL),
         "missing or ambiguous phase authority must refuse");
+    YVEX_TEST_ASSERT(!generation_phase_matrix_minimum(NULL, YVEX_EXECUTION_PHASE_PREFILL) &&
+        !generation_phase_matrix_minimum(&policy, YVEX_EXECUTION_PHASE_MIXED) &&
+        !generation_phase_matrix_minimum(&policy, (yvex_execution_phase)-1),
+        "missing or ambiguous matrix phase authority must refuse");
     {
         const yvex_engine_specialization *none = NULL;
         unsigned long long width = 99ull;

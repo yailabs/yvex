@@ -234,7 +234,9 @@ static int moe_layer_write(yvex_core_bytes *bytes,
         if (!plan_put_u64(bytes, layer->tensor_ids[slot])) return 0;
     for (slot = 0ull; slot < YVEX_MOE_WEIGHT_COUNT; ++slot)
         if (!plan_put_u64(bytes, layer->qtypes[slot])) return 0;
-    return plan_put_text(bytes, layer->layer_identity);
+    return plan_put_text(bytes, layer->layer_identity) &&
+        (layer->schema_version < YVEX_MOE_PLAN_SCHEMA_V2 ||
+         plan_put_u64(bytes, layer->mhc_projection));
 }
 
 static int moe_plan_write(yvex_core_bytes *bytes, const yvex_moe_plan *plan)
@@ -281,7 +283,8 @@ static int moe_layer_read(model_plan_cursor *cursor, yvex_moe_layer_plan *layer)
     unsigned long long v[25], slot;
     memset(layer, 0, sizeof(*layer));
     if (!plan_get_values(cursor, v, sizeof(v) / sizeof(v[0])) ||
-        v[0] > UINT_MAX || v[4] > UINT_MAX || v[5] > UINT_MAX ||
+        (v[0] != YVEX_MOE_PLAN_SCHEMA_V1 && v[0] != YVEX_MOE_PLAN_SCHEMA_V2) ||
+        v[4] > UINT_MAX || v[5] > UINT_MAX ||
         v[6] > UINT_MAX || v[7] > UINT_MAX || v[8] > UINT_MAX ||
         v[22] > 1ull || v[23] > 1ull || v[24] > 1ull)
         return 0;
@@ -323,7 +326,13 @@ static int moe_layer_read(model_plan_cursor *cursor, yvex_moe_layer_plan *layer)
         if (!plan_get_u64(cursor, &qtype) || qtype > UINT_MAX) return 0;
         layer->qtypes[slot] = (unsigned int)qtype;
     }
-    return plan_get_text(cursor, layer->layer_identity);
+    if (!plan_get_text(cursor, layer->layer_identity)) return 0;
+    if (layer->schema_version == YVEX_MOE_PLAN_SCHEMA_V2) {
+        unsigned long long projection;
+        if (!plan_get_u64(cursor, &projection) || projection != YVEX_MHC_PROJECTION_F32_ACC_V1) return 0;
+        layer->mhc_projection = (yvex_mhc_projection_contract)projection;
+    }
+    return 1;
 }
 
 static int moe_plan_read(model_plan_cursor *cursor, yvex_moe_plan **out,

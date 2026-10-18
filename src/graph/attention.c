@@ -1,9 +1,5 @@
-/*
- * Provide reusable state and selection mechanisms to graph-family recipes.
- *
- * History is immutable and causal selection is deterministic. Protocol truth does not promote
- * complete attention, persistent KV, or generation.
- */
+/* Reusable history and causal selection for graph-family recipes.
+ * Operation contracts do not establish complete attention or generation. */
 #include "src/graph/private.h"
 typedef struct {
     unsigned long long kv_stride, score_stride, kv_extent, score_extent;
@@ -1852,17 +1848,21 @@ int yvex_attention_execute(
         request->execution_class > YVEX_EXECUTION_CLASS_FORENSIC_REFERENCE ||
         (request->measure_device_time != 0 && request->measure_device_time != 1))
         return attention_probe_fail(err, YVEX_ERR_INVALID_ARG, "canonical V2 probe request is invalid");
-    if (!family || !plan || !session || !descriptor || !result ||
+    if (!family || !plan || !result ||
         !family->cpu_options_default || !family->cpu_chunk_execute || !family->cuda_token_execute)
         return attention_probe_fail(err, YVEX_ERR_INVALID_ARG,
                                     "sealed attention owners and execution API are required");
     context.summary = yvex_attention_plan_summary(plan);
     if (!context.summary || !context.summary->full_execution_ready ||
-        !context.summary->cpu_reference_ready ||
+        ((request->compare_backends || request->backend == YVEX_BACKEND_KIND_CPU) &&
+         !context.summary->cpu_reference_ready) ||
         ((request->compare_backends || request->backend == YVEX_BACKEND_KIND_CUDA) &&
          !context.summary->cuda_execution_ready))
         return attention_probe_fail(err, YVEX_ERR_UNSUPPORTED,
                                     "requested production attention capability is not admitted");
+    if (!session || !descriptor)
+        return attention_probe_fail(err, YVEX_ERR_INVALID_ARG,
+                                    "materialized attention session and descriptor are required");
     if ((unsigned int)request->evidence_level >
             (unsigned int)YVEX_ATTENTION_EVIDENCE_FULL ||
         (request->select_layer &&

@@ -7,6 +7,7 @@
  */
 #include "src/backend/cuda/private.h"
 #include "src/backend/cuda/transformer_ops.h"
+#include "src/backend/cuda/component_ops.h"
 #include <yvex/internal/component.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/transformer.h>
@@ -948,31 +949,11 @@ int yvex_cuda_q8_row_matrix_geometry(
     unsigned int *grid, unsigned int *block)
 {
     if (!grid || !block || !rows || rows > 131072ull || !width || width > 8192ull ||
-        width % 256ull || inputs < 4ull || inputs > 1024ull) return 0;
+        width % 256ull || inputs < 4ull || inputs > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH) return 0;
     unsigned long long warps = inputs < 32ull ? (inputs + 7ull) / 8ull : 4ull;
     unsigned long long groups = (inputs + warps * 8ull - 1ull) / (warps * 8ull);
     *grid = (unsigned int)(((rows + 15ull) / 16ull) * groups);
     *block = (unsigned int)(warps * 32ull);
-    return 1;
-}
-
-int yvex_cuda_qtype_tensorcore_geometry(
-    unsigned long long rows, unsigned long long input_rows,
-    unsigned int *grid, unsigned int *block)
-{
-    unsigned long long row_tiles, input_tiles, input_groups, blocks;
-    unsigned int warps;
-    if (!rows || !input_rows || !grid || !block ||
-        rows > ULLONG_MAX - 15ull || input_rows > ULLONG_MAX - 15ull) return 0;
-    row_tiles = (rows + 15ull) / 16ull;
-    input_tiles = (input_rows + cuda_qtype_tensorcore_columns(rows, input_rows) - 1ull) /
-                  cuda_qtype_tensorcore_columns(rows, input_rows);
-    warps = input_tiles > 4ull ? 4u : (unsigned int)input_tiles;
-    input_groups = (input_tiles + warps - 1ull) / warps;
-    if (!yvex_core_u64_mul(row_tiles, input_groups, &blocks) ||
-        !blocks || blocks > UINT_MAX) return 0;
-    *grid = (unsigned int)blocks;
-    *block = warps * 32u;
     return 1;
 }
 
@@ -1382,21 +1363,20 @@ int yvex_cuda_transformer_linear_f32(yvex_backend *backend, const unsigned char 
         output_width, input_width, rows, input, output, selected, facts, err) : rc;
 }
 
-/* Execute one admitted row-major F32 matrix batch through cuBLAS. */
+/* Execute one admitted F32 batch; the enclosing program may own completion. */
 static int cuda_blas_f32_projection(
     yvex_backend *backend, yvex_cuda_backend_state *state,
     CUdeviceptr encoded, unsigned long long encoded_bytes,
     unsigned long long row_count, unsigned long long row_width,
     unsigned long long input_rows, const yvex_device_tensor *input,
     const yvex_device_tensor *additive, yvex_device_tensor *output,
-    unsigned long long activation_bytes, yvex_backend_operation_facts *facts,
+    unsigned long long activation_bytes, int explicit_acc, yvex_backend_operation_facts *facts,
     yvex_error *err)
 {
-    const float alpha = 1.0f, beta = additive ? 1.0f : 0.0f;
     CUdeviceptr input_ptr = (CUdeviceptr)input->data;
     CUdeviceptr output_ptr = (CUdeviceptr)output->data;
     unsigned long long output_bytes;
-    int rc = YVEX_OK, blas_status;
+    int rc = YVEX_OK;
 
     if (!state->blas.ready || row_count > INT_MAX || row_width > INT_MAX ||
         input_rows > INT_MAX ||
@@ -1407,8 +1387,7 @@ static int cuda_blas_f32_projection(
                        "F32 projection exceeds cuBLAS integer geometry");
         return YVEX_ERR_BOUNDS;
     }
-    rc = yvex_cuda_blas_bind_launch_stream(backend, "cuda.encoded-gemm.stream", err);
-    if (rc == YVEX_OK && additive) {
+    if (additive) {
         CUdeviceptr additive_ptr = (CUdeviceptr)additive->data;
         int driver_status = state->driver.cuMemcpyDtoDAsync_v2
                                 ? state->driver.cuMemcpyDtoDAsync_v2(
@@ -1420,21 +1399,9 @@ static int cuda_blas_f32_projection(
             rc = yvex_cuda_status(&state->driver, driver_status,
                                   "cuda.encoded-gemm.additive", err);
     }
-    blas_status = rc == YVEX_OK
-        ? state->blas.gemm_ex(
-              state->blas.handle, CUDA_BLAS_OP_T, CUDA_BLAS_OP_N,
-              (int)row_count, (int)input_rows, (int)row_width, &alpha,
-              (const void *)(uintptr_t)encoded, CUDA_BLAS_R_32F, (int)row_width,
-              (const void *)(uintptr_t)input_ptr, CUDA_BLAS_R_32F, (int)row_width,
-              &beta, (void *)(uintptr_t)output_ptr, CUDA_BLAS_R_32F, (int)row_count,
-              CUDA_BLAS_COMPUTE_32F, CUDA_BLAS_DEFAULT)
-        : 0;
-    if (rc == YVEX_OK && blas_status != 0) {
-        yvex_error_setf(err, YVEX_ERR_BACKEND, "cuda.encoded-gemm",
-                        "cuBLAS F32 projection failed with status %d", blas_status);
-        rc = YVEX_ERR_BACKEND;
-    }
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK) rc = yvex_cuda_f32_matrix(backend, encoded, row_count, row_width,
+        input_rows, input_ptr, output_ptr, additive != NULL, explicit_acc, err);
+    if (rc == YVEX_OK && !state->program_status_active)
         rc = yvex_cuda_synchronize(
             backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
             "cuda.encoded-gemm.sync", err);
@@ -1442,7 +1409,7 @@ static int cuda_blas_f32_projection(
     output->is_written = 1;
     facts->d2d_bytes = additive ? output_bytes : 0ull;
     facts->kernel_launches = 1ull;
-    facts->device_synchronizations = 1ull;
+    facts->device_synchronizations = !state->program_status_active;
     facts->active_weight_bytes = encoded_bytes;
     facts->activation_bytes = activation_bytes;
     facts->compulsory_memory_facts_available = 1;
@@ -1452,12 +1419,19 @@ static int cuda_blas_f32_projection(
 static int cuda_encoded_policy(unsigned int qtype, yvex_encoded_input_policy input_policy,
     yvex_encoded_reduction_policy reduction_policy, int split_input, yvex_error *err)
 {
-    if ((reduction_policy != YVEX_ENCODED_REDUCTION_DEFAULT && reduction_policy != YVEX_ENCODED_REDUCTION_ROW) ||
+    if ((reduction_policy != YVEX_ENCODED_REDUCTION_DEFAULT && reduction_policy != YVEX_ENCODED_REDUCTION_ROW &&
+         reduction_policy != YVEX_ENCODED_REDUCTION_F32_ACC) ||
         (reduction_policy == YVEX_ENCODED_REDUCTION_ROW &&
          ((input_policy != YVEX_ENCODED_INPUT_F32 && input_policy != YVEX_ENCODED_INPUT_Q8) || split_input))) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cuda.encoded-matvec.reduction",
             "row reduction requires unsplit F32 or Q8 input and admitted encoded parameters");
         return YVEX_ERR_INVALID_ARG;
+    }
+    if (reduction_policy == YVEX_ENCODED_REDUCTION_F32_ACC &&
+        (qtype != YVEX_GGUF_QTYPE_F32 || input_policy != YVEX_ENCODED_INPUT_F32 || split_input)) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "cuda.encoded-matvec.accumulation",
+            "explicit F32 accumulation requires unsplit F32 operands");
+        return YVEX_ERR_UNSUPPORTED;
     }
     if (input_policy != YVEX_ENCODED_INPUT_F32 && input_policy != YVEX_ENCODED_INPUT_Q8 &&
         input_policy != YVEX_ENCODED_INPUT_BF16) {
@@ -1515,6 +1489,25 @@ static void cuda_encoded_matvec_status_error(
         tensorcore, q8, split, additive);
 }
 
+/* Packing storage cannot alias live input, output, weights or the additive operand. */
+static int cuda_encoded_workspace_disjoint(const yvex_device_tensor *workspace,
+    unsigned long long encoded, unsigned long long encoded_bytes,
+    const yvex_device_tensor *input, const yvex_device_tensor *output,
+    const yvex_device_tensor *additive, yvex_error *err)
+{
+    if (!workspace) return YVEX_OK;
+    unsigned long long a = (unsigned long long)(uintptr_t)workspace->data;
+    unsigned long long starts[] = {encoded, (unsigned long long)(uintptr_t)input->data,
+        (unsigned long long)(uintptr_t)output->data, additive ? (unsigned long long)(uintptr_t)additive->data : 0u};
+    unsigned long long sizes[] = {encoded_bytes, input->bytes, output->bytes, additive ? additive->bytes : 0u};
+    for (size_t i = 0u; i < 4u; ++i) if (sizes[i] &&
+        (a <= starts[i] ? starts[i] - a < workspace->bytes : a - starts[i] < sizes[i])) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cuda.encoded-workspace", "packing storage aliases an operand");
+        return YVEX_ERR_FORMAT;
+    }
+    return YVEX_OK;
+}
+
 /* Project an exact resident encoded matrix without changing its reduction class. */
 static int cuda_encoded_matvec(
     yvex_backend *backend, const unsigned char *resident_encoded,
@@ -1539,6 +1532,7 @@ static int cuda_encoded_matvec(
     unsigned long long group_count = 1ull, group_rows = row_count;
     int output_bf16 = 0, host_status = 0, rc, cleanup_rc, q8_path, q8_input = 0;
     int tensorcore_path, row_matrix_path;
+    CUfunction row_matrix_function = NULL;
     int block_row = 0;
     int forensic_numeric = 0, split_input = input_tail != NULL;
     unsigned int matvec_grid, matvec_block, tensorcore_grid = 0u, tensorcore_block = 0u;
@@ -1558,10 +1552,8 @@ static int cuda_encoded_matvec(
                       q8_path && state && state->qtype_tensorcore_rows_function &&
                       cuda_qtype_tensorcore_eligible(input_rows);
     row_matrix_path = reduction_policy == YVEX_ENCODED_REDUCTION_ROW && q8_path &&
-        (qtype == YVEX_GGUF_QTYPE_MXFP4 || qtype == YVEX_GGUF_QTYPE_Q2_K) &&
-        state && state->q8_row_matrix_function &&
-        yvex_cuda_q8_row_matrix_geometry(row_count, row_width, input_rows,
-            &row_matrix_grid, &row_matrix_block);
+        (row_matrix_function = cuda_q8_row_matrix_select(backend, qtype,
+            row_count, row_width, input_rows, &row_matrix_grid, &row_matrix_block)) != NULL;
     if (!state || !resident_encoded || !encoded_bytes || !row_count || !input_rows ||
         !row_width || !row_bytes || !facts || split_input != (input_head_width != 0ull) ||
         (split_input && input_head_width >= row_width) ||
@@ -1599,37 +1591,36 @@ static int cuda_encoded_matvec(
         return YVEX_ERR_FORMAT;
     }
     if (tensorcore_path && !yvex_cuda_qtype_tensorcore_geometry(
-                               row_count, input_rows,
+                               row_count, input_rows, qtype, group_rows,
                                &tensorcore_grid, &tensorcore_block)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "cuda.encoded-matvec.tensorcore",
                        "Tensor Core row-batch grid exceeds launch bounds");
         return YVEX_ERR_BOUNDS;
     }
-    if (workspace) {
-        unsigned long long a = (unsigned long long)(uintptr_t)workspace->data;
-        unsigned long long starts[] = {device_address, (unsigned long long)(uintptr_t)input->data,
-            (unsigned long long)(uintptr_t)output->data, additive ? (unsigned long long)(uintptr_t)additive->data : 0u};
-        unsigned long long sizes[] = {encoded_bytes, input->bytes, output->bytes, additive ? additive->bytes : 0u};
-        for (size_t i = 0u; i < 4u; ++i) if (sizes[i] &&
-            (a <= starts[i] ? starts[i] - a < workspace->bytes : a - starts[i] < sizes[i])) {
-            yvex_error_set(err, YVEX_ERR_FORMAT, "cuda.encoded-workspace", "packing storage aliases an operand");
-            return YVEX_ERR_FORMAT;
-        }
-    }
+    rc = cuda_encoded_workspace_disjoint(workspace, device_address, encoded_bytes,
+        input, output, additive, err);
+    if (rc != YVEX_OK) return rc;
     output->is_written = 0;
     rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
                                       "cuda.encoded-matvec", err);
     if (rc == YVEX_OK) rc = yvex_cuda_set_current(backend, "cuda.encoded-matvec", err);
+    if (rc == YVEX_OK && reduction_policy == YVEX_ENCODED_REDUCTION_F32_ACC && !state->blas.ready) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "cuda.encoded-matvec.accumulation",
+            "explicit F32 accumulation requires its complete narrow/wide consumer");
+        return YVEX_ERR_UNSUPPORTED;
+    }
     encoded_ptr = (CUdeviceptr)device_address;
     if (rc == YVEX_OK && input_policy == YVEX_ENCODED_INPUT_BF16 && state->blas.ready)
         return cuda_blas_bf16_projection(
             backend, state, encoded_ptr, encoded_bytes, row_count, row_width,
             input_rows, input, additive, output, activation_bytes, facts, err);
     if (rc == YVEX_OK && !split_input &&
-        qtype == YVEX_GGUF_QTYPE_F32 && state->blas.ready && reduction_policy == YVEX_ENCODED_REDUCTION_DEFAULT)
+        qtype == YVEX_GGUF_QTYPE_F32 && state->blas.ready &&
+        (reduction_policy == YVEX_ENCODED_REDUCTION_DEFAULT || reduction_policy == YVEX_ENCODED_REDUCTION_F32_ACC))
         return cuda_blas_f32_projection(
             backend, state, encoded_ptr, encoded_bytes, row_count, row_width,
-            input_rows, input, additive, output, activation_bytes, facts, err);
+            input_rows, input, additive, output, activation_bytes,
+            reduction_policy == YVEX_ENCODED_REDUCTION_F32_ACC, facts, err);
     work.backend = backend;
     work.state = state;
     work.variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED;
@@ -1667,8 +1658,8 @@ static int cuda_encoded_matvec(
         q8_input = q8_path;
         rc = yvex_cuda_launch(
             backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
-            tensorcore_path ? cuda_qtype_tensorcore_function(state, row_count, input_rows, qtype)
-                            : row_matrix_path ? state->q8_row_matrix_function
+            tensorcore_path ? cuda_qtype_tensorcore_function(state, row_count, input_rows, qtype, tensorcore_block)
+                            : row_matrix_path ? row_matrix_function
                             : split_input ? state->qtype_split_matvec_function
                                           : state->qtype_matvec_function,
             tensorcore_path ? tensorcore_grid : row_matrix_path ? row_matrix_grid : matvec_grid,

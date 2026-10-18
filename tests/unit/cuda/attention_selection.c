@@ -67,7 +67,12 @@ static float selection_score(const selection_storage *s, unsigned long long cand
     return selection_score_values(s->query, s->weights, s->rows[candidate], heads, width);
 }
 
-typedef struct { yvex_backend *backend; void **params; } selection_graph_fixture;
+typedef struct {
+    yvex_backend *backend;
+    void **params;
+    CUfunction function;
+    unsigned int grid, block, shared;
+} selection_graph_fixture;
 
 /* Exercise both the exact narrow-product domain and the original F64 fallback.
  * The oracle remains scalar F64; fixtures do not implement device eligibility. */
@@ -100,14 +105,13 @@ static void selection_product_fixture(selection_storage *s, unsigned int scenari
 static int selection_graph_enqueue(void *context, int enqueue_kernels, yvex_error *err)
 {
     selection_graph_fixture *fixture = context;
-    yvex_cuda_backend_state *state = yvex_cuda_state(fixture->backend);
     return enqueue_kernels ? yvex_cuda_launch(fixture->backend,
-        YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, state->attention_candidate_scores_function,
-        SELECTION_CAPACITY, 256u, 256u * sizeof(double), fixture->params,
+        YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, fixture->function,
+        fixture->grid, fixture->block, fixture->shared, fixture->params,
         "cuda.test.attention-score-replay", err) :
         yvex_cuda_graph_kernel_update(fixture->backend,
-            YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, state->attention_candidate_scores_function,
-            SELECTION_CAPACITY, 256u, 256u * sizeof(double), fixture->params,
+            YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, fixture->function,
+            fixture->grid, fixture->block, fixture->shared, fixture->params,
             "cuda.test.attention-score-replay", err);
 }
 
@@ -133,7 +137,7 @@ static void selection_position_fixture(selection_storage *s, unsigned int scenar
 static void selection_integer_fixture(selection_storage *s, unsigned int scenario,
     unsigned long long count, unsigned long long heads, unsigned long long width)
 {
-    if (scenario < 32u || scenario > 39u) return;
+    if (scenario < 32u || scenario > 43u) return;
     for (unsigned long long head = 0ull; head < heads; ++head) {
         s->weights[head] = head % 3ull ? 0.5f : -0.25f;
         for (unsigned long long i = 0ull; i < width; ++i) {
@@ -144,6 +148,10 @@ static void selection_integer_fixture(selection_storage *s, unsigned int scenari
             if (scenario == 36u) value = -0.0f;
             if (scenario == 37u) value = 0x1p-133f;
             if (scenario >= 38u) value = ldexpf(0x1.fep0f, (int)((i * 7ull + head) % 47ull) - 23);
+            if (scenario >= 40u)
+                value = ldexpf(0x1.fep0f, (int)((i * 7ull + head) % (scenario == 41u ? 16ull : 15ull)) - 7);
+            if (scenario == 42u && head % 3ull == 1ull) value = nextafterf(value, INFINITY);
+            if (scenario == 43u && head % 3ull == 2ull) value = 0x1p-133f;
             s->query[head * width + i] = i % 4ull == 1ull ? -value : value;
         }
     }
@@ -153,12 +161,13 @@ static void selection_integer_fixture(selection_storage *s, unsigned int scenari
             if (scenario == 38u) value = ldexpf(value, (int)((c * 13ull + i) % 43ull) - 21);
             if (scenario == 39u && c % 3ull == 1ull) value = nextafterf(value, INFINITY);
             if (scenario == 39u && c % 3ull == 2ull) value = 0x1p-133f;
+            if (scenario >= 40u) value = ldexpf(value, (int)((c * 13ull + i) % 15ull) - 7);
             s->rows[c][i] = c % 2ull ? -value : value;
         }
 }
 
-static int selection_case(yvex_backend *backend, unsigned long long count,
-                          unsigned long long k, unsigned int scenario)
+static int selection_case_impl(yvex_backend *backend, unsigned long long count,
+                          unsigned long long k, unsigned int scenario, int matrix)
 {
     selection_storage *host = calloc(1u, sizeof(*host));
     selection_storage *observed = calloc(1u, sizeof(*observed));
@@ -249,6 +258,11 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
     indexes = base + offsetof(selection_storage, indexes);
     status = base + offsetof(selection_storage, status);
     unsigned long long query_rows = 1ull;
+    CUfunction function = matrix ? state->attention_candidate_scores_matrix_function
+                                 : state->attention_candidate_scores_function;
+    unsigned int score_grid = matrix ? (unsigned int)((extent + 7ull) / 8ull) : (unsigned int)extent;
+    unsigned int score_block = matrix ? (unsigned int)heads * 2u : 256u;
+    unsigned int score_shared = matrix ? (unsigned int)heads * 8u * sizeof(double) : 256u * sizeof(double);
     start = selection_now();
     {
         void *params[] = {
@@ -257,22 +271,24 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
             &ratio, &query_position, &scores, &status, &query_rows, &extent
         };
         if (scenario == 16u) {
-            selection_graph_fixture fixture = {backend, params};
+            selection_graph_fixture fixture = {backend, params, function,
+                matrix ? SELECTION_CAPACITY / 8u : SELECTION_CAPACITY, score_block, score_shared};
             yvex_backend_cuda_graph_info info;
+            const char *graph_key = matrix ? "attention-matrix-score-capacity-replay-v1"
+                                           : "attention-score-capacity-replay-v1";
             unsigned long long saved_history = history_count, saved_current = current_count;
             history_count = current_count = 0ull;
-            rc = yvex_cuda_graph_execute(backend, "attention-score-capacity-replay-v1", NULL,
+            rc = yvex_cuda_graph_execute(backend, graph_key, NULL,
                 selection_graph_enqueue, &fixture, 0u, &info, &err);
             YVEX_TEST_ASSERT(rc == YVEX_OK, "capture empty candidate population");
             history_count = saved_history; current_count = saved_current;
-            rc = yvex_cuda_graph_execute(backend, "attention-score-capacity-replay-v1", NULL,
+            rc = yvex_cuda_graph_execute(backend, graph_key, NULL,
                 selection_graph_enqueue, &fixture, 0u, &info, &err);
             YVEX_TEST_ASSERT(rc == YVEX_OK && info.capture_count == 1ull && info.replay_count >= 2ull,
                 "changed population replays the same admitted score launch without recapture");
         } else rc = yvex_cuda_launch(
             backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
-            state->attention_candidate_scores_function, (unsigned int)extent,
-            256u, 256u * sizeof(double), params, "cuda.test.attention-score", &err);
+            function, score_grid, score_block, score_shared, params, "cuda.test.attention-score", &err);
     }
     if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend,
         YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, &device_wide, "cuda.test.attention-score", &err);
@@ -338,10 +354,19 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
     return 0;
 }
 
-enum { BATCH_ROWS = 32, BATCH_HEADS = 3, BATCH_WIDTH = 5, BATCH_CANDIDATES = 129,
+static int selection_case(yvex_backend *backend, unsigned long long count,
+                          unsigned long long k, unsigned int scenario)
+{
+    int rc = selection_case_impl(backend, count, k, scenario, 0);
+    if (rc || scenario < 8u || scenario == 9u || scenario == 24u ||
+        scenario == 34u || scenario == 35u || scenario == 38u || scenario == 39u) return rc;
+    return selection_case_impl(backend, count, k, scenario, 1);
+}
+
+enum { BATCH_ROWS = 32, BATCH_HEADS = 64, BATCH_WIDTH = 128, BATCH_CANDIDATES = 129,
        BATCH_EXTENT = 256, BATCH_SELECTED = 17 };
 typedef struct {
-    float query[BATCH_ROWS][BATCH_HEADS * BATCH_WIDTH], weights[BATCH_ROWS][BATCH_HEADS];
+    float query[BATCH_ROWS * BATCH_HEADS * BATCH_WIDTH], weights[BATCH_ROWS * BATCH_HEADS];
     float candidates[BATCH_CANDIDATES][BATCH_WIDTH];
     unsigned long long positions[BATCH_CANDIDATES];
     unsigned long long selected[BATCH_ROWS][BATCH_SELECTED], selected_positions[BATCH_ROWS][BATCH_SELECTED];
@@ -352,33 +377,37 @@ typedef struct {
     unsigned char canary[64];
 } selection_batch_storage;
 
-static void selection_batch_fixture(selection_batch_storage *s, unsigned int scenario)
+static void selection_batch_fixture(selection_batch_storage *s, unsigned int scenario,
+                                    unsigned int heads, unsigned int width)
 {
     for (unsigned int r = 0u; r < BATCH_ROWS; ++r) {
-        for (unsigned int h = 0u; h < BATCH_HEADS; ++h) {
-            s->weights[r][h] = scenario == 1u ? 0.0f : h == 1u ? -0.25f : 0.5f;
-            for (unsigned int i = 0u; i < BATCH_WIDTH; ++i)
-                s->query[r][h * BATCH_WIDTH + i] =
+        for (unsigned int h = 0u; h < heads; ++h) {
+            s->weights[r * heads + h] = scenario == 1u ? 0.0f : h == 1u ? -0.25f : 0.5f;
+            for (unsigned int i = 0u; i < width; ++i)
+                s->query[(r * heads + h) * width + i] =
                     (float)((int)((r * 7u + h * 11u + i) % 31u) - 15) / 8.0f;
         }
     }
     for (unsigned int c = 0u; c < BATCH_CANDIDATES; ++c) {
         s->positions[c] = ((c * 37u) % BATCH_CANDIDATES) * 4ull;
-        for (unsigned int i = 0u; i < BATCH_WIDTH; ++i)
+        for (unsigned int i = 0u; i < width; ++i)
             s->candidates[c][i] = (float)((int)((c * 3u + i * 5u) % 19u) - 9) / 4.0f;
     }
     if (scenario == 2u) {
         s->positions[BATCH_CANDIDATES - 1u] = 1000ull;
         s->candidates[BATCH_CANDIDATES - 1u][0] = NAN;
     }
-    if (scenario == 3u) s->query[0][0] = NAN;
+    if (scenario == 3u) s->query[0] = NAN;
     if (scenario == 4u) s->positions[1] = s->positions[0];
     if (scenario == 5u) s->status = 1;
+    if (scenario == 11u) s->query[0] = nextafterf(s->query[0], INFINITY);
+    if (scenario == 12u) s->candidates[0][0] = 0x1p-80f;
     memset(s->canary, 0xa5, sizeof(s->canary));
 }
 
 static int selection_batch_check(const selection_batch_storage *host,
-    const selection_batch_storage *observed, unsigned long long rows, unsigned int scenario)
+    const selection_batch_storage *observed, unsigned long long rows, unsigned int scenario,
+    unsigned int heads, unsigned int width)
 {
     YVEX_TEST_ASSERT(!memcmp(host, observed, offsetof(selection_batch_storage, selected)),
                     "batched ranking preserves immutable query, weight and candidate inputs");
@@ -395,8 +424,8 @@ static int selection_batch_check(const selection_batch_storage *host,
         for (unsigned long long c = 0ull; c < BATCH_CANDIDATES; ++c) {
             if (host->positions[c] + 3ull > position) continue;
             expected[valid++] = (selection_expected){
-                selection_score_values(host->query[r], host->weights[r], host->candidates[c],
-                                       BATCH_HEADS, BATCH_WIDTH), c, host->positions[c]};
+                selection_score_values(host->query + r * heads * width, host->weights + r * heads,
+                                       host->candidates[c], heads, width), c, host->positions[c]};
         }
         qsort(expected, (size_t)valid, sizeof(expected[0]), selection_compare);
         unsigned long long chosen = valid < BATCH_SELECTED ? valid : BATCH_SELECTED;
@@ -425,29 +454,37 @@ typedef struct {
 static int selection_batch_graph_enqueue(void *context, int enqueue, yvex_error *err)
 {
     selection_batch_graph *fixture = context;
+    int rc = yvex_cuda_work_cleanup(fixture->work, err);
+    if (rc != YVEX_OK) return rc;
+    backend_workspace_reset(fixture->work->backend);
     fixture->work->prepare_only = !enqueue;
-    int rc = yvex_cuda_attention_operations_get()->selection_phase(
+    rc = yvex_cuda_attention_operations_get()->selection_phase(
         fixture->work, fixture->phase, "cuda.test.selection.rows.replay", fixture->failure, err);
     fixture->work->prepare_only = 0;
     return rc;
 }
 
-static int selection_batch_case(yvex_backend *backend, unsigned long long rows, unsigned int scenario)
+static int selection_batch_case(yvex_backend *backend, unsigned long long rows, unsigned int scenario, int matrix)
 {
     selection_batch_storage *host = calloc(1u, sizeof(*host)), *observed = calloc(1u, sizeof(*observed));
     yvex_backend_tensor_desc descriptor = {.name = "attention-selection-rows", .dtype = YVEX_DTYPE_I8,
         .rank = 1u, .dims = {sizeof(*host)}, .bytes = sizeof(*host)};
-    yvex_device_tensor *arena = NULL;
+    yvex_device_tensor *arena = NULL, *workspace = NULL;
     yvex_error err = {0};
     yvex_backend_attention_failure failure = {0};
     yvex_cuda_work work = {.backend = backend, .state = yvex_cuda_state(backend),
         .variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED};
     int device_wide = 0;
     YVEX_TEST_ASSERT(host && observed, "allocate independent multi-query selection fixture");
-    selection_batch_fixture(host, scenario);
+    unsigned int heads = matrix ? BATCH_HEADS : 3u, width = matrix ? BATCH_WIDTH : 5u;
+    selection_batch_fixture(host, scenario, heads, width);
     YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &descriptor, &arena, &err) == YVEX_OK &&
         yvex_backend_tensor_write(backend, arena, host, sizeof(*host), &err) == YVEX_OK,
         "upload independent multi-query selection fixture");
+    descriptor.dims[0] = descriptor.bytes = 1024ull * 1024ull;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &descriptor, &workspace, &err) == YVEX_OK &&
+        yvex_backend_workspace_attach(backend, workspace, 1ull, &err) == YVEX_OK,
+        "query preparation owns bounded device scratch before graph capture");
     CUdeviceptr base = yvex_cuda_activation_pointer(backend, arena);
     yvex_cuda_attention_selection_phase phase = {
         base + offsetof(selection_batch_storage, query), base + offsetof(selection_batch_storage, weights),
@@ -456,7 +493,7 @@ static int selection_batch_case(yvex_backend *backend, unsigned long long rows, 
         base + offsetof(selection_batch_storage, selected_count), base + offsetof(selection_batch_storage, valid_count),
         base + offsetof(selection_batch_storage, scores), base + offsetof(selection_batch_storage, indexes),
         base + offsetof(selection_batch_storage, status), BATCH_CANDIDATES, BATCH_EXTENT, BATCH_EXTENT,
-        BATCH_SELECTED, rows, BATCH_HEADS, BATCH_WIDTH, BATCH_WIDTH, 4ull, 250ull, BATCH_SELECTED};
+        BATCH_SELECTED, rows, heads, width, BATCH_WIDTH, 4ull, 250ull, BATCH_SELECTED};
     const yvex_cuda_attention_operations *ops = yvex_cuda_attention_operations_get();
     if (scenario == 6u) phase.first_position = ~0ull;
     if (scenario == 7u) phase.score_grid = BATCH_EXTENT - 1ull;
@@ -466,23 +503,46 @@ static int selection_batch_case(yvex_backend *backend, unsigned long long rows, 
     if (scenario == 10u) {
         selection_batch_graph fixture = {&work, &phase, &failure};
         yvex_backend_cuda_graph_info info;
+        const char *graph_key = matrix ? "attention-matrix-selection-rows-v1"
+                                       : "attention-selection-rows-v1";
         phase.candidates = 0ull;
-        rc = yvex_cuda_graph_execute(backend, "attention-selection-rows-v1", NULL,
+        rc = yvex_cuda_graph_execute(backend, graph_key, NULL,
             selection_batch_graph_enqueue, &fixture, 0u, &info, &err);
         YVEX_TEST_ASSERT(rc == YVEX_OK, "capture empty batched candidate population");
         phase.candidates = BATCH_CANDIDATES;
-        rc = yvex_cuda_graph_execute(backend, "attention-selection-rows-v1", NULL,
+        rc = yvex_cuda_graph_execute(backend, graph_key, NULL,
             selection_batch_graph_enqueue, &fixture, 0u, &info, &err);
         YVEX_TEST_ASSERT(rc == YVEX_OK && info.capture_count == 1ull && info.replay_count >= 2ull,
                         "changed batched candidate population replays without graph recapture");
     } else rc = ops->selection_phase(&work, &phase, "cuda.test.selection.rows", &failure, &err);
+    if (scenario == 13u) {
+        unsigned int ranges = work.count;
+        unsigned long long capacity = work.index_capacity;
+        CUdeviceptr prepared = work.index_workspace;
+        YVEX_TEST_ASSERT(rc == YVEX_OK && ranges == 1u && capacity && prepared,
+            "one reusable range owns exact index operands");
+        for (unsigned int repeat = 0u; repeat < 96u; ++repeat) {
+            YVEX_TEST_ASSERT(yvex_cuda_launch_synchronize(backend, work.variant, &device_wide,
+                "cuda.test.selection.reuse", &err) == YVEX_OK,
+                "finish the preceding tile before changing fixture inputs");
+            host->query[0] = (float)((int)(repeat % 31u) - 15) / 4.0f;
+            YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, host, sizeof(*host), &err) == YVEX_OK,
+                "replace the real query; allocation reuse cannot reuse stale prepared values");
+            rc = ops->selection_phase(&work, &phase, "cuda.test.selection.rows", &failure, &err);
+            YVEX_TEST_ASSERT(rc == YVEX_OK && work.count == ranges &&
+                work.index_capacity == capacity && work.index_workspace == prepared,
+                "96 sequential query tiles reuse the same range without exhausting work ownership");
+        }
+    }
     if (scenario >= 6u && scenario <= 9u) {
         YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS && work.launches == 0ull &&
             failure.code == YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT,
             "invalid row/position/scratch/output geometry refuses before submission");
     } else {
-        YVEX_TEST_ASSERT(rc == YVEX_OK && (scenario == 10u || work.launches == 2ull),
-                        "a query tile submits exactly one score and one ranking launch");
+        unsigned long long expected_launches = matrix && rows >= 8ull ? 4ull : 2ull;
+        YVEX_TEST_ASSERT(rc == YVEX_OK &&
+            (scenario == 10u || work.launches == expected_launches * (scenario == 13u ? 97ull : 1ull)),
+                        "query tile submits exact preparation/score/rank population, no synthetic rows");
         YVEX_TEST_ASSERT(yvex_cuda_launch_synchronize(backend, work.variant, &device_wide,
             "cuda.test.selection.rows", &err) == YVEX_OK, "complete batched ranking before observing");
     }
@@ -490,8 +550,17 @@ static int selection_batch_case(yvex_backend *backend, unsigned long long rows, 
                     "read bounded row selection fixture");
     if (scenario >= 6u && scenario <= 9u) YVEX_TEST_ASSERT(!memcmp(host, observed, sizeof(*host)),
                                        "refused geometry does not mutate any input or output byte");
-    else if (selection_batch_check(host, observed, rows, scenario)) return 1;
-    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+    else if (selection_batch_check(host, observed, rows, scenario, heads, width)) return 1;
+    if (scenario == 10u) {
+        YVEX_TEST_ASSERT(yvex_cuda_graphs_close_all(backend, &err) == YVEX_OK,
+            "retire selection graphs before retiring their scratch backing");
+    }
+    YVEX_TEST_ASSERT(yvex_cuda_work_cleanup(&work, &err) == YVEX_OK &&
+                    !work.index_workspace && !work.index_capacity,
+                    "retire prepared query/key transaction without retained allocations");
+    yvex_backend_workspace_detach(backend);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &workspace, &err) == YVEX_OK &&
+                    yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
                     "release bounded row selection fixture");
     printf("attention selection rows=%llu scenario=%u exact_oracle=PASS launches=%llu\n",
            rows, scenario, work.launches);
@@ -528,15 +597,17 @@ int yvex_cuda_test_attention_selection(void)
     for (unsigned int scenario = 25u; scenario <= 31u; ++scenario)
         if (selection_case(backend, 513ull, 17ull, scenario) ||
             selection_case(backend, 4096ull, 512ull, scenario)) return 1;
-    for (unsigned int scenario = 32u; scenario <= 39u; ++scenario)
+    for (unsigned int scenario = 32u; scenario <= 43u; ++scenario)
         if (selection_case(backend, 129ull, 17ull, scenario) ||
             selection_case(backend, 513ull, 512ull, scenario)) return 1;
     const unsigned long long rows[] = {1ull, 2ull, 7ull, 31ull, 32ull};
-    for (size_t i = 0u; i < sizeof(rows) / sizeof(rows[0]); ++i)
-        for (unsigned int scenario = 0u; scenario < 3u; ++scenario)
-            if (selection_batch_case(backend, rows[i], scenario)) return 1;
-    for (unsigned int scenario = 3u; scenario <= 10u; ++scenario)
-        if (selection_batch_case(backend, 32ull, scenario)) return 1;
+    for (int matrix = 0; matrix <= 1; ++matrix) {
+        for (size_t i = 0u; i < sizeof(rows) / sizeof(rows[0]); ++i)
+            for (unsigned int scenario = 0u; scenario < 3u; ++scenario)
+                if (selection_batch_case(backend, rows[i], scenario, matrix)) return 1;
+        for (unsigned int scenario = 3u; scenario <= (matrix ? 13u : 12u); ++scenario)
+            if (selection_batch_case(backend, 32ull, scenario, matrix)) return 1;
+    }
     yvex_backend_close(backend);
     return 0;
 }

@@ -1,0 +1,1075 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/receipt.json",
+          "sha256": "4d43317faf6bae32080585eacbf5e71db5466ac1217263f62c560dc3500efdd3",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+          "sha256": "7f2dbc8a2b7137ecf59f23eccda529502f93b274e19ee2eeebde8e6d55fccdbf",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/source.json",
+          "sha256": "cc7e7c6eaf6aa6be97006972dbba9bb7b290fae037cd87ee7a1e038e271e9f49",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/build.json",
+          "sha256": "2f17f77651046b526c6f2b48200560291f7953829e40ac61b77be6b72138bcfe",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-kernel-identity-01/stdout.jsonl",
+          "sha256": "a2933c5415019166657dba75960415b23e61214760e3c1e4d77d703e1078a783",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/closed.json",
+          "sha256": "bfaaa64e8fe0039f54cc1b6ac029eee3caee231ae6e404eeeaaf999ccf707466",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/operator-restored.json",
+          "sha256": "4ab28c773f69bba1e7a29b9ed72d3776fc27d6d721ccf93a46a5d5ba95b9fa1b",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "94a1fd52f04fe12467c8dd713ae7d821dc2ff98bfa8645ce2960909123b8cf4a",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/loaded-4096.json",
+          "sha256": "aaf90481af5256da41f3894149714222270fa87789eae39cb43f55c7046d0d01",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/receipt.json",
+          "sha256": "4d43317faf6bae32080585eacbf5e71db5466ac1217263f62c560dc3500efdd3",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+          "sha256": "7f2dbc8a2b7137ecf59f23eccda529502f93b274e19ee2eeebde8e6d55fccdbf",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/source.json",
+          "sha256": "cc7e7c6eaf6aa6be97006972dbba9bb7b290fae037cd87ee7a1e038e271e9f49",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/build.json",
+          "sha256": "2f17f77651046b526c6f2b48200560291f7953829e40ac61b77be6b72138bcfe",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-kernel-identity-01/stdout.jsonl",
+          "sha256": "a2933c5415019166657dba75960415b23e61214760e3c1e4d77d703e1078a783",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/closed.json",
+          "sha256": "bfaaa64e8fe0039f54cc1b6ac029eee3caee231ae6e404eeeaaf999ccf707466",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/operator-restored.json",
+          "sha256": "4ab28c773f69bba1e7a29b9ed72d3776fc27d6d721ccf93a46a5d5ba95b9fa1b",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "94a1fd52f04fe12467c8dd713ae7d821dc2ff98bfa8645ce2960909123b8cf4a",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/loaded-4096.json",
+          "sha256": "aaf90481af5256da41f3894149714222270fa87789eae39cb43f55c7046d0d01",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    },
+    "product-path": {
+      "state": "CHARACTERIZED",
+      "scope": "Three uninstrumented isolated native-v25 requests; not independent checkpoint quality or installed-product qualification",
+      "required_evidence": [
+        "receipt",
+        "events",
+        "source",
+        "build",
+        "kernel",
+        "closure",
+        "restoration",
+        "resources",
+        "engine"
+      ],
+      "evidence": {
+        "receipt": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/receipt.json",
+          "sha256": "4d43317faf6bae32080585eacbf5e71db5466ac1217263f62c560dc3500efdd3",
+          "result": "PASS"
+        },
+        "events": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+          "sha256": "7f2dbc8a2b7137ecf59f23eccda529502f93b274e19ee2eeebde8e6d55fccdbf",
+          "result": "PASS"
+        },
+        "source": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/source.json",
+          "sha256": "cc7e7c6eaf6aa6be97006972dbba9bb7b290fae037cd87ee7a1e038e271e9f49",
+          "result": "PASS"
+        },
+        "build": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/build.json",
+          "sha256": "2f17f77651046b526c6f2b48200560291f7953829e40ac61b77be6b72138bcfe",
+          "result": "PASS"
+        },
+        "kernel": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-kernel-identity-01/stdout.jsonl",
+          "sha256": "a2933c5415019166657dba75960415b23e61214760e3c1e4d77d703e1078a783",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/closed.json",
+          "sha256": "bfaaa64e8fe0039f54cc1b6ac029eee3caee231ae6e404eeeaaf999ccf707466",
+          "result": "PASS"
+        },
+        "restoration": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/operator-restored.json",
+          "sha256": "4ab28c773f69bba1e7a29b9ed72d3776fc27d6d721ccf93a46a5d5ba95b9fa1b",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table-resources.jsonl.summary.json",
+          "sha256": "94a1fd52f04fe12467c8dd713ae7d821dc2ff98bfa8645ce2960909123b8cf4a",
+          "result": "PASS"
+        },
+        "engine": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/loaded-4096.json",
+          "sha256": "aaf90481af5256da41f3894149714222270fa87789eae39cb43f55c7046d0d01",
+          "result": "PASS"
+        }
+      },
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-f32-split-speculative-coding-hash-table-20261012",
+  "limitations": [
+    "Three fresh-session samples; median, range and MAD, not a confidence interval or universal speedup.",
+    "Same artifact/binding/numerical class; implementation/build/kernel differ. Instrumented traces excluded from timing.",
+    "No independent checkpoint-matched NLL/PPL/KL or held-out quality. High/maximum, HTTP and installed-product performance not qualified.",
+    "Client-visible fragment arrival is not PTY painting; server/client latency metrics have distinct boundaries.",
+    "Advisory locks and sampled clear GPU process observations do not establish uninterrupted exclusivity; clocks uncontrolled.",
+    "Exact internal output-byte agreement does not independently qualify model behavior.",
+    "4K coding and 16K prefill admitted after authorized operator-model unload; no 32K candidate admission or installed rollout claim.",
+    "Rejected full-model tradeoff, not a retained or automatically recommended realization."
+  ],
+  "measurements": [
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to native TURN_STARTED acknowledgement; not pure server setup time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "admission.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.579345132,
+        0.57369019,
+        0.556561321
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.579345132,
+        "median": 0.57369019,
+        "median_absolute_deviation": 0.005654942000000052,
+        "minimum": 0.556561321
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect through terminal response",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "request.client-complete",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        18.734666884,
+        18.597632206,
+        18.625721189
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 18.734666884,
+        "median": 18.625721189,
+        "median_absolute_deviation": 0.028088982999999956,
+        "minimum": 18.597632206
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final/reasoning content",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "ttft.client-visible",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.753633805,
+        1.717400142,
+        1.69929773
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.753633805,
+        "median": 1.717400142,
+        "median_absolute_deviation": 0.018102411999999957,
+        "minimum": 1.69929773
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn maximum interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "delivery.client-gap.maximum",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.4635539889999998,
+        0.4407094669999978,
+        0.43484446600000126
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.4635539889999998,
+        "median": 0.4407094669999978,
+        "median_absolute_deviation": 0.005865000999996539,
+        "minimum": 0.43484446600000126
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "per-turn arithmetic mean interval between consecutive nonempty native final/reasoning fragments at client receive; excludes TTFT, includes observer work, not transport-only or terminal paint",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "delivery.client-gap.mean",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.06658982990588236,
+        0.06619481334901962,
+        0.06637593223137256
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.06658982990588236,
+        "median": 0.06637593223137256,
+        "median_absolute_deviation": 0.00018111888235293472,
+        "minimum": 0.06619481334901962
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "turn start to first committed model-token callback",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "ttft.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.174386578,
+        1.143611086,
+        1.142644969
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.174386578,
+        "median": 1.143611086,
+        "median_absolute_deviation": 0.0009661169999999331,
+        "minimum": 1.142644969
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server turn start to first source-classified final token",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "final.first.server",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.174386578,
+        1.143611086,
+        1.142644969
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.174386578,
+        "median": 1.143611086,
+        "median_absolute_deviation": 0.0009661169999999331,
+        "minimum": 1.142644969
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "client dispatch including connect to first nonempty final fragment",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "final.first.client",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        1.753633805,
+        1.717400142,
+        1.69929773
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 1.753633805,
+        "median": 1.717400142,
+        "median_absolute_deviation": 0.018102411999999957,
+        "minimum": 1.69929773
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "source-classified final tokens / server phase from reasoning boundary or prefill completion to decode end; not post-first sustained rate",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "final.phase-rate",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        14.681440061863778,
+        14.792361515807194,
+        14.751005112384624
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 14.792361515807194,
+        "median": 14.751005112384624,
+        "median_absolute_deviation": 0.04135640342257041,
+        "minimum": 14.681440061863778
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "committed tokens after first / elapsed decode wall after first",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "decode.post-first.committed",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        15.01749054880784,
+        15.106953795596512,
+        15.065799316649775
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 15.106953795596512,
+        "median": 15.065799316649775,
+        "median_absolute_deviation": 0.04115447894673707,
+        "minimum": 15.01749054880784
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "newly committed uncached input positions / complete prefill wall",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "prefill.uncached",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        43.206086460912175,
+        43.24085076881619,
+        43.445442986252964
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 43.445442986252964,
+        "median": 43.24085076881619,
+        "median_absolute_deviation": 0.034764307904012526,
+        "minimum": 43.206086460912175
+      },
+      "unit": "token/s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    },
+    {
+      "case": "coding.hash-table/turn-0",
+      "definition": "server-authored complete newly executed prefill wall time",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl",
+      "metric": "prefill.wall",
+      "output_bound": 256,
+      "prompt_identity": "ee35246b1e5ecee57b224c33a163ec8a17c5a05f120da6f4409f6e0aaa070dda",
+      "reference_identity": null,
+      "samples": [
+        0.717491505,
+        0.716914664,
+        0.713538587
+      ],
+      "scope": "native-v25 isolated resident host; selected configuration, not installed defaults",
+      "session_state": "fresh",
+      "statistics": {
+        "count": 3,
+        "maximum": 0.717491505,
+        "median": 0.716914664,
+        "median_absolute_deviation": 0.0005768409999999946,
+        "minimum": 0.713538587
+      },
+      "unit": "s",
+      "warm_state": "resident engine after separate warmup; fresh session; file cache uncontrolled"
+    }
+  ],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": false,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/source-capture",
+    "build": {
+      "build_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+      "build_identity": "3dc0ac8236a8859fc267772a056c7f31394d531b76d32ae97109bbd1d9770cb9",
+      "local_protocol_version": 25,
+      "registry_identity": "1762b4b32baa550b8396af6d786439189efa80ebfcf0580186ff4451a8040de2",
+      "schema": "yvex.version.v1",
+      "shell_build_identity": "8773627ed7522ddd97d42589f06e963a025b93eaecd4f9725ca04aa02b6c7fed",
+      "source_delta_identity": "340e07bba6dfaf5fd8003c14c7a21818efcf25e46e1e678ff8f8447bc9f3ea79",
+      "source_state": "dirty",
+      "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+      "version": "0.1.0"
+    },
+    "resource_observation": {
+      "schema": "yvex.qualification.resource-observation.v1",
+      "adapter": "cuda-process-list-v1",
+      "state": "OBSERVED_CLEAR",
+      "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table-resources.jsonl",
+      "allowed_pids": [
+        1203819
+      ],
+      "devices": [],
+      "interval_seconds": 1,
+      "observations": 58,
+      "probe_seconds": 1.3193324600288179,
+      "scope": "sampled compute-process witness; not exclusive reservation, profiler or numerical evidence",
+      "owned_child_pid": 1204315,
+      "cancellation_requested": false,
+      "owned_child_returncode": 0
+    },
+    "client_build": "3dc0ac8236a8859fc267772a056c7f31394d531b76d32ae97109bbd1d9770cb9",
+    "checkpoint_relationship": {
+      "claims_inherited": false,
+      "record_identity": "a4f60934bdf38eff935dc2434030713aa45bfc7047c9997e54ef48867974fe7a",
+      "source": "explicit-local-record",
+      "target_identity": "e92461c22e97e8cbfedf02a8bf85b5628ede1eafe910023932490028d3b42255"
+    },
+    "engine_record": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/loaded-4096.json",
+      "sha256": "aaf90481af5256da41f3894149714222270fa87789eae39cb43f55c7046d0d01",
+      "result": "PASS"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-kernel-identity-01/stdout.jsonl",
+      "sha256": "a2933c5415019166657dba75960415b23e61214760e3c1e4d77d703e1078a783",
+      "result": "PASS"
+    },
+    "device_uuid": "GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc",
+    "boot_id": "54835689-f267-4b02-be92-24be60646f9d",
+    "reproduction": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table-command.json",
+      "sha256": "736b2119755a1ec0ceba04c7565b2a184467929eb7514e00d81b14c503d3cc47",
+      "result": "PASS"
+    },
+    "continuation_control": {
+      "baseline": {
+        "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/ceeca-control-native-01/speculative/4096-coding.hash-table/events.jsonl",
+        "sha256": "f4a198fd8da315bdd1fcd41c1c206a0329fe2b9becd80a54b6fa7bc99f477f98",
+        "result": "PASS"
+      },
+      "equal_ordered_fragment_channels_lengths_hashes": true,
+      "scope": "Internal output regression; not upstream checkpoint conformance or independent model quality"
+    },
+    "diagnostics": [
+      {
+        "id": "post-load.rss",
+        "case": "coding.hash-table",
+        "value": 104093532160,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "post-load.pss",
+        "case": "coding.hash-table",
+        "value": 104083154944,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "post-load.pss_file",
+        "case": "coding.hash-table",
+        "value": 103841646592,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "post-load.pss_anon",
+        "case": "coding.hash-table",
+        "value": 197271552,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "post-load.locked",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "byte",
+        "definition": "OS smaps_rollup: overlapping classes, not additive allocations or proof of CUDA pinning",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/memory-post-load-4096.json"
+      },
+      {
+        "id": "load.client",
+        "case": "coding.hash-table",
+        "value": 5.481082551,
+        "unit": "s",
+        "definition": "One load command to ready; artifact authentication already read file pages; not cold-storage latency",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/load-4096.json"
+      },
+      {
+        "id": "native.prompt_tokens",
+        "case": "coding.hash-table",
+        "value": 31,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "native.reused_tokens",
+        "case": "coding.hash-table",
+        "value": 0,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "native.prefill_tokens",
+        "case": "coding.hash-table",
+        "value": 31,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "native.generated_tokens",
+        "case": "coding.hash-table",
+        "value": 256,
+        "unit": "count",
+        "definition": "Server population per completed request",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_cycles.0",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_forwards.0",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.proposed_tokens.0",
+        "case": "coding.hash-table",
+        "value": 215,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.selected_verification_tokens.0",
+        "case": "coding.hash-table",
+        "value": 211,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.target_verifications.0",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.accepted_tokens.0",
+        "case": "coding.hash-table",
+        "value": 170,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.rejected_tokens.0",
+        "case": "coding.hash-table",
+        "value": 41,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.discarded_tokens.0",
+        "case": "coding.hash-table",
+        "value": 4,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.correction_or_bonus_tokens.0",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.mean_accepted_prefix.0",
+        "case": "coding.hash-table",
+        "value": 3.953488372093023,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.maximum_accepted_prefix.0",
+        "case": "coding.hash-table",
+        "value": 5,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_seconds.0",
+        "case": "coding.hash-table",
+        "value": 1.202103562,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.verification_seconds.0",
+        "case": "coding.hash-table",
+        "value": 11.023388351,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.commit_seconds.0",
+        "case": "coding.hash-table",
+        "value": 4.886558958,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_cycles.1",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_forwards.1",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.proposed_tokens.1",
+        "case": "coding.hash-table",
+        "value": 215,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.selected_verification_tokens.1",
+        "case": "coding.hash-table",
+        "value": 211,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.target_verifications.1",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.accepted_tokens.1",
+        "case": "coding.hash-table",
+        "value": 170,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.rejected_tokens.1",
+        "case": "coding.hash-table",
+        "value": 41,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.discarded_tokens.1",
+        "case": "coding.hash-table",
+        "value": 4,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.correction_or_bonus_tokens.1",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.mean_accepted_prefix.1",
+        "case": "coding.hash-table",
+        "value": 3.953488372093023,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.maximum_accepted_prefix.1",
+        "case": "coding.hash-table",
+        "value": 5,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_seconds.1",
+        "case": "coding.hash-table",
+        "value": 1.186636388,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.verification_seconds.1",
+        "case": "coding.hash-table",
+        "value": 10.889611124,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.commit_seconds.1",
+        "case": "coding.hash-table",
+        "value": 4.899614227,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_cycles.2",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_forwards.2",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.proposed_tokens.2",
+        "case": "coding.hash-table",
+        "value": 215,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.selected_verification_tokens.2",
+        "case": "coding.hash-table",
+        "value": 211,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.target_verifications.2",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.accepted_tokens.2",
+        "case": "coding.hash-table",
+        "value": 170,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.rejected_tokens.2",
+        "case": "coding.hash-table",
+        "value": 41,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.discarded_tokens.2",
+        "case": "coding.hash-table",
+        "value": 4,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.correction_or_bonus_tokens.2",
+        "case": "coding.hash-table",
+        "value": 43,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.mean_accepted_prefix.2",
+        "case": "coding.hash-table",
+        "value": 3.953488372093023,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.maximum_accepted_prefix.2",
+        "case": "coding.hash-table",
+        "value": 5,
+        "unit": "count",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.draft_seconds.2",
+        "case": "coding.hash-table",
+        "value": 1.203472471,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.verification_seconds.2",
+        "case": "coding.hash-table",
+        "value": 10.909651075,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      },
+      {
+        "id": "speculation.commit_seconds.2",
+        "case": "coding.hash-table",
+        "value": 4.909171182,
+        "unit": "s",
+        "definition": "Observed cycle economics; durations need not partition complete-turn wall time",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/f32-split-native-01/speculative/4096-coding.hash-table/events.jsonl"
+      }
+    ],
+    "selection": {
+      "state": "rejected",
+      "reason": "Independent component numerics passed, but three fresh full-model samples establish no material benefit over q2-pipeline and require a larger decoded workspace. Removed from production; frozen source and executable retained."
+    },
+    "predecessor_comparison": {
+      "kind": "explicit-experiment",
+      "varying": [
+        "source_delta",
+        "build",
+        "executable",
+        "backend_implementation",
+        "kernel_bundle"
+      ],
+      "left": "f84db5d85d7dbc363eebf9f3cc75e8f17cda88f4c43959237427b6ca1d5b6d81",
+      "right": "25739941695ba3779bc854fafe3a7cbaafccebe04488953abb7e4a8d176a49bc",
+      "automatic_ranking": false
+    }
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; f32-split executable realization",
+    "binding": "091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632",
+    "build": "3dc0ac8236a8859fc267772a056c7f31394d531b76d32ae97109bbd1d9770cb9",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 4096,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "22031f0f222d9fe9c6d620e43a8e4419d692e7bf48f991a2b1699962c7995d12",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "f8e1d37a37521934d84fc62bc97e0b27e21269daccb32842668cc1584142611a",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "product-native-v25",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "isolated resident host; fresh session per sample after separate warmup; speculative; no prefix reuse",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "340e07bba6dfaf5fd8003c14c7a21818efcf25e46e1e678ff8f8447bc9f3ea79",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": "92dec75ee03479cba2905305a424f0dd9bba421b1fa5695bf46f58033e898d85",
+    "strategy": "speculative",
+    "suite": "d5d9eb417abe63fc2d2c242317479cfc785ce46688e25cc7e936501111393f9d",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "25739941695ba3779bc854fafe3a7cbaafccebe04488953abb7e4a8d176a49bc",
+  "title": "0731 MXFP4/Q2 native f32-split realization: speculative / coding.hash-table / three fresh sessions"
+}

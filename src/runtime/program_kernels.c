@@ -444,6 +444,11 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
                 return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "Q8 row-dot target requires its CUDA implementation");
             continue;
         }
+        if (!strcmp(s->implementation, "linear.f32_acc.v1")) {
+            if (yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CUDA)
+                return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "explicit F32 accumulation has only a CUDA consumer");
+            continue;
+        }
         if (!strcmp(s->implementation, "parameter.encoded.v1") ||
             !strcmp(s->implementation, "reshape.f32-storage.v1") ||
             !strcmp(s->implementation, "grid_rotary.f32.v1") ||
@@ -1446,7 +1451,8 @@ static int kernel_encoded_linear(yvex_program_kernels *c, const yvex_program_dev
     int q8 = !strcmp(s->implementation, "linear.row_dot.q8.v1");
     if (q8) precision = YVEX_ENCODED_INPUT_Q8;
     yvex_encoded_reduction_policy reduction = q8 || !strcmp(s->implementation, "linear.row_dot.f32.v1") ?
-        YVEX_ENCODED_REDUCTION_ROW : YVEX_ENCODED_REDUCTION_DEFAULT;
+        YVEX_ENCODED_REDUCTION_ROW : !strcmp(s->implementation, "linear.f32_acc.v1") ?
+        YVEX_ENCODED_REDUCTION_F32_ACC : YVEX_ENCODED_REDUCTION_DEFAULT;
     if (yvex_backend_kind_of(c->backend) == YVEX_BACKEND_KIND_CPU)
         return kernel_linear_cpu(c->backend, w, r, input, output, facts, err);
     unsigned long long packing = 0u;
@@ -1666,7 +1672,7 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
             type->shape[2].extent, type->shape[1].extent, epsilon->value.real, mhc->value.real,
             &r->values[s->results[1]], output, facts, err);
     }
-    if (!strcmp(s->implementation, "linear.encoded.f32.v1") ||
+    if (!strcmp(s->implementation, "linear.encoded.f32.v1") || !strcmp(s->implementation, "linear.f32_acc.v1") ||
         !strcmp(s->implementation, "linear.row_dot.f32.v1") || !strcmp(s->implementation, "linear.row_dot.q8.v1"))
         return kernel_encoded_linear(c, r, input, output, facts, err);
     if (!strcmp(s->implementation, "linear.bf16.f32acc.v1")) {

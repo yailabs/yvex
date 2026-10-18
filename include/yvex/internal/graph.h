@@ -1,5 +1,4 @@
-/* Graph contracts for runtime/backend/operator consumers are explicit and immutable.
- * Graph execution is not runtime KV, transformer composition, or generation. */
+/* Immutable graph contracts; runtime KV, transformer composition and generation have separate owners. */
 #ifndef INCLUDE_YVEX_INTERNAL_GRAPH_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_GRAPH_H_INCLUDED
 #include <stddef.h>
@@ -38,6 +37,8 @@ typedef struct yvex_attention_layer_plan {
     unsigned long long mhc_sinkhorn_iterations, attention_input_norm_width;
     double mhc_epsilon, mhc_residual_post_multiplier;
     unsigned int mhc_entry_policy;
+    yvex_mhc_projection_contract mhc_projection;
+    yvex_matrix_projection_contract matrix_projection;
     int mhc_attention_pre_and_post, attention_input_norm_required;
     yvex_tensor_role attention_input_norm_role, mhc_function_role, mhc_base_role, mhc_scale_role;
     int compressor_required, indexer_required;
@@ -530,8 +531,7 @@ typedef struct {
     char tensor_output_digest[YVEX_SHA256_HEX_CAP];
     char cpu_output_digest[YVEX_SHA256_HEX_CAP], cuda_output_digest[YVEX_SHA256_HEX_CAP];
     char state_delta_digest[YVEX_SHA256_HEX_CAP];
-    char cpu_state_delta_digest[YVEX_SHA256_HEX_CAP];
-    char cuda_state_delta_digest[YVEX_SHA256_HEX_CAP];
+    char cpu_state_delta_digest[YVEX_SHA256_HEX_CAP], cuda_state_delta_digest[YVEX_SHA256_HEX_CAP];
     char comparison_contract_identity[YVEX_SHA256_HEX_CAP];
     char cuda_device[128];
     unsigned long long layers_executed, bindings_executed;

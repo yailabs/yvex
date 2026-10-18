@@ -648,6 +648,8 @@ static int qwen_execution_descriptor(
 
 static int qwen_semantic_model_build(yvex_semantic_model_ir **out,
                                      const yvex_source_verification *verification,
+                                     unsigned int attention_compute, unsigned int mhc_projection,
+                                     unsigned int matrix_projection,
                                      yvex_error *err)
 {
     const yvex_qwen3_5_api *family = yvex_model_register_qwen3_5();
@@ -662,6 +664,11 @@ static int qwen_semantic_model_build(yvex_semantic_model_ir **out,
     int rc;
 
     if (out) *out = NULL;
+    if (attention_compute || mhc_projection || matrix_projection) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "qwen.semantic-model",
+                       "requested attention realization is not admitted by this program");
+        return YVEX_ERR_UNSUPPORTED;
+    }
     rc = family->open(&model, verification, &failure, err);
     architecture = rc == YVEX_OK ? family->architecture(model) : NULL;
     if (rc == YVEX_OK && (!architecture ||
@@ -1139,7 +1146,7 @@ static const yvex_quant_preset_catalog *qwen_small_quant_presets(void)
 }
 
 static const yvex_family_binding_pipeline qwen_binding_pipeline = {
-    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1,
+    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V2,
     .source_open = qwen_compilation_source_open,
     .source_close = qwen_compilation_source_close,
     .artifact_admit = qwen_artifact_admit,
@@ -1235,7 +1242,7 @@ static int qwen_small_tokenizer_policy(yvex_tokenizer_family_policy *out, yvex_e
 }
 
 static const yvex_family_binding_pipeline qwen_small_binding_pipeline = {
-    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1,
+    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V2,
     .source_open = qwen_small_compilation_source_open, .source_close = qwen_compilation_source_close,
     .artifact_admit = qwen_small_artifact_admit, .semantic_model_build = qwen_semantic_model_build,
     .runtime_descriptor_build = qwen_runtime_descriptor,

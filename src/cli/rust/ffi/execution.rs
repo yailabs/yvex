@@ -76,7 +76,53 @@ impl Family {
         Ok(key)
     }
 
-    pub(crate) fn prepare(&self, paths: [Option<&str>; 10]) -> Result<String, Error> {
+    pub(crate) fn prepare(
+        &self,
+        paths: [Option<&str>; 10],
+        attention_compute: Option<&str>,
+        mhc_projection: Option<&str>,
+        matrix_projection: Option<&str>,
+    ) -> Result<String, Error> {
+        let attention_compute = match attention_compute.unwrap_or("default") {
+            "default" => 0,
+            "bf16-online64-f32-mma-v1" => {
+                raw::yvex_attention_compute_contract_YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1
+            }
+            _ => {
+                return Err(Error {
+                    code: raw::yvex_status_YVEX_ERR_INVALID_ARG,
+                    owner: "compilation.runtime-binding".into(),
+                    message: "unknown attention numerical realization".into(),
+                });
+            }
+        };
+        let mhc_projection = match mhc_projection.unwrap_or("default") {
+            "default" => 0,
+            "f32-acc-v1" => raw::yvex_mhc_projection_contract_YVEX_MHC_PROJECTION_F32_ACC_V1,
+            _ => {
+                return Err(Error {
+                    code: raw::yvex_status_YVEX_ERR_INVALID_ARG,
+                    owner: "compilation.runtime-binding".into(),
+                    message: "unknown residual projection numerical realization".into(),
+                });
+            }
+        };
+        let matrix_projection = match matrix_projection.unwrap_or("default") {
+            "default" => 0,
+            "bf16-f32-acc-v1" => {
+                raw::yvex_matrix_projection_contract_YVEX_MATRIX_PROJECTION_BF16_F32_ACC_V1
+            }
+            "prepared-bf16-f32-acc-v1" => {
+                raw::yvex_matrix_projection_contract_YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1
+            }
+            _ => {
+                return Err(Error {
+                    code: raw::yvex_status_YVEX_ERR_INVALID_ARG,
+                    owner: "compilation.runtime-binding".into(),
+                    message: "unknown matrix projection numerical realization".into(),
+                });
+            }
+        };
         let inputs = paths
             .into_iter()
             .map(argument)
@@ -104,6 +150,9 @@ impl Family {
             quant_preset_name: pointer(6),
             imatrix_path: pointer(7),
             physical_variant_plan_path: pointer(8),
+            attention_compute,
+            mhc_projection,
+            matrix_projection,
             family_adapter_id: adapter.adapter_id,
             family_adapter_version: adapter.adapter_version,
             ..Default::default()

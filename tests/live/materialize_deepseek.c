@@ -202,7 +202,7 @@ int main(int argc, char **argv)
     }
     rc = yvex_compiler_family_deepseek_v4()->binding_pipeline->semantic_model_build(
         &semantic_model,
-        yvex_model_register_deepseek_v4()->payload.verification(handoff), &err);
+        yvex_model_register_deepseek_v4()->payload.verification(handoff), 0u, 0u, 0u, &err);
     if (rc != YVEX_OK) {
         fprintf(stderr, "semantic_model_failure where=%s message=%s\n",
                 yvex_error_where(&err), yvex_error_message(&err));

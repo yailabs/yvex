@@ -468,11 +468,135 @@ static __device__ int worklist_scalar_span(
     return *count < tensor_core_minimum;
 }
 
-extern "C" __global__ void yvex_moe_grouped_up_rows(
-    const unsigned char *gate, unsigned long long gate_row_bytes,
-    unsigned long long gate_expert_bytes, unsigned int gate_qtype,
-    const unsigned char *up, unsigned long long up_row_bytes,
-    unsigned long long up_expert_bytes, unsigned int up_qtype,
+/* Eight lanes per encoded row share gate/up activation loads. Decode uses
+ * the same integer K256 products and reconstructs the original 32-lane tree,
+ * rather than inheriting the ordinary matrix contraction's F32 ordering. */
+static __device__ __forceinline__ int moe_iq2_signed_word(
+    unsigned code, unsigned signs, unsigned part, const unsigned *grid)
+{
+    unsigned packed = grid[code * 2u + part], bits = (signs >> (part * 4u)) & 15u;
+    unsigned mask = ((bits * 0x00204081u) & 0x01010101u) * 255u;
+    return (int)__vsub4(packed ^ mask, mask);
+}
+
+static __device__ __forceinline__ float2 moe_iq2_narrow_block(
+    const unsigned char *gate, const unsigned char *up, const unsigned char *x,
+    unsigned long long row, unsigned block, unsigned blocks, const unsigned *grid)
+{
+    const unsigned char *w[2] = {gate + (row * blocks + block) * 66ull,
+                                up + (row * blocks + block) * 66ull};
+    int products[2] = {};
+    for (unsigned segment = 0u; segment < 8u; ++segment) {
+        unsigned codes[2], ss[2]; int subtotal[2] = {};
+#pragma unroll
+        for (unsigned which = 0u; which < 2u; ++which) {
+            codes[which] = qtype_load_u32(w[which] + 2u + segment * 8u);
+            ss[which] = qtype_load_u32(w[which] + 6u + segment * 8u);
+        }
+#pragma unroll
+        for (unsigned group = 0u; group < 4u; ++group) {
+            int a = (int)qtype_load_u32(x + 4u + segment * 32u + group * 8u);
+            int b = (int)qtype_load_u32(x + 8u + segment * 32u + group * 8u);
+#pragma unroll
+            for (unsigned which = 0u; which < 2u; ++which) {
+                unsigned code = (codes[which] >> (group * 8u)) & 255u;
+                unsigned signs = iq2_xxs_signs((ss[which] >> (group * 7u)) & 127u);
+                subtotal[which] = __dp4a(moe_iq2_signed_word(code, signs, 0u, grid), a, subtotal[which]);
+                subtotal[which] = __dp4a(moe_iq2_signed_word(code, signs, 1u, grid), b, subtotal[which]);
+            }
+        }
+#pragma unroll
+        for (unsigned which = 0u; which < 2u; ++which)
+            products[which] += subtotal[which] * (int)(2u * (ss[which] >> 28u) + 1u);
+    }
+    float xs = __uint_as_float(qtype_load_u32(x)), values[2];
+#pragma unroll
+    for (unsigned which = 0u; which < 2u; ++which)
+        values[which] = 0.125f * f16_bits_to_float(qtype_load_u16(w[which])) * xs * (float)products[which];
+    return make_float2(values[0], values[1]);
+}
+
+static __device__ __forceinline__ void moe_iq2_narrow_rows(
+    const unsigned char *gate, unsigned long long grb, unsigned long long geb, unsigned gq,
+    const unsigned char *up, unsigned long long urb, unsigned long long ueb, unsigned uq,
+    const unsigned long long *selected, const float *weights, const unsigned long long *order,
+    const unsigned long long *offsets, const unsigned long long *populations,
+    const yvex_expert_worklist_observation *summary, unsigned long long minimum,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    const unsigned char *input, unsigned long long extent, int q8,
+    unsigned long long width, double limit, float *out, int *status)
+{
+    __shared__ unsigned grid[512];
+    __shared__ int active;
+    if (!threadIdx.x) active = status && !atomicAdd(status, 0);
+    for (unsigned i = threadIdx.x; i < 256u; i += blockDim.x) {
+        unsigned short code = iq2_xxs_grid[i];
+        for (unsigned part = 0u; part < 2u; ++part) {
+            unsigned packed = 0u;
+            for (unsigned j = 0u; j < 4u; ++j) {
+                unsigned level = (code >> (2u * (part * 4u + j))) & 3u;
+                packed |= (level == 0u ? 8u : level == 1u ? 25u : 43u) << (8u * j);
+            }
+            grid[i * 2u + part] = packed;
+        }
+    }
+    __syncthreads();
+    if (!active) return;
+    unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u, k_lane = lane & 7u;
+    if (blockDim.x != 128u || !gate || !up || !input || !out || !topk || !experts ||
+        !pairs || pairs % topk || !width || (extent != 16ull && extent != 32ull) || !q8 ||
+        gq != YVEX_GGUF_QTYPE_IQ2_XXS || uq != gq || grb != extent * 66ull || urb != grb ||
+        width > ~0ull / grb || geb != width * grb || ueb != geb || !isfinite(limit) || limit <= 0.0) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
+    unsigned long long row_tiles = width / 16ull + (width % 16ull != 0ull), first, count;
+    if (!worklist_scalar_span(blockIdx.x / row_tiles, pairs, experts, offsets,
+            populations, summary, minimum, &first, &count, status)) return;
+    unsigned long long row = blockIdx.x % row_tiles * 16ull + warp * 4u + (lane >> 3u);
+    for (unsigned long long ordinal = 0ull; ordinal < count; ++ordinal) {
+        unsigned long long pair = first + ordinal, source_pair = order ? order[pair] : pair;
+        if (source_pair >= pairs) { if (!lane) atomicCAS(status, 0, 2); return; }
+        unsigned long long expert = selected ? selected[source_pair] : 0ull;
+        if (expert >= experts) { if (!lane) atomicCAS(status, 0, 2); return; }
+        const unsigned char *g = gate + expert * geb, *u = up + expert * ueb;
+        const unsigned char *x = input + source_pair / topk * extent * 292ull;
+        float2 leaves[4] = {};
+#pragma unroll
+        for (unsigned round = 0u; round < 4u; ++round) {
+            unsigned block = k_lane + round * 8u;
+            if (row < width && block < extent)
+                leaves[round] = moe_iq2_narrow_block(g, u, x + block * 292ull, row, block, (unsigned)extent, grid);
+            if (extent == 32ull) {
+                leaves[round].x = __fadd_rn(0.0f, leaves[round].x);
+                leaves[round].y = __fadd_rn(0.0f, leaves[round].y);
+            }
+        }
+        float gv = __fadd_rn(__fadd_rn(leaves[0].x, leaves[2].x), __fadd_rn(leaves[1].x, leaves[3].x));
+        float uv = __fadd_rn(__fadd_rn(leaves[0].y, leaves[2].y), __fadd_rn(leaves[1].y, leaves[3].y));
+        for (unsigned step = 4u; step; step >>= 1u) {
+            gv = __fadd_rn(gv, __shfl_down_sync(0xffffffffu, gv, step, 8));
+            uv = __fadd_rn(uv, __shfl_down_sync(0xffffffffu, uv, step, 8));
+        }
+        if (!k_lane && row < width) {
+            if (!isfinite(gv)) gv = qtype_q8_dot_recover_f64(g + row * grb, x, extent,
+                66ull, gq, status, YVEX_MOE_DEVICE_GATE_OPERAND);
+            if (!isfinite(uv)) uv = qtype_q8_dot_recover_f64(u + row * urb, x, extent,
+                66ull, uq, status, YVEX_MOE_DEVICE_UP_OPERAND);
+            float value;
+            if (!cuda_clamped_swiglu_bf16_value(gv, uv, limit, weights ? weights[source_pair] : 1.0f, &value))
+                atomicCAS(status, 0, YVEX_MOE_DEVICE_ROUTED_ACTIVATION);
+            else if (!*status) out[pair * width + row] = value;
+        }
+    }
+}
+
+template<bool Q2_GEOMETRY>
+static __device__ __forceinline__ void moe_grouped_up_rows(
+    const unsigned char *gate, unsigned long long supplied_gate_row_bytes,
+    unsigned long long gate_expert_bytes, unsigned int supplied_gate_qtype,
+    const unsigned char *up, unsigned long long supplied_up_row_bytes,
+    unsigned long long up_expert_bytes, unsigned int supplied_up_qtype,
     const unsigned long long *selected, const float *weights,
     const unsigned long long *order,
     const unsigned long long *bucket_offsets,
@@ -481,10 +605,22 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     unsigned long long tensor_core_minimum,
     unsigned long long pair_count, unsigned long long topk,
     unsigned long long expert_count, const unsigned char *input,
-    unsigned long long input_extent, int q8_input,
+    unsigned long long supplied_input_extent, int supplied_q8_input,
     unsigned long long intermediate_width, double limit,
     float *intermediate, int *status)
 {
+    const unsigned long long input_extent = Q2_GEOMETRY ? 16ull : supplied_input_extent;
+    const unsigned long long gate_row_bytes = Q2_GEOMETRY ? 1344ull : supplied_gate_row_bytes;
+    const unsigned long long up_row_bytes = Q2_GEOMETRY ? 1344ull : supplied_up_row_bytes;
+    const unsigned gate_qtype = Q2_GEOMETRY ? YVEX_GGUF_QTYPE_Q2_K : supplied_gate_qtype;
+    const unsigned up_qtype = Q2_GEOMETRY ? YVEX_GGUF_QTYPE_Q2_K : supplied_up_qtype;
+    const int q8_input = Q2_GEOMETRY ? 1 : supplied_q8_input;
+    if (Q2_GEOMETRY && (supplied_input_extent != input_extent ||
+        supplied_gate_row_bytes != gate_row_bytes || supplied_up_row_bytes != up_row_bytes ||
+        supplied_gate_qtype != gate_qtype || supplied_up_qtype != up_qtype || supplied_q8_input != 1)) {
+        if (status && !threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
     extern __shared__ float staged_activation[];
     __shared__ unsigned short grid_table[256];
     /* Copy the canonical table before any status-dependent exit. Lane-varying
@@ -506,9 +642,8 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     }
     unsigned long long rows_per_pair = intermediate_width / 8ull +
                                        (intermediate_width % 8ull != 0ull);
-    unsigned long long task = (unsigned long long)blockIdx.x / rows_per_pair;
-    unsigned long long output_row = ((unsigned long long)blockIdx.x % rows_per_pair) *
-                                    8ull + warp;
+    unsigned long long task = blockIdx.x / rows_per_pair;
+    unsigned long long output_row = (blockIdx.x % rows_per_pair) * 8ull + warp;
     unsigned long long first, count;
     if (!worklist_scalar_span(task, pair_count, expert_count,
             bucket_offsets, bucket_populations, summary,
@@ -563,9 +698,10 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     }
 }
 
-extern "C" __global__ void yvex_moe_grouped_down_rows(
-    const unsigned char *down, unsigned long long row_bytes,
-    unsigned long long expert_bytes, unsigned int qtype,
+template<bool Q2_GEOMETRY>
+static __device__ __forceinline__ void moe_grouped_down_rows(
+    const unsigned char *down, unsigned long long supplied_row_bytes,
+    unsigned long long expert_bytes, unsigned int supplied_qtype,
     const unsigned long long *selected,
     const unsigned long long *order,
     const unsigned long long *bucket_offsets,
@@ -573,9 +709,18 @@ extern "C" __global__ void yvex_moe_grouped_down_rows(
     const yvex_expert_worklist_observation *summary,
     unsigned long long tensor_core_minimum, unsigned long long pair_count,
     unsigned long long topk, unsigned long long expert_count,
-    const unsigned char *intermediate, unsigned long long intermediate_extent,
-    int q8_input, unsigned long long hidden, float *pair_outputs, int *status)
+    const unsigned char *intermediate, unsigned long long supplied_intermediate_extent,
+    int supplied_q8_input, unsigned long long hidden, float *pair_outputs, int *status)
 {
+    const unsigned long long intermediate_extent = Q2_GEOMETRY ? 8ull : supplied_intermediate_extent;
+    const unsigned long long row_bytes = Q2_GEOMETRY ? 672ull : supplied_row_bytes;
+    const unsigned qtype = Q2_GEOMETRY ? YVEX_GGUF_QTYPE_Q2_K : supplied_qtype;
+    const int q8_input = Q2_GEOMETRY ? 1 : supplied_q8_input;
+    if (Q2_GEOMETRY && (supplied_intermediate_extent != intermediate_extent ||
+        supplied_row_bytes != row_bytes || supplied_qtype != qtype || supplied_q8_input != 1)) {
+        if (status && !threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
     extern __shared__ float staged_activation[];
     __shared__ unsigned short grid_table[256];
     if (q8_input && qtype == YVEX_GGUF_QTYPE_IQ2_XXS) {
@@ -593,9 +738,8 @@ extern "C" __global__ void yvex_moe_grouped_down_rows(
         return;
     }
     unsigned long long rows_per_pair = hidden / 8ull + (hidden % 8ull != 0ull);
-    unsigned long long task = (unsigned long long)blockIdx.x / rows_per_pair;
-    unsigned long long output_row = ((unsigned long long)blockIdx.x % rows_per_pair) *
-                                    8ull + warp;
+    unsigned long long task = blockIdx.x / rows_per_pair;
+    unsigned long long output_row = (blockIdx.x % rows_per_pair) * 8ull + warp;
     unsigned long long first, count;
     if (!worklist_scalar_span(task, pair_count, expert_count,
             bucket_offsets, bucket_populations, summary,
@@ -637,6 +781,71 @@ extern "C" __global__ void yvex_moe_grouped_down_rows(
         else pair_outputs[source_pair * hidden + output_row] = value;
     }
     }
+}
+
+/* Constant encoded geometry removes dynamic dispatch and address arithmetic
+ * from the real small-population path. Both entrypoints retain the original
+ * dot, reduction tree, worklist associations and exceptional recovery. */
+extern "C" __global__ void yvex_moe_grouped_up_rows(
+    const unsigned char *gate, unsigned long long grb, unsigned long long geb, unsigned gq,
+    const unsigned char *up, unsigned long long urb, unsigned long long ueb, unsigned uq,
+    const unsigned long long *selected, const float *weights, const unsigned long long *order,
+    const unsigned long long *offsets, const unsigned long long *populations,
+    const yvex_expert_worklist_observation *summary, unsigned long long minimum,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    const unsigned char *input, unsigned long long extent, int q8,
+    unsigned long long width, double limit, float *out, int *status)
+{
+    if (blockDim.x == 128u) {
+        moe_iq2_narrow_rows(gate, grb, geb, gq, up, urb, ueb, uq, selected, weights,
+            order, offsets, populations, summary, minimum, pairs, topk, experts,
+            input, extent, q8, width, limit, out, status);
+        return;
+    }
+    moe_grouped_up_rows<false>(gate, grb, geb, gq, up, urb, ueb, uq, selected, weights,
+        order, offsets, populations, summary, minimum, pairs, topk, experts,
+        input, extent, q8, width, limit, out, status);
+}
+
+extern "C" __global__ void yvex_moe_grouped_up_q2_rows(
+    const unsigned char *gate, unsigned long long grb, unsigned long long geb, unsigned gq,
+    const unsigned char *up, unsigned long long urb, unsigned long long ueb, unsigned uq,
+    const unsigned long long *selected, const float *weights, const unsigned long long *order,
+    const unsigned long long *offsets, const unsigned long long *populations,
+    const yvex_expert_worklist_observation *summary, unsigned long long minimum,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    const unsigned char *input, unsigned long long extent, int q8,
+    unsigned long long width, double limit, float *out, int *status)
+{
+    moe_grouped_up_rows<true>(gate, grb, geb, gq, up, urb, ueb, uq, selected, weights,
+        order, offsets, populations, summary, minimum, pairs, topk, experts,
+        input, extent, q8, width, limit, out, status);
+}
+
+extern "C" __global__ void yvex_moe_grouped_down_rows(
+    const unsigned char *down, unsigned long long rb, unsigned long long eb, unsigned qtype,
+    const unsigned long long *selected, const unsigned long long *order,
+    const unsigned long long *offsets, const unsigned long long *populations,
+    const yvex_expert_worklist_observation *summary, unsigned long long minimum,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    const unsigned char *input, unsigned long long extent, int q8,
+    unsigned long long width, float *out, int *status)
+{
+    moe_grouped_down_rows<false>(down, rb, eb, qtype, selected, order, offsets, populations,
+        summary, minimum, pairs, topk, experts, input, extent, q8, width, out, status);
+}
+
+extern "C" __global__ void yvex_moe_grouped_down_q2_rows(
+    const unsigned char *down, unsigned long long rb, unsigned long long eb, unsigned qtype,
+    const unsigned long long *selected, const unsigned long long *order,
+    const unsigned long long *offsets, const unsigned long long *populations,
+    const yvex_expert_worklist_observation *summary, unsigned long long minimum,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    const unsigned char *input, unsigned long long extent, int q8,
+    unsigned long long width, float *out, int *status)
+{
+    moe_grouped_down_rows<true>(down, rb, eb, qtype, selected, order, offsets, populations,
+        summary, minimum, pairs, topk, experts, input, extent, q8, width, out, status);
 }
 
 extern "C" __global__ void yvex_moe_reduce_rows(

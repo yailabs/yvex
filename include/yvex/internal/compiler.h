@@ -1,10 +1,6 @@
-/*
- * Family compilation ends at one immutable execution envelope.
- *
- * The adapter supplies semantic policy while compiler-plane owners validate and persist the
- * result. Only the binding-publication boundary invokes these callbacks; runtime execution
- * consumes the persisted records.
- */
+/* Family adapters supply semantic policy for an immutable execution envelope.
+ * Compiler owners validate and persist it at binding publication; runtime
+ * consumes those records without invoking the source callbacks. */
 #ifndef INCLUDE_YVEX_INTERNAL_COMPILER_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_COMPILER_H_INCLUDED
 
@@ -187,6 +183,8 @@ typedef struct {
     unsigned long long mhc_sinkhorn_iterations, attention_input_norm_width;
     double mhc_epsilon, mhc_residual_post_multiplier;
     unsigned int mhc_entry_policy;
+    yvex_mhc_projection_contract mhc_projection;
+    yvex_matrix_projection_contract matrix_projection;
     int mhc_attention_pre_and_post, attention_input_norm_required;
     yvex_tensor_role attention_input_norm_role, mhc_function_role, mhc_base_role;
     yvex_tensor_role mhc_scale_role;
@@ -385,7 +383,7 @@ int yvex_semantic_model_ir_composite_view(
 const char *yvex_semantic_model_ir_reference(
     const yvex_semantic_model_ir *model, const char *key);
 void yvex_semantic_model_ir_close(yvex_semantic_model_ir **model);
-#define YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1 1u
+#define YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V2 2u
 typedef struct yvex_family_compilation_source {
     void *owner;
     const struct yvex_source_verification *verification;
@@ -412,7 +410,8 @@ typedef struct yvex_family_binding_pipeline {
                           yvex_error *err);
     int (*semantic_model_build)(yvex_semantic_model_ir **out,
                                 const struct yvex_source_verification *verification,
-                                yvex_error *err);
+                                unsigned int attention_compute, unsigned int mhc_projection,
+                                unsigned int matrix_projection, yvex_error *err);
     int (*runtime_descriptor_build)(
         struct yvex_runtime_descriptor **out,
         const struct yvex_complete_artifact_admission *admission,

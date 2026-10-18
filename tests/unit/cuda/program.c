@@ -376,15 +376,19 @@ static int program_cuda_failures(program_fixture *f)
     YVEX_TEST_ASSERT(yvex_program_device_run(f->execution, 2u, &f->argument, 1u, outputs, 1u,
         NULL, NULL, &result, &err) == YVEX_OK && result.operations == 4u && output.is_written,
         "owner remains reusable after backend refusal");
-    float valid = f->input_values[0];
-    f->input_values[0] = NAN;
-    YVEX_TEST_ASSERT(yvex_backend_tensor_write(f->backend, f->input, f->input_values,
-        sizeof(f->input_values), &err) == YVEX_OK, "stage invalid program input");
-    rc = yvex_program_device_run(f->execution, 2u, &f->argument, 1u, outputs, 1u,
-        NULL, NULL, &result, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && !output.is_written,
-        "deferred numerical failure cannot publish a physical program result");
-    f->input_values[0] = valid;
+    const unsigned int invalid_positions[] = {0u, 31u, 32u, 63u};
+    for (size_t i = 0u; i < sizeof(invalid_positions) / sizeof(invalid_positions[0]); ++i) {
+        unsigned int position = invalid_positions[i];
+        float valid = f->input_values[position];
+        f->input_values[position] = i & 1u ? INFINITY : NAN;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(f->backend, f->input, f->input_values,
+            sizeof(f->input_values), &err) == YVEX_OK, "stage invalid program input");
+        rc = yvex_program_device_run(f->execution, 2u, &f->argument, 1u, outputs, 1u,
+            NULL, NULL, &result, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && !output.is_written,
+            "deferred numerical failure cannot publish or leave BLAS packing uninitialized");
+        f->input_values[position] = valid;
+    }
     YVEX_TEST_ASSERT(yvex_backend_tensor_write(f->backend, f->input, f->input_values,
         sizeof(f->input_values), &err) == YVEX_OK, "restore valid independent input");
     unsigned int cancel_checks = 0u;
@@ -803,8 +807,9 @@ int yvex_cuda_test_program(void)
     if (test_shared_expert(YVEX_BACKEND_KIND_CUDA)) return 1;
     if (test_shared_target(YVEX_BACKEND_KIND_CUDA)) return 1;
     if (test_ingress_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
-    if (test_mhc_cuda_control(YVEX_GGUF_QTYPE_F32) != 0 ||
-        test_mhc_cuda_control(YVEX_GGUF_QTYPE_BF16) != 0) return 1;
+    if (test_mhc_cuda_control(YVEX_GGUF_QTYPE_F32, YVEX_MHC_PROJECTION_ORDERED_F64) != 0 ||
+        test_mhc_cuda_control(YVEX_GGUF_QTYPE_BF16, YVEX_MHC_PROJECTION_ORDERED_F64) != 0 ||
+        test_mhc_cuda_control(YVEX_GGUF_QTYPE_BF16, YVEX_MHC_PROJECTION_F32_ACC_V1) != 0) return 1;
     if (test_post_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_stream_mean_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;

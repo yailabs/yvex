@@ -1,0 +1,513 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-online64-critical-path-prefill-promessi-8192-20261012",
+  "limitations": [
+    "Profiled diagnostic with exact input/output population, not an uninstrumented performance sample.",
+    "Overlapping host scopes and GPU intervals cannot be summed as disjoint request phases.",
+    "Kernel duration/population does not establish physical bandwidth, occupancy or a hardware ceiling.",
+    "No independent checkpoint quality or installed-runtime promotion."
+  ],
+  "measurements": [],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": true,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/source-capture",
+    "restoration": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/operator-restored.json",
+      "sha256": "c5453fc53b15d9771ddf5091c85d427c7b585469802bd543d14fce3e2639b9e6",
+      "result": "PASS"
+    },
+    "traces": [
+      {
+        "case": "prefill.promessi-8192",
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/identity.json",
+          "sha256": "b7ca8b324a25117f79214f477030be5e87a7659937b158a30a598cf8b0465cdc",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/closed.json",
+          "sha256": "a9ddfd23fb8f40f2ec07a944e63d9c9fe6aac5f45c493b6764b5e5e57f00b0ec",
+          "result": "PASS"
+        },
+        "trace": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv",
+          "sha256": "f52e7ed8b64fb2902ee2709a2ba173cc7a0afa47968a19b8b3d31312b47decf3",
+          "result": "PASS"
+        },
+        "result": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/result.json",
+          "sha256": "acd3d4e878313bf8d223ca72feba14fde99053f7e1ca3c0d35ecc3319c626c9b",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/resources.jsonl.summary.json",
+          "sha256": "e33b28f94fdb6a0a0b357c13d97806ebf62c640f009288e2129b5e2149e456e0",
+          "result": "PASS"
+        },
+        "context": 16384,
+        "prompt_tokens": 8192,
+        "generated_tokens": 16,
+        "kernel_sum_ns": 53694149311,
+        "kernels": [
+          {
+            "name": "yvex_qtype_matvec",
+            "nanoseconds": 7841804339,
+            "count": 10592
+          },
+          {
+            "name": "yvex_decoded_rows",
+            "nanoseconds": 5848628862,
+            "count": 2320
+          },
+          {
+            "name": "yvex_moe_grouped_up_shared",
+            "nanoseconds": 5651271776,
+            "count": 688
+          },
+          {
+            "name": "yvex_mxfp4_tensorcore_shared_rows",
+            "nanoseconds": 4026823521,
+            "count": 2400
+          },
+          {
+            "name": "yvex_q8_row_matrix",
+            "nanoseconds": 3460032019,
+            "count": 2064
+          },
+          {
+            "name": "yvex_moe_grouped_up_q2_rows",
+            "nanoseconds": 3115413376,
+            "count": 1376
+          },
+          {
+            "name": "yvex_attention_block_pv",
+            "nanoseconds": 2953439090,
+            "count": 1376
+          },
+          {
+            "name": "yvex_attention_yarn_rope",
+            "nanoseconds": 2943719440,
+            "count": 5960
+          },
+          {
+            "name": "yvex_moe_grouped_down_shared",
+            "nanoseconds": 2583212244,
+            "count": 688
+          },
+          {
+            "name": "yvex_attention_block_qk",
+            "nanoseconds": 2535947231,
+            "count": 1376
+          },
+          {
+            "name": "yvex_attention_candidate_scores_matrix",
+            "nanoseconds": 2439178114,
+            "count": 5376
+          },
+          {
+            "name": "yvex_moe_grouped_down_q2_rows",
+            "nanoseconds": 1549381226,
+            "count": 1376
+          },
+          {
+            "name": "yvex_attention_rolling_rows",
+            "nanoseconds": 1360342675,
+            "count": 992
+          },
+          {
+            "name": "yvex_attention_unit_norm",
+            "nanoseconds": 1031847379,
+            "count": 1376
+          },
+          {
+            "name": "yvex_qtype_tensorcore_rows",
+            "nanoseconds": 991677594,
+            "count": 1376
+          },
+          {
+            "name": "yvex_residual_mhc_post",
+            "nanoseconds": 889482572,
+            "count": 2752
+          },
+          {
+            "name": "yvex_residual_mhc_pre",
+            "nanoseconds": 884661632,
+            "count": 2752
+          },
+          {
+            "name": "yvex_q8_quantize",
+            "nanoseconds": 768485751,
+            "count": 13744
+          },
+          {
+            "name": "yvex_attention_topk",
+            "nanoseconds": 363492520,
+            "count": 5712
+          },
+          {
+            "name": "yvex_attention_activation_quantize",
+            "nanoseconds": 344718858,
+            "count": 3208
+          },
+          {
+            "name": "yvex_expert_worklist_build_cuda",
+            "nanoseconds": 299053470,
+            "count": 1376
+          },
+          {
+            "name": "yvex_decoded_prepare",
+            "nanoseconds": 291747061,
+            "count": 5328
+          },
+          {
+            "name": "yvex_attention_block_softmax",
+            "nanoseconds": 253707059,
+            "count": 1376
+          },
+          {
+            "name": "yvex_attention_bf16_round",
+            "nanoseconds": 221941571,
+            "count": 2825
+          },
+          {
+            "name": "yvex_moe_swiglu",
+            "nanoseconds": 221941504,
+            "count": 1376
+          },
+          {
+            "name": "yvex_attention_weighted_norm",
+            "nanoseconds": 220545413,
+            "count": 6664
+          },
+          {
+            "name": "yvex_moe_reduce_rows",
+            "nanoseconds": 163238532,
+            "count": 1376
+          },
+          {
+            "name": "yvex_decoded_mxfp4_rows",
+            "nanoseconds": 128164324,
+            "count": 688
+          },
+          {
+            "name": "yvex_mxfp4_q8_rows",
+            "nanoseconds": 112024625,
+            "count": 1024
+          },
+          {
+            "name": "yvex_moe_route_rows",
+            "nanoseconds": 54084947,
+            "count": 1376
+          },
+          {
+            "name": "yvex_moe_combine_rows",
+            "nanoseconds": 52177727,
+            "count": 1376
+          },
+          {
+            "name": "yvex_attention_candidate_scores",
+            "nanoseconds": 50057188,
+            "count": 336
+          },
+          {
+            "name": "yvex_transformer_final",
+            "nanoseconds": 23291078,
+            "count": 32
+          },
+          {
+            "name": "yvex_encoded_row_decode",
+            "nanoseconds": 10824051,
+            "count": 5152
+          },
+          {
+            "name": "yvex_attention_rolling_state",
+            "nanoseconds": 4964969,
+            "count": 992
+          },
+          {
+            "name": "yvex_argmax_f32",
+            "nanoseconds": 2825573,
+            "count": 16
+          }
+        ],
+        "profile": {
+          "counters": {
+            "accelerated_matrix_launches": 7472,
+            "accepted_draft_tokens": 0,
+            "cache_evictions": 0,
+            "cache_hits": 5504,
+            "cache_misses": 0,
+            "d2d_bytes": 135825101696,
+            "d2h_bytes": 1230380352,
+            "device_allocations": 0,
+            "device_synchronizations": 32,
+            "discarded_candidate_rows": 0,
+            "downloads": 4160,
+            "draft_forwards": 0,
+            "draft_rows": 0,
+            "event_synchronizations": 0,
+            "expert_bytes": 1081462459776,
+            "expert_subviews": 0,
+            "full_array_host_scan_bytes": 0,
+            "generated_tokens": 16,
+            "graph_captures": 298,
+            "graph_launches": 2752,
+            "graph_replays": 2752,
+            "h2d_bytes": 1591713856,
+            "host_allocations": 0,
+            "host_payload_reads": 0,
+            "kernel_launches": 98776,
+            "logits_d2d_bytes": 0,
+            "logits_d2h_bytes": 384,
+            "logits_h2d_bytes": 0,
+            "managed_prefetch_bytes": 0,
+            "mapped_bytes_touched": 0,
+            "new_prefill_tokens": 8192,
+            "output_head_rows": 16,
+            "promoted_target_rows": 0,
+            "prompt_tokens": 8192,
+            "queue_synchronizations": 4208,
+            "replayed_accepted_target_rows": 0,
+            "reused_tokens": 0,
+            "row_expert_pairs": 2117664,
+            "target_extensions": 0,
+            "target_forwards": 32,
+            "target_rows": 8208,
+            "target_verifications": 0,
+            "unique_experts": 125285,
+            "uploads": 1408,
+            "verified_rows": 0,
+            "workspace_resets": 0
+          },
+          "identity": "f07ac24b88abacfe303127b53490832c4485a03ef7d617249fdf5b9061fb6410",
+          "mode": "summary",
+          "phases_ns": {
+            "attention": 56653155381,
+            "detokenization": 55840,
+            "embedding": 464079998,
+            "final_normalization": 23941779,
+            "first_decode": 129052312,
+            "kv_commit": 0,
+            "logits_publication": 39232,
+            "moe_ingress": 0,
+            "moe_post": 0,
+            "moe_total": 55151057818,
+            "output_head": 106428756,
+            "prompt_rendering": 0,
+            "provider_publication": 0,
+            "queue": 0,
+            "routed_experts": 0,
+            "router_projection": 0,
+            "router_topk": 0,
+            "sampling": 3674405,
+            "selected_expert_preparation": 0,
+            "shared_experts": 0,
+            "state_validation": 0,
+            "subsequent_decode": 1783041165,
+            "synchronization_wait": 0,
+            "tokenizer": 2203444,
+            "total_generation": 57373407417,
+            "total_prefill": 55348714263
+          },
+          "schema": 4
+        },
+        "execution_profile": "92d8c01c43a2485c27e3c6e5cfdfcd3cfcc9f1ca64f80c2d7748024f032dd591"
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "prefill.promessi-8192.kernel-sum",
+        "case": "prefill.promessi-8192",
+        "value": 53.694149311,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_qtype_matvec",
+        "case": "prefill.promessi-8192",
+        "value": 7.841804339,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_decoded_rows",
+        "case": "prefill.promessi-8192",
+        "value": 5.848628862,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_moe_grouped_up_shared",
+        "case": "prefill.promessi-8192",
+        "value": 5.651271776,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_mxfp4_tensorcore_shared_rows",
+        "case": "prefill.promessi-8192",
+        "value": 4.026823521,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_q8_row_matrix",
+        "case": "prefill.promessi-8192",
+        "value": 3.460032019,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_moe_grouped_up_q2_rows",
+        "case": "prefill.promessi-8192",
+        "value": 3.115413376,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_attention_block_pv",
+        "case": "prefill.promessi-8192",
+        "value": 2.95343909,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_attention_yarn_rope",
+        "case": "prefill.promessi-8192",
+        "value": 2.94371944,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_moe_grouped_down_shared",
+        "case": "prefill.promessi-8192",
+        "value": 2.583212244,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_attention_block_qk",
+        "case": "prefill.promessi-8192",
+        "value": 2.535947231,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_attention_candidate_scores_matrix",
+        "case": "prefill.promessi-8192",
+        "value": 2.439178114,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      },
+      {
+        "id": "prefill.promessi-8192.yvex_moe_grouped_down_q2_rows",
+        "case": "prefill.promessi-8192",
+        "value": 1.549381226,
+        "unit": "s",
+        "definition": "Complete-request CUPTI duration population including bounded decode; not an additive wall-time partition, throughput or measured memory bandwidth",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/online64-profile-01/prefill.promessi-8192/cupti.tsv"
+      }
+    ]
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; online64 executable realization",
+    "binding": "44c8bf1dc9cd3275f840aaf06efbab70dadf0f72a24af92b17aa60c14b31c236",
+    "build": "3161e5573f566279f257007362cd56f971a96ce26384678437b5e311f2d995ee",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 16384,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "efad2cb2738c76e3b7b656ffff18f417a6c46074bae2113cdca94397b87246ed",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "2e0d07ff17219fa290bc4de8348c8769c2cf8de93ec6b083fc309df9544e75a3",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "controlled-engine CUPTI diagnostic",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "controlled fresh engine; bounded diagnostic output; instrumented",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "b8eba206553630f77bdfddc80b85051e28e566580c16f86b07cf7f8a66fc62c2",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": null,
+    "strategy": "target-only",
+    "suite": "ba06670744e623b715778ff9f208f54da79ac0d9899184436ca4b7b229c04c1e",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "06cf61b5c5cf78542aa54eeed1f47ae0e7f59ea95b737db6dda395b0dd924a5e",
+  "title": "0731 online64 realization CUPTI attribution: prefill.promessi-8192 (not timing evidence)"
+}

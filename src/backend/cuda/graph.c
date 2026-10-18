@@ -7,7 +7,7 @@
  * Graph replay only schedules operations already admitted by backend owners; it never infers model
  * topology or supplies a numerical fallback.
  */
-#include "src/backend/cuda/private.h"
+#include "src/backend/cuda/attention_ops.h"
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -1480,7 +1480,7 @@ int yvex_cuda_attention_graph_key(const yvex_backend *backend,
     yvex_sha256_init(&hash);
 #define HASH(value) \
     do { if (!yvex_sha256_update_u64(&hash, (unsigned long long)(value))) goto failed; } while (0)
-    if (!yvex_sha256_update_text(&hash, "yvex.cuda.attention-topology.v23") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.cuda.attention-topology.v28") ||
         !yvex_sha256_update_text(&hash, configuration->compatibility_identity) ||
         !yvex_sha256_update_text(&hash, configuration->capture_bucket))
         goto failed;
@@ -1501,6 +1501,24 @@ int yvex_cuda_attention_graph_key(const yvex_backend *backend,
     HASH(job->compute_contract); HASH(job->hidden_width);
     HASH(job->q_rank); HASH(job->query_heads); HASH(job->head_dimension);
     HASH(job->kv_width); HASH(job->sliding_window); HASH(job->compression_ratio);
+    if (job->compute_contract == YVEX_BACKEND_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1 &&
+        first <= YVEX_CUDA_ATTENTION_STAGE_REDUCE && last > YVEX_CUDA_ATTENTION_STAGE_REDUCE) {
+        unsigned long long end, selected, local, columns, pitch, prepared;
+        if (!yvex_core_u64_add(job->token_position, job->token_count, &end) ||
+            !yvex_core_u64_add(yvex_cuda_attention_history_capacity(configuration, job, 1),
+                1ull, &selected)) goto failed;
+        if (job->indexer_topk < selected) selected = job->indexer_topk;
+        if (!selected) selected = 1ull;
+        if (!attention_block_geometry(job, selected,
+                job->compression_ratio ? end / job->compression_ratio : 0ull,
+                &local, &columns, &pitch)) goto failed;
+        HASH(pitch);
+        if (!yvex_core_u64_add(job->local_count, job->token_count, &prepared) ||
+            !yvex_core_u64_add(prepared,
+                job->compression_ratio ? end / job->compression_ratio : 0ull, &prepared) ||
+            !yvex_core_u64_add(prepared, 63ull, &prepared)) goto failed;
+        HASH(prepared & ~63ull);
+    }
     if (first <= YVEX_CUDA_ATTENTION_STAGE_COMPRESS &&
         last > YVEX_CUDA_ATTENTION_STAGE_COMPRESS && job->compression_ratio) {
         /* Only the emission pattern changes launch topology. A window with no
@@ -1515,6 +1533,8 @@ int yvex_cuda_attention_graph_key(const yvex_backend *backend,
         }
     }
     HASH(job->output_groups); HASH(job->output_group_input_width); HASH(job->output_rank);
+    HASH(job->mhc_projection);
+    HASH(job->matrix_projection);
     HASH(job->indexer_heads); HASH(job->indexer_head_dimension); HASH(job->indexer_topk);
     HASH(yvex_cuda_attention_local_capacity(configuration, job, 0)); HASH(job->local_stride);
     HASH(yvex_cuda_attention_history_capacity(configuration, job, 0));

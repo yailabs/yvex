@@ -70,6 +70,7 @@ static const physical_rule physical_rules[] = {
     {"nn.embedding", "embedding.encoded.f32.v1", 0u, 0x02u},
     {"nn.linear", "linear.bf16.f32acc.v1", 0u, 0x02u},
     {"nn.linear", "linear.encoded.f32.v1", 0u, 0x02u},
+    {"nn.linear", "linear.f32_acc.v1", 0u, 0x02u},
     {"nn.linear", "linear.row_dot.f32.v1", 0u, 0x02u},
     {"nn.linear", "linear.row_dot.q8.v1", 0u, 0x02u},
     {"nn.linear_residual", "linear_residual.bf16.f32add.v1", 0u, 0x02u},
@@ -262,9 +263,12 @@ static const physical_rule *physical_rule_select(const yvex_program_physical *p,
         return physical_rule_find("gated_delta.mixed.f32state.v2", 1);
     if (!strcmp(semantic, "nn.linear"))
         for (unsigned int i = 0u; i < op->attribute_count; ++i)
-            if (!strcmp(op->attributes[i].name, "reduction") &&
-                op->attributes[i].value.integer == YVEX_IR_REDUCTION_ROW_DOT)
-                return physical_rule_find("linear.row_dot.f32.v1", 1);
+            if (!strcmp(op->attributes[i].name, "reduction")) {
+                if (op->attributes[i].value.integer == YVEX_IR_REDUCTION_ROW_DOT)
+                    return physical_rule_find("linear.row_dot.f32.v1", 1);
+                if (op->attributes[i].value.integer == YVEX_IR_REDUCTION_F32_ACC)
+                    return physical_rule_find("linear.f32_acc.v1", 1);
+            }
     if (!strcmp(semantic, "nn.linear") && result_count == 1u &&
         p->values[results[0]].type.scalar == YVEX_IR_F32)
         return physical_rule_find("linear.encoded.f32.v1", 1);
@@ -285,8 +289,9 @@ static int physical_numeric_verify(const yvex_program_physical *p,
     unsigned int i;
     const physical_rule *rule = physical_rule_find(s->implementation, 1);
     int q8 = !strcmp(s->implementation, "linear.row_dot.q8.v1");
+    int f32_acc = !strcmp(s->implementation, "linear.f32_acc.v1");
     int row_dot = q8 || !strcmp(s->implementation, "linear.row_dot.f32.v1");
-    int encoded = row_dot || !strcmp(s->implementation, "linear.encoded.f32.v1") ||
+    int encoded = row_dot || f32_acc || !strcmp(s->implementation, "linear.encoded.f32.v1") ||
         !strcmp(s->implementation, "embedding.encoded.f32.v1");
     int residual = !strcmp(s->implementation, "linear_residual.bf16.f32add.v1");
     size_t length = strlen(s->implementation);
@@ -344,7 +349,17 @@ static int physical_numeric_verify(const yvex_program_physical *p,
             return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
                 "Q8 row-dot target requires an admitted 256-wide encoded activation geometry");
     }
-    if (!row_dot && !strcmp(rule->semantic, "nn.linear") && yvex_program_physical_attribute(s, "reduction"))
+    if (f32_acc) {
+        const yvex_ir_attribute *reduction = yvex_program_physical_attribute(s, "reduction");
+        if (!reduction || reduction->kind != YVEX_IR_ATTR_U64 ||
+            reduction->value.integer != YVEX_IR_REDUCTION_F32_ACC ||
+            p->values[s->operands[1]].qtype != YVEX_GGUF_QTYPE_F32 ||
+            p->values[s->operands[0]].type.scalar != YVEX_IR_F32 ||
+            p->values[s->results[0]].type.scalar != YVEX_IR_F32)
+            return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+                "explicit F32 accumulation requires its reduction attribute and exact F32 storage");
+    }
+    if (!row_dot && !f32_acc && !strcmp(rule->semantic, "nn.linear") && yvex_program_physical_attribute(s, "reduction"))
         return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
             "linear implementation does not satisfy its reduction obligation");
     if (!strncmp(s->implementation, "linear_bias.cuda.sm121.", 22u)) {

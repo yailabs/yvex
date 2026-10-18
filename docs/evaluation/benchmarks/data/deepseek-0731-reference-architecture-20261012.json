@@ -1,0 +1,617 @@
+{
+  "schema": "yvex.evaluation.observation.v1",
+  "id": "deepseek-0731-reference-architecture-20261012",
+  "title": "DeepSeek 0731 external CUDA architecture controls / uncached_prefill_tokens_per_second",
+  "kind": "characterization",
+  "context": {
+    "source_commit": "9139e2ae58a41503968a500f36f75895c1ba63fc",
+    "source_tree": "f29629bbdfe659bb4e307902cf4a172d76e9256a",
+    "source_stability": "frozen",
+    "date": "2026-10-12",
+    "run_id": "reference-architecture-ablation-02",
+    "model": "DwarfStar DeepSeek V4 Flash 0731 release",
+    "model_revision": "released 0731; 43 preserved F32 tensors match official 7872f01b1d1fe23eabc4c98b48bffcef5a386062; full quantized equivalence not asserted",
+    "artifact_identity": "ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0",
+    "binding_identity": null,
+    "representation": "IQ2_XXS routed gate/up, Q2_K down; Q8 attention/shared/output; external aligned execution layouts",
+    "backend": "external CUDA, pinned objects and standalone public C consumers",
+    "device": "one NVIDIA GB10; GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc; driver 580.159.03",
+    "runtime_configuration": {
+      "arms": {
+        "control-prefill": {
+          "identity": {
+            "command": [
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/ds4-probe",
+              "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf",
+              "16384",
+              "512",
+              "3",
+              "none",
+              "1",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-2048.txt",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-8192.txt"
+            ],
+            "environment": {},
+            "source": {
+              "head": "9139e2ae58a41503968a500f36f75895c1ba63fc",
+              "state": "clean",
+              "delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "tree": "f29629bbdfe659bb4e307902cf4a172d76e9256a"
+            },
+            "executable_sha256": "9343d585e2c3faf5563529df1debed7784eef09b8339ae902fedc087afdee471",
+            "profiled": false,
+            "source_changed": false,
+            "workload_sha256": {
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-2048.txt": "a6120db0c07806165d7866d0e972caacfd1af0bea0e3c666f9b98c4d7d7bae64",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-8192.txt": "02f4f56643530dcf0b66d128cbe921b39a700bb3f13ea1f02f3bbeaf47080ff9"
+            },
+            "model_snapshot": {
+              "size": 86720111488,
+              "mtime_ns": 1789481245461305656
+            },
+            "comparison": "Same external checkpoint and representation within these arms; not YVEX numerical equivalence",
+            "instrumentation": {
+              "schema": "yvex.qualification.instrumentation.v1",
+              "profiled": false,
+              "declared_profiled": false,
+              "observed_environment_markers": [],
+              "scope": "caller declaration and invoking-process markers; not proof against external profiler attachment"
+            },
+            "cache_policy": "No eviction. Fresh sessions, post-load; first sample retained separately."
+          },
+          "raw_sha256": "b00719be820c06609e36d842d05d7c65b03f26b0942286c0a76e975ed107a5a0",
+          "closed_sha256": "3bfe01520a364bd6e8c1d725e3f128815b5975e892b1d6bd74f3019d7fbd1cce",
+          "ready": {
+            "event": "ready",
+            "load_seconds": 132.604945737,
+            "bytes": 86720111488,
+            "context": 16384,
+            "chunk": 512,
+            "warm_weights": true
+          },
+          "measurements": [
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 0,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 7.074125431,
+              "tokens_per_second": 289.647111857
+            },
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 1,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 3.011924352,
+              "tokens_per_second": 680.295970461
+            },
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 2,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 2.995593737,
+              "tokens_per_second": 684.004634772
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 0,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 12.274580271,
+              "tokens_per_second": 668.291690543
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 1,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 12.277770594,
+              "tokens_per_second": 668.118037978
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 2,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 12.321890054,
+              "tokens_per_second": 665.725790771
+            }
+          ]
+        },
+        "no-d2r-prefill": {
+          "identity": {
+            "command": [
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/ds4-probe",
+              "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf",
+              "16384",
+              "512",
+              "3",
+              "none",
+              "1",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-2048.txt",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-8192.txt"
+            ],
+            "environment": {
+              "DS4_MMQ_D2R": "0",
+              "DS4_MMQ_D2R_IQ2": "0"
+            },
+            "source": {
+              "head": "9139e2ae58a41503968a500f36f75895c1ba63fc",
+              "state": "clean",
+              "delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "tree": "f29629bbdfe659bb4e307902cf4a172d76e9256a"
+            },
+            "executable_sha256": "9343d585e2c3faf5563529df1debed7784eef09b8339ae902fedc087afdee471",
+            "profiled": false,
+            "source_changed": false,
+            "workload_sha256": {
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-2048.txt": "a6120db0c07806165d7866d0e972caacfd1af0bea0e3c666f9b98c4d7d7bae64",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-8192.txt": "02f4f56643530dcf0b66d128cbe921b39a700bb3f13ea1f02f3bbeaf47080ff9"
+            },
+            "model_snapshot": {
+              "size": 86720111488,
+              "mtime_ns": 1789481245461305656
+            },
+            "comparison": "Same external checkpoint and representation within these arms; not YVEX numerical equivalence",
+            "instrumentation": {
+              "schema": "yvex.qualification.instrumentation.v1",
+              "profiled": false,
+              "declared_profiled": false,
+              "observed_environment_markers": [],
+              "scope": "caller declaration and invoking-process markers; not proof against external profiler attachment"
+            },
+            "cache_policy": "No eviction. Fresh sessions, post-load; first sample retained separately."
+          },
+          "raw_sha256": "d87f12442870de9076962c749c15d6ef212f000d40359a703c8c6520f9184d2f",
+          "closed_sha256": "941aec46bce82e1c919d8accfc6ae33932321d00f027f37e4effb3a457ac7084",
+          "ready": {
+            "event": "ready",
+            "load_seconds": 140.654057489,
+            "bytes": 86720111488,
+            "context": 16384,
+            "chunk": 512,
+            "warm_weights": true
+          },
+          "measurements": [
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 0,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 11.377134549,
+              "tokens_per_second": 180.09807225
+            },
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 1,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 4.935350445,
+              "tokens_per_second": 415.168086406
+            },
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 2,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 4.927848891,
+              "tokens_per_second": 415.800087486
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 0,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 20.234048634,
+              "tokens_per_second": 405.405766705
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 1,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 20.244142538,
+              "tokens_per_second": 405.203627894
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 2,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 20.282919071,
+              "tokens_per_second": 404.428966624
+            }
+          ]
+        },
+        "no-dense-d2r-prefill": {
+          "identity": {
+            "command": [
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/ds4-probe",
+              "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf",
+              "16384",
+              "512",
+              "3",
+              "none",
+              "1",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-2048.txt",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-8192.txt"
+            ],
+            "environment": {
+              "DS4_MMQ_DENSE_D2R": "0"
+            },
+            "source": {
+              "head": "9139e2ae58a41503968a500f36f75895c1ba63fc",
+              "state": "clean",
+              "delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "tree": "f29629bbdfe659bb4e307902cf4a172d76e9256a"
+            },
+            "executable_sha256": "9343d585e2c3faf5563529df1debed7784eef09b8339ae902fedc087afdee471",
+            "profiled": false,
+            "source_changed": false,
+            "workload_sha256": {
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-2048.txt": "a6120db0c07806165d7866d0e972caacfd1af0bea0e3c666f9b98c4d7d7bae64",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-8192.txt": "02f4f56643530dcf0b66d128cbe921b39a700bb3f13ea1f02f3bbeaf47080ff9"
+            },
+            "model_snapshot": {
+              "size": 86720111488,
+              "mtime_ns": 1789481245461305656
+            },
+            "comparison": "Same external checkpoint and representation within these arms; not YVEX numerical equivalence",
+            "instrumentation": {
+              "schema": "yvex.qualification.instrumentation.v1",
+              "profiled": false,
+              "declared_profiled": false,
+              "observed_environment_markers": [],
+              "scope": "caller declaration and invoking-process markers; not proof against external profiler attachment"
+            },
+            "cache_policy": "No eviction. Fresh sessions, post-load; first sample retained separately."
+          },
+          "raw_sha256": "569c59477ed0c82e7d8885f54ebb75aaf15e1f65a4cd00be9210f29823fa92c2",
+          "closed_sha256": "4a72c0d27d36005dc4a7e5739f508146d21861a8d02ed9db438c8c3aed45d46a",
+          "ready": {
+            "event": "ready",
+            "load_seconds": 149.841686063,
+            "bytes": 86720111488,
+            "context": 16384,
+            "chunk": 512,
+            "warm_weights": true
+          },
+          "measurements": [
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 0,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 7.201813872,
+              "tokens_per_second": 284.51165726
+            },
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 1,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 3.079073943,
+              "tokens_per_second": 665.45982264
+            },
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 2,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 3.091146772,
+              "tokens_per_second": 662.860792817
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 0,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 12.640472113,
+              "tokens_per_second": 648.947280344
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 1,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 12.687971069,
+              "tokens_per_second": 646.517867624
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 2,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 12.681078364,
+              "tokens_per_second": 646.86927756
+            }
+          ]
+        },
+        "no-mmq-prefill": {
+          "identity": {
+            "command": [
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/ds4-probe",
+              "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf",
+              "16384",
+              "512",
+              "3",
+              "none",
+              "1",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-2048.txt",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-8192.txt"
+            ],
+            "environment": {
+              "DS4_CUDA_MMQ": "0"
+            },
+            "source": {
+              "head": "9139e2ae58a41503968a500f36f75895c1ba63fc",
+              "state": "clean",
+              "delta_identity": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "tree": "f29629bbdfe659bb4e307902cf4a172d76e9256a"
+            },
+            "executable_sha256": "9343d585e2c3faf5563529df1debed7784eef09b8339ae902fedc087afdee471",
+            "profiled": false,
+            "source_changed": false,
+            "workload_sha256": {
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-2048.txt": "a6120db0c07806165d7866d0e972caacfd1af0bea0e3c666f9b98c4d7d7bae64",
+              "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/followup-20261007.iiQ6tR/ds4-prefill-window-03/prefill.promessi-8192.txt": "02f4f56643530dcf0b66d128cbe921b39a700bb3f13ea1f02f3bbeaf47080ff9"
+            },
+            "model_snapshot": {
+              "size": 86720111488,
+              "mtime_ns": 1789481245461305656
+            },
+            "comparison": "Same external checkpoint and representation within these arms; not YVEX numerical equivalence",
+            "instrumentation": {
+              "schema": "yvex.qualification.instrumentation.v1",
+              "profiled": false,
+              "declared_profiled": false,
+              "observed_environment_markers": [],
+              "scope": "caller declaration and invoking-process markers; not proof against external profiler attachment"
+            },
+            "cache_policy": "No eviction. Fresh sessions, post-load; first sample retained separately."
+          },
+          "raw_sha256": "ba6dbda0c7e29b7e99cba755ab11242df5d4028f3906ee08d2528d29d84cec16",
+          "closed_sha256": "c3bb68897cb9d57d3b3de5af0a8b87ad1a1df2f57f35704d49be60e0c2c34cd0",
+          "ready": {
+            "event": "ready",
+            "load_seconds": 144.867736846,
+            "bytes": 86720111488,
+            "context": 16384,
+            "chunk": 512,
+            "warm_weights": true
+          },
+          "measurements": [
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 0,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 10.239759782,
+              "tokens_per_second": 200.102350409
+            },
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 1,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 3.463824914,
+              "tokens_per_second": 591.542601276
+            },
+            {
+              "event": "prefill",
+              "case_index": 0,
+              "sample": 2,
+              "tokens": 2049,
+              "position": 2049,
+              "seconds": 2.893003697,
+              "tokens_per_second": 708.260415338
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 0,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 11.902548885,
+              "tokens_per_second": 689.180114214
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 1,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 11.912147131,
+              "tokens_per_second": 688.6248054
+            },
+            {
+              "event": "prefill",
+              "case_index": 1,
+              "sample": 2,
+              "tokens": 8203,
+              "position": 8203,
+              "seconds": 11.933673708,
+              "tokens_per_second": 687.382628411
+            }
+          ]
+        }
+      },
+      "reasoning": "none",
+      "sampling": "greedy",
+      "chunk": 512,
+      "coding_context": 4096,
+      "prefill_context": 16384
+    },
+    "workload": "exact coding hash-table prompt; retained Promessi text bands, actual token counts explicit",
+    "warm_state": "mixed",
+    "concurrency": 1,
+    "sequence_lengths": {
+      "coding_prompt": 31,
+      "coding_output": 256,
+      "prefill": [
+        2049,
+        8203
+      ]
+    },
+    "memory": {
+      "artifact_bytes": 86720111488,
+      "prepared_GiB_reported": 78.71,
+      "prepared_objects_reported": 474,
+      "observed_live_physical_bytes": null,
+      "scope": "Prepared bytes are reference diagnostics, not OS physical residency. No overlapping sum."
+    },
+    "limitations": [
+      "External ablations are not same-artifact YVEX comparisons or independent model-quality qualification.",
+      "DS4_CUDA_MMQ=0 changes the prefill tier; routed expert D2R remains active. It is not all-MMQ disabled.",
+      "First request is separate; two subsequent 2K/coding samples are not three steady samples.",
+      "Alternative reference reductions may differ numerically; throughput comparison does not certify equivalence.",
+      "No cache eviction. File warming and lazy execution preparation are distinct.",
+      "Source-level Entrpi and latest antirez inspection does not reproduce their self-reported benchmark numbers."
+    ],
+    "recorded_from": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/reference-architecture-ablation-02; each raw/identity/resource receipt is hash-bound in runtime_configuration"
+  },
+  "measurements": [
+    {
+      "id": "control-prefill-2k-first",
+      "label": "control-prefill 2K first request",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 289.647111857,
+      "samples": 1,
+      "statistic": "median",
+      "scope": "2049 executed tokens; first post-load request includes lazy preparation"
+    },
+    {
+      "id": "control-prefill-0-steady",
+      "label": "control-prefill 2K subsequent",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 682.1503026165001,
+      "samples": 2,
+      "statistic": "median",
+      "scope": "2049 newly executed tokens; fresh sessions; no prefix reuse; external control only"
+    },
+    {
+      "id": "control-prefill-1-steady",
+      "label": "control-prefill 8K subsequent",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 668.118037978,
+      "samples": 3,
+      "statistic": "median",
+      "scope": "8203 newly executed tokens; fresh sessions; no prefix reuse; external control only"
+    },
+    {
+      "id": "no-d2r-prefill-2k-first",
+      "label": "no-d2r-prefill 2K first request",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 180.09807225,
+      "samples": 1,
+      "statistic": "median",
+      "scope": "2049 executed tokens; first post-load request includes lazy preparation"
+    },
+    {
+      "id": "no-d2r-prefill-0-steady",
+      "label": "no-d2r-prefill 2K subsequent",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 415.484086946,
+      "samples": 2,
+      "statistic": "median",
+      "scope": "2049 newly executed tokens; fresh sessions; no prefix reuse; external control only"
+    },
+    {
+      "id": "no-d2r-prefill-1-steady",
+      "label": "no-d2r-prefill 8K subsequent",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 405.203627894,
+      "samples": 3,
+      "statistic": "median",
+      "scope": "8203 newly executed tokens; fresh sessions; no prefix reuse; external control only"
+    },
+    {
+      "id": "no-dense-d2r-prefill-2k-first",
+      "label": "no-dense-d2r-prefill 2K first request",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 284.51165726,
+      "samples": 1,
+      "statistic": "median",
+      "scope": "2049 executed tokens; first post-load request includes lazy preparation"
+    },
+    {
+      "id": "no-dense-d2r-prefill-0-steady",
+      "label": "no-dense-d2r-prefill 2K subsequent",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 664.1603077284999,
+      "samples": 2,
+      "statistic": "median",
+      "scope": "2049 newly executed tokens; fresh sessions; no prefix reuse; external control only"
+    },
+    {
+      "id": "no-dense-d2r-prefill-1-steady",
+      "label": "no-dense-d2r-prefill 8K subsequent",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 646.86927756,
+      "samples": 3,
+      "statistic": "median",
+      "scope": "8203 newly executed tokens; fresh sessions; no prefix reuse; external control only"
+    },
+    {
+      "id": "no-mmq-prefill-2k-first",
+      "label": "no-mmq-prefill 2K first request",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 200.102350409,
+      "samples": 1,
+      "statistic": "median",
+      "scope": "2049 executed tokens; first post-load request includes lazy preparation"
+    },
+    {
+      "id": "no-mmq-prefill-0-steady",
+      "label": "no-mmq-prefill 2K subsequent",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 649.9015083070001,
+      "samples": 2,
+      "statistic": "median",
+      "scope": "2049 newly executed tokens; fresh sessions; no prefix reuse; external control only"
+    },
+    {
+      "id": "no-mmq-prefill-1-steady",
+      "label": "no-mmq-prefill 8K subsequent",
+      "metric": "uncached_prefill_tokens_per_second",
+      "unit": "tok/s",
+      "value": 688.6248054,
+      "samples": 3,
+      "statistic": "median",
+      "scope": "8203 newly executed tokens; fresh sessions; no prefix reuse; external control only"
+    }
+  ]
+}

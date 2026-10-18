@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 856" role="img" aria-labelledby="title desc">
+<title id="title">DeepSeek 0731 external CUDA architecture controls / uncached_prefill_tokens_per_second</title>
+<desc id="desc">characterization; External ablations are not same-artifact YVEX comparisons or independent model-quality qualification.. Values are printed beside each bar.</desc>
+<style>text{fill:#292434}.bar{fill:#7541ba}@media(prefers-color-scheme:dark){text{fill:#ede8f5}.bar{fill:#ba97f2}}</style>
+<g font-family="Arial, sans-serif">
+<text x="30" y="38" font-size="23" font-weight="700">DeepSeek 0731 external CUDA architecture controls / uncached_prefill_tokens_per_second</text>
+<text x="30" y="67" font-size="16">CHARACTERIZATION · tok/s · not an automatic capability promotion</text>
+<text x="30" y="129" font-size="18">control-prefill 2K first request</text>
+<rect class="bar" x="330" y="110" width="197.690" height="27" rx="4"/>
+<text x="547.690" y="129" font-size="17">289.647</text>
+<text x="30" y="187" font-size="18">control-prefill 2K subsequent</text>
+<rect class="bar" x="330" y="168" width="465.581" height="27" rx="4"/>
+<text x="815.581" y="187" font-size="17">682.15</text>
+<text x="30" y="245" font-size="18">control-prefill 8K subsequent</text>
+<rect class="bar" x="330" y="226" width="456.004" height="27" rx="4"/>
+<text x="806.004" y="245" font-size="17">668.118</text>
+<text x="30" y="303" font-size="18">no-d2r-prefill 2K first request</text>
+<rect class="bar" x="330" y="284" width="122.920" height="27" rx="4"/>
+<text x="472.920" y="303" font-size="17">180.098</text>
+<text x="30" y="361" font-size="18">no-d2r-prefill 2K subsequent</text>
+<rect class="bar" x="330" y="342" width="283.576" height="27" rx="4"/>
+<text x="633.576" y="361" font-size="17">415.484</text>
+<text x="30" y="419" font-size="18">no-d2r-prefill 8K subsequent</text>
+<rect class="bar" x="330" y="400" width="276.559" height="27" rx="4"/>
+<text x="626.559" y="419" font-size="17">405.204</text>
+<text x="30" y="477" font-size="18">no-dense-d2r-prefill 2K first request</text>
+<rect class="bar" x="330" y="458" width="194.185" height="27" rx="4"/>
+<text x="544.185" y="477" font-size="17">284.512</text>
+<text x="30" y="535" font-size="18">no-dense-d2r-prefill 2K subsequent</text>
+<rect class="bar" x="330" y="516" width="453.302" height="27" rx="4"/>
+<text x="803.302" y="535" font-size="17">664.16</text>
+<text x="30" y="593" font-size="18">no-dense-d2r-prefill 8K subsequent</text>
+<rect class="bar" x="330" y="574" width="441.501" height="27" rx="4"/>
+<text x="791.501" y="593" font-size="17">646.869</text>
+<text x="30" y="651" font-size="18">no-mmq-prefill 2K first request</text>
+<rect class="bar" x="330" y="632" width="136.574" height="27" rx="4"/>
+<text x="486.574" y="651" font-size="17">200.102</text>
+<text x="30" y="709" font-size="18">no-mmq-prefill 2K subsequent</text>
+<rect class="bar" x="330" y="690" width="443.571" height="27" rx="4"/>
+<text x="793.571" y="709" font-size="17">649.902</text>
+<text x="30" y="767" font-size="18">no-mmq-prefill 8K subsequent</text>
+<rect class="bar" x="330" y="748" width="470.000" height="27" rx="4"/>
+<text x="820.000" y="767" font-size="17">688.625</text>
+</g></svg>

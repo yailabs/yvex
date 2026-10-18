@@ -75,6 +75,16 @@ static int semantic_layer_geometry_identity(
 static int semantic_layer_mhc_identity(
     yvex_sha256 *hash, const yvex_semantic_attention_layer *layer)
 {
+    if (layer->mhc_projection &&
+        (layer->mhc_projection != YVEX_MHC_PROJECTION_F32_ACC_V1 ||
+         !layer->mhc_attention_pre_and_post ||
+         !yvex_sha256_update_text(hash, "mhc-projection.v1") ||
+         !yvex_sha256_update_u64(hash, layer->mhc_projection))) return 0;
+    if (layer->matrix_projection &&
+        (layer->matrix_projection > YVEX_MATRIX_PROJECTION_PREPARED_BF16_F32_ACC_V1 ||
+         layer->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
+         !yvex_sha256_update_text(hash, "matrix-projection.v1") ||
+         !yvex_sha256_update_u64(hash, layer->matrix_projection))) return 0;
     return yvex_sha256_update_u64(hash, layer->residual_stream_count) &&
            yvex_sha256_update_u64(hash, layer->residual_stream_width) &&
            yvex_sha256_update_u64(hash, layer->residual_expanded_width) &&

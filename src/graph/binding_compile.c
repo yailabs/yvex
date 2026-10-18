@@ -79,7 +79,7 @@ static int pipeline_valid(const yvex_family_compiler_adapter *adapter)
            adapter->transformer_policy && adapter->logits_policy &&
            adapter->speculation_policy && adapter->tokenizer_policy &&
            adapter->physical_variant && pipeline &&
-           pipeline->schema_version == YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1 &&
+           pipeline->schema_version == YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V2 &&
            pipeline->source_open && pipeline->source_close && pipeline->artifact_admit &&
            pipeline->semantic_model_build &&
            pipeline->runtime_descriptor_build &&
@@ -225,8 +225,7 @@ static int binding_compiler_materialize(binding_compiler *compiler, yvex_error *
 
 static int binding_compiler_graph(binding_compiler *compiler, yvex_error *err)
 {
-    int rc = compiler->pipeline->semantic_model_build(
-        &compiler->semantic_model, compiler->source.verification, err);
+    int rc = YVEX_OK;
 
     if (rc == YVEX_OK && yvex_semantic_model_ir_program(compiler->semantic_model))
         rc = yvex_program_execution_compile(&compiler->program_execution,
@@ -501,6 +500,11 @@ static int binding_compiler_prepare(
                        "family execution envelope compilation failed");
         return YVEX_ERR_STATE;
     }
+    if (compiler->attention) {
+        const yvex_attention_summary *attention = yvex_attention_plan_summary(compiler->attention);
+        compiler->capabilities.cpu_prefill_eager_ready &= attention->cpu_reference_ready;
+        compiler->capabilities.cpu_decode_eager_ready &= attention->cpu_reference_ready;
+    }
     rc = yvex_physical_execution_ir_build(
         &compiler->physical_execution, compiler->materialization,
         compiler->descriptor, compiler->admission.profile_identity, err);
@@ -599,6 +603,9 @@ int yvex_family_binding_compile(
         return YVEX_ERR_STATE;
     }
     rc = binding_compiler_open(compiler, request, err);
+    if (rc == YVEX_OK) rc = compiler->pipeline->semantic_model_build(
+        &compiler->semantic_model, compiler->source.verification,
+        request->attention_compute, request->mhc_projection, request->matrix_projection, err);
     if (rc == YVEX_OK) rc = binding_compiler_materialize(compiler, err);
     if (rc == YVEX_OK) rc = binding_compiler_graph(compiler, err);
     if (rc == YVEX_OK && !compiler->source.transform_ir) {

@@ -14,8 +14,12 @@ extern "C" __global__ void yvex_f32_to_bf16(
         (unsigned long long)threadIdx.x;
     union { float value; unsigned int bits; } encoded;
     unsigned int rounding;
-    if (!status || *status || index >= count) return;
-    if (!input || !output || !isfinite(input[index])) {
+    if (!status || !output || index >= count) return;
+    /* BLAS consumes every packed element even after a deferred failure. Fill
+     * the entire population; the latched status still forbids publication.
+     * Do not race a status load against another lane's atomic failure. */
+    output[index] = 0u;
+    if (!input || !isfinite(input[index])) {
         atomicCAS(status, 0, 1);
         return;
     }

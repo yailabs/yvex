@@ -1,0 +1,589 @@
+{
+  "claims": {
+    "family-conformance": {
+      "state": "UNQUALIFIED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "checkpoint-reference": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "representation-quality": {
+      "state": "BLOCKED",
+      "scope": "No model inference or quality claim from artifact admission and load",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": [
+        "Independent checkpoint-matched quality evidence missing"
+      ]
+    },
+    "backend-execution": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "deployment-performance": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    },
+    "product-path": {
+      "state": "UNQUALIFIED",
+      "scope": "Instrumented attribution only; native measurements separately retained",
+      "required_evidence": [],
+      "evidence": {},
+      "blockers": []
+    }
+  },
+  "id": "deepseek-0731-program-p-q2-phase-critical-path-prefill-promessi-8192-20261013",
+  "limitations": [
+    "Profiled diagnostic with exact input/output population, not an uninstrumented performance sample.",
+    "Overlapping host scopes and GPU intervals cannot be summed as disjoint request phases.",
+    "Kernel duration/population does not establish physical bandwidth, occupancy or a hardware ceiling.",
+    "No independent checkpoint quality or installed-runtime promotion.",
+    "GDB wrapper, CUPTI and launch-argument interception are present; use separate native N=3 receipts for performance."
+  ],
+  "measurements": [],
+  "origin": "yvex-published",
+  "provenance": {
+    "source_stability": "frozen",
+    "profiled": true,
+    "installed_product": false,
+    "source_capture": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/source-capture",
+    "source": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/source.json",
+      "sha256": "5104850a391de14cd213762ae0bd582a38daa9fc51f0b8198c5ae07416c1e5bc",
+      "result": "PASS"
+    },
+    "kernel_observation": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-kernel-identity-01/stdout.jsonl",
+      "sha256": "f6bd8b83c782e2c0e74181e6ef4c3efdc6efe7eb4884113c0e81db7f9aabd581",
+      "result": "PASS"
+    },
+    "restoration": {
+      "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/operator-restored.json",
+      "sha256": "122081808debd8c1ab8bf846a1f654f3a2c79487686f2a9fbf66ed4975855def",
+      "result": "PASS"
+    },
+    "traces": [
+      {
+        "case": "prefill.promessi-8192",
+        "identity": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/identity.json",
+          "sha256": "a777a68431ae51864f851bfb790ecae7a5039ba0f83c748e8ff6a59f863ab909",
+          "result": "PASS"
+        },
+        "closure": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/closed.json",
+          "sha256": "73fdac6792cc89078dcb00f7007ca67fb94fd86d460c5d9983aebb934c01a122",
+          "result": "PASS"
+        },
+        "trace": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/cupti.tsv",
+          "sha256": "f978c0360db10a85dcd046a6c8c441e7f2e40457dc8815bfa024651b1d54a124",
+          "result": "PASS"
+        },
+        "result": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/result.json",
+          "sha256": "57e14301b48b7e593bc0d890b365209808d72104a3bd1a1ab2f92ae348c933f1",
+          "result": "PASS"
+        },
+        "resources": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/resources.jsonl.summary.json",
+          "sha256": "e1fc9dd2329b2baff808ba94041a9fc5b1de97b73a3c3f480764460cb54e10b5",
+          "result": "PASS"
+        },
+        "population_analysis": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/kernel-populations.json",
+          "sha256": "f21f4b54ee254de0dc8ae0d983e07a5507c5ba76023854034204d7f72e876cd1",
+          "result": "PASS"
+        },
+        "geometry_analysis": {
+          "locator": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/matvec-geometry.json",
+          "sha256": "ef40fb1a2333a1834281c13e5b156152e7ea19a753719c5a1a4e78c613a46c55",
+          "result": "PASS"
+        },
+        "context": 16384,
+        "prompt_tokens": 8192,
+        "generated_tokens": 16,
+        "kernel_count": 217809,
+        "kernel_sum_seconds": 34.869572013,
+        "kernel_union_seconds": 34.851850889,
+        "kernel_or_copy_union_seconds": 36.067482709,
+        "span_seconds": 39.992163648,
+        "unobserved_gap_seconds": 3.924680939,
+        "largest_kernel_populations": [
+          {
+            "name": "yvex_moe_grouped_up_shared",
+            "count": 688,
+            "seconds": 6.203789263
+          },
+          {
+            "name": "yvex_q8_row_matrix",
+            "count": 2064,
+            "seconds": 3.433097177
+          },
+          {
+            "name": "yvex_attention_yarn_rope",
+            "count": 5960,
+            "seconds": 2.938466184
+          },
+          {
+            "name": "yvex_moe_grouped_down_shared",
+            "count": 688,
+            "seconds": 2.914409282
+          },
+          {
+            "name": "yvex_attention_candidate_scores_matrix",
+            "count": 5376,
+            "seconds": 2.413751311
+          },
+          {
+            "name": "yvex_qtype_matvec",
+            "count": 7840,
+            "seconds": 1.729471798
+          },
+          {
+            "name": "yvex_attention_rolling_rows",
+            "count": 992,
+            "seconds": 1.29037344
+          },
+          {
+            "name": "yvex_attention_block_pv",
+            "count": 1376,
+            "seconds": 1.279540515
+          },
+          {
+            "name": "yvex_bf16_prepare",
+            "count": 65376,
+            "seconds": 1.259504811
+          },
+          {
+            "name": "yvex_mxfp4_tensorcore_shared_rows",
+            "count": 688,
+            "seconds": 1.256998977
+          },
+          {
+            "name": "yvex_attention_unit_norm",
+            "count": 1376,
+            "seconds": 1.029277626
+          },
+          {
+            "name": "yvex_attention_block_qk",
+            "count": 1376,
+            "seconds": 0.963327342
+          }
+        ],
+        "matvec_populations": [
+          {
+            "K": 4096,
+            "M": 256,
+            "N": 512,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 688,
+            "seconds": 1.268006846,
+            "minimum_ns": 1698120,
+            "maximum_ns": 2924918,
+            "launch_configurations": [
+              [
+                16384,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 129280,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 16,
+            "seconds": 0.103792619,
+            "minimum_ns": 6257862,
+            "maximum_ns": 8615140,
+            "launch_configurations": [
+              [
+                16160,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 8192,
+            "M": 4096,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 688,
+            "seconds": 0.094998406,
+            "minimum_ns": 125119,
+            "maximum_ns": 290748,
+            "launch_configurations": [
+              [
+                512,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 2048,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 1376,
+            "seconds": 0.068090353,
+            "minimum_ns": 45375,
+            "maximum_ns": 164734,
+            "launch_configurations": [
+              [
+                256,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 1024,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 672,
+            "seconds": 0.053578332,
+            "minimum_ns": 52895,
+            "maximum_ns": 428858,
+            "launch_configurations": [
+              [
+                128,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 256,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 1360,
+            "seconds": 0.042819546,
+            "minimum_ns": 20576,
+            "maximum_ns": 101215,
+            "launch_configurations": [
+              [
+                32,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 512,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 640,
+            "seconds": 0.036453644,
+            "minimum_ns": 29375,
+            "maximum_ns": 121502,
+            "launch_configurations": [
+              [
+                64,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 2048,
+            "M": 4096,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 688,
+            "seconds": 0.027357915,
+            "minimum_ns": 36576,
+            "maximum_ns": 144958,
+            "launch_configurations": [
+              [
+                512,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 1024,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 688,
+            "seconds": 0.016388879,
+            "minimum_ns": 21600,
+            "maximum_ns": 102334,
+            "launch_configurations": [
+              [
+                128,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 512,
+            "N": 1,
+            "qtype": 39,
+            "q8": 1,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 688,
+            "seconds": 0.01084598,
+            "minimum_ns": 14496,
+            "maximum_ns": 69215,
+            "launch_configurations": [
+              [
+                64,
+                256,
+                64,
+                3760
+              ]
+            ]
+          },
+          {
+            "K": 4096,
+            "M": 64,
+            "N": 1,
+            "qtype": 30,
+            "q8": 0,
+            "block_row": 0,
+            "forensic": 0,
+            "count": 336,
+            "seconds": 0.007139278,
+            "minimum_ns": 19647,
+            "maximum_ns": 49919,
+            "launch_configurations": [
+              [
+                8,
+                256,
+                64,
+                3760
+              ]
+            ]
+          }
+        ],
+        "profile": {
+          "counters": {
+            "accelerated_matrix_launches": 62032,
+            "accepted_draft_tokens": 0,
+            "cache_evictions": 0,
+            "cache_hits": 5504,
+            "cache_misses": 0,
+            "d2d_bytes": 135825101696,
+            "d2h_bytes": 1230380352,
+            "device_allocations": 0,
+            "device_synchronizations": 32,
+            "discarded_candidate_rows": 0,
+            "downloads": 4160,
+            "draft_forwards": 0,
+            "draft_rows": 0,
+            "event_synchronizations": 0,
+            "expert_bytes": 1080777084288,
+            "expert_subviews": 0,
+            "full_array_host_scan_bytes": 0,
+            "generated_tokens": 16,
+            "graph_captures": 171,
+            "graph_launches": 2064,
+            "graph_replays": 2064,
+            "h2d_bytes": 1562659864,
+            "host_allocations": 0,
+            "host_payload_reads": 0,
+            "kernel_launches": 157112,
+            "logits_d2d_bytes": 0,
+            "logits_d2h_bytes": 384,
+            "logits_h2d_bytes": 0,
+            "managed_prefetch_bytes": 0,
+            "mapped_bytes_touched": 0,
+            "new_prefill_tokens": 8192,
+            "output_head_rows": 16,
+            "promoted_target_rows": 0,
+            "prompt_tokens": 8192,
+            "queue_synchronizations": 4208,
+            "replayed_accepted_target_rows": 0,
+            "reused_tokens": 0,
+            "row_expert_pairs": 2117664,
+            "target_extensions": 0,
+            "target_forwards": 32,
+            "target_rows": 8208,
+            "target_verifications": 0,
+            "unique_experts": 125202,
+            "uploads": 1408,
+            "verified_rows": 0,
+            "workspace_resets": 0
+          },
+          "identity": "25f34fbc7fc23815f1b37835ff1bbdc70d948cd58265546d9cca4065981e82cf",
+          "mode": "summary",
+          "phases_ns": {
+            "attention": 38179417806,
+            "detokenization": 62174,
+            "embedding": 457282575,
+            "final_normalization": 23039926,
+            "first_decode": 135118991,
+            "kv_commit": 0,
+            "logits_publication": 39727,
+            "moe_ingress": 0,
+            "moe_post": 0,
+            "moe_total": 35912880927,
+            "output_head": 105115329,
+            "prompt_rendering": 0,
+            "provider_publication": 0,
+            "queue": 0,
+            "routed_experts": 0,
+            "router_projection": 0,
+            "router_topk": 0,
+            "sampling": 3633309,
+            "selected_expert_preparation": 0,
+            "shared_experts": 0,
+            "state_validation": 0,
+            "subsequent_decode": 1603785984,
+            "synchronization_wait": 0,
+            "tokenizer": 2218017,
+            "total_generation": 39359780397,
+            "total_prefill": 37509610536
+          },
+          "schema": 4
+        },
+        "execution_profile": "beb4fa460440fc5455f6e77059f1546b796511f28e3e2ecbd3d2570a988b0777"
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "prefill.promessi-8192.kernel_sum_seconds",
+        "case": "prefill.promessi-8192",
+        "value": 34.869572013,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/kernel-populations.json"
+      },
+      {
+        "id": "prefill.promessi-8192.kernel_union_seconds",
+        "case": "prefill.promessi-8192",
+        "value": 34.851850889,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/kernel-populations.json"
+      },
+      {
+        "id": "prefill.promessi-8192.kernel_or_copy_union_seconds",
+        "case": "prefill.promessi-8192",
+        "value": 36.067482709,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/kernel-populations.json"
+      },
+      {
+        "id": "prefill.promessi-8192.span_seconds",
+        "case": "prefill.promessi-8192",
+        "value": 39.992163648,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/kernel-populations.json"
+      },
+      {
+        "id": "prefill.promessi-8192.unobserved_gap_seconds",
+        "case": "prefill.promessi-8192",
+        "value": 3.924680939,
+        "unit": "s",
+        "definition": "Instrumented complete-request interval/population; not a disjoint wall-time share or throughput",
+        "evidence": "/home/dgmothx/lab/models/evidence/program-p-convergence-20261012.VxnrFZDv/q2-phase-critical-gdb-01/prefill.promessi-8192/kernel-populations.json"
+      }
+    ]
+  },
+  "schema": "yvex.qualification.receipt.v1",
+  "target": {
+    "artifact_set": "25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041",
+    "backend": "cuda",
+    "backend_implementation": "CUDA Q2_K routed matrix; MXFP4 nonrouted; q2-phase admitted realization",
+    "binding": "0884e68a1ccb6362323bd27241c7b1bd2ed96d0fd712684a1dea7b6c2ce30c37",
+    "build": "3320efd425c14059a6a20f2cc2008ac5a96f18d8af54830d994d0a1ecef8e570",
+    "checkpoint": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "concurrency": 1,
+    "context": 16384,
+    "device_count": 1,
+    "driver": "580.159.03",
+    "executable": "3a11abad19923147c18e3895105daa6ab0662f8bc307776af202242d2e383861",
+    "family_contract": "deepseek-v4-flash-dspark",
+    "hardware_model": "NVIDIA DGX Spark GB10",
+    "kernel_bundle": "a22675f812e5b96f44920f72a1e822e7d6c01233bd1bf54c216c364bc14c7f48",
+    "memory_configuration": "130663165952 system bytes; mandatory capacity/8 reserve",
+    "physical_policy": "1af3500d0025db9b262b42013b3105c5dc0d6fb49276ecb9c86fe5d484d3ad93",
+    "prefill_geometry": "chunk=512",
+    "product_path": "controlled-engine CUPTI diagnostic with GDB wrapper",
+    "reasoning": "none",
+    "representation": "goal-v1-mxfp4-routed-q2_k; physical variant 572c0689fdc28e093656ba6986f18d1410a85891c690c3acad98f0d9269c4b8a",
+    "runtime_configuration": "controlled fresh engine; bounded diagnostic output; instrumented",
+    "runtime_toolkit": "CUDA 13.0; nvcc 13.0.88",
+    "sampling": "{\"min_p\":0.0,\"seed\":null,\"seed_present\":0,\"stochastic\":0,\"temperature\":0.0,\"top_k\":0,\"top_p\":1.0,\"typical_p\":1.0}",
+    "schema": "yvex.qualification.target.v1",
+    "sequence_geometry": "width=1",
+    "source_commit": "ceeca35f5fa5b12b243cf4e61752cabfd2f15afd",
+    "source_delta": "ac932ecd8d958b5a38bf8a521f0c672d4694a4085ad119f8eff4edbe79cc8689",
+    "source_tree": "9299178b4acb9c5fdeb05610057f31618c349cc9",
+    "specialization": null,
+    "strategy": "target-only",
+    "suite": "c155726e2fc7bed83c828162fcd7a61ccb9223a56f4c137ad32cf3ef9dadeebe",
+    "tokenizer_conversation": "bd23dc1b6acfa3f74426cf6832be8a33f4375f1538c96214947ea645ddfd3819",
+    "topology": "single GB10 coherent unified memory",
+    "transformation_ir": "ad1dffd6da2e85126811eb74f0c02665cc5a40c781fdb51dd3d7b1da59ec064d",
+    "upstream_repository": "deepseek-ai/DeepSeek-V4-Flash-0731"
+  },
+  "target_identity": "80e315465010edb1756f08a45f49b16f0ffab5b6b33909a95c92b34bbc490e69",
+  "title": "0731 phase-specific Q2 CUPTI attribution: prefill.promessi-8192 (not timing evidence)"
+}

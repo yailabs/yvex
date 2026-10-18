@@ -7,6 +7,7 @@
 #ifndef SRC_BACKEND_CUDA_KERNEL_PRIMITIVES_H_INCLUDED
 #define SRC_BACKEND_CUDA_KERNEL_PRIMITIVES_H_INCLUDED
 #include <yvex/qtype.h>
+#include <yvex/internal/execution_batch.h>
 #ifdef __CUDACC__
 static __device__ float f16_bits_to_float(unsigned int h)
 {

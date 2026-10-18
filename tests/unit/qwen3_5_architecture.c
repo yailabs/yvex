@@ -322,7 +322,7 @@ static int qwen_test_lowering(const yvex_graph_execution_binding *execution,
     int rc;
     yvex_core_text_copy(source.manifest_payload_identity, sizeof(source.manifest_payload_identity),
                         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
-    rc = execution->compiler->binding_pipeline->semantic_model_build(&semantic, &source, &error);
+    rc = execution->compiler->binding_pipeline->semantic_model_build(&semantic, &source, 0u, 0u, 0u, &error);
     if (rc != YVEX_OK) fprintf(stderr, "Qwen lowering refusal: %s\n", yvex_error_message(&error));
     YVEX_TEST_ASSERT(rc == YVEX_OK &&
                      yvex_ir_identity(yvex_semantic_model_ir_program(semantic)) &&

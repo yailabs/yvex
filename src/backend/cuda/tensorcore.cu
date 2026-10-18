@@ -106,6 +106,44 @@ static __device__ void tensorcore_integer_mma(int c[4], const int a[4], const in
         : "+r"(c[0]),"+r"(c[1]),"+r"(c[2]),"+r"(c[3])
         : "r"(a[0]),"r"(a[1]),"r"(a[2]),"r"(a[3]),"r"(b[0]),"r"(b[1]));
 }
+/* Q2 minimum correction is another exact matrix product, not a per-output
+ * scalar reduction. Split each signed I16 activation subtotal into unsigned
+ * low and signed high bytes: s = lo + 256*hi. Two integer MMAs cover sixteen
+ * real terms (the other K lanes are zero). Even arbitrary encoded I16 values
+ * satisfy |sum(min*s)| <= 16*15*32768, so all intermediates fit I32. */
+static __device__ void tensorcore_q2_minimum(int result[4],
+    const unsigned char *weights, unsigned long long row_bytes,
+    unsigned long long rows, unsigned long long row_base,
+    const unsigned char *input, unsigned blocks, unsigned block,
+    const unsigned long long *order, unsigned long long offset,
+    unsigned population, unsigned topk, unsigned column_base, int ordered)
+{
+    unsigned group = (threadIdx.x & 31u) >> 2u, lane = threadIdx.x & 3u;
+    int a[4] = {}, low[2] = {}, high[2] = {}, upper[4] = {};
+#pragma unroll
+    for (unsigned j = 0u; j < 2u; ++j) {
+        unsigned long long row = row_base + group + j * 8ull;
+        if (row < rows)
+            a[j] = (int)((qtype_load_u32(weights + row * row_bytes +
+                block * 84ull + lane * 4u) >> 4u) & 0x0f0f0f0fu);
+    }
+    unsigned column = column_base + group;
+    if (column < population) {
+        unsigned long long source = ordered ? offset + column : order[offset + column] / topk;
+        const unsigned char *sums = input + (source * blocks + block) *
+            YVEX_CUDA_Q8_K_BYTES + 260ull + lane * 8u;
+        unsigned first = qtype_load_u32(sums), second = qtype_load_u32(sums + 4u);
+        low[0] = (int)__byte_perm(first, second, 0x6420u);
+        high[0] = (int)__byte_perm(first, second, 0x7531u);
+    }
+    asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.u8.s32 "
+        "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+        : "+r"(result[0]), "+r"(result[1]), "+r"(result[2]), "+r"(result[3])
+        : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(low[0]), "r"(low[1]));
+    tensorcore_integer_mma(upper, a, high);
+#pragma unroll
+    for (unsigned j = 0u; j < 4u; ++j) result[j] += 256 * upper[j];
+}
 /* Register MMA owns sixteen rows by eight inputs per warp. Integer products
  * retain each format's exact 32/256-element block; F32 block scales and their
  * source-order sum are unchanged. No shared fragments or block barriers are
@@ -324,6 +362,105 @@ extern "C" __global__ void yvex_mxfp4_tensorcore_wide_rows(
         input_rows, group_count, group_rows, qtype, activation, additive, output, output_bf16, status);
 }
 
+/* A CTA stages one encoded K256 cohort (64 weight rows, 32 Q8_K inputs).
+ * The four row tiles share activations; the two column tiles share weights.
+ * No repacked representation survives the CTA. Integer products and the
+ * original eight source-ordered F32 MXFP4 block publications are unchanged. */
+extern "C" __global__ void yvex_mxfp4_tensorcore_shared_rows(
+    const unsigned char *encoded, unsigned long long row_bytes, unsigned long long row_width,
+    unsigned long long start_row, unsigned long long row_count, unsigned long long input_rows,
+    unsigned long long group_count, unsigned long long group_rows, unsigned qtype,
+    const unsigned char *activation, const float *additive, float *output, int output_bf16, int *status)
+{
+    __shared__ unsigned weight_words[64 * 34], activation_words[32 * 73];
+    __shared__ int active;
+    if (!status) return;
+    if (!threadIdx.x) active = *status == 0;
+    __syncthreads();
+    if (!active) return;
+    if (!encoded || !activation || !output || !row_count || !input_rows || !group_count || !group_rows ||
+        group_count > ~0ull / group_rows || row_count != group_count * group_rows ||
+        blockDim.x != 256u || input_rows > ~0ull - 31ull ||
+        (group_count > 1 && group_rows % 64) || qtype != YVEX_GGUF_QTYPE_MXFP4 ||
+        !tensorcore_row_geometry(qtype, row_width, row_bytes)) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
+    const unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
+    const unsigned long long input_groups = (input_rows + 31) / 32;
+    const unsigned long long row_base = (blockIdx.x / input_groups) * 64;
+    const unsigned long long input_base = (blockIdx.x % input_groups) * 32;
+    if (row_base >= row_count) return;
+    const unsigned long long row_group = row_base / group_rows, blocks = row_width / 256;
+    const unsigned char *w = (const unsigned char *)weight_words;
+    const unsigned char *x = (const unsigned char *)activation_words;
+    float totals[2][4] = {};
+    for (unsigned long long block = 0; block < blocks; block++) {
+        for (unsigned i = threadIdx.x; i < 64 * 34; i += 256) {
+            unsigned long long row = row_base + i / 34;
+            weight_words[i] = row < row_count ? qtype_load_u32(
+                encoded + (start_row + row) * row_bytes + block * 136 + (i % 34) * 4) : 0;
+        }
+        for (unsigned i = threadIdx.x; i < 32 * 73; i += 256) {
+            unsigned long long column = input_base + i / 73;
+            activation_words[i] = column < input_rows ? qtype_load_u32(activation +
+                ((column * group_count + row_group) * blocks + block) * 292 + (i % 73) * 4) : 0;
+        }
+        __syncthreads();
+#pragma unroll
+        for (unsigned segment = 0; segment < 8; segment++) {
+            int a[4];
+#pragma unroll
+            for (unsigned j = 0; j < 4; j++) {
+                unsigned r = (warp / 2) * 16 + (lane >> 2) + (j & 1) * 8;
+                unsigned first = (lane & 3) * 4 + (j >> 1) * 16;
+                /* Canonical 17-byte blocks cross shared-word boundaries.
+                 * Read aligned words and assemble the exact quartet instead
+                 * of four byte-addressed shared loads. The last quartet ends
+                 * at byte 135 of its 136-byte cohort; no next row is read. */
+                unsigned offset = r * 136 + segment * 17 + 1 + (first & 15u);
+                unsigned index = offset >> 2, shift = (offset & 3u) * 8u;
+                unsigned packed = __funnelshift_r(weight_words[index],
+                    weight_words[index + (shift != 0)], shift);
+                a[j] = mxfp4_i8x4(packed, first >= 16u);
+            }
+#pragma unroll
+            for (unsigned tile = 0; tile < 2; tile++) {
+                int b[2], product[4] = {};
+                unsigned column = (warp % 2) * 16 + tile * 8 + (lane >> 2);
+#pragma unroll
+                for (unsigned j = 0; j < 2; j++)
+                    b[j] = (int)qtype_load_u32(x + column * 292 + 4 + segment * 32 + (lane & 3) * 4 + j * 16);
+                tensorcore_integer_mma(product, a, b);
+#pragma unroll
+                for (unsigned j = 0; j < 4; j++) {
+                    unsigned r = (warp / 2) * 16 + (lane >> 2) + (j >> 1) * 8;
+                    unsigned c = (warp % 2) * 16 + tile * 8 + (lane & 3) * 2 + (j & 1);
+                    float scale = __uint_as_float(activation_words[c * 73]);
+                    float term = tensorcore_scaled_group(w + r * 136, segment * 32,
+                        YVEX_GGUF_QTYPE_MXFP4, scale, product[j], 0);
+                    totals[tile][j] = __fadd_rn(totals[tile][j], term);
+                }
+            }
+        }
+        __syncthreads();
+    }
+#pragma unroll
+    for (unsigned tile = 0; tile < 2; tile++) {
+#pragma unroll
+        for (unsigned j = 0; j < 4; j++) {
+            unsigned long long row = row_base + (warp / 2) * 16 + (lane >> 2) + (j >> 1) * 8;
+            unsigned long long column = input_base + (warp % 2) * 16 + tile * 8 + (lane & 3) * 2 + (j & 1);
+            if (row < row_count && column < input_rows) {
+                unsigned long long i = column * row_count + row;
+                float value = additive ? __fadd_rn(totals[tile][j], additive[i]) : totals[tile][j];
+                if (!isfinite(value)) atomicCAS(status, 0, 1);
+                else output[i] = output_bf16 ? float_to_bf16_rne(value) : value;
+            }
+        }
+    }
+}
+
 static __device__ float4 tensorcore_f32x4_add(float4 a,float4 b) {
     return make_float4(__fadd_rn(a.x,b.x),__fadd_rn(a.y,b.y),__fadd_rn(a.z,b.z),__fadd_rn(a.w,b.w));
 }
@@ -348,10 +485,13 @@ extern "C" __global__ void yvex_q8_row_matrix(
     if (!status || *status) return;
     if (!weights || !activation || !output || !width || width > 8192ull ||
         width % 256ull || row_bytes != width / 256ull *
-            (qtype == YVEX_GGUF_QTYPE_Q2_K ? 84ull : 136ull) ||
+            (qtype == YVEX_GGUF_QTYPE_Q2_K ? 84ull :
+             qtype == YVEX_GGUF_QTYPE_Q8_0 ? 272ull : 136ull) ||
         !rows || rows > 131072ull || start > ~0ull - rows ||
-        (start + rows) > ~0ull / row_bytes || !inputs || inputs > 1024ull ||
-        (qtype != YVEX_GGUF_QTYPE_MXFP4 && qtype != YVEX_GGUF_QTYPE_Q2_K) ||
+        (start + rows) > ~0ull / row_bytes || !inputs ||
+        inputs > YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH ||
+        (qtype != YVEX_GGUF_QTYPE_MXFP4 && qtype != YVEX_GGUF_QTYPE_Q2_K &&
+         qtype != YVEX_GGUF_QTYPE_Q8_0) ||
         stride != width || q8 != 1 ||
         block_row || forensic || output_stride < rows || output_stride > ~0ull / inputs ||
         blockDim.x < 32u || blockDim.x > 128u || blockDim.x % 32u ||
@@ -381,8 +521,11 @@ extern "C" __global__ void yvex_q8_row_matrix(
                 for (unsigned j = 0u; j < 4u; ++j) {
                     unsigned long long row = row_base + (lane >> 2u) + (j & 1u) * 8ull;
                     const unsigned char *w = weights + (start + row) * row_bytes +
-                        (block * 8u + part) * 17u + 1u + (lane & 3u) * 4u;
-                    a[j] = row < rows ? mxfp4_i8x4(qtype_load_u32(w), j >> 1u) : 0;
+                        (block * 8u + part) * (qtype == YVEX_GGUF_QTYPE_Q8_0 ? 34u : 17u) +
+                        (qtype == YVEX_GGUF_QTYPE_Q8_0 ? 2u + (j >> 1u) * 16u : 1u) +
+                        (lane & 3u) * 4u;
+                    a[j] = row >= rows ? 0 : qtype == YVEX_GGUF_QTYPE_Q8_0
+                        ? (int)qtype_load_u32(w) : mxfp4_i8x4(qtype_load_u32(w), j >> 1u);
                 }
                 unsigned long long column = input_base + (lane >> 2u);
                 for (unsigned j = 0u; j < 2u; ++j)
@@ -394,11 +537,14 @@ extern "C" __global__ void yvex_q8_row_matrix(
                     unsigned long long row = row_base + (lane >> 2u) + (j >> 1u) * 8ull;
                     unsigned long long col = input_base + (lane & 3u) * 2u + (j & 1u);
                     if (row < rows && col < inputs) {
-                        float ws = e8m0_bits_to_float(weights[(start + row) * row_bytes +
-                            (block * 8u + part) * 17u]);
+                        float ws = qtype == YVEX_GGUF_QTYPE_Q8_0
+                            ? f16_bits_to_float(qtype_load_u16(weights + (start + row) * row_bytes +
+                                (block * 8u + part) * 34u))
+                            : e8m0_bits_to_float(weights[(start + row) * row_bytes +
+                                (block * 8u + part) * 17u]) * 0.5f;
                         float as = __uint_as_float(qtype_load_u32(activation +
                             (col * blocks + block) * 292ull));
-                        values[j] = fmaf(ws * 0.5f * as, (float)products[j], values[j]);
+                        values[j] = fmaf(ws * as, (float)products[j], values[j]);
                     }
                 }
             }
@@ -419,7 +565,8 @@ extern "C" __global__ void yvex_q8_row_matrix(
             float value = values[j];
             if (!isfinite(value)) value = qtype_q8_dot_recover_f64(
                 weights + (start + row) * row_bytes, activation + col * blocks * 292ull,
-                blocks, qtype == YVEX_GGUF_QTYPE_Q2_K ? 84ull : 136ull, qtype, status);
+                blocks, qtype == YVEX_GGUF_QTYPE_Q2_K ? 84ull :
+                    qtype == YVEX_GGUF_QTYPE_Q8_0 ? 272ull : 136ull, qtype, status);
             if (additive) value = __fadd_rn(value, additive[col * output_stride + row]);
             if (output_bf16) value = float_to_bf16_rne(value);
             if (!isfinite(value)) atomicCAS(status, 0, 1);
@@ -427,6 +574,440 @@ extern "C" __global__ void yvex_q8_row_matrix(
         }
     }
 }
+/* A Q2 CTA owns 64 rows by eight real expert columns. Stage the next real
+ * block while computing the current one; share Q8 input across four row warps.
+ * Storage, integer products, the 32-leaf F32 tree and recovery are unchanged.
+ * Shared storage is CTA-local: no persistent preparation or model duplicate. */
+
+static __device__ void q2_pipeline_copy(unsigned *destination,
+                                       const unsigned char *source, bool present)
+{
+    // Canonical package offsets may be unaligned. That case uses the existing
+    // bounded byte decoder; it must never issue an unaligned asynchronous copy.
+#if __CUDA_ARCH__ >= 800
+    if (present && !((unsigned long long)source & 3ull)) {
+        unsigned address = (unsigned)__cvta_generic_to_shared(destination);
+        asm volatile("cp.async.ca.shared.global [%0], [%1], 4;"
+                     :: "r"(address), "l"(source) : "memory");
+        return;
+    }
+#endif
+    *destination = present ? qtype_load_u32(source) : 0u;
+}
+
+template<unsigned COLS = 8u, unsigned AREA = 512u>
+static __device__ void q2_pipeline_stage(unsigned *w, unsigned *x,
+    const unsigned char *weights, unsigned long long row_bytes,
+    unsigned long long rows, unsigned long long first_row,
+    const unsigned char *input, unsigned blocks, unsigned block,
+    const unsigned long long *order, unsigned long long offset,
+    unsigned population, unsigned topk, unsigned column_base, int ordered)
+{
+    for (unsigned i = threadIdx.x; i < (AREA / COLS) * 21u; i += blockDim.x) {
+        unsigned row = i / 21u, word = i % 21u;
+        bool present = first_row + row < rows;
+        const unsigned char *address = present ? weights +
+            (first_row + row) * row_bytes + block * 84ull + word * 4u : weights;
+        q2_pipeline_copy(w + i, address, present);
+    }
+    for (unsigned i = threadIdx.x; i < COLS * 73u; i += blockDim.x) {
+        unsigned column = column_base + i / 73u, word = i % 73u;
+        bool present = column < population;
+        unsigned long long index = present ?
+            (ordered ? offset + column : order[offset + column] / topk) : 0ull;
+        const unsigned char *address = present ? input +
+            (index * blocks + block) * 292ull + word * 4u : input;
+        q2_pipeline_copy(x + i, address, present);
+    }
+#if __CUDA_ARCH__ >= 800
+    asm volatile("cp.async.commit_group;" ::: "memory");
+#endif
+}
+
+static __device__ float4 tensorcore_expert_shared_dot(
+    const unsigned char *weights, unsigned long long row_bytes,
+    unsigned long long rows, unsigned long long row_base,
+    const unsigned char *input, unsigned blocks, const unsigned long long *order,
+    unsigned long long offset, unsigned population, unsigned topk,
+    unsigned column_base, int ordered, int *status)
+{
+    __shared__ unsigned staged_weights[2][64 * 21];
+    __shared__ unsigned staged_input[2][8 * 73];
+    unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
+    unsigned group = lane >> 2u, thread = lane & 3u;
+    unsigned long long first_row = row_base - warp * 16u;
+    float4 s0 = {}, s1 = {}, s2 = {}, s3 = {}, s4 = {}, result = {};
+    unsigned slot = 0u;
+    q2_pipeline_stage(staged_weights[0], staged_input[0], weights, row_bytes,
+        rows, first_row, input, blocks, 0u, order, offset, population, topk,
+        column_base, ordered);
+    for (unsigned leaf = 0u; leaf < 32u; ++leaf) {
+        unsigned block = __brev(leaf) >> 27u;
+        float4 value = {};
+        if (block < blocks) {
+#if __CUDA_ARCH__ >= 800
+            asm volatile("cp.async.wait_group 0;" ::: "memory");
+#endif
+            __syncthreads();
+            unsigned next = leaf + 1u;
+            while (next < 32u && (__brev(next) >> 27u) >= blocks) ++next;
+            if (next < 32u)
+                q2_pipeline_stage(staged_weights[slot ^ 1u], staged_input[slot ^ 1u],
+                    weights, row_bytes, rows, first_row, input, blocks,
+                    __brev(next) >> 27u, order, offset, population, topk,
+                    column_base, ordered);
+            const unsigned *w = staged_weights[slot], *x = staged_input[slot];
+            int product[4] = {};
+#pragma unroll
+            for (unsigned segment = 0u; segment < 256u; segment += 32u) {
+                int a[4], b[2];
+#pragma unroll
+                for (unsigned j = 0u; j < 4u; ++j) {
+                    unsigned row = warp * 16u + group + (j & 1u) * 8u;
+                    unsigned first = segment + thread * 4u + (j >> 1u) * 16u;
+                    unsigned bits = w[row * 21u + 4u + first / 128u * 8u + first % 32u / 4u];
+                    unsigned scale = (w[row * 21u + first / 64u] >>
+                        (first / 16u % 4u * 8u)) & 15u;
+                    a[j] = (int)(((bits >> (first % 128u / 32u * 2u)) & 0x03030303u) * scale);
+                }
+                for (unsigned j = 0u; j < 2u; ++j)
+                    b[j] = (int)x[group * 73u + 1u + segment / 4u + thread + j * 4u];
+                tensorcore_integer_mma(product, a, b);
+            }
+            int minimum[4] = {};
+            tensorcore_q2_minimum(minimum, (const unsigned char *)w, 84ull, 64ull,
+                warp * 16u, (const unsigned char *)x, 1u, 0u, nullptr, 0ull, 8u, 1u, 0u, 1);
+            float values[4] = {};
+            for (unsigned j = 0u; j < 4u; ++j) {
+                unsigned row = warp * 16u + group + (j >> 1u) * 8u;
+                unsigned column = thread * 2u + (j & 1u);
+                if (first_row + row < rows && column_base + column < population) {
+                    float scale = __uint_as_float(x[column * 73u]);
+                    unsigned scales = w[row * 21u + 20u];
+                    values[j] = scale * f16_bits_to_float(scales & 65535u) * (float)product[j] -
+                        scale * f16_bits_to_float(scales >> 16u) * (float)minimum[j];
+                }
+            }
+            value = make_float4(values[0], values[1], values[2], values[3]);
+            __syncthreads();
+            slot ^= 1u;
+        }
+        if (!(leaf & 1u)) s0 = value;
+        else { value = tensorcore_f32x4_add(s0, value); if (!(leaf & 2u)) s1 = value;
+        else { value = tensorcore_f32x4_add(s1, value); if (!(leaf & 4u)) s2 = value;
+        else { value = tensorcore_f32x4_add(s2, value); if (!(leaf & 8u)) s3 = value;
+        else { value = tensorcore_f32x4_add(s3, value); if (!(leaf & 16u)) s4 = value;
+        else result = tensorcore_f32x4_add(s4, value); }}}}
+    }
+    float values[] = {result.x, result.y, result.z, result.w};
+    for (unsigned j = 0u; j < 4u; ++j) {
+        unsigned long long row = row_base + group + (j >> 1u) * 8u;
+        unsigned column = column_base + thread * 2u + (j & 1u);
+        if (row < rows && column < population && !isfinite(values[j])) {
+            unsigned long long index = ordered ? offset + column : order[offset + column] / topk;
+            values[j] = qtype_q8_dot_recover_f64(weights + row * row_bytes,
+                input + index * blocks * 292ull, blocks, 84ull, YVEX_GGUF_QTYPE_Q2_K,
+                status, ordered ? YVEX_MOE_DEVICE_DOWN_OPERAND : YVEX_MOE_DEVICE_GATE_OPERAND);
+        }
+    }
+    return make_float4(values[0], values[1], values[2], values[3]);
+}
+
+/* Paired Q2 projection: common activation stage and block traversal.
+ * Both independent dots keep their original 32-leaf F32 trees.
+ */
+struct tensorcore_pair_result { float4 gate, up; };
+struct tensorcore_pair_tree { float4 s0,s1,s2,s3,s4,result; };
+
+static __device__ __forceinline__ void tensorcore_pair_push(tensorcore_pair_tree &tree,float4 value,unsigned leaf)
+{
+    if (!(leaf & 1u)) tree.s0=value;
+    else { value=tensorcore_f32x4_add(tree.s0,value); if (!(leaf & 2u)) tree.s1=value;
+    else { value=tensorcore_f32x4_add(tree.s1,value); if (!(leaf & 4u)) tree.s2=value;
+    else { value=tensorcore_f32x4_add(tree.s2,value); if (!(leaf & 8u)) tree.s3=value;
+    else { value=tensorcore_f32x4_add(tree.s3,value); if (!(leaf & 16u)) tree.s4=value;
+    else tree.result=tensorcore_f32x4_add(tree.s4,value); }}}}
+}
+
+template<unsigned COLS>
+static __device__ void tensorcore_pair_stage(unsigned *g,unsigned *u,unsigned *x,
+    const unsigned char *gate,const unsigned char *up,unsigned long long rb,
+    unsigned long long rows,unsigned long long first_row,
+    const unsigned char *input,unsigned blocks,unsigned block,const unsigned long long *order,
+    unsigned long long offset,unsigned population,unsigned topk,unsigned column_base,int ordered)
+{
+    q2_pipeline_stage<COLS,1024u>(g,x,gate,rb,rows,first_row,input,blocks,block,
+        order,offset,population,topk,column_base,ordered);
+    for(unsigned i=threadIdx.x;i<(1024u/COLS)*21u;i+=blockDim.x) {
+        unsigned row=i/21u,word=i%21u;
+        bool present=first_row+row<rows;
+        const unsigned char *address=present?up+(first_row+row)*rb+block*84ull+word*4u:up;
+        q2_pipeline_copy(u+i,address,present);
+    }
+#if __CUDA_ARCH__ >= 800
+    asm volatile("cp.async.commit_group;" ::: "memory");
+#endif
+}
+
+template<unsigned COLS>
+static __device__ __forceinline__ tensorcore_pair_result tensorcore_pair_dot(const unsigned char *gate,
+    const unsigned char *up,unsigned long long rb,unsigned long long rows,
+    unsigned long long row_base,const unsigned char *input,
+    unsigned blocks,const unsigned long long *order,unsigned long long offset,unsigned population,unsigned topk,
+    unsigned column_base,int ordered,int *status)
+{
+    __shared__ unsigned gate_stage[2][(1024/COLS)*21];
+    __shared__ unsigned up_stage[2][(1024/COLS)*21];
+    __shared__ unsigned input_stage[2][COLS*73];
+    unsigned lane=threadIdx.x&31u,warp=threadIdx.x>>5u;
+    unsigned group=lane>>2u,thread=lane&3u;
+    unsigned warp_row=warp/(COLS/8u)*16u,warp_column=warp%(COLS/8u)*8u;
+    unsigned long long first_row=row_base-warp_row;
+    tensorcore_pair_tree trees[2]={};
+    unsigned slot=0u;
+    tensorcore_pair_stage<COLS>(gate_stage[0],up_stage[0],input_stage[0],gate,up,rb,
+        rows,first_row,input,blocks,0u,order,offset,population,topk,column_base,ordered);
+    for(unsigned leaf=0;leaf<32;leaf++) {
+        unsigned block=__brev(leaf)>>27u;
+        float4 values[2]={};
+        if(block<blocks) {
+#if __CUDA_ARCH__ >= 800
+            asm volatile("cp.async.wait_group 0;" ::: "memory");
+#endif
+            __syncthreads();
+            unsigned next=leaf+1;
+            while(next<32&&(__brev(next)>>27u)>=blocks)next++;
+            if(next<32)tensorcore_pair_stage<COLS>(gate_stage[slot^1u],up_stage[slot^1u],
+                input_stage[slot^1u],gate,up,rb,rows,first_row,input,blocks,
+                __brev(next)>>27u,order,offset,population,topk,column_base,ordered);
+            const unsigned *x=input_stage[slot];
+            int products[2][4]={};
+#pragma unroll
+            for(unsigned segment=0;segment<256;segment+=32) {
+                int b[2];
+#pragma unroll
+                for(unsigned j=0;j<2;j++)
+                    b[j]=(int)x[(warp_column+group)*73u+1u+segment/4u+thread+j*4u];
+#pragma unroll
+                for(unsigned which=0;which<2;which++) {
+                    const unsigned *w=which?up_stage[slot]:gate_stage[slot];
+                    int a[4];
+#pragma unroll
+                    for(unsigned j=0;j<4;j++) {
+                        unsigned row=warp_row+group+(j&1u)*8u;
+                        unsigned first=segment+thread*4u+(j>>1u)*16u;
+                        unsigned bits=w[row*21u+4u+first/128u*8u+first%32u/4u];
+                        unsigned scale=(w[row*21u+first/64u]>>(first/16u%4u*8u))&15u;
+                        a[j]=(int)(((bits>>(first%128u/32u*2u))&0x03030303u)*scale);
+                    }
+                    tensorcore_integer_mma(products[which],a,b);
+                }
+            }
+#pragma unroll
+            for(unsigned which=0;which<2;which++) {
+                const unsigned *w=which?up_stage[slot]:gate_stage[slot];
+                int minimum[4]={};
+                tensorcore_q2_minimum(minimum,(const unsigned char *)w,84ull,1024ull/COLS,
+                    warp_row,(const unsigned char *)(x+warp_column*73u),1u,0u,
+                    nullptr,0ull,8u,1u,0u,1);
+                float scalars[4]={};
+#pragma unroll
+                for(unsigned j=0;j<4;j++) {
+                    unsigned row=warp_row+group+(j>>1u)*8u;
+                    unsigned column=warp_column+thread*2u+(j&1u);
+                    if(first_row+row<rows&&column_base+column<population) {
+                        float scale=__uint_as_float(x[column*73u]);
+                        unsigned scales=w[row*21u+20u];
+                        scalars[j]=scale*f16_bits_to_float(scales&65535u)*(float)products[which][j]-
+                            scale*f16_bits_to_float(scales>>16u)*(float)minimum[j];
+                    }
+                }
+                values[which]=make_float4(scalars[0],scalars[1],scalars[2],scalars[3]);
+            }
+            __syncthreads();slot^=1u;
+        }
+#pragma unroll
+        for(unsigned which=0;which<2;which++)tensorcore_pair_push(trees[which],values[which],leaf);
+    }
+    tensorcore_pair_result result={trees[0].result,trees[1].result};
+#pragma unroll
+    for(unsigned which=0;which<2;which++) {
+        float4 v=which?result.up:result.gate;
+        float values[]={v.x,v.y,v.z,v.w};
+#pragma unroll
+        for(unsigned j=0;j<4;j++) {
+            unsigned long long row=row_base+group+(j>>1u)*8u;
+            unsigned column=column_base+warp_column+thread*2u+(j&1u);
+            if(row<rows&&column<population&&!isfinite(values[j])) {
+                unsigned long long index=ordered?offset+column:order[offset+column]/topk;
+                const unsigned char *w=which?up:gate;
+                values[j]=qtype_q8_dot_recover_f64(w+row*rb,input+index*blocks*292ull,
+                    blocks,84ull,YVEX_GGUF_QTYPE_Q2_K,status,
+                    which ? YVEX_MOE_DEVICE_UP_OPERAND : YVEX_MOE_DEVICE_GATE_OPERAND);
+            }
+        }
+        v=make_float4(values[0],values[1],values[2],values[3]);
+        if(which)result.up=v;else result.gate=v;
+    }
+    return result;
+}
+
+/* An IQ2 block is 66 bytes. Stage its enclosing 68-byte aligned interval,
+ * keeping the source's halfword displacement rather than reading unaligned
+ * encoded words throughout MMA. Even block populations keep the final copy
+ * within its row. This is CTA-local preparation, not another weight copy. */
+static __device__ void tensorcore_iq2_pair_stage(unsigned *g, unsigned *u, unsigned *x,
+    const unsigned char *gate, const unsigned char *up, unsigned long long rb,
+    unsigned long long rows, unsigned long long first_row,
+    const unsigned char *input, unsigned blocks, unsigned block,
+    const unsigned long long *order, unsigned long long offset, unsigned population,
+    unsigned topk, unsigned column_base, int ordered)
+{
+    unsigned aligned = (block * 66u) & ~3u;
+    for (unsigned i = threadIdx.x; i < 64u * 17u; i += blockDim.x) {
+        unsigned row = i / 17u, word = i % 17u;
+        bool present = first_row + row < rows;
+        const unsigned char *ga = present ? gate + (first_row + row) * rb + aligned + word * 4u : gate;
+        const unsigned char *ua = present ? up + (first_row + row) * rb + aligned + word * 4u : up;
+        q2_pipeline_copy(g + i, ga, present);
+        q2_pipeline_copy(u + i, ua, present);
+    }
+    for (unsigned i = threadIdx.x; i < 16u * 73u; i += blockDim.x) {
+        unsigned column = column_base + i / 73u, word = i % 73u;
+        bool present = column < population;
+        unsigned long long source = present ? (ordered ? offset + column : order[offset + column] / topk) : 0ull;
+        const unsigned char *address = present ? input + (source * blocks + block) * 292ull + word * 4u : input;
+        q2_pipeline_copy(x + i, address, present);
+    }
+#if __CUDA_ARCH__ >= 800
+    asm volatile("cp.async.commit_group;" ::: "memory");
+#endif
+}
+
+static __device__ unsigned tensorcore_iq2_word(const unsigned *row, unsigned offset)
+{
+    unsigned word = offset >> 2u, shift = (offset & 3u) * 8u;
+    return __funnelshift_r(row[word], row[word + (shift != 0u)], shift);
+}
+
+static __device__ int tensorcore_iq2_digit4(const unsigned *row, unsigned displacement,
+    unsigned first, const unsigned *grid_table)
+{
+    unsigned group = first / 32u, subgroup = first % 32u / 8u;
+    unsigned grids = tensorcore_iq2_word(row, displacement + 2u + group * 8u);
+    unsigned ss = tensorcore_iq2_word(row, displacement + 6u + group * 8u);
+    unsigned index = (grids >> (subgroup * 8u)) & 255u;
+    unsigned signs = iq2_xxs_signs((ss >> (subgroup * 7u)) & 127u);
+    unsigned part = (first & 4u) >> 2u, packed = grid_table[index * 2u + part];
+    unsigned bits = (signs >> (part * 4u)) & 15u;
+    unsigned mask = ((bits * 0x00204081u) & 0x01010101u) * 255u;
+    return (int)__vsub4(packed ^ mask, mask);
+}
+
+static __device__ __forceinline__ tensorcore_pair_result tensorcore_iq2_pair_dot(
+    const unsigned char *gate, const unsigned char *up, unsigned long long rb,
+    unsigned long long rows, unsigned long long row_base,
+    const unsigned char *input, unsigned blocks, const unsigned long long *order,
+    unsigned long long offset, unsigned population, unsigned topk,
+    unsigned column_base, int ordered, int *status, const unsigned *grid_table)
+{
+    __shared__ unsigned gate_stage[2][64u * 17u], up_stage[2][64u * 17u];
+    __shared__ unsigned input_stage[2][16u * 73u];
+    unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
+    unsigned group = lane >> 2u, thread = lane & 3u;
+    unsigned warp_row = warp / 2u * 16u, warp_column = warp % 2u * 8u;
+    unsigned long long first_row = row_base - warp_row;
+    tensorcore_pair_tree trees[2] = {};
+    unsigned slot = 0u;
+    tensorcore_iq2_pair_stage(gate_stage[0], up_stage[0], input_stage[0], gate, up, rb,
+        rows, first_row, input, blocks, 0u, order, offset, population, topk, column_base, ordered);
+    for (unsigned leaf = 0u; leaf < 32u; ++leaf) {
+        unsigned block = __brev(leaf) >> 27u;
+        float4 values[2] = {};
+        if (block < blocks) {
+#if __CUDA_ARCH__ >= 800
+            asm volatile("cp.async.wait_group 0;" ::: "memory");
+#endif
+            __syncthreads();
+            unsigned next = leaf + 1u;
+            while (next < 32u && (__brev(next) >> 27u) >= blocks) ++next;
+            if (next < 32u)
+                tensorcore_iq2_pair_stage(gate_stage[slot ^ 1u], up_stage[slot ^ 1u], input_stage[slot ^ 1u],
+                    gate, up, rb, rows, first_row, input, blocks, __brev(next) >> 27u,
+                    order, offset, population, topk, column_base, ordered);
+            const unsigned *x = input_stage[slot];
+            unsigned displacement = (block & 1u) * 2u;
+            int products[2][4] = {};
+#pragma unroll
+            for (unsigned segment = 0u; segment < 256u; segment += 32u) {
+                int b[2];
+#pragma unroll
+                for (unsigned j = 0u; j < 2u; ++j)
+                    b[j] = (int)x[(warp_column + group) * 73u + 1u + segment / 4u + thread + j * 4u];
+#pragma unroll
+                for (unsigned which = 0u; which < 2u; ++which) {
+                    const unsigned *w = which ? up_stage[slot] : gate_stage[slot];
+                    int a[4], partial[4] = {};
+#pragma unroll
+                    for (unsigned j = 0u; j < 4u; ++j) {
+                        unsigned row = warp_row + group + (j & 1u) * 8u;
+                        unsigned first = segment + thread * 4u + (j >> 1u) * 16u;
+                        a[j] = tensorcore_iq2_digit4(w + row * 17u, displacement, first, grid_table);
+                    }
+                    tensorcore_integer_mma(partial, a, b);
+#pragma unroll
+                    for (unsigned j = 0u; j < 4u; ++j) {
+                        unsigned row = warp_row + group + (j >> 1u) * 8u;
+                        unsigned ss = tensorcore_iq2_word(w + row * 17u, displacement + 6u + segment / 32u * 8u);
+                        products[which][j] += partial[j] * (int)(2u * (ss >> 28u) + 1u);
+                    }
+                }
+            }
+#pragma unroll
+            for (unsigned which = 0u; which < 2u; ++which) {
+                const unsigned *w = which ? up_stage[slot] : gate_stage[slot];
+                float scalars[4] = {};
+#pragma unroll
+                for (unsigned j = 0u; j < 4u; ++j) {
+                    unsigned row = warp_row + group + (j >> 1u) * 8u;
+                    unsigned column = warp_column + thread * 2u + (j & 1u);
+                    if (first_row + row < rows && column_base + column < population) {
+                        float as = __uint_as_float(x[column * 73u]);
+                        float ws = f16_bits_to_float((w[row * 17u] >> (displacement * 8u)) & 65535u);
+                        scalars[j] = 0.125f * ws * as * (float)products[which][j];
+                    }
+                }
+                values[which] = make_float4(scalars[0], scalars[1], scalars[2], scalars[3]);
+            }
+            __syncthreads();
+            slot ^= 1u;
+        }
+#pragma unroll
+        for (unsigned which = 0u; which < 2u; ++which)
+            tensorcore_pair_push(trees[which], values[which], leaf);
+    }
+    tensorcore_pair_result result = {trees[0].result, trees[1].result};
+#pragma unroll
+    for (unsigned which = 0u; which < 2u; ++which) {
+        float4 value = which ? result.up : result.gate;
+        float scalars[] = {value.x, value.y, value.z, value.w};
+#pragma unroll
+        for (unsigned j = 0u; j < 4u; ++j) {
+            unsigned long long row = row_base + group + (j >> 1u) * 8u;
+            unsigned column = column_base + warp_column + thread * 2u + (j & 1u);
+            if (row < rows && column < population && !isfinite(scalars[j])) {
+                unsigned long long source = ordered ? offset + column : order[offset + column] / topk;
+                scalars[j] = qtype_q8_dot_recover_f64((which ? up : gate) + row * rb,
+                    input + source * blocks * 292ull, blocks, 66ull, YVEX_GGUF_QTYPE_IQ2_XXS,
+                    status, which ? YVEX_MOE_DEVICE_UP_OPERAND : YVEX_MOE_DEVICE_GATE_OPERAND);
+            }
+        }
+        value = make_float4(scalars[0], scalars[1], scalars[2], scalars[3]);
+        if (which) result.up = value; else result.gate = value;
+    }
+    return result;
+}
+
 static __device__ float4 tensorcore_expert_register_dot(const unsigned char *weights,unsigned long long rb,
     unsigned long long rows,unsigned long long rowbase,const unsigned char *input,
     unsigned blocks,const unsigned long long *order,unsigned long long offset,
@@ -464,6 +1045,10 @@ static __device__ float4 tensorcore_expert_register_dot(const unsigned char *wei
                     }
                 } else tensorcore_integer_mma(lo,a,b);
             }
+            int minima[4] = {};
+            if (qtype == YVEX_GGUF_QTYPE_Q2_K)
+                tensorcore_q2_minimum(minima, weights, rb, rows, rowbase, input,
+                    blocks, block, order, offset, pop, topk, columnbase, ordered);
             float values[4];
             for(unsigned j=0;j<4;j++) {
                 unsigned long long row=rowbase+group+(j>>1)*8;
@@ -477,10 +1062,8 @@ static __device__ float4 tensorcore_expert_register_dot(const unsigned char *wei
                     if(qtype==YVEX_GGUF_QTYPE_IQ2_XXS)
                         value=0.125f*f16_bits_to_float(qtype_load_u16(w))*as*(float)lo[j];
                     else {
-                        int minimum=0;
-                        for(unsigned s=0;s<16;s++)minimum+=q8_k_sum(a,s)*(int)(w[s]>>4);
                         value=as*f16_bits_to_float(qtype_load_u16(w+80))*(float)lo[j]-
-                            as*f16_bits_to_float(qtype_load_u16(w+82))*(float)minimum;
+                            as*f16_bits_to_float(qtype_load_u16(w+82))*(float)minima[j];
                     }
                 }
                 values[j]=value;
@@ -568,7 +1151,8 @@ static __device__ unsigned long long tensorcore_expert_column_tile(
     return buckets;
 }
 
-extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
+template<bool COOPERATIVE, bool IQ2_COOPERATIVE = false>
+static __device__ __forceinline__ void tensorcore_grouped_up(
     const unsigned char *gate, unsigned long long gate_row_bytes,
     unsigned long long gate_expert_bytes, unsigned int gate_qtype,
     const unsigned char *up, unsigned long long up_row_bytes,
@@ -587,15 +1171,31 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
     /* IQ2 fragment lanes use different codebook entries. Stage the canonical
      * table once rather than serializing divergent constant-memory reads. */
     __shared__ unsigned int grid_table[512];
-    if (gate_qtype == YVEX_GGUF_QTYPE_IQ2_XXS || up_qtype == YVEX_GGUF_QTYPE_IQ2_XXS)
+    __shared__ int active;
+    if (!threadIdx.x) active = status && atomicAdd(status, 0) == 0;
+    if ((!COOPERATIVE || IQ2_COOPERATIVE) &&
+        (gate_qtype == YVEX_GGUF_QTYPE_IQ2_XXS || up_qtype == YVEX_GGUF_QTYPE_IQ2_XXS))
         tensorcore_iq2_grid(grid_table);
     __syncthreads();
+    if (!active) return;
     unsigned int warp = threadIdx.x >> 5u, lane = threadIdx.x & 31u;
+    constexpr bool cooperative = COOPERATIVE;
+    const unsigned paired_qtype = IQ2_COOPERATIVE ? YVEX_GGUF_QTYPE_IQ2_XXS : YVEX_GGUF_QTYPE_Q2_K;
+    if (cooperative && (!matrix_tiles || gate_qtype != paired_qtype || up_qtype != paired_qtype ||
+        (IQ2_COOPERATIVE && (input_width / 256ull % 2ull ||
+            (((unsigned long long)gate | (unsigned long long)up |
+              (unsigned long long)input | gate_row_bytes | up_row_bytes) & 3ull))))) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
     unsigned long long tiles = (intermediate_width + 15ull) / 16ull;
-    unsigned long long task = (unsigned long long)blockIdx.x * 4ull + warp;
+    unsigned long long task = cooperative ? blockIdx.x : (unsigned long long)blockIdx.x * 4ull + warp;
     unsigned long long row_base = tiles ? (task % tiles) * 16ull : intermediate_width;
-    if (!status || *status || warp >= 4u || !summary || !expert_ids ||
-        !bucket_offsets || !bucket_populations) return;
+    if (blockDim.x != (cooperative ? 256u : 128u) || !summary || !expert_ids ||
+        !bucket_offsets || !bucket_populations) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
     if (!tiles || !tensor_core_minimum || summary->bucket_count > expert_count ||
         summary->bucket_count > pair_count || (matrix_tiles && matrix_tiles[0] >
             pair_count / 8ull + (pair_count % 8ull != 0ull) + summary->bucket_count)) {
@@ -606,7 +1206,7 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
      * tile, making same-expert encoded weight rows reusable in cache. */
     if (matrix_tiles) {
         if (!matrix_tiles[0]) return;
-        row_base = (task / matrix_tiles[0]) * 16ull;
+        row_base = (task / matrix_tiles[0]) * (cooperative ? 64ull : 16ull);
         if (row_base >= intermediate_width) return;
     }
     unsigned int column_base = 0u;
@@ -615,6 +1215,9 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
         bucket_populations, summary->bucket_count, tensor_core_minimum, &column_base, status,
         matrix_tiles);
     if (bucket >= summary->bucket_count) return;
+    /* A paired tile owns two adjacent canonical eight-column descriptors.
+     * Odd descriptors perform no loads or stores; no output is duplicated. */
+    if (cooperative && (column_base & 8u)) return;
     unsigned long long offset = bucket_offsets[bucket];
     unsigned long long population = bucket_populations[bucket];
     unsigned long long expert = expert_ids[bucket];
@@ -635,13 +1238,20 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
         return;
     }
     if (!lane) for (unsigned long long column = column_base;
-                   column < population && column < column_base + 8ull; ++column) {
+                   column < population && column < column_base + (cooperative ? 16ull : 8ull); ++column) {
         unsigned long long source_pair = order[offset + column];
         if (source_pair >= pair_count || selected[source_pair] != expert)
             atomicCAS(status, 0, 2);
     }
-    __syncwarp();
-    if (*status) return;
+    if (cooperative) {
+        /* Every warp validates the same eight pairs; thread zero therefore
+         * observes all local refusals. Broadcast one atomic read, not 128. */
+        if (__syncthreads_or(!threadIdx.x && atomicAdd(status, 0) != 0)) return;
+        row_base += warp / 2u * 16u;
+    } else {
+        __syncwarp();
+        if (*status) return;
+    }
     if (!tensorcore_row_geometry(gate_qtype, input_width, gate_row_bytes) ||
         !tensorcore_row_geometry(up_qtype, input_width, up_row_bytes) ||
         gate_expert_bytes != intermediate_width * gate_row_bytes ||
@@ -650,19 +1260,39 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
         return;
     }
     {
-        float4 gate_values = tensorcore_expert_register_dot(gate + expert * gate_expert_bytes,
-            gate_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
-            order, offset, (unsigned int)population, (unsigned int)topk,
-            column_base, gate_qtype, 0, status, grid_table, YVEX_MOE_DEVICE_GATE_OPERAND);
-        float4 up_values = tensorcore_expert_register_dot(up + expert * up_expert_bytes,
-            up_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
-            order, offset, (unsigned int)population, (unsigned int)topk,
-            column_base, up_qtype, 0, status, grid_table, YVEX_MOE_DEVICE_UP_OPERAND);
+        float4 gate_values, up_values;
+        if (IQ2_COOPERATIVE) {
+            tensorcore_pair_result pair = tensorcore_iq2_pair_dot(
+                gate + expert * gate_expert_bytes, up + expert * up_expert_bytes,
+                gate_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
+                order, offset, (unsigned int)population, (unsigned int)topk,
+                column_base, 0, status, grid_table);
+            gate_values = pair.gate;
+            up_values = pair.up;
+        } else if (cooperative) {
+            tensorcore_pair_result pair = tensorcore_pair_dot<16u>(
+                gate + expert * gate_expert_bytes, up + expert * up_expert_bytes,
+                gate_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
+                order, offset, (unsigned int)population, (unsigned int)topk,
+                column_base, 0, status);
+            gate_values = pair.gate;
+            up_values = pair.up;
+        } else {
+            gate_values = tensorcore_expert_register_dot(gate + expert * gate_expert_bytes,
+                gate_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
+                order, offset, (unsigned int)population, (unsigned int)topk,
+                column_base, gate_qtype, 0, status, grid_table, YVEX_MOE_DEVICE_GATE_OPERAND);
+            up_values = tensorcore_expert_register_dot(up + expert * up_expert_bytes,
+                up_row_bytes, intermediate_width, row_base, input, (unsigned int)input_blocks,
+                order, offset, (unsigned int)population, (unsigned int)topk,
+                column_base, up_qtype, 0, status, grid_table, YVEX_MOE_DEVICE_UP_OPERAND);
+        }
         const float gates[] = {gate_values.x, gate_values.y, gate_values.z, gate_values.w};
         const float ups[] = {up_values.x, up_values.y, up_values.z, up_values.w};
         for (unsigned int coordinate = 0u; coordinate < 4u; ++coordinate) {
             unsigned long long row = row_base + (lane >> 2u) + (coordinate >> 1u) * 8ull;
-            unsigned int column = column_base + (lane & 3u) * 2u + (coordinate & 1u);
+            unsigned int column = column_base + (cooperative ? warp % 2u * 8u : 0u) +
+                (lane & 3u) * 2u + (coordinate & 1u);
             if (row < intermediate_width && column < population && !*status) {
                 unsigned long long ordered_pair = offset + column, source_pair = order[ordered_pair];
                 float value;
@@ -675,7 +1305,8 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
     }
 }
 
-extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
+template<bool COOPERATIVE>
+static __device__ __forceinline__ void tensorcore_grouped_down(
     const unsigned char *down, unsigned long long row_bytes,
     unsigned long long expert_bytes, unsigned int qtype,
     const unsigned long long *selected, const unsigned long long *order,
@@ -689,12 +1320,23 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
     unsigned long long hidden, float *pair_outputs, int *status,
     const unsigned long long *matrix_tiles)
 {
+    __shared__ int active;
+    if (!threadIdx.x) active = status && atomicAdd(status, 0) == 0;
+    __syncthreads();
+    if (!active) return;
     unsigned int warp = threadIdx.x >> 5u, lane = threadIdx.x & 31u;
+    constexpr bool cooperative = COOPERATIVE;
+    if (cooperative && (!matrix_tiles || qtype != YVEX_GGUF_QTYPE_Q2_K)) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
     unsigned long long tiles = (hidden + 15ull) / 16ull;
-    unsigned long long task = (unsigned long long)blockIdx.x * 4ull + warp;
+    unsigned long long task = cooperative ? blockIdx.x : (unsigned long long)blockIdx.x * 4ull + warp;
     unsigned long long row_base = tiles ? (task % tiles) * 16ull : hidden;
-    if (!status || *status || warp >= 4u || !summary || !expert_ids ||
-        !bucket_offsets || !bucket_populations) return;
+    if (blockDim.x != 128u || !summary || !expert_ids || !bucket_offsets || !bucket_populations) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
     if (!tiles || !tensor_core_minimum || summary->bucket_count > expert_count ||
         summary->bucket_count > pair_count || (matrix_tiles && matrix_tiles[0] >
             pair_count / 8ull + (pair_count % 8ull != 0ull) + summary->bucket_count)) {
@@ -703,7 +1345,7 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
     }
     if (matrix_tiles) {
         if (!matrix_tiles[0]) return;
-        row_base = (task / matrix_tiles[0]) * 16ull;
+        row_base = (task / matrix_tiles[0]) * (cooperative ? 64ull : 16ull);
         if (row_base >= hidden) return;
     }
     unsigned int column_base = 0u;
@@ -734,15 +1376,23 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
         if (source_pair >= pair_count || selected[source_pair] != expert)
             atomicCAS(status, 0, 2);
     }
-    __syncwarp();
-    if (*status) return;
+    if (cooperative) {
+        if (__syncthreads_or(!threadIdx.x && atomicAdd(status, 0) != 0)) return;
+        row_base += warp * 16u;
+    } else {
+        __syncwarp();
+        if (*status) return;
+    }
     if (!tensorcore_row_geometry(qtype, intermediate_width, row_bytes) ||
         expert_bytes != hidden * row_bytes) {
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
     {
-        float4 dot = tensorcore_expert_register_dot(down + expert * expert_bytes,
+        float4 dot = cooperative ? tensorcore_expert_shared_dot(down + expert * expert_bytes,
+            row_bytes, hidden, row_base, intermediate, (unsigned int)input_blocks,
+            order, offset, (unsigned int)population, (unsigned int)topk, column_base, 1, status) :
+            tensorcore_expert_register_dot(down + expert * expert_bytes,
             row_bytes, hidden, row_base, intermediate, (unsigned int)input_blocks,
             order, offset, (unsigned int)population, (unsigned int)topk, column_base, qtype, 1,
             status, nullptr, YVEX_MOE_DEVICE_DOWN_OPERAND);
@@ -760,4 +1410,205 @@ extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
     if (!lane && !row_base && !*status)
         atomicAdd(&summary->matrix_tile_executed_pairs,
                   population - column_base < 8ull ? population - column_base : 8ull);
+}
+
+/* Keep the ROW class's eight fmaf terms per K256 block and 32-leaf tree,
+ * while a 64x32 CTA reuses aligned encoded words and Q8 activations. The
+ * DEFAULT matrix reduction above is intentionally not substituted. */
+extern "C" __global__ __launch_bounds__(256,2) void yvex_mxfp4_row_matrix_shared(
+    const unsigned char *encoded,unsigned long long row_bytes,unsigned long long row_width,
+    unsigned long long start_row,unsigned long long row_count,unsigned long long input_rows,
+    unsigned qtype,const unsigned char *activation,unsigned long long stride,
+    int q8,int block_row,int forensic,const float *additive,float *output,
+    unsigned long long output_stride,int output_bf16,int *status)
+{
+    const unsigned long long group_count=1ull,group_rows=row_count;
+    __shared__ unsigned weight_words[64 * 34], activation_words[32 * 73];
+    __shared__ int active;
+    if (!status) return;
+    if (!threadIdx.x) active = *status == 0;
+    __syncthreads();
+    if (!active) return;
+    if (!encoded || !activation || !output || !row_count || row_count>131072ull ||
+        !row_bytes || start_row>~0ull-row_count ||
+        start_row+row_count>~0ull/row_bytes ||
+        input_rows<32ull || input_rows>YVEX_EXECUTION_PREFILL_MAXIMUM_WIDTH || row_width>8192ull || q8!=1 ||
+        stride!=row_width || block_row || forensic || output_stride<row_count ||
+        output_stride>~0ull/input_rows || (output_bf16!=0 && output_bf16!=1) ||
+        !group_count || !group_rows ||
+        group_count > ~0ull / group_rows || row_count != group_count * group_rows ||
+        blockDim.x != 256u || input_rows > ~0ull - 31ull ||
+        (group_count > 1 && group_rows % 64) || qtype != YVEX_GGUF_QTYPE_MXFP4 ||
+        !tensorcore_row_geometry(qtype, row_width, row_bytes)) {
+        if (!threadIdx.x) atomicCAS(status, 0, 2);
+        return;
+    }
+    const unsigned lane = threadIdx.x & 31u, warp = threadIdx.x >> 5u;
+    const unsigned long long input_groups = (input_rows + 31) / 32;
+    const unsigned long long row_base = (blockIdx.x / input_groups) * 64;
+    const unsigned long long input_base = (blockIdx.x % input_groups) * 32;
+    if (row_base >= row_count) return;
+    const unsigned long long row_group = row_base / group_rows, blocks = row_width / 256;
+    const unsigned char *w = (const unsigned char *)weight_words;
+    const unsigned char *x = (const unsigned char *)activation_words;
+    tensorcore_pair_tree trees[2]={};
+    for(unsigned leaf=0;leaf<32;++leaf) {
+        unsigned block=__brev(leaf)>>27u;
+        float totals[2][4]={};
+        if(block<blocks) {
+        for (unsigned i = threadIdx.x; i < 64 * 34; i += 256) {
+            unsigned long long row = row_base + i / 34;
+            weight_words[i] = row < row_count ? qtype_load_u32(
+                encoded + (start_row + row) * row_bytes + block * 136 + (i % 34) * 4) : 0;
+        }
+        for (unsigned i = threadIdx.x; i < 32 * 73; i += 256) {
+            unsigned long long column = input_base + i / 73;
+            activation_words[i] = column < input_rows ? qtype_load_u32(activation +
+                ((column * group_count + row_group) * blocks + block) * 292 + (i % 73) * 4) : 0;
+        }
+        __syncthreads();
+#pragma unroll
+        for (unsigned segment = 0; segment < 8; segment++) {
+            int a[4];
+#pragma unroll
+            for (unsigned j = 0; j < 4; j++) {
+                unsigned r = (warp / 2) * 16 + (lane >> 2) + (j & 1) * 8;
+                unsigned first = (lane & 3) * 4 + (j >> 1) * 16;
+                unsigned offset = r * 136 + segment * 17 + 1 + (first & 15u);
+                unsigned index = offset >> 2, shift = (offset & 3u) * 8u;
+                unsigned packed = __funnelshift_r(weight_words[index],
+                    weight_words[index + (shift != 0)], shift);
+                a[j] = mxfp4_i8x4(packed, first >= 16u);
+            }
+#pragma unroll
+            for (unsigned tile = 0; tile < 2; tile++) {
+                int b[2], product[4] = {};
+                unsigned column = (warp % 2) * 16 + tile * 8 + (lane >> 2);
+#pragma unroll
+                for (unsigned j = 0; j < 2; j++)
+                    b[j] = (int)qtype_load_u32(x + column * 292 + 4 + segment * 32 + (lane & 3) * 4 + j * 16);
+                tensorcore_integer_mma(product, a, b);
+#pragma unroll
+                for (unsigned j = 0; j < 4; j++) {
+                    unsigned r = (warp / 2) * 16 + (lane >> 2) + (j >> 1) * 8;
+                    unsigned c = (warp % 2) * 16 + tile * 8 + (lane & 3) * 2 + (j & 1);
+                    float scale = __uint_as_float(activation_words[c * 73]);
+                    float ws=e8m0_bits_to_float(w[r*136+segment*17]);
+                    totals[tile][j]=fmaf(ws*0.5f*scale,(float)product[j],totals[tile][j]);
+                }
+            }
+        }
+        __syncthreads();
+        }
+        for(unsigned tile=0;tile<2;++tile)
+            tensorcore_pair_push(trees[tile],make_float4(totals[tile][0],totals[tile][1],
+                totals[tile][2],totals[tile][3]),leaf);
+    }
+    float totals[2][4]={{trees[0].result.x,trees[0].result.y,trees[0].result.z,trees[0].result.w},
+                        {trees[1].result.x,trees[1].result.y,trees[1].result.z,trees[1].result.w}};
+#pragma unroll
+    for (unsigned tile = 0; tile < 2; tile++) {
+#pragma unroll
+        for (unsigned j = 0; j < 4; j++) {
+            unsigned long long row = row_base + (warp / 2) * 16 + (lane >> 2) + (j >> 1) * 8;
+            unsigned long long column = input_base + (warp % 2) * 16 + tile * 8 + (lane & 3) * 2 + (j & 1);
+            if (row < row_count && column < input_rows) {
+                unsigned long long i = column * output_stride + row;
+                float value=totals[tile][j];
+                if(!isfinite(value))value=qtype_q8_dot_recover_f64(
+                    encoded+(start_row+row)*row_bytes,activation+column*blocks*292ull,
+                    blocks,136ull,YVEX_GGUF_QTYPE_MXFP4,status);
+                if(additive)value=__fadd_rn(value,additive[i]);
+                if(output_bf16)value=float_to_bf16_rne(value);
+                if(!isfinite(value))atomicCAS(status,0,1);
+                else output[i]=value;
+            }
+        }
+    }
+}
+
+/* Separate entrypoints keep register/shared admission local to the selected
+ * realization. The template above remains the single worklist/numerical owner. */
+extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
+    const unsigned char *gate, unsigned long long gate_row_bytes,
+    unsigned long long gate_expert_bytes, unsigned gate_qtype,
+    const unsigned char *up, unsigned long long up_row_bytes,
+    unsigned long long up_expert_bytes, unsigned up_qtype,
+    const unsigned long long *selected, const float *weights, const unsigned long long *order,
+    const unsigned long long *expert_ids, const unsigned long long *offsets,
+    const unsigned long long *populations, const yvex_expert_worklist_observation *summary,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    unsigned long long minimum, const unsigned char *input, unsigned long long width,
+    unsigned long long intermediate_width, double limit, float *output, int *status,
+    const unsigned long long *tiles)
+{
+    tensorcore_grouped_up<false>(gate, gate_row_bytes, gate_expert_bytes, gate_qtype,
+        up, up_row_bytes, up_expert_bytes, up_qtype, selected, weights, order, expert_ids,
+        offsets, populations, summary, pairs, topk, experts, minimum, input, width,
+        intermediate_width, limit, output, status, tiles);
+}
+/* Bound register residency independently of the larger legacy IQ2 consumer.
+ * This equivalent CTA implementation retains its own launch resource class. */
+extern "C" __global__ __launch_bounds__(256, 2) void yvex_moe_grouped_up_shared(
+    const unsigned char *gate, unsigned long long gate_row_bytes,
+    unsigned long long gate_expert_bytes, unsigned gate_qtype,
+    const unsigned char *up, unsigned long long up_row_bytes,
+    unsigned long long up_expert_bytes, unsigned up_qtype,
+    const unsigned long long *selected, const float *weights, const unsigned long long *order,
+    const unsigned long long *expert_ids, const unsigned long long *offsets,
+    const unsigned long long *populations, const yvex_expert_worklist_observation *summary,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    unsigned long long minimum, const unsigned char *input, unsigned long long width,
+    unsigned long long intermediate_width, double limit, float *output, int *status,
+    const unsigned long long *tiles)
+{
+    tensorcore_grouped_up<true>(gate, gate_row_bytes, gate_expert_bytes, gate_qtype,
+        up, up_row_bytes, up_expert_bytes, up_qtype, selected, weights, order, expert_ids,
+        offsets, populations, summary, pairs, topk, experts, minimum, input, width,
+        intermediate_width, limit, output, status, tiles);
+}
+extern "C" __global__ __launch_bounds__(256, 2) void yvex_moe_grouped_up_iq2_shared(
+    const unsigned char *gate, unsigned long long gate_row_bytes,
+    unsigned long long gate_expert_bytes, unsigned gate_qtype,
+    const unsigned char *up, unsigned long long up_row_bytes,
+    unsigned long long up_expert_bytes, unsigned up_qtype,
+    const unsigned long long *selected, const float *weights, const unsigned long long *order,
+    const unsigned long long *expert_ids, const unsigned long long *offsets,
+    const unsigned long long *populations, const yvex_expert_worklist_observation *summary,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    unsigned long long minimum, const unsigned char *input, unsigned long long width,
+    unsigned long long intermediate_width, double limit, float *output, int *status,
+    const unsigned long long *tiles)
+{
+    tensorcore_grouped_up<true, true>(gate, gate_row_bytes, gate_expert_bytes, gate_qtype,
+        up, up_row_bytes, up_expert_bytes, up_qtype, selected, weights, order, expert_ids,
+        offsets, populations, summary, pairs, topk, experts, minimum, input, width,
+        intermediate_width, limit, output, status, tiles);
+}
+
+extern "C" __global__ void yvex_moe_grouped_down_tensorcore(
+    const unsigned char *down, unsigned long long row_bytes, unsigned long long expert_bytes,
+    unsigned qtype, const unsigned long long *selected, const unsigned long long *order,
+    const unsigned long long *expert_ids, const unsigned long long *offsets,
+    const unsigned long long *populations, yvex_expert_worklist_observation *summary,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    unsigned long long minimum, const unsigned char *input, unsigned long long width,
+    unsigned long long hidden, float *output, int *status, const unsigned long long *tiles)
+{
+    tensorcore_grouped_down<false>(down, row_bytes, expert_bytes, qtype, selected, order,
+        expert_ids, offsets, populations, summary, pairs, topk, experts, minimum,
+        input, width, hidden, output, status, tiles);
+}
+extern "C" __global__ void yvex_moe_grouped_down_shared(
+    const unsigned char *down, unsigned long long row_bytes, unsigned long long expert_bytes,
+    unsigned qtype, const unsigned long long *selected, const unsigned long long *order,
+    const unsigned long long *expert_ids, const unsigned long long *offsets,
+    const unsigned long long *populations, yvex_expert_worklist_observation *summary,
+    unsigned long long pairs, unsigned long long topk, unsigned long long experts,
+    unsigned long long minimum, const unsigned char *input, unsigned long long width,
+    unsigned long long hidden, float *output, int *status, const unsigned long long *tiles)
+{
+    tensorcore_grouped_down<true>(down, row_bytes, expert_bytes, qtype, selected, order,
+        expert_ids, offsets, populations, summary, pairs, topk, experts, minimum,
+        input, width, hidden, output, status, tiles);
 }

@@ -287,6 +287,9 @@ fn validate(invocation: &Invocation<'_>, options: &Options<'_>) -> Result<()> {
     }
     let variant = [
         "--admitted-binding",
+        "--attention-compute",
+        "--mhc-projection",
+        "--matrix-projection",
         "--quant-policy",
         "--quant-preset",
         "--imatrix-manifest",
@@ -812,18 +815,23 @@ pub(crate) fn dispatch(invocation: &Invocation<'_>, width: usize, styled: bool) 
                 .value("--admitted-binding")
                 .map(expanded)
                 .transpose()?;
-            paths.binding = family.prepare([
-                Some(&paths.source),
-                Some(&paths.models),
-                Some(&paths.manifest),
-                Some(&paths.artifact),
-                Some(&paths.directory),
-                policy.as_deref(),
-                invocation.value("--quant-preset"),
-                imatrix.as_deref(),
-                plan.as_deref(),
-                admitted.as_deref(),
-            ])?;
+            paths.binding = family.prepare(
+                [
+                    Some(&paths.source),
+                    Some(&paths.models),
+                    Some(&paths.manifest),
+                    Some(&paths.artifact),
+                    Some(&paths.directory),
+                    policy.as_deref(),
+                    invocation.value("--quant-preset"),
+                    imatrix.as_deref(),
+                    plan.as_deref(),
+                    admitted.as_deref(),
+                ],
+                invocation.value("--attention-compute"),
+                invocation.value("--mhc-projection"),
+                invocation.value("--matrix-projection"),
+            )?;
         }
         let summary = execution::binding(&paths.binding)?;
         let mut result = binding_result(&options, &paths, &family, &summary);
