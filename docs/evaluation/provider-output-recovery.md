@@ -15,6 +15,70 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## Updated producer and 0731 installed — 2026-10-18
+
+After explicit operator authorization, the clean `3aa7e69c` producer replaces
+the historical f12 Host and admits the retained **DeepSeek-V4-Flash-0731
+MXFP4/Q2** representation at 16K. This closes the installation/availability
+gate, not numerical fault attribution, real native-function acceptance, model
+quality or Program P performance. No inference, YAI SEND or historical replay
+is dispatched by this rollout.
+
+| Identity / configuration | Verified value |
+| --- | --- |
+| Source / tree | `3aa7e69c05cbcf882a5b3da0a25a2bc5f6318564` / `7b8bdf90c0753b27e321b62adb0d3278fffd7c7c`; clean build |
+| Native build | `c4ab0af4ba422459c9faef1c41f5d86596a375d66b575627bb52d464ee7c8ab5` |
+| Running executable SHA-256 | `bb3ae5149483429fe1122f92fddceea89ed93ba28480174d463af7f2450223e8`; independently read through `/proc/3899407/exe` |
+| Checkpoint / source revision | `deepseek-ai/DeepSeek-V4-Flash-0731` / `7872f01b1d1fe23eabc4c98b48bffcef5a386062` |
+| Artifact | `25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041` |
+| Binding | `091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632` |
+| Specialization | `789cca9bf51e7c9b15a3a73d617b4f68739dc1b6b5d35512446e8735ebf2fed7` |
+| Public model ID / engine | `deepseek-v4-flash-0731`; generation 1 in the new Host lifetime, PID 3899407 |
+| Workload envelope | 16,384 context; chunk 512; one physical sequence; CUDA on one GB10; target-verified speculative DSpark |
+| Compatibility | Local protocol 25; `yvex.openai.compat.v3`; existing Exon loopback carrier unchanged |
+
+The model receives a new registry alias through the canonical publisher; old
+entries, publications and historical bindings are unchanged. The compact IQ2
+research candidate is not substituted. Original f12 binary, original DSpark
+artifact/binding and profile remain available for rollback, which must explicitly
+request `--ctx 32768` because that saved profile defaults to 4K.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Source software | Registered CI and sanitizer owners | Integrated source and deterministic CPU/protocol controls | Compatible source gates pass | Local CI 136/136; sanitizer 2/2; hosted Linux/macOS jobs both successful, run 39125128481 | No failed hosted job | PASS | Software qualification only; no inherited model-quality result |
+| Client compatibility | Private protocol 25 | Disposable empty Host, new/f12/management clients | Status/catalog reads and graceful restoration | Three clients pass; no model load or inference in fixture | Exact binary identities | PASS | Installed management can consume the new Host's existing local contract |
+| Resource admission | Canonical runtime capacity owner | Exact binding, 16K, chunk 512, one sequence, speculative, greedy assessment | Preserve existing reserve and complete peak | Post-retirement required 124,151,859,752 bytes; available 126,609,977,344; system reserve 16,332,895,744 included | Status 0; no custom reserve | PASS | Sampled pre-residency feasibility, not reservation or physical residency |
+| Installed model | Artifact/binding admission and engine manager | Exact baseline artifact and authenticated binding | Ready engine with requested context | Generation 1, context 16,384, zero work/sessions/clients/leases at handoff | Exact identity agreement | PASS | Model opened; not executed inference |
+| Consumer reachability | Independent Exon HTTP/TLS reads | Existing port 18001 carrier and pinned management identity | Ready health and exact nonempty catalog | HTTP 200; exact model/artifact/binding/generation; management PID 2458152 unchanged | Native/public context agreement | PASS | Consumer can reconcile identity and preflight its actual request |
+| Real model / YAI Work | Independent live result required | Not dispatched | No synthetic success | Unexecuted | No throughput, call, effect or feedback result | UNQUALIFIED | None |
+
+The earlier read-only 16K assessment refused the then-observed memory extent;
+after graceful retirement of the old Host it passed with the same reserve.
+No cache eviction, model-sized copy or quantization change was used to make it
+pass. Model load took 108.010 seconds. Observed unavailability from graceful
+Host stop through the exact new catalog on Exon was 114.344 seconds; rollback
+was not required. These lifecycle durations are not inference benchmarks.
+Available-memory observations, mapped bytes and actual physical residency must
+not be summed or substituted for one another. The actual Core request still
+requires full preflight, including tool/template and output budget; the new
+runtime capacity is 16K, not the previous service's 32K.
+
+Private evidence root: `yvex-0731-rollout-20261018.NES0CF1o` under the existing
+model-evidence directory. `after.json` SHA-256 is
+`62b1ff0fe6475b3dfbc345e5f08ee80699ce2f18cdc15555814ffd86a7084d1c`;
+`post-retirement-capacity.json` SHA-256 is
+`194a18e1334f76556ff275cbb65df1be43b7bfc85fcf4bf6e7b01b9202afd11f`.
+The installation, original state, registry addition, interop controls, load
+logs and bounded rollout/rollback procedure are retained alongside them.
+The exact consumer handoff, SHA-256
+`84b9b4f58c27a48836777e63e0bcb93ee6d1df4933979378c8045c9e3765b8f2`,
+is copied to Exon with an independently matching digest. No Core source,
+Case binding, Skill, permission, submission or effect was changed by YVEX.
+
+`progression_decision: proceed`; `downstream_safe: true` for identity
+reconciliation and actual-request preflight. Real governed Work acceptance,
+historical numerical causality and the competitive 20/700 exits remain open.
+
 ## 0731 alternative and integrated source boundary — 2026-10-18
 
 The operator separately authorizes an isolated alternative-checkpoint check.

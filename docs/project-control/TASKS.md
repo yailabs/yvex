@@ -78,6 +78,16 @@ publication alone neither installs a service nor authorizes a YAI Work replay.
 Availability, numerical repair, model quality and YAI acceptance remain
 separate; no Program P speedup is inherited by a checkpoint substitution.
 
+The subsequent explicit rollout authorization closes only the installed
+producer/availability gate: clean `3aa7e69c` now hosts authenticated 0731
+MXFP4/Q2 at 16K under a distinct alias, with canonical reserve preserved and
+the exact catalog independently observed from Exon. Original f12/DSpark
+artifacts, bindings and explicit 32K rollback remain available; management,
+pins and grants are unchanged. See the [rollout evidence](../evaluation/provider-output-recovery.md#updated-producer-and-0731-installed-2026-10-18).
+No inference, historical Work replay or YAI SEND is dispatched by deployment.
+The provider Task remains IN PROGRESS for real acceptance; Program P retains
+its independent quality and competitive performance exits.
+
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The selected continuation includes the opt-in block-online attention numerical
 class and its compiler/binding/resource integration. Bounded official-reference

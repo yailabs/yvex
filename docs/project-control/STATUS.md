@@ -25,18 +25,28 @@ publication: {html: true, pdf: true, index: true}
 On 2026-10-18 the operator selects consolidation of the accumulated Program P
 implementation and retained evidence on `main`, together with the already
 published provider corrections. This source integration is not a competitive
-exit, an installed rollout or YAI acceptance. The subsequent provider candidate
-must use the updated executable and an explicitly compatible 0731 binding;
+exit or YAI acceptance. The subsequent provider candidate uses the updated
+executable and an explicitly compatible 0731 binding;
 the [earlier isolated attempts](../evaluation/provider-output-recovery.md#0731-alternative-and-integrated-source-boundary-2026-10-18)
-did not complete inference. Original DSpark is restored at generation 8/32K;
-the historical installed Host is unchanged.
+did not complete inference. A later, explicitly authorized
+[controlled rollout](../evaluation/provider-output-recovery.md#updated-producer-and-0731-installed-2026-10-18)
+now installs clean producer `3aa7e69c`, executable `bb3ae514…`, with retained
+0731 MXFP4/Q2 artifact `25d29155…` and binding `091f933e…`. The new Host admits
+generation 1 at **16K**, chunk 512, speculative DSpark, and Exon observes the
+exact ready catalog. Canonical post-retirement capacity preserves the existing
+reserve; management, listener addresses, pins and grants are unchanged.
+Original DSpark generation 8 is retired, with its artifact, binding and old
+executable preserved for explicit 32K rollback. No inference or YAI SEND is
+dispatched by this rollout; numerical causality, tool acceptance, independent
+quality and Program P performance remain open.
 
 The 2026-10-17 local CPU continuation composes IQ2 producer alternatives with
 canonical parameter plans and unchanged calibration/compatibility owners.
 Default search and public management are unchanged; the opt-in CLI projection
 is explicitly versioned. Complete-model effect and independent quality remain
 unearned. The operator has meanwhile reserved the GPU for YAI; Program P's
-GPU dispatch stays stopped and the original DSpark 32K service is preserved.
+GPU dispatch stays stopped. The latest explicitly authorized provider state is
+the 0731 16K deployment above, not a resumed performance campaign.
 
 The end-to-end qualification/model-identity extension is selected inside the
 same Program P Task. Native phase observations preserve producer clock,
