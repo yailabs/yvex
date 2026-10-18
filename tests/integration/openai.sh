@@ -62,10 +62,11 @@ port = int(sys.argv[1])
 tool = {"type": "function", "function": {"name": "inspect_fixture", "parameters": {
     "type": "object", "properties": {"note": {"type": "string"}},
     "additionalProperties": False}, "strict": False}}
-def run(marker, mode, stream, history=None):
+def run(marker, mode, stream, history=None, parallel=False):
     payload = {"model": "deepseek4-v4-flash-dspark", "temperature": 0,
         "messages": history or [{"role": "user", "content": marker}],
-        "tools": [tool], "reasoning_effort": mode, "stream": stream}
+        "tools": [tool], "reasoning_effort": mode, "stream": stream,
+        "parallel_tool_calls": parallel}
     if stream: payload["stream_options"] = {"include_usage": True}
     client = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     client.request("POST", "/v1/chat/completions", json.dumps(payload),
@@ -129,6 +130,28 @@ for mode in ("none", "high", "max"):
             assert text["choices"][0]["finish_reason"] == "stop"
             assert text["choices"][0]["message"]["content"] == "fixture final ✓"
         count += 1
+        for parallel in (False, True):
+            status, result = run("SOURCE_COMPLETION_MULTIPLE", mode, stream, parallel=parallel)
+            if parallel:
+                assert status == 200
+                if stream:
+                    assert not any("error" in event for event in result)
+                    choices = [c for event in result for c in event.get("choices", [])]
+                    calls = [call for c in choices for call in c.get("delta", {}).get("tool_calls", [])]
+                    assert len({c["id"] for c in calls if c.get("id")}) == 2
+                    assert [c["finish_reason"] for c in choices if c.get("finish_reason")] == ["tool_calls"]
+                else:
+                    assert len(result["choices"][0]["message"]["tool_calls"]) == 2
+            elif stream:
+                assert status == 200
+                errors = [event["error"] for event in result if "error" in event]
+                assert len(errors) == 1 and "parallel_tool_calls=false" in errors[0]["message"]
+                choices = [c for event in result for c in event.get("choices", [])]
+                assert not any(c.get("finish_reason") or c.get("delta", {}).get("tool_calls") for c in choices)
+            else:
+                assert status == 400 and "choices" not in result
+                assert "parallel_tool_calls=false" in result["error"]["message"]
+            count += 1
         for marker, predicate in (("SOURCE_COMPLETION_INCOMPLETE", "parameter_start"),
                                   ("SOURCE_COMPLETION_MALFORMED", "parameter_json"),
                                   ("SOURCE_COMPLETION_BAD_START", "invoke_start")):
@@ -159,9 +182,9 @@ import http.client, json, sys
 port = int(sys.argv[1])
 function = {"name": "inspect_fixture", "parameters": {"type": "object",
     "properties": {"note": {"type": "string"}}, "additionalProperties": False}, "strict": False}
-def run(marker, endpoint, stream, mode="none"):
+def run(marker, endpoint, stream, mode="none", parallel=False):
     payload = {"model": "deepseek4-v4-flash-dspark", "temperature": 0,
-               "stream": stream, "reasoning_effort": mode}
+               "stream": stream, "reasoning_effort": mode, "parallel_tool_calls": parallel}
     if endpoint == "chat/completions":
         payload.update(messages=[{"role": "user", "content": marker}],
                        tools=[{"type": "function", "function": function}])
@@ -238,6 +261,25 @@ for endpoint in ("chat/completions", "responses"):
             count += 1
 for mode in ("none", "high", "max"):
     for stream in (False, True):
+        for parallel in (False, True):
+            status, raw, events = run("SOURCE_COMPLETION_MULTIPLE", "responses", stream, mode, parallel)
+            if parallel:
+                assert status == 200
+                text, reasoning, calls = outputs(events, "responses", stream)
+                assert len(calls) == 2
+                if stream: assert any(e["type"] == "response.completed" for e in events)
+            elif stream:
+                assert status == 200
+                errors = [e["response"]["error"] for e in events if e["type"] == "response.failed"]
+                assert len(errors) == 1 and "parallel_tool_calls=false" in errors[0]["message"]
+                assert not any(e["type"] in ("response.completed", "response.incomplete",
+                    "response.function_call_arguments.delta") for e in events)
+                assert not any(e["type"] == "response.output_item.added" and
+                    e["item"]["type"] == "function_call" for e in events)
+            else:
+                assert status == 400 and "output" not in events[0]
+                assert "parallel_tool_calls=false" in events[0]["error"]["message"]
+            count += 1
         for marker, expected in (("SOURCE_COMPLETION_EMPTY", {}), ("SOURCE_COMPLETION_LONG_UNICODE", {"note": "a"*4085 + "é🌍"})):
             status, raw, events = run(marker, "responses", stream, mode)
             assert status == 200

@@ -697,6 +697,12 @@ static int send_source_completion(int fd, const yvex_client_request *request,
         "\n\n<" FIXTURE_DSML "tool_calls>\n"
         "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n\n"
         "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
+    static const char multiple_calls[] =
+        "\n\n<" FIXTURE_DSML "tool_calls>\n"
+        "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n\n"
+        "</" FIXTURE_DSML "invoke>\n"
+        "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n\n"
+        "</" FIXTURE_DSML "invoke>\n</" FIXTURE_DSML "tool_calls>";
     static const char incomplete[] =
         "\n\n<" FIXTURE_DSML "tool_calls>\n"
         "<" FIXTURE_DSML "invoke name=\"inspect_fixture\">\n\n";
@@ -728,6 +734,8 @@ static int send_source_completion(int fd, const yvex_client_request *request,
     yvex_client_message message;
     unsigned char raw[8192];
     const char *body = feedback ? "fixture feedback accepted" :
+        request_contains(request->provider_request, "SOURCE_COMPLETION_MULTIPLE")
+            ? multiple_calls :
         request_contains(request->provider_request, "SOURCE_COMPLETION_TEXT")
             ? "fixture final \xe2\x9c\x93" :
         request_contains(request->provider_request, "SOURCE_COMPLETION_INCOMPLETE")

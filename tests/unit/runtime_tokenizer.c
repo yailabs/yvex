@@ -493,6 +493,25 @@ static int test_qwen_tool_grammar(void)
                    "{\"city\": \"Rome\", \"days\": 2}", 27u) == 0,
         "Qwen XML completion becomes one grounded typed tool call");
     yvex_tokenizer_provider_result_clear(&result);
+    {
+        unsigned char multiple[2u * sizeof(completion)];
+        size_t first = sizeof(completion) - 1u;
+        memcpy(multiple, completion, first);
+        multiple[first] = '\n';
+        memcpy(multiple + first + 1u, completion + 8u, first - 8u);
+        YVEX_TEST_ASSERT(yvex_tokenizer_parse_provider_completion(
+            &tokenizer, &request, multiple, first * 2u - 7u, &result, &err) == YVEX_ERR_FORMAT &&
+            !result.completed && !result.tool_calls && !result.tool_call_count && !result.content,
+            "Qwen XML calls obey the same single-call request constraint");
+        request.tool_choice.parallel_calls = 1;
+        request.sealed = 0;
+        request.request_identity[0] = '\0';
+        YVEX_TEST_ASSERT(yvex_provider_request_seal(&request, &err) == YVEX_OK &&
+            yvex_tokenizer_parse_provider_completion(&tokenizer, &request, multiple,
+                first * 2u - 7u, &result, &err) == YVEX_OK && result.tool_call_count == 2u,
+            "Qwen XML multiple calls remain admitted with explicit permission");
+        yvex_tokenizer_provider_result_clear(&result);
+    }
     return 0;
 }
 
@@ -1313,6 +1332,17 @@ static int test_provider_projection(void)
             "</" TEST_DSML "parameter>\n"
             "</" TEST_DSML "invoke>\n"
             "</" TEST_DSML "tool_calls>";
+        YVEX_TEST_ASSERT(!request.tool_choice.parallel_calls &&
+            yvex_tokenizer_parse_provider_completion(
+                &tokenizer, &request, multiple_calls,
+                sizeof(multiple_calls) - 1u, &result, &err) == YVEX_ERR_FORMAT &&
+                !result.completed && !result.tool_calls && !result.tool_call_count &&
+                !result.content && !result.reasoning_content &&
+                strstr(yvex_error_message(&err), "parallel_tool_calls=false") != NULL,
+            "multiple native calls refuse atomically when the sealed request forbids them");
+        request.tool_choice.parallel_calls = 1;
+        YVEX_TEST_ASSERT(request_reseal(&request, &err) == YVEX_OK,
+            "multiple-call permission is explicitly sealed");
         YVEX_TEST_ASSERT(
             yvex_tokenizer_parse_provider_completion(
                 &tokenizer, &request, multiple_calls,

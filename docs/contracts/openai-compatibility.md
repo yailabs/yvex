@@ -295,6 +295,16 @@ bounded ordered set of calls when `parallel_tool_calls=true`; call IDs must be
 unique, and results are merged into the source-authored user/tool-result form
 in call order.
 
+With `parallel_tool_calls=false` (including the current omitted-field default),
+completion admission permits at most one call. Multiple syntactically valid
+calls violate the sealed request and fail before any native call is published;
+the producer neither drops extra calls nor chooses one for the application.
+This is request-policy enforcement, not malformed source syntax or a guarantee
+that model generation will obey the restriction. Buffered delivery returns an
+error; an already opened SSE response terminates with an error, without a
+successful finish. The same completion owner applies this constraint to the
+admitted DeepSeek DSML and Qwen XML grammars.
+
 YVEX returns a stable call ID, function name, and arguments that validate as a
 JSON object. The application validates and executes the function, then returns
 the result with the exact call ID. The tokenizer/family prompt owner renders

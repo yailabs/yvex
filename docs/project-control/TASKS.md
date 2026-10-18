@@ -55,8 +55,13 @@ predicate coverage, historical causality, numerical repair and real YAI
 acceptance are unearned. The separately authorized 2026-10-18 exact-wire
 diagnostic completes all 8,055 input positions and produces one schema-valid
 native call on the diagnostic binary; original DSpark returns at generation
-5/32K. This does not establish a numerical repair. An unchanged-original-binary
-fresh-process control is prepared and requires its own inference authorization.
+5/32K. A separately authorized original-binary control also completes all 8,055
+positions, then returns two calls despite `parallel_tool_calls=false`. This
+demonstrates a distinct request-policy admission defect, now corrected with
+transactional parser and buffered/SSE regression controls; it does not explain
+the historical numerical refusal. Original DSpark returns at generation 6/32K.
+Numerical causality, a numerical repair, installed correction and real YAI
+acceptance remain unearned; no further inference follows from these results.
 
 Current phase: **Program P goal-driven Physical Model Compiler IN PROGRESS; DeepSeek .5 dependencies remain unearned; A03 remains READY and unstarted**.
 The operator selected `V010.PHYSICAL.MODEL.COMPILER.GOAL.DRIVEN.0` on

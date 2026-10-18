@@ -15,6 +15,97 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## Original-binary control and call-cardinality defect — 2026-10-18
+
+One separately authorized exact-wire control used the **original installed
+executable**, SHA-256 `a90afc6e1c5a601c8c984e1f3a43f70ea4313b06babc9136a83db5ec29e4356d`,
+clean source `f12d8818dc0b0dcf45faf8e1d9df0d2a0f3744e7`, tree `d37e75c552c834a6bce46f2bea5b982b3e436ada`,
+build `19bb0fa5caf2614b2e981f44031c1701292b11eb81c15cee9c453664e90b980a`.
+It ran in a disposable process, not the installed Host, with the unchanged
+26,803-byte wire `dee234e8…`, original DSpark artifact `b669d807…`, binding
+`8cdb4929…`, specialization `3fb4ce20…`, context 32K, chunk 512 and speculative
+strategy. Preflight independently confirmed 8,055 input positions.
+
+| Observation | Result | Claim boundary |
+| --- | --- | --- |
+| Full prefill | All 8,055 positions / 16 chunks; 94.4679407 s | Original executable also passes the historical failure position in a fresh process |
+| Completion | 311 final tokens, HTTP 200, `tool_calls`; native 128.640393 s, client 129.804538155 s | Completed computation; not proof of historical numerical repair or sustained performance |
+| Native arguments | Two offered functions; both argument objects pass independent Draft 2020-12 validation; null controls refuse | Arguments are valid, but the response violates the requested call count |
+| Request restriction | `parallel_tool_calls=false`, observed two calls | Confirmed producer admission defect, distinct from the historical CUDA failure |
+| Resource guard | Minimum conservative remaining margin 2,729,401,888 bytes | Sampled safety only; no physical-residency claim |
+| Restore | Original generation 5→6 / 32K; same Host/management PIDs and executable hashes; Exon catalog verified | Original request count 3→3; model-unavailability upper interval 145.009065132 s |
+
+The response is 1,593 bytes, `application/json`, SHA-256
+`d082de178d1ea3beb6e0f715bca27136f9531d478d49433308b9fae8110b5d32`.
+Private content, function names and arguments are not published. Exact evidence
+is retained under `dspark-exact-wire-followup-20261018.7HGjogYA/original-control`
+in the private model-evidence root; receipt
+`daa05b8c0b25c15901868b3beff7909771b807003b43c9184a69f49884526bea`.
+No YAI Work, tool execution, installed rollout or automatic retry occurred.
+
+This removes the diagnostic modification as a necessary explanation for the
+successful fresh-process prefill. It does **not** reproduce the historical
+process, rule out timing/buffer/state defects, or identify the original failed
+predicate. Historical numerical causality remains **unknown**. A separate,
+authorized synthetic `cuda.moe_rows` run under Compute Sanitizer 2025.3.1
+`initcheck` completed in 12.949876 s with zero reported errors. `synccheck`
+completed in 4.322111 s with zero reported errors; `racecheck` completed in
+15.161485 s with zero reported hazards, errors or warnings. Each run used the
+same frozen diagnostic source and test binary, held the accelerator locks,
+checked idle ownership and the unchanged reserve, and preserved resident
+generation 6. Each log contains 235 encoded configurations, plus routing,
+combination and quantizer controls; this is the isolated release fixture
+population, not the earlier 440-configuration shared-tree population. These
+checks do not reproduce whole-model state or prove absence of faults outside
+their synthetic scope. Test executable SHA-256:
+`151b2a5abb986a565f7c645459cb8ee039ba92143f543955f73eca940becc5be`.
+
+A bounded independent GGUF-reader audit examines all 1,899,386,328 encoded
+bytes belonging to layer 11 in the original artifact: no nonfinite F32/BF16
+values, quantization scales or MXFP4 exponent encodings were found. Reader
+revision `2f2d44052b7d15c9c4dd6610f6e14a5f7b2d5f3f`, NumPy 2.3.5; receipt
+`59be51840da781c96cf484b0024abbbf6ccba9de3d227d3cb21fd068c6e9b701`.
+This does not test activation values, arithmetic overflow, earlier layers or
+historical buffer contents. It is not a model-quality certificate.
+
+The retained journal scoped to original Host PID 1937768 contains the failure
+in its first generation session, `oa-000000000001/r2`, after twelve completed
+512-position chunks. Thus a preceding successful conversation in that process
+is not an established prerequisite. Reuse within the failing request and
+intermittent full-path faults remain unresolved. The privacy-bounded event
+projection has digest
+`b414f75ba4888d68af6f94bb19ecb8f084b9c1f046ee73ebe06d3a6055c0ef16`.
+
+The confirmed output defect has a deterministic non-private witness: two
+complete source-authored calls were accepted even though the sealed request's
+`parallel_calls` bit was false. The parser previously bounded total calls but
+never consulted this bit. `parse_calls` now rejects that policy violation
+transactionally, releases all parsed calls, and publishes no result. It does
+not alter source grammar, JSON checks, numerics, sampling or model prompts;
+multiple calls remain valid when explicitly enabled. The correction does not
+make a disobedient model output valid or explain the earlier prefill failure.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Before/after tokenizer | Sealed request and existing public contract | Public two-call DSML fixture | Refuse when false; retain both when true | Before FAIL, after PASS | Exact count, atomic empty refused result | PASS | Deterministic request-policy defect and correction |
+| Cross-family | Same request constraint, admitted Qwen grammar | Two XML calls | False refuses; true admits | PASS | Exact call count | PASS | Constraint is not a DeepSeek-name policy |
+| Chat buffered/SSE | Real parser → local protocol → HTTP | none/high/max × false/true × buffered/SSE | No call publication or successful finish on refusal | 12 new cases PASS | Exact protocol posture | PASS | Source-output and Chat adapter boundary |
+| Responses buffered/SSE | Same parser and Responses adapter | Same 12 combinations | Error, never completed/incomplete on refusal | 12 new cases PASS | Exact protocol posture | PASS | Responses boundary |
+
+Existing source-completion/feedback controls total 60 passing cases; the
+UTF-8/Responses suite totals 64. Source-stable registered qualification on
+`b70bb2cf` plus the retained shared-tree delta gives fast 104 PASS
+(`df783e9d…`), ASan/LeakSanitizer/UBSan runtime PASS (`d2d4403b…`, 371.877 s),
+architecture PASS (`e3b13a5a…`) and documentation PASS (`3225a2e7…`). Pinned
+Python 2.50.0 and Node 7.1.0 OpenAI SDK controls pass (`9e0e79bc…`); the first
+SDK attempt was BLOCKED because Node/npm were absent from PATH
+(`7ec1890a…`), then reran with the existing retained Node toolchain. No toolchain
+or installed service was replaced. These software results include concurrent
+Program P source and do not establish a clean release binary. Final evidence-
+only documentation updates are rechecked before publication. Installation and
+real YAI acceptance remain separate gates. No new full-model request is
+authorized by publishing this evidence.
+
 ## Exact-wire diagnostic completes with a native call — 2026-10-18
 
 After separate authorization for one additional request, the same retained

@@ -1729,6 +1729,11 @@ static int parse_calls(const yvex_conversation_protocol *conversation,
         (wrapped && !consume(&cursor, end, conversation->tool_calls_end)) ||
         cursor != end))
         rc = YVEX_ERR_FORMAT;
+    if (rc == YVEX_OK && count > 1u && !request->tool_choice.parallel_calls) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.provider.tool",
+                       "completion contains multiple tool calls but parallel_tool_calls=false");
+        rc = YVEX_ERR_FORMAT;
+    }
     if (rc != YVEX_OK) {
         unsigned long long index;
         for (index = 0u; index < count; ++index)

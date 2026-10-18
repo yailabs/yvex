@@ -729,10 +729,14 @@ unchanged. Complete diagnostic coverage, historical causal attribution and a
 numerical correction remain unearned. The separately authorized 2026-10-18
 exact-wire diagnostic then completes all 8,055 input positions and returns one
 independently schema-validated native call, HTTP 200. Original DSpark is restored
-at generation 5/32K, with installed services unchanged. This passes the prior
-failure position only on the diagnostic binary in a fresh process; an isolated
-unchanged-original-binary control remains unexecuted and requires authorization.
-Neither a historical numerical repair nor successful YAI Work follows.
+at generation 5/32K, with installed services unchanged. A separately authorized
+original-binary control also completes prefill and generation. Its two calls
+violate the explicit `parallel_tool_calls=false` request: a distinct producer
+policy defect, now corrected at transactional completion admission with
+DeepSeek/Qwen and buffered/SSE fixture controls. Original DSpark returns at
+generation 6/32K, with installed binaries unchanged. Historical numerical
+causality and repair remain unknown; neither installed correction nor successful
+YAI Work follows.
 
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |
