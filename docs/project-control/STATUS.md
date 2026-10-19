@@ -48,6 +48,25 @@ output; this is not a false parser rejection. No validator, source arithmetic,
 artifact or installed executable is changed. Real YAI Work, repeated reliability,
 live SSE, independent model quality and competitive performance remain unearned.
 
+The subsequent real feedback request `r17` fails after prefill and 274 generated
+tokens. [Digest-matched producer evidence](../evaluation/provider-output-recovery.md#0731-feedback-failure-exact-down-operand-predicate-2026-10-19)
+identifies MoE layer 0, down-operand status 20, six rows/36 pairs. The source
+artifact's corresponding Q2 scales are finite; device-state causality is still
+open. The prepared synthetic reuse control is refused before GPU dispatch by
+the memory guard. A subsequently authorized
+[fresh real-model diagnostic](../evaluation/provider-output-recovery.md#fresh-real-model-diagnostic-and-host-crash-2026-10-19)
+instead terminates the installed producer with SIGSEGV during prefill; no core
+is retained by Apport and equivalence to r17 is unproven. The same executable
+and 0731 artifact/binding are restored at 16K in a new Host lifetime, with
+management and protected configuration unchanged. A later
+[isolated debugger control and allocation regression](../evaluation/provider-output-recovery.md#workspace-allocation-refusal-and-real-debugger-control-2026-10-19)
+complete 9,723 prefill positions and 512 generated tokens without a CUDA refusal
+or crash; the response refuses reasoning truncated at the output limit. A
+separately reproduced host-workspace error-publication defect is corrected in
+source, but neither historical crash nor r17 causality is established. Installed
+code is unchanged; Host PID 1955840 has the original 16K profile, generation 2.
+YAI acceptance and a real run of the correction remain unqualified.
+
 The 2026-10-17 local CPU continuation composes IQ2 producer alternatives with
 canonical parameter plans and unchanged calibration/compatibility owners.
 Default search and public management are unchanged; the opt-in CLI projection

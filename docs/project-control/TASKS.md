@@ -33,6 +33,23 @@ handoff](../evaluation/provider-output-recovery.md#0731-native-output-and-correl
 qualify one synthetic buffered chain, not real YAI Work, general tool reliability,
 checkpoint quality or Program P performance. No Case, SEND or historical replay.
 
+The later 0731 feedback failure `r17` is traced to the exact down-operand
+predicate by matching the retained HTTP body digest, not by guessing from
+`YVEX_ERR_BACKEND`. [Forensic evidence](../evaluation/provider-output-recovery.md#0731-feedback-failure-exact-down-operand-predicate-2026-10-19)
+records finite encoded down scales and a prepared six-row graph/eager reuse
+control. Its authorized synthetic CUDA dispatch is refused by the coexistence
+memory guard; the original numerical cause and repair remain unqualified.
+A later authorized fresh real-model diagnostic crashes the installed Host during
+prefill; [failure and recovery evidence](../evaluation/provider-output-recovery.md#fresh-real-model-diagnostic-and-host-crash-2026-10-19)
+records same-binary/profile restoration and the missing faulting stack. Management,
+protected configuration and the original indeterminate Work are unchanged.
+The [debugger control](../evaluation/provider-output-recovery.md#workspace-allocation-refusal-and-real-debugger-control-2026-10-19)
+completes 9,723 positions and 512 generated tokens on the original binary, then
+refuses reasoning truncated at the output ceiling. A common host-workspace
+allocator defect is independently reproduced and source-corrected; it does not
+yet explain r17 or the historical crash. Same-binary/profile recovery is observed;
+the correction's live validation and YAI Work remain open in this same Task.
+
 The separately authorized 2026-10-16 real-response forensics stays within
 `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. It records an unrecoverable original
 response boundary and exact pinned producer/consumer fixture controls, not a

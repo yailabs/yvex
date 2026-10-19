@@ -187,6 +187,14 @@ capacity admission and workspace preparation. Persistent state, prefix
 checkpoints, status, publication and device scratch keep their original owners
 and lifetimes; the smaller host bound does not remove validation or state work.
 
+Host workspace preparation publishes storage only after its allocator returns
+success with a non-null buffer. A failed return preserves the originating error
+and acquires no workspace ownership, even if the output slot was written. CUDA
+stages the Driver allocation locally before publishing it to this common owner.
+Failure and subsequent recovery do not change numerical or capacity policy; this
+boundary does not establish the cause of a historical model failure. See the
+[allocation regression and real control](../evaluation/provider-output-recovery.md#workspace-allocation-refusal-and-real-debugger-control-2026-10-19).
+
 For the admitted online64 attention class, an SM121 realization fuses QK,
 block softmax and probability/value multiplication for at least 16 positions
 and at least 256 padded candidate slots. Device and function attributes must

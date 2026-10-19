@@ -15,6 +15,207 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## Workspace allocation refusal and real debugger control — 2026-10-19
+
+**IN PROGRESS; a source allocation defect is reproduced and repaired; original
+r17 numerical causality and real YAI acceptance remain open.** No arithmetic,
+kernel, artifact, binding or parser acceptance rule changes in this correction.
+
+The common host-workspace owner inspected the allocator's pointer but ignored
+its failure return when that pointer was non-null. It then published the arena
+and cleared the originating error. The new deterministic control returns
+`YVEX_ERR_NOMEM` with an output pointer that conveys no successful allocation.
+Before correction, `unit.backend_cpu` fails at the assertion that this must not
+publish an arena (`11393f93…`, 0 PASS / 1 FAIL). The corrected owner initializes
+the local pointer and rejects the failure before publishing any fields. CUDA's
+page-locked allocator separately stages its Driver output and only publishes
+it after success. The after control passes (`195e4907…`, 1 PASS / 0 FAIL).
+Null output, untouched output, success without storage, exact original error,
+no borrow/free of refused storage, successful recovery, duplicate refusal and
+one successful release are separate controls. This is a CPU fault-injection
+proof of error/ownership handling, not reproduction of a model's numerical fault.
+
+Kernel journal evidence adds a distinct historical observation: at 17:20:38 UTC,
+when fresh diagnostic `r20` started, NVIDIA reports two `NV_ERR_NO_MEMORY`
+failures from `_memdescAllocInternal`. This does not identify the faulting CPU
+instruction, prove the allocation's returned pointer, or establish r17 causality.
+No corresponding kernel entries were found for the inspected original r17
+interval. Absence of an entry is not proof of adequate resources.
+
+One separately authorized, isolated real request runs the unchanged installed
+`3aa7e69c` executable (SHA-256 `bb3ae514…`) under GDB, with the same 0731
+artifact `25d29155…`, binding `091f933e…`, DSpark, 16K context and 512-position
+prefill. Public source excerpts reproduce the earlier diagnostic's exact 9,723
+input-token workload, not the unavailable private r17 request. The temporary
+Host completes all prefill positions and generates 512 tokens without SIGSEGV
+or a recorded CUDA refusal. It returns HTTP 400 because reasoning reaches the
+512-token ceiling before its source delimiter; this is not an accepted final
+response or YAI Work. Instrumented timing is diagnostic, not throughput evidence.
+
+| Control | Authority / input | Expected | Observed | Result / claim |
+| --- | --- | --- | --- | --- |
+| Allocation refusal | Deterministic allocator callback; non-null output plus `YVEX_ERR_NOMEM` | Preserve error; no published ownership or borrow | Before FAIL; after PASS | Reproduced common-owner defect; historical cause unproven |
+| Real debugger run | Exact installed binary and representation; fresh public-source request | Capture any crash or numerical refusal | 9,723 prefill positions and 512 generated tokens; HTTP 400 reasoning-budget refusal | CHARACTERIZED: no crash/CUDA error in this one request; no accepted completion |
+| Resource observations | Sampled `/proc/meminfo` and Host reads | Retain distinct views | Real control minimum MemFree 1,297,326,080 bytes; minimum MemAvailable 112,366,911,488 bytes | Observations, not physical device residency or proof of uninterrupted reserve |
+| Restoration | Exact unit/binary/configuration and typed catalog | Original artifact/binding, DSpark, 16K | Host PID 1955840; generation 2; management PID 2458152 unchanged | Operator profile restored; generation is scoped to this Host lifetime |
+
+The first preparation attempt dispatches zero inferences: an experiment guard
+mistakes an unloaded historical row for an active engine. Its attempted restore
+is refused by canonical admission: required 124,151,859,752 versus available
+123,312,746,496 bytes. The empty Host retains about 1.28 GiB anonymous memory.
+Recovery restarts the same installed Host, then admits the original profile;
+the corrected guard excludes only terminal, non-executable, zero-mapped rows.
+The subsequent debugger attempt performs the single inference and restores
+the model without another Host restart. This controller defect and recovery
+are retained, not attributed to YVEX's allocator regression. No reserve is
+weakened, cache evicted, installed binary changed, Case mutated or Work replayed.
+
+Private evidence and scripts are under
+`/home/dgmothx/lab/models/evidence/0731-r17-gdb-20261019.JfxfuUls`;
+`attempt2/result.json` and `attempt2/restored.json` retain the real request's
+outcome and recovery. The new source correction was not installed or exercised
+by that run. A stack for the historical SIGSEGV and the first invalid r17
+device operand remain unavailable. Further real dispatch is a separate gate;
+fixture success does not close it.
+
+Software qualification on frozen main `a122eb41`, delta `fe30f7c0…`: fast
+105 PASS / 0 FAIL (`6e1d45a2…`); structural 21 PASS / 0 FAIL (`cd83ecca…`);
+no top-level SKIP/BLOCKED/ERROR. The selected `unit.backend_cpu`,
+`unit.backend_ops` and `unit.runtime_moe` controls also complete under combined
+ASan/LeakSanitizer/UBSan, with stable source and no reported sanitizer failure.
+These are software/ownership controls, not real-model qualification of the fix.
+The private local engineering executable has SHA-256
+`dfd139e7f436101ef56f1e171f7076771ec3452e4306cdadb21dad0d1f9cc289`,
+build `4af7b6aa…`, local protocol 25. Its truthful dirty-source identity includes
+preserved unpublished Program P work; it is neither a clean release candidate
+nor an installed producer. No additional GPU inference follows from software QA.
+
+## Fresh real-model diagnostic and Host crash — 2026-10-19
+
+**IN PROGRESS; no numerical repair or causal equivalence to r17 established.**
+The operator authorized a real-model diagnostic instead of the pending synthetic
+MoE control. One fresh request used the already resident 0731 Engine, without
+a second model allocation, installed rollout, YAI SEND, tool execution or Work
+replay. Public YVEX source excerpts supplied the workload; the private r17 prompt
+was not available and was not reconstructed.
+
+| Dimension | Exact observation |
+| --- | --- |
+| Executable | Installed `3aa7e69c05cbcf882a5b3da0a25a2bc5f6318564`; SHA-256 `bb3ae5149483429fe1122f92fddceea89ed93ba28480174d463af7f2450223e8` |
+| Representation | Artifact `25d29155…`; binding `091f933e…`; unchanged 0731 MXFP4/Q2 |
+| Workload | 9,723 uncached input tokens; output ceiling 512; `high`, temperature 0, seed 0; DSpark; 16K context; chunk 512 |
+| Request | Fresh `oa-000000000007/r20`; wire SHA-256 `84bb22748f534c8518a989a7b8023a72feec1f13d2552bcd144dc0a86c5715a9` |
+| Admission / scope | Idle Host and Engine, advisory locks, generation-pinned token preflight; normal runtime session admission; unchanged system-reserve policy; one dispatch, 600-second ceiling |
+| Failure | Host PID 1259920 terminates with SIGSEGV during prefill; no completed prefill, generated token or HTTP response body observed |
+| Diagnostic limitation | Apport explicitly declines a core because the executable is not package-owned. A systemd `core-dump` result is not proof that a recoverable core exists |
+| Recovery | Same installed unit and executable restarted; Host PID 1904868; same artifact/binding, DSpark, chunk 512 and 16K; generation 1 belongs to this **new Host lifetime** |
+| Observed interruption | 83.67 seconds from systemd's recorded process exit to the restored `engine.ready` event; not a complete client-outage measurement |
+| Protected state | Management PID 2458152, protected configuration/grant digests and concurrent source delta unchanged; health and nonempty exact public catalog independently observed |
+
+This is a failed complete-model diagnostic, not a reproduction of r17's
+down-operand predicate or a measured throughput comparison. Host/Engine reads
+were sampled concurrently with inference; their causal role is unproven.
+Neither numerical tolerances nor rejection predicates were changed. The first
+request-sizing attempt stopped at CPU token preflight without inference; the
+single actual dispatch was not retried.
+
+Private request, preflight, resource observations, bounded journal events and
+recovery evidence are retained under
+`/home/dgmothx/lab/models/evidence/0731-r17-real-20261019.sfpjDv`.
+No private model output or Case data is published. A subsequent external request
+on the recovered service is operator work, not a second diagnostic sample;
+accelerator testing remains suspended for that ownership boundary. The next
+discriminating experiment is one separately approved, isolated real-model run
+under a debugger to capture the faulting stack, preserving the same binary,
+representation and numerical class and restoring the operator profile. Original
+r17 causality, a verified correction and real YAI acceptance remain open.
+
+## 0731 feedback failure: exact down-operand predicate — 2026-10-19
+
+**IN PROGRESS; original numerical cause not yet reproduced.** The later real
+YAI continuation failed in producer request `oa-000000000006/r17`, HTTP
+`http-95`, after all 9,723 input positions and 274 generated tokens. This is
+not the earlier native-tool grammar refusal. No new inference, Work replay,
+service lifecycle action or deployment is performed by this investigation.
+
+The consumer retained a complete `application/json` response of 181 bytes,
+SHA-256 `976cda9392a407538f3ddd09f7398329c3376437fdc8bacfb0a9cba893afd29c`.
+The original body was not retained. Enumerating the installed producer's
+bounded diagnostic grammar and independently serializing the matching message
+with the actual C OpenAI error renderer reproduces **both** that byte count and
+digest:
+
+```text
+deferred CUDA MoE layer 0 reported device status 20 (down-operand-nonfinite; rows=6 pairs=36)
+```
+
+This is a cryptographically matched reconstruction of the static producer
+error, not a recovered model completion. The renderer and affected MoE/dot
+owners are unchanged between installed source `3aa7e69c` and parent main
+`a122eb41`. Host PID 1259920, executable SHA-256 `bb3ae514…`, generation 1,
+artifact `25d29155…`, binding `091f933e…`, 16K context and speculative strategy
+remain the [installed configuration](#updated-producer-and-0731-installed-2026-10-18).
+
+Code 20 identifies a nonfinite down operand encountered by the exceptional
+encoded-dot recovery: either an activation Q8 scale or a decoded weight value.
+It is distinct from routed-intermediate quantization (28), down-output
+publication (22), or parser failure. It identifies the first recorded check,
+not the originating write or an established hardware fault. Six rows match
+the target-verification population for five DSpark proposals plus the anchor;
+no private prompt, reasoning or generated content is needed for this finding.
+
+| Control | Authority / input | Expected | Observed | Result / claim |
+| --- | --- | --- | --- | --- |
+| Error reconstruction | Installed-source diagnostic vocabulary; actual C HTTP error serializer; consumer digest | Exact byte count and SHA-256 | 181 bytes; exact digest above | PASS: exact terminal predicate, not its upstream cause |
+| Encoded weight scan | Pinned independent GGUF reader; `blk.0.ffn_down_exps.weight` in the unchanged artifact | Finite Q2_K binary16 scales | 8,388,608 blocks; 704,643,072 bytes; zero nonfinite scales | PASS: file payload negative control, not device-buffer validity |
+| Synthetic reproduction preparation | Existing `cuda.moe_rows`; six rows, top-k six, 64 changing inputs, scalar/hybrid/matrix and eager/graph | Independent Q8/F64 controls; unchanged BF16 tolerance; invalid operands still refused | Native fixture compiled; accelerator execution refused before dispatch | BLOCKED: no reproduced numerical cause or verified repair |
+| Coexistence admission | Current Host/Engine observations, host-scoped locks and conservative memory guard | Idle resident engine; complete backing and reserve protected; 2 GiB test allowance | Zero requests/sessions/clients/leases; locks available; only 1,113,669,216 bytes margin | BLOCKED: below 2,147,483,648-byte test allowance; no CUDA dispatched |
+
+The memory guard deducts all 103,728,880,544 artifact bytes from observed
+`MemAvailable` before retaining the unchanged 16,332,895,744-byte system reserve.
+This deliberately conservative safety deduction is **not** an additive RSS,
+mapping or physical-residency measurement. The 256-MiB fixture allocation cap
+does not include driver/context and host-side test overhead; it cannot replace
+the complete 2-GiB test allowance. No reserve was reduced to admit the test.
+
+Private, content-free reproduction sources and preflight evidence are retained
+under `/home/dgmothx/lab/models/evidence/0731-r17-forensics-20261019.vnUb6vMi`.
+The selected QA identity remains `cuda.moe_rows`, with a maximum 600-second
+execution. Its new workspace-reuse controls are **not GPU-qualified**. The next
+gate is sufficient coexistence margin under the same guard, or separately
+authorized resource coordination; neither authorization to unload the engine
+nor a new YAI dispatch follows from this evidence. The original Work remains
+indeterminate and untouched. No YAI validator workaround is justified.
+
+The source-stable structural lane passes 21/21 gates, zero
+FAIL/SKIP/BLOCKED/ERROR (`856da037…`); its build-contract inner suite retains
+one platform-dependent skip. This validates fixture integration, source and
+documentation controls, not execution of `cuda.moe_rows`. Production CUDA
+sources and numerical criteria are unchanged. The compiled test binary at this
+checkpoint has SHA-256
+`bdec3de11891195fc49a956388de03509319f2a811b00f17262ce901e891589d`.
+
+Follow-up source inspection distinguishes fast-dot overflow from this refusal:
+the recovery rereads global Q8 scales and decoded weights before latching 20.
+Overflow or a shared-tile error alone cannot explain that predicate if the
+recovery receives the correct finite global operands. The originating buffer,
+view or status/completion-storage fault remains unproven. The installed engine
+reports zero prepared bytes; no prepared-weight experiment is inferred.
+
+The refined fixture uses the production shared execution stream and deferred
+completion, asserts that boundary and synchronizes before readback. Its first
+version used an isolated graph stream alongside an asynchronous poison write;
+that could introduce a **fixture** race and is not a producer defect finding.
+One final valid replay after the four intentional refusals additionally checks
+recovery in the same graph and allocation. The refined test executable is
+`2587304af1f642a7a03d277a495b6ea4c072afa321ce4c1141d14fe077fe7ddf`.
+The source-stable structural rerun passes 21/21 gates (`973d23c9…`), with no
+top-level failures, skips or blocked tests. The preceding failed invocation
+(`499997c1…`: 11 PASS, 9 FAIL, 1 BLOCKED) excluded Cargo/CUDA from PATH; its
+logs are retained and the corrected invocation restores the existing toolchain.
+Neither run dispatches the synthetic CUDA fixture. Numerical repair and live
+YAI acceptance remain unearned.
+
 ## 0731 native output and correlated feedback — 2026-10-19
 
 **IN PROGRESS — `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`.** One real synthetic

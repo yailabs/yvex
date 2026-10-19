@@ -295,7 +295,7 @@ int yvex_backend_host_workspace_prepare_owned(yvex_backend *backend,
                                               unsigned long long bytes,
                                               yvex_error *err)
 {
-    unsigned char *base;
+    unsigned char *base = NULL;
     int rc;
     if (!backend || backend_cleanup_only(backend) ||
         backend->status == YVEX_BACKEND_STATUS_FAILED || !bytes ||
@@ -315,11 +315,12 @@ int yvex_backend_host_workspace_prepare_owned(yvex_backend *backend,
         base = (unsigned char *)malloc((size_t)bytes);
         rc = base ? YVEX_OK : YVEX_ERR_NOMEM;
     }
+    /* An allocator's output conveys ownership only after successful return. */
+    if (rc != YVEX_OK) return rc;
     if (!base) {
-        if (rc == YVEX_OK)
-            yvex_error_set(err, YVEX_ERR_NOMEM, "backend.host_workspace.prepare",
-                           "failed to allocate standalone host workspace");
-        return rc == YVEX_OK ? YVEX_ERR_NOMEM : rc;
+        yvex_error_set(err, YVEX_ERR_NOMEM, "backend.host_workspace.prepare",
+                       "failed to allocate standalone host workspace");
+        return YVEX_ERR_NOMEM;
     }
     backend->host_workspace_base = base;
     backend->host_workspace_bytes = bytes;

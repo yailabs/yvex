@@ -11,6 +11,7 @@
 #include <yvex/internal/neural_operations.h>
 #include <yvex/internal/gguf.h>
 
+#include "src/backend/private.h"
 #include "tests/test.h"
 
 static void make_desc(yvex_backend_tensor_desc *desc,
@@ -483,8 +484,85 @@ static int test_encoded_f32_rows(void)
     return 0;
 }
 
+typedef struct {
+    unsigned char storage[64];
+    unsigned int mode, releases;
+} workspace_allocation_control;
+
+static int workspace_control_allocate(yvex_backend *backend, size_t bytes,
+                                       unsigned char **out, yvex_error *err)
+{
+    workspace_allocation_control *control = backend->impl;
+    if (bytes != sizeof(control->storage)) return YVEX_ERR_BOUNDS;
+    if (control->mode != 2u)
+        *out = control->mode == 1u || control->mode == 3u ? NULL : control->storage;
+    if (control->mode < 3u) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "fixture.host.allocate",
+                       "allocator refused; output does not establish ownership");
+        return YVEX_ERR_NOMEM;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int workspace_control_release(yvex_backend *backend,
+                                      unsigned char **base, yvex_error *err)
+{
+    workspace_allocation_control *control = backend->impl;
+    if (*base != control->storage) return YVEX_ERR_STATE;
+    control->releases++;
+    *base = NULL;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int test_host_workspace_allocation_failure(void)
+{
+    workspace_allocation_control control = {0};
+    const yvex_backend_vtable operations = {
+        .host_workspace_alloc = workspace_control_allocate,
+        .host_workspace_free = workspace_control_release};
+    yvex_backend backend = {.kind = YVEX_BACKEND_KIND_CPU,
+                            .status = YVEX_BACKEND_STATUS_READY,
+                            .vtable = &operations, .impl = &control};
+    yvex_backend_host_workspace_summary summary = {0};
+    yvex_error err = {0};
+    void *borrow = (void *)1;
+    for (control.mode = 0u; control.mode < 4u; ++control.mode) {
+        YVEX_TEST_ASSERT(yvex_backend_host_workspace_prepare_owned(
+            &backend, sizeof(control.storage), &err) == YVEX_ERR_NOMEM &&
+            yvex_error_code(&err) == YVEX_ERR_NOMEM,
+            "failed allocator output and success without storage cannot publish an arena");
+        if (control.mode < 3u)
+            YVEX_TEST_ASSERT_STREQ(err.where, "fixture.host.allocate",
+                                  "preserve the originating allocation failure");
+        YVEX_TEST_ASSERT(!backend.host_workspace_base && !backend.host_workspace_bytes &&
+            !backend.host_workspace_generation && !backend.host_workspace_allocation_count &&
+            !backend.host_workspace_owned && !backend.host_workspace_pinned && !control.releases,
+            "failed preparation acquires no ownership and frees no unowned pointer");
+        YVEX_TEST_ASSERT(yvex_backend_host_workspace_acquire(
+            &backend, 1ull, 1ull, &borrow) == YVEX_BACKEND_RESIDENT_MISS && !borrow,
+            "failed arena cannot be borrowed by a subsequent operation");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_host_workspace_prepare_owned(
+        &backend, sizeof(control.storage), &err) == YVEX_OK &&
+        yvex_backend_host_workspace_summary_get(&backend, &summary) &&
+        summary.capacity == sizeof(control.storage) && summary.owned && summary.pinned,
+        "successful preparation after refusal publishes exact ownership");
+    YVEX_TEST_ASSERT(yvex_backend_host_workspace_prepare_owned(
+        &backend, sizeof(control.storage), &err) == YVEX_ERR_STATE &&
+        backend.host_workspace_base == control.storage,
+        "duplicate preparation preserves the admitted arena");
+    YVEX_TEST_ASSERT(yvex_backend_host_workspace_detach(&backend, &err) == YVEX_OK &&
+        control.releases == 1u && !backend.host_workspace_base &&
+        !backend.host_workspace_bytes && !backend.host_workspace_owned,
+        "only successful allocation is released exactly once");
+    return 0;
+}
+
 int yvex_test_backend_cpu(void)
 {
+    if (test_host_workspace_allocation_failure() != 0) return 1;
     if (test_open_and_unsupported() != 0) return 1;
     if (test_tensor_memory_and_copy() != 0) return 1;
     if (test_memory_limit_and_invalid_args() != 0) return 1;

@@ -444,6 +444,7 @@ static int cuda_host_workspace_alloc(yvex_backend *backend, size_t bytes,
                                      unsigned char **out, yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    void *allocation = NULL;
     int rc;
     if (out) *out = NULL;
     if (!state || !out || !bytes || !state->driver.cuMemHostAlloc) {
@@ -454,8 +455,9 @@ static int cuda_host_workspace_alloc(yvex_backend *backend, size_t bytes,
     rc = yvex_cuda_set_current(backend, "cuda.host_workspace.alloc", err);
     if (rc == YVEX_OK)
         rc = yvex_cuda_status(&state->driver,
-                              state->driver.cuMemHostAlloc((void **)out, bytes, 0u),
+                              state->driver.cuMemHostAlloc(&allocation, bytes, 0u),
                               "cuda.host_workspace.alloc", err);
+    if (rc == YVEX_OK) *out = allocation;
     return rc;
 }
 
