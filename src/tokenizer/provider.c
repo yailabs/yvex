@@ -1700,6 +1700,8 @@ static int parse_calls(const yvex_conversation_protocol *conversation,
                        unsigned long long *call_count, yvex_error *err)
 {
     yvex_provider_tool_call *owned;
+    const unsigned char *begin = cursor;
+    const char *predicate = NULL;
     unsigned long long count = 0u;
     int rc = YVEX_OK;
 
@@ -1707,28 +1709,37 @@ static int parse_calls(const yvex_conversation_protocol *conversation,
     *call_count = 0u;
     int wrapped = conversation->tool_grammar ==
                   YVEX_CONVERSATION_TOOL_GRAMMAR_TYPED_ATTRIBUTES;
-    if (wrapped && !consume(&cursor, end, conversation->tool_calls_start))
+    if (wrapped && !consume(&cursor, end, conversation->tool_calls_start)) {
+        predicate = "block_start";
         rc = YVEX_ERR_FORMAT;
+    }
     owned = calloc(YVEX_PROVIDER_MAX_TOOLS, sizeof(*owned));
     if (!owned) return YVEX_ERR_NOMEM;
     while (rc == YVEX_OK && cursor < end &&
            (!wrapped ||
             !starts_with(cursor, end, conversation->tool_calls_end))) {
-        if (count >= YVEX_PROVIDER_MAX_TOOLS)
+        if (count >= YVEX_PROVIDER_MAX_TOOLS) {
+            predicate = "call_limit";
             rc = YVEX_ERR_BOUNDS;
-        else
+        } else
             rc = parse_invoke(conversation, request, &cursor, end,
                               &owned[count], err);
         if (rc == YVEX_OK) ++count;
         if (rc == YVEX_OK && cursor < end) {
-            if (cursor[0] != '\n') rc = YVEX_ERR_FORMAT;
+            if (cursor[0] != '\n') {
+                predicate = "invoke_separator";
+                rc = YVEX_ERR_FORMAT;
+            }
             else ++cursor;
         }
     }
-    if (rc == YVEX_OK && (!count ||
-        (wrapped && !consume(&cursor, end, conversation->tool_calls_end)) ||
-        cursor != end))
-        rc = YVEX_ERR_FORMAT;
+    if (rc == YVEX_OK) {
+        if (!count) predicate = "empty_block";
+        else if (wrapped && !consume(&cursor, end, conversation->tool_calls_end))
+            predicate = "block_close";
+        else if (cursor != end) predicate = "trailing_content";
+        if (predicate) rc = YVEX_ERR_FORMAT;
+    }
     if (rc == YVEX_OK && count > 1u && !request->tool_choice.parallel_calls) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.provider.tool",
                        "completion contains multiple tool calls but parallel_tool_calls=false");
@@ -1739,9 +1750,11 @@ static int parse_calls(const yvex_conversation_protocol *conversation,
         for (index = 0u; index < count; ++index)
             free((void *)owned[index].arguments_json.bytes);
         free(owned);
-        if (!yvex_error_code(err))
-            yvex_error_set(err, rc, "tokenizer.provider.tool",
-                           "completion tool block is not exact source grammar");
+        if (predicate)
+            yvex_error_setf(err, rc, "tokenizer.provider.tool",
+                           "completion tool block is not exact source grammar"
+                           ": %s at block byte %llu", predicate,
+                           (unsigned long long)(cursor - begin));
         return rc;
     }
     *calls = owned;

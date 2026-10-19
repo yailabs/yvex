@@ -752,7 +752,9 @@ static int send_source_completion(int fd, const yvex_client_request *request,
         == YVEX_REASONING_DISABLED ? "" : "fixture reasoning</think>";
     int long_unicode = request_contains(request->provider_request, "SOURCE_COMPLETION_LONG_UNICODE");
     int length;
-    if (long_unicode && !feedback) {
+    if (!feedback && request_contains(request->provider_request, "SOURCE_COMPLETION_REPEATED_BLOCK")) {
+        length = snprintf((char *)raw, sizeof(raw), "%s%s\n\n%s", prefix, nonempty, nonempty);
+    } else if (long_unicode && !feedback) {
         char padding[4086];
         memset(padding, 'a', sizeof(padding) - 1u); padding[sizeof(padding) - 1u] = '\0';
         length = snprintf((char *)raw, sizeof(raw), "%s\n\n<" FIXTURE_DSML "tool_calls>\n"

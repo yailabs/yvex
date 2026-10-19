@@ -154,7 +154,8 @@ for mode in ("none", "high", "max"):
             count += 1
         for marker, predicate in (("SOURCE_COMPLETION_INCOMPLETE", "parameter_start"),
                                   ("SOURCE_COMPLETION_MALFORMED", "parameter_json"),
-                                  ("SOURCE_COMPLETION_BAD_START", "invoke_start")):
+                                  ("SOURCE_COMPLETION_BAD_START", "invoke_start"),
+                                  ("SOURCE_COMPLETION_REPEATED_BLOCK", "trailing_content")):
             status, error = run(marker, mode, stream)
             if stream:
                 assert status == 200 and any("error" in event for event in error)
@@ -165,7 +166,8 @@ for mode in ("none", "high", "max"):
             else:
                 assert status == 400 and "error" in error and "choices" not in error
                 diagnostic = error["error"]
-            assert f": {predicate} at invocation byte " in diagnostic["message"], diagnostic
+            boundary = "block" if predicate == "trailing_content" else "invocation"
+            assert f": {predicate} at {boundary} byte " in diagnostic["message"], diagnostic
             assert "private_sentinel" not in diagnostic["message"]
             assert "inspect_fixture" not in diagnostic["message"]
             count += 1

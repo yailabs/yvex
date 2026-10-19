@@ -1242,6 +1242,80 @@ static int test_provider_invocation_diagnostics(void)
     return 0;
 }
 
+static int test_provider_block_diagnostics(void)
+{
+    static const char start[] = "\n\n<" TEST_DSML "tool_calls>\n";
+    static const char invoke[] =
+        "<" TEST_DSML "invoke name=\"get_match_context\">\n"
+        "<" TEST_DSML "parameter name=\"match_id\" string=\"true\">private_sentinel"
+        "</" TEST_DSML "parameter>\n</" TEST_DSML "invoke>";
+    static const char close[] = "</" TEST_DSML "tool_calls>";
+    static const char *const predicates[] = {
+        "empty_block", "block_close", "invoke_separator", "trailing_content",
+        "trailing_content", "trailing_content"};
+    yvex_tokenizer tokenizer;
+    yvex_token_info tokens[4];
+    yvex_provider_request request;
+    yvex_provider_message messages[1];
+    yvex_provider_function_tool tools[1];
+    yvex_error err;
+    fixture_open(&tokenizer, tokens);
+    YVEX_TEST_ASSERT(provider_fixture(&request, messages, tools, &err) == YVEX_OK,
+                     "block diagnostic request seals");
+    for (unsigned policy = 0u; policy < 2u; ++policy) {
+        if (policy) {
+            const yvex_graph_execution_binding *execution =
+                yvex_graph_execution_find(0u, 0u, "deepseek4-v4-flash-0731");
+            YVEX_TEST_ASSERT(execution && execution->compiler &&
+                execution->compiler->tokenizer_policy(&tokenizer.compiled_policy, &err) &&
+                yvex_tokenizer_family_policy_conversation(&tokenizer.compiled_policy,
+                                                         &tokenizer.conversation_view),
+                "0731 source policy resolves");
+        }
+        for (int mode = YVEX_REASONING_DISABLED; mode <= YVEX_REASONING_MAXIMUM; ++mode) {
+            unsigned char input[4096];
+            char block[1024];
+            const char *prefix = mode ? "private_reasoning_sentinel</think>" : "";
+            int n = snprintf(block, sizeof(block), "%s%s\n%s", start, invoke, close);
+            YVEX_TEST_ASSERT(n > 0 && (size_t)n < sizeof(block), "bounded valid block");
+            request.reasoning_policy = (yvex_reasoning_policy)mode;
+            for (unsigned parallel = 0u; parallel < 2u; ++parallel) {
+                request.tool_choice.parallel_calls = (int)parallel;
+                YVEX_TEST_ASSERT(request_reseal(&request, &err) == YVEX_OK, "request reseals");
+                for (unsigned which = 0u; which < 7u; ++which) {
+                    yvex_tokenizer_provider_result result = {0};
+                    switch (which) {
+                    case 0: n = snprintf((char *)input, sizeof(input), "%s%s%s", prefix, start, close); break;
+                    case 1: n = snprintf((char *)input, sizeof(input), "%s%s%s\n", prefix, start, invoke); break;
+                    case 2: n = snprintf((char *)input, sizeof(input), "%s%s%s%s", prefix, start, invoke, close); break;
+                    case 3: n = snprintf((char *)input, sizeof(input), "%s%s\n", prefix, block); break;
+                    case 4: n = snprintf((char *)input, sizeof(input), "%s%sprivate_sentinel", prefix, block); break;
+                    case 5: n = snprintf((char *)input, sizeof(input), "%s%s\n\n%s", prefix, block, block); break;
+                    default: n = snprintf((char *)input, sizeof(input), "%s%s", prefix, block); break;
+                    }
+                    YVEX_TEST_ASSERT(n > 0 && (size_t)n < sizeof(input), "bounded block fixture");
+                    int rc = yvex_tokenizer_parse_provider_completion(&tokenizer, &request,
+                        input, (unsigned)n, &result, &err);
+                    if (which == 6u) {
+                        YVEX_TEST_ASSERT(rc == YVEX_OK && result.completed && result.tool_call_count == 1u,
+                                         "complete source block remains valid");
+                        yvex_tokenizer_provider_result_clear(&result);
+                    } else {
+                        char expected[128];
+                        snprintf(expected, sizeof(expected), ": %s at block byte ", predicates[which]);
+                        YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && !result.completed && !result.tool_calls &&
+                            !result.content && !result.reasoning_content && strstr(yvex_error_message(&err), expected) &&
+                            !strstr(yvex_error_message(&err), "sentinel") &&
+                            !strstr(yvex_error_message(&err), "get_match_context"),
+                            "outer grammar refuses transactionally with a private-content-free predicate");
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 static int test_provider_projection(void)
 {
     static const unsigned char completion[] =
@@ -1704,6 +1778,8 @@ int yvex_test_runtime_tokenizer(void)
     if (test_provider_invocation_whitespace() != 0)
         return 1;
     if (test_provider_invocation_diagnostics() != 0)
+        return 1;
+    if (test_provider_block_diagnostics() != 0)
         return 1;
     if (test_provider_projection() != 0)
         return 1;

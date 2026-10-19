@@ -324,6 +324,9 @@ canonical single ASCII space. A native invocation refusal includes a static
 structural predicate and a byte offset relative to that invocation, without
 copying function names, arguments or reasoning into the diagnostic. These
 details refine the existing error message, not the public error schema or code.
+Outer-block refusals likewise identify the static predicate and block-relative
+byte offset (including `trailing_content`). A second complete tool block or prose
+after the closing block remains invalid; neither is discarded to salvage a call.
 Buffered and SSE paths preserve the parsed function identity, argument bytes,
 call correlation and `tool_calls` finish. A malformed or incomplete native call
 still terminates in error; an already opened SSE stream does not turn that error

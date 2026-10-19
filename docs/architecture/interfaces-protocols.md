@@ -155,6 +155,13 @@ structural refusal predicates and invocation-relative byte offsets pass through
 the existing error projection; adapters neither interpret those predicates nor
 recover invalid calls. See the [source-decoder witness](../evaluation/provider-output-recovery.md#invocation-whitespace-and-structural-refusals-2026-10-17).
 
+Completion diagnostics also retain the first failed outer-block predicate and
+relative byte offset, without payload content. The [0731 live controls](../evaluation/provider-output-recovery.md#0731-native-output-and-correlated-feedback-2026-10-19)
+distinguish actual generated tokens from parser/transport assembly: a valid
+invocation followed by invalid trailing output is still a refused completion.
+Reasoning and sampling policy belong to the exact request/qualification identity;
+one successful `high`/greedy call does not qualify the `none` path.
+
 The local protocol carries bounded byte fragments, not independently complete
 UTF-8 strings. The adapter keeps a complete-scalar cursor in each existing
 result buffer (final, reasoning and per call ID) before JSON/SSE serialization.

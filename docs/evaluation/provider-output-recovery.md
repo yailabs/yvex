@@ -15,6 +15,141 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## 0731 native output and correlated feedback — 2026-10-19
+
+**IN PROGRESS — `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`.** One real synthetic
+buffered native-call/feedback/final chain succeeds with source-authored `high`
+reasoning and explicit greedy sampling. Two `none` controls produce malformed
+complete outputs, correctly refused by both YVEX and the official source decoder.
+The source change improves the missing outer-block diagnostic; it does not make
+invalid model output valid. The successful chain uses the already installed
+producer, not that diagnostic change. Program P performance and YAI Case Work
+remain separate, unearned gates.
+
+### Target and causal boundary
+
+Source/tree/build/executable, checkpoint, artifact, binding, specialization,
+backend, context and strategy remain the exact [installed 0731 configuration](#updated-producer-and-0731-installed-2026-10-18):
+clean producer `3aa7e69c`, executable SHA-256 `bb3ae5149483429fe1122f92fddceea89ed93ba28480174d463af7f2450223e8`,
+0731 revision `7872f01b1d1fe23eabc4c98b48bffcef5a386062`, artifact `25d29155…`,
+binding `091f933e…`, one GB10, CUDA, DSpark, context 16,384, chunk 512.
+All requests use seed 0, one offered synthetic function, no parallel calls,
+maximum 256 output tokens and a 300-second request timeout. No Case data,
+application tool execution, SEND or historical replay occurs.
+
+| Fresh request | Changed request axis | Input / committed completion | Actual completion and result |
+| --- | --- | --- | --- |
+| 1 | Original synthetic request; `none`, omitted temperature resolves to 1 | 330 / 96, EOS | Two complete consecutive DSML blocks; HTTP 400; source decoder also refuses |
+| 2 | Same prompt, explicit temperature 0 | 330 / 60, EOS | One complete call plus 47 trailing prose bytes; HTTP 400; source decoder also refuses |
+| 3 | Greedy retained; source-authored `high` | 409 / 87, including 38 reasoning tokens, EOS | One exact offered call, HTTP 200, `finish_reason=tool_calls`; source decoder accepts |
+| 4, separately authorized | Actual assistant call/history plus correlated synthetic tool result; `high`, greedy, `tool_choice=none` | 511 / 21, including 17 reasoning tokens | HTTP 200, exact final `yai-contract`, `finish_reason=stop` |
+
+These are single functional observations, not throughput/reliability benchmarks.
+Requests 1–3 use read-only debugger observation; their timing is instrumented.
+Request 4 uses the restored systemd producer without the debugger. No extra
+request is inferred from a successful preflight. The original three-request
+authorization and the later single-feedback authorization are both exhausted.
+
+The complete raw outputs are retained privately. In requests 1/2 the first block
+ends at byte 195; the remaining 197/47 bytes violate the official decoder's
+`Unexpected content after tool calls` assertion. Extracting the first block is
+an offline diagnostic control, never an accepted replacement response. The
+original Core completion is still unavailable: request 1 reproduces its exact
+body digest, 96-token EOS outcome and 142-byte error response digest, but does
+not recover or prove the original completion bytes.
+
+For requests 2/3, the captured committed-token ledger has contiguous positions
+and fragment offsets. Independent decoding reconstructs the exact parser input;
+there is no fragment/HTTP duplication in these controls. Actual prompt bytes
+match the official renderer using the typed definition's canonical JSON member
+order (`name`, `description`, `parameters`). Incoming JSON member order is not
+preserved as a semantic requirement. No instruction, delimiter or tool argument
+is repaired. This bounds the observed defect to generated output under the
+tested `none` policy; it does not prove universal upstream-checkpoint behavior
+or independent conformance of this quantized representation.
+
+### Source correction and evidence
+
+`src/tokenizer/provider.c` now reports outer predicates such as `empty_block`,
+`block_close`, `invoke_separator` and `trailing_content`, with a block-relative
+byte offset. Existing invocation predicates remain separate. Error class,
+accepted grammar, argument validation, transactional publication and the public
+compatibility version are unchanged. There is no truncation, duplicate-call
+removal, EOS synthesis, sampling-default change or fallback. No new ABI, source
+owner, structural ADR or consumer implementation is required.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Official completion grammar | Pinned 0731 `encoding_dsv4.py`, SHA-256 `abc0d261…` | Three privately captured completions; runtime-suppressed EOS explicitly supplied to the source decoder | Refuse malformed tails, accept complete source output | Two refusals, one accepted call | Exact grammar, no delimiter repair | PASS | Fresh outputs, not recovered historical r32/Core bytes |
+| Prompt and committed output | Official renderer and independent `tokenizers` 0.22.2 | Requests 2/3, exact token IDs, fragments and prompt captures | Source prompt agreement and exact committed bytes | Both prompts match; both token decodes match parser input | Byte equality; canonical tool member order stated above | PASS | No assembly/transport duplication for these controls; not full logits conformance |
+| Tool arguments / feedback | `jsonschema` 4.26.0, Draft 2020-12; exact call correlation | Actual high-policy function arguments, extra-member/null negatives, returned synthetic observation | Admit exact schema, refuse negatives, preserve call ID and final value | 1 positive, 2 negatives; exact correlated final | Exact object and text | PASS | One synthetic tool/feedback/final chain, no actual tool effect |
+| Native outer grammar | Registered `unit.runtime_tokenizer` | DSpark/0731 × none/high/maximum × parallel false/true; six malformed forms plus valid control | Same refusal behavior with precise private-content-free predicate | 72 negative and 12 positive new controls | Exact status and empty publication on error | PASS | Parser diagnostic boundary; no model-quality claim |
+| Public buffered/SSE refusal | Registered `integration.openai` | Repeated closed blocks through actual parser/protocol/adapters; none/high/maximum | Buffered error or terminal SSE error; no tool or successful finish | Six new negative cases plus existing text/tool/feedback/Unicode controls | Exact framing and diagnostic class | PASS | Fixture-level public adapter behavior; live SSE remains unqualified |
+
+Before the diagnostic change, the new native regression fails against the
+generic outer error (`d384b271…`); after it, the focused tokenizer and HTTP runs
+pass (`a8c601f5…`, `22bd0687…`). A first harness startup fails before model load
+or inference because the debugger initially resolves symbols in the wrong
+language; selecting C symbol lookup is qualified on the exact executable before
+retrying startup. The service is restored after that failure. No failed attempt
+is silently counted as a successful model sample.
+
+The registered changed-owner run `8a49f9e3…` covers 137 tests on frozen base
+`dc87febe594b4ef1960bfff92c6de27d2be108e5`, source delta
+`cb38c8782202d67bc1e2d045505d84e5514d18d3fd92ae1242337f3a99a585d6`,
+with observed source stability and QA build `b8cda95b…`: **133 PASS, 0 FAIL,
+4 BLOCKED, 0 ERROR**. Runtime and quantization sanitizer lanes pass, including
+the affected native parser and HTTP fixtures under Address/Leak and Undefined
+Behavior sanitizers. Building the canonical default Rust SDK example resolves
+the management-runtime and SSH-session prerequisites; their separate stable
+runs pass (`90b875db…`, `ba86a19b…`). The resulting obligation coverage is
+**135 PASS / 2 BLOCKED**, not a wholly green local matrix. The two remaining
+native-credential SDK controls require the system D-Bus development package
+(`dbus-1.pc`) absent on this host; no system package or SDK source is changed
+to conceal that environmental boundary. Final canonical-document checks run
+after this documentation-only reconciliation; no implementation/test bytes
+change after the full software run.
+
+### Runtime and consumer handoff
+
+The authorized diagnostic lifecycle preserves installed binary bytes, profile,
+artifact/binding, 16K context, memory reserve, management, listener addresses,
+pins and grants. Post-retirement capacity still requires 124,151,859,752 bytes,
+including 16,332,895,744 bytes reserve; every diagnostic admission passes its
+fresh available-memory observation. No cache eviction or model-sized duplicate
+is introduced. Debugger Hosts are retired gracefully and the original systemd
+producer is independently restored each time. Final Host PID is 1259920,
+generation 1 in that **new Host lifetime**; management PID 2458152 is unchanged.
+After feedback, work/sessions/clients/leases are zero. Exon independently observes
+healthy service and the exact nonempty 0731 catalog at its existing port 18001.
+
+For a separately authorized YAI consumer qualification, use public model ID
+`deepseek-v4-flash-0731`, `reasoning_effort=high`, `temperature=0`, `seed=0`,
+`max_tokens=256`, `parallel_tool_calls=false`; reconcile current identities and
+run full preflight first. The successful feedback carried the actual assistant
+message including its separate `reasoning_content` and exact call ID. A consumer
+that drops that history must qualify its changed configuration; do not infer
+equivalence. No Core parser relaxation is indicated. These producer observations
+do not authorize another request, mutate a Case, qualify real SSE or establish
+repeated reliability. The existing installed producer already supports the
+observed successful path; the diagnostic-only source change is not a prerequisite
+for testing it.
+
+Private raw evidence and executable observers:
+`/home/dgmothx/lab/models/evidence/0731-tool-repair-20261019.vCbAZWaU`.
+Its redacted `analysis.json` has SHA-256
+`796baec7abaf94f8e05dce68e62be7fad4e86e94fbe8ce0d262562a402e602ce`;
+`schema-validation.json`, `feedback/result.json`, `feedback/after.json` and
+`HANDOFF.md` retain exact checks and consumer prerequisites. Raw prompts,
+reasoning, responses and token records stay private, outside Git. Source
+publication, installed executable identity, this bounded synthetic chain and
+real YAI Work remain four distinct boundaries.
+
+`progression_decision: proceed` — the bounded producer-to-consumer handoff.
+`downstream_safe: true` — read-only reconciliation and preparation of a separately
+authorized consumer probe only; not real Case Work, general `none` acceptance,
+checkpoint quality or Program P completion.
+
 ## Updated producer and 0731 installed — 2026-10-18
 
 After explicit operator authorization, the clean `3aa7e69c` producer replaces

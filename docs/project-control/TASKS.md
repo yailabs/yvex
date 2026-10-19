@@ -22,7 +22,16 @@ compiler/performance implementation authority and all its unearned exits.
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
 | `V010.TERMINAL.WORKBENCH.INTEGRATION.0` | Terminal-native operational workbench | P1 | ✅ COMPLETE | Linux inline Home/conversation, Models, Compile, contextual inspection and bounded Activity consume current registry/native owners through one REPLAI terminal owner. [Source-stable evidence](../evaluation/retained-observations.md#terminal-workbench-consumer-2026-10-10) qualifies PTY navigation, progressive output, Unicode, resize, cancellation, disconnection/recovery, host-incarnation refusal, restoration and real isolated CPU execution/retirement in dev and release builds. Linear CLI/protocol and operator engine remain unchanged. macOS rerun, full-screen UI, Program P quality and DeepSeek performance are not earned by this consumer delivery. |
-| `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0` | Source-faithful native output and tool-call recovery | P1 | 🔵 IN PROGRESS | Selected 2026-10-14: canonical empty-argument invocation falsely rejected; exact LF recognition has independent source serialization and tokenizer/feedback controls. A separate valid-source witness demonstrates invalid SSE UTF-8 at 4-KiB argument cuts; complete-scalar delivery now has buffered/SSE Chat/Responses and malformed-tail controls. [Evidence](../evaluation/provider-output-recovery.md) retains before/after witnesses, sanitizer/regression scope and refusals. Historical r32 output is unavailable; no causal closure or real-model/YAI acceptance follows. No GPU inference, service/model lifecycle mutation, historical Work replay or cross-repository changes. Program P retains compiler/performance ownership; explicit rollout/live gates remain open. |
+| `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0` | Source-faithful native output and tool-call recovery | P1 | 🔵 IN PROGRESS | Selected 2026-10-14: canonical empty-argument invocation falsely rejected; exact LF recognition has independent source serialization and tokenizer/feedback controls. A separate valid-source witness demonstrates invalid SSE UTF-8 at 4-KiB argument cuts; complete-scalar delivery now has buffered/SSE Chat/Responses and malformed-tail controls. [Evidence](../evaluation/provider-output-recovery.md) retains before/after witnesses, sanitizer/regression scope and refusals. Subsequent separately authorized rollout and live controls qualify one 0731 high/greedy synthetic call/feedback chain, not general tool reliability or YAI Work. Historical r32 output and causal closure remain unavailable. No historical Work replay or cross-repository change. Program P retains compiler/performance ownership. |
+
+The 2026-10-19 authorized 0731 campaign remains in this recovery Task. Two
+`none` outputs are independently confirmed malformed after the closing tool
+block; the diagnostic correction names that predicate without relaxing parsing.
+A source-authored `high`/greedy request and its separately authorized correlated
+feedback complete on the unchanged installed producer. [Evidence and consumer
+handoff](../evaluation/provider-output-recovery.md#0731-native-output-and-correlated-feedback-2026-10-19)
+qualify one synthetic buffered chain, not real YAI Work, general tool reliability,
+checkpoint quality or Program P performance. No Case, SEND or historical replay.
 
 The separately authorized 2026-10-16 real-response forensics stays within
 `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. It records an unrecoverable original

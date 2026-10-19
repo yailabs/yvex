@@ -40,6 +40,14 @@ executable preserved for explicit 32K rollback. No inference or YAI SEND is
 dispatched by this rollout; numerical causality, tool acceptance, independent
 quality and Program P performance remain open.
 
+The separately authorized [2026-10-19 producer campaign](../evaluation/provider-output-recovery.md#0731-native-output-and-correlated-feedback-2026-10-19)
+establishes one real buffered native-call → correlated synthetic feedback → exact
+final response chain on that same installed 0731 producer, explicitly at `high`
+reasoning and greedy sampling. Two `none` controls produce source-invalid trailing
+output; this is not a false parser rejection. No validator, source arithmetic,
+artifact or installed executable is changed. Real YAI Work, repeated reliability,
+live SSE, independent model quality and competitive performance remain unearned.
+
 The 2026-10-17 local CPU continuation composes IQ2 producer alternatives with
 canonical parameter plans and unchanged calibration/compatibility owners.
 Default search and public management are unchanged; the opt-in CLI projection
