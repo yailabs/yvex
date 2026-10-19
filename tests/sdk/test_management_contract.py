@@ -3,9 +3,12 @@
 """SDK standalone contract controls; producer checkout remains optional."""
 import copy
 import json
+import os
 from pathlib import Path
+import runpy
 import sys
 import unittest
+from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 SDK = ROOT / "sdk/rust"
 
@@ -48,5 +51,16 @@ class ManagementContract(unittest.TestCase):
             self.assertFalse({'token','password','secret'} & self.contract['types'][row['input']].keys())
         self.assertNotIn('input',self.contract['types']['JobSummary'])
         self.assertNotIn('result',self.contract['types']['JobSummary'])
+
+    def test_native_fixture_selects_explicit_feature_build(self):
+        executable = '/isolated/native-credentials/debug/examples/connections'
+        with patch.dict(os.environ, {'YVEX_SDK_CONNECTIONS_EXAMPLE': executable}, clear=True):
+            fixture = runpy.run_path(str(ROOT / 'tests/sdk/test_network_native.py'))
+        self.assertEqual(fixture['SDK_EXAMPLE'], Path(executable))
+
+    def test_native_fixture_retains_standalone_build_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            fixture = runpy.run_path(str(ROOT / 'tests/sdk/test_network_native.py'))
+        self.assertEqual(fixture['SDK_EXAMPLE'], SDK / 'target/debug/examples/connections')
 
 if __name__=='__main__':unittest.main()

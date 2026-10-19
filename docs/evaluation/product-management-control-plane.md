@@ -25,7 +25,7 @@ facade retirement is an independently versioned YAI SDK packaging change.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `integration.sdk-contract` | Public SDK and independent protocol fixtures | Rust crate, no runtime link | Exact identities and conservative recovery | 45 tests pass, including concurrent first-use and unsafe-root controls | Exact contracts | PASS | Independently buildable client |
 | `structural.sdk-parity` | Operator registry and producer schemas | Current v1/v2/finite/network descriptors | Exact inventory/hash match; deltas refused | Pass | Exact | PASS | Projection matches producer, not installed capability |
-| `unit.sdk-contract-projection` | Declared public fields | Management/finite negative fixtures | Reject stale shape, fake authority and runtime promotion | 10 tests pass | Exact | PASS | Contract refusal boundaries |
+| `unit.sdk-contract-projection` | Declared public fields and exact fixture executable | Management/finite negative fixtures and native feature-build selection | Reject stale shape, fake authority and runtime promotion; preserve explicit executable | 12 tests pass | Exact | PASS | Contract refusal and fixture identity boundaries |
 | `integration.sdk-management-ssh` | Public management v2 | Isolated loopback SSH and synthetic Jobs | One dispatch, exact recovery, wrong identity/pins refused | 11 mode controls plus recovery and key negatives pass | Exact correlation | PASS | Transport/recovery, not model execution |
 | `integration.sdk-finite-ssh` | Public finite v1 | Isolated SSH, synthetic scores | Reject foreign generation/population, oversized/lost responses | 15 mode controls and key negatives pass | Exact identities | PASS | Separate finite transport |
 | `integration.sdk-finite-native` | Installed public declarations | Disposable C ABI peer | Preserve bounded result; reject invalid values and declaration drift | 42 feature tests, eight result negatives and three ABI-drift controls pass | Exact declarations | PASS | ABI/client conformance only |
@@ -65,6 +65,17 @@ still requires the explicit native-vault opt-in, and hosted macOS supplies it.
 The former `b1cb4c87` run records 29 PASS / 0 FAIL / 1 BLOCKED on macOS; it is not
 a green run or native-vault proof. Final hosted results remain separately recorded
 by CI, and Studio's real isolated credential proof does not replace that lane.
+
+The `05f735bc` macOS lane records 29 PASS / 1 FAIL: its default-feature
+`--all-targets` SDK tests replaced the earlier native-credential example binary
+at the shared Cargo output path. The vault control then correctly refused
+`native_credential_feature_required` before dispatch. Hosted native examples now
+use a distinct target directory, and the migrated fixture consumes the exact
+`YVEX_SDK_CONNECTIONS_EXAMPLE` already used by the existing ownership controls.
+The override regression fails before this harness correction and passes after it;
+the standalone default remains tested. This repairs test-build isolation, not
+the credential store or public API. Native end-to-end proof remains the separately
+reported hosted/desktop lane; no missing vault feature is treated as success.
 
 ## Managed Host lifecycle correction — 2026-10-07
 

@@ -50,14 +50,16 @@ jobs:
           # Admission fixtures use declared capacity on the hosted runner;
           # unit.platform still observes actual native memory independently.
           YVEX_TEST_FIXTURE_CAPACITY: '1'
-          YVEX_SDK_PRODUCT_EXAMPLE: ${{ github.workspace }}/sdk/rust/target/debug/examples/management_product
-          YVEX_SDK_CONNECTIONS_EXAMPLE: ${{ github.workspace }}/sdk/rust/target/debug/examples/connections
+          YVEX_SDK_PRODUCT_EXAMPLE: ${{ github.workspace }}/sdk/rust/target/native-credentials/debug/examples/management_product
+          YVEX_SDK_CONNECTIONS_EXAMPLE: ${{ github.workspace }}/sdk/rust/target/native-credentials/debug/examples/connections
           YVEX_SDK_TEST_NATIVE_CREDENTIALS: '1'
           YVEX_NETWORK_TEST_BINARY: ${{ github.workspace }}/yvex
         run: |
           # The hosted macOS keychain supplies this lane's real native vault.
           # Tests retain isolated profiles and remove their generated entries.
-          cargo build --manifest-path sdk/rust/Cargo.toml --locked --features native-credentials --example management_product --example connections
+          # Default-feature contract tests rebuild examples; keep feature-bound
+          # executables outside their target directory for the entire lane.
+          CARGO_TARGET_DIR="$PWD/sdk/rust/target/native-credentials" cargo build --manifest-path sdk/rust/Cargo.toml --locked --features native-credentials --example management_product --example connections
           python3 tools/qa.py run native
       - name: Check ownership and build contracts
         run: >-

@@ -71,6 +71,10 @@ operator connections. Native finite controls link a synthetic ABI peer, not an
 inference engine. They require libclang and its matching system headers.
 `test_network_native.py` additionally requires an explicit disposable producer
 binary and an available native vault; it never substitutes plaintext storage.
+Build its examples with `native-credentials` in a separate Cargo target directory
+and set `YVEX_SDK_CONNECTIONS_EXAMPLE` (and `YVEX_SDK_PRODUCT_EXAMPLE` for the
+product controls) to those exact executables. Default-feature `--all-targets`
+tests otherwise rebuild the same example paths without native credentials.
 Registered QA distinguishes these environment gates from standalone contract
 tests. A passing client fixture is not model, deployment or Studio acceptance.
 

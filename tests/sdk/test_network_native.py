@@ -7,7 +7,7 @@ import hashlib,json,os,select,subprocess,tempfile,time
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SDK = ROOT / "sdk/rust"
-SDK_EXAMPLE=SDK/'target/debug/examples/connections'
+SDK_EXAMPLE=Path(os.environ.get('YVEX_SDK_CONNECTIONS_EXAMPLE',str(SDK/'target/debug/examples/connections'))).resolve()
 PRODUCER=Path(os.environ.get('YVEX_NETWORK_TEST_BINARY',str(ROOT/'yvex'))).resolve()
 
 def main():
