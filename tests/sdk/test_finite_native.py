@@ -28,7 +28,7 @@ def main():
         subprocess.run(["python3", GUARD, "--include-dir", str(prefix / "include"), "--check"], cwd=SDK, check=True)
         obj = prefix / "fixture.o"
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", str(prefix / "include"),
-            "-c", str(ROOT / "tests/fixtures/sdk/finite_client.c"), "-o", str(obj)], check=True)
+            "-c", str(ROOT / "tests/integration/sdk_finite_client.c"), "-o", str(obj)], check=True)
         subprocess.run(["ar", "rcs", str(prefix / "lib/libyvex.a"), str(obj)], check=True)
         env = dict(os.environ, YVEX_CLIENT_PREFIX=str(prefix), YVEX_CLIENT_LINK_LIBS="")
         command = ["cargo", "test", "--locked", "-p", "yvex-sdk@0.2.0", "--features", "finite-decision-native"]

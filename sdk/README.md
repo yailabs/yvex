@@ -10,8 +10,8 @@ sdk/rust/Cargo.toml` does not build the compiler/runtime. Public HTTPS, local
 companion and advanced restricted SSH clients preserve exact identity and recovery.
 The CLI and network dispatcher invoke the same producer domain owners.
 
-Clients pin YVEX directly. The historical `yai-sdk` facades are being retired in
-a coordinated breaking SDK release; YAI Application contracts remain owned by
+Clients pin YVEX directly. YAI SDK 0.8 removes the historical YVEX facades in
+a breaking SDK release; YAI Application contracts remain owned by
 that independent package. TypeScript contains safe public records, not renderer
 credential transport. `sdk/tools/generate.py` owns generated projections from the
 reviewed public records under `sdk/rust/contract`.
@@ -50,7 +50,8 @@ it cannot read caller-chosen files or grant qualification to another candidate.
 
 The SDK has one implementation. Its legacy external conformance harnesses moved
 from MIT `yailabs/yai-sdk` revision `7a2a19b00d6e5934f30d6d1d3d11b38a2137c6f5`
-to `tests/sdk` and `tests/fixtures/sdk`; exact producer parity lives in
+to `tests/sdk`, `tests/fixtures/sdk` and `tests/integration/sdk_finite_client.c`;
+exact producer parity lives in
 `sdk/tools/check_parity.py`. Both repositories retain the same Francesco
 Maiomascio copyright and MIT notice. No proprietary Core or Studio source is
 included. Historical facade releases remain available in their Git history.
