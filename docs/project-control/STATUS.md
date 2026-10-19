@@ -428,6 +428,13 @@ proof is qualified; the DGX operator Host has not been migrated or restarted.
 
 ## Platform control-plane convergence
 
+2026-10-19: canonical SDK conformance now lives with the producer, including
+exact schema parity, ten projection negatives, isolated SSH recovery and public
+finite ABI fixtures. The independently versioned YAI facade retirement and
+Studio direct-consumer qualification proceed under the same platform Task;
+no computational runtime, installed service or Program P claim changes.
+[Evidence](../evaluation/product-management-control-plane.md#canonical-sdk-conformance-consolidation-2026-10-19).
+
 The selected milestone has qualified the independent MIT public SDK (`sdk/rust`
 0.2 and `@yvex/sdk`), explicit headless ownership, typed observation retention,
 profile v3 readiness and exact reviewed-build-plan fencing. Product management

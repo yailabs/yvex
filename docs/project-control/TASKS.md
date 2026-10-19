@@ -605,6 +605,14 @@ The Spark development checkout remains foreign concurrent work. Installed runtim
 is observed before any qualification; no implicit restart, historical request replay
 or unselected Training/A03/Core work is authorized by this record.
 
+Continuation authorized 2026-10-19: retire the YVEX compatibility packages in
+`yai-sdk`, retain their useful conformance controls under YVEX ownership, and
+qualify direct Studio consumption under its existing STUDIO-T02. YAI SDK owns
+only Core contracts; TypeScript remains types-only and native credentials stay
+in the Rust client. This delivery does not alter Program P or installed services.
+SDK publication, consumer qualification and operator UI acceptance are separate
+exits; the Task remains IN PROGRESS until those exits are earned.
+
 ## Product management delivery
 
 | ID | Task | Priority | Status | Dependency / Exit |

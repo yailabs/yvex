@@ -17,10 +17,13 @@ or Studio dependency. Optional finite native FFI requires an explicitly supplied
 public installation, never private runtime headers.
 
 Historical extraction placed this code under yai-sdk without a semantic dependency
-on YAI. Preserve compatibility there through an exact dependency and reexport;
-remove the second protocol implementation and generator. Studio may consume the
-YVEX client directly. Third-party clients receive the same management, trust,
-credential-reference and recovery boundaries.
+on YAI. The initial migration retained an exact dependency and reexport, without
+a second protocol implementation or generator. The operator-authorized
+2026-10-19 continuation retires that transitional facade through an explicit
+breaking YAI SDK release. Studio and other clients consume YVEX directly;
+YAI SDK owns only Core client contracts. Third-party clients receive the same
+management, trust, credential-reference and recovery boundaries. Migration and
+retained MIT test provenance are documented in the [SDK guide](../../sdk/README.md).
 
 The existing CLI and public service share producer domain owners. This decision
 does not turn terminal narrative into a client API, expose private computational

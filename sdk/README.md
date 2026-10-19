@@ -10,8 +10,9 @@ sdk/rust/Cargo.toml` does not build the compiler/runtime. Public HTTPS, local
 companion and advanced restricted SSH clients preserve exact identity and recovery.
 The CLI and network dispatcher invoke the same producer domain owners.
 
-`yai-sdk` remains a compatibility/composition consumer. New independent clients
-should pin YVEX directly. TypeScript contains safe public records, not renderer
+Clients pin YVEX directly. The historical `yai-sdk` facades are being retired in
+a coordinated breaking SDK release; YAI Application contracts remain owned by
+that independent package. TypeScript contains safe public records, not renderer
 credential transport. `sdk/tools/generate.py` owns generated projections from the
 reviewed public records under `sdk/rust/contract`.
 
@@ -44,3 +45,36 @@ their approved connection. No CLI-output parsing or private socket is involved.
 Plan evidence references preserve the published receipt identity and association
 scope. `client.qualifications().get(...)` retrieves the complete record by ID;
 it cannot read caller-chosen files or grant qualification to another candidate.
+
+## Independent conformance and migration provenance
+
+The SDK has one implementation. Its legacy external conformance harnesses moved
+from MIT `yailabs/yai-sdk` revision `7a2a19b00d6e5934f30d6d1d3d11b38a2137c6f5`
+to `tests/sdk` and `tests/fixtures/sdk`; exact producer parity lives in
+`sdk/tools/check_parity.py`. Both repositories retain the same Francesco
+Maiomascio copyright and MIT notice. No proprietary Core or Studio source is
+included. Historical facade releases remain available in their Git history.
+
+```sh
+CARGO_BUILD_JOBS=2 cargo test --manifest-path sdk/rust/Cargo.toml --locked --all-targets
+python3 sdk/tools/generate.py --check
+python3 sdk/tools/check_parity.py
+python3 -m unittest discover -s tests/sdk -p '*contract.py'
+python3 tests/sdk/test_management_remote.py
+python3 tests/sdk/test_finite_remote.py
+python3 tests/sdk/test_finite_native.py --include-dir /path/to/public/include
+```
+
+SSH controls use ephemeral private keys and isolated loopback listeners, never
+operator connections. Native finite controls link a synthetic ABI peer, not an
+inference engine. They require libclang and its matching system headers.
+`test_network_native.py` additionally requires an explicit disposable producer
+binary and an available native vault; it never substitutes plaintext storage.
+Registered QA distinguishes these environment gates from standalone contract
+tests. A passing client fixture is not model, deployment or Studio acceptance.
+
+Consumers migrate Rust dependencies from the facade to this independent
+`sdk/rust` package and TypeScript imports from `@yai/sdk/yvex` to `@yvex/sdk`.
+Pin a reviewed YVEX revision in both manifests; keep YAI SDK versioning separate.
+API changes originate here, consumers adopt independently through supported
+schemas, and no SDK dependency grants runtime authority or permission to replay.

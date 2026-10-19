@@ -13,6 +13,35 @@ publication: {html: true, pdf: true, index: true}
 [Evaluation](README.md) · [Public contract](../contracts/product-management.md) ·
 [Lifecycle classification](../contracts/product-management-lifecycle-map.md)
 
+## Canonical SDK conformance consolidation — 2026-10-19
+
+The platform Task transfers MIT conformance fixtures from `yai-sdk` `7a2a19b0`
+into their producer repository. No SDK wire, computational implementation or
+installed service changes. The independent crate remains 0.2.0; the consumer
+facade retirement is an independently versioned YAI SDK packaging change.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `integration.sdk-contract` | Public SDK and independent protocol fixtures | Rust crate, no runtime link | Exact identities and conservative recovery | 43 tests pass | Exact contracts | PASS | Independently buildable client |
+| `structural.sdk-parity` | Operator registry and producer schemas | Current v1/v2/finite/network descriptors | Exact inventory/hash match; deltas refused | Pass | Exact | PASS | Projection matches producer, not installed capability |
+| `unit.sdk-contract-projection` | Declared public fields | Management/finite negative fixtures | Reject stale shape, fake authority and runtime promotion | 10 tests pass | Exact | PASS | Contract refusal boundaries |
+| `integration.sdk-management-ssh` | Public management v2 | Isolated loopback SSH and synthetic Jobs | One dispatch, exact recovery, wrong identity/pins refused | 11 mode controls plus recovery and key negatives pass | Exact correlation | PASS | Transport/recovery, not model execution |
+| `integration.sdk-finite-ssh` | Public finite v1 | Isolated SSH, synthetic scores | Reject foreign generation/population, oversized/lost responses | 15 mode controls and key negatives pass | Exact identities | PASS | Separate finite transport |
+| `integration.sdk-finite-native` | Installed public declarations | Disposable C ABI peer | Preserve bounded result; reject invalid values and declaration drift | 42 feature tests, eight result negatives and three ABI-drift controls pass | Exact declarations | PASS | ABI/client conformance only |
+| Native vault integration | Existing TLS/credential contract | Explicit disposable producer and native credential store | No plaintext substitute | Not rerun in this checkpoint | Not applicable | BLOCKED | No new native-vault or live-service claim |
+
+The migrated SSH fixtures now create their temporary key roots beneath the
+user-owned home: OpenSSH StrictModes correctly refused the former shared `/tmp`
+ancestry on Spark. Authentication checks remain enabled. Native bindgen on this
+Spark required the installed GCC include path via `BINDGEN_EXTRA_CLANG_ARGS`;
+the public header and ABI checks were not relaxed. Reproduction commands and
+MIT provenance are in [SDK documentation](../../sdk/README.md).
+
+The raw canonical QA records remain in `build/qa/evidence`; the six registered
+lanes above distinguish fixture conformance from deployment and Studio product
+acceptance. No inference, Host replacement, credential migration or Case effect
+was dispatched. Program P and the installed model are outside this change.
+
 ## Managed Host lifecycle correction — 2026-10-07
 
 Starts from `07e6c8a8`. The operator rejected the prior client composition and

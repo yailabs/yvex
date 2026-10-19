@@ -44,8 +44,9 @@ does not grant model admission or new public management operations.
 
 YVEX owns its independent public client in `sdk/rust` (`yvex-sdk` 0.2) and
 `sdk/typescript` (`@yvex/sdk`). The Rust crate is an independent workspace: importing
-management requires neither the YVEX compiler nor YAI. The historical yai-sdk
-package is a compatibility reexport of the exact published YVEX client.
+management requires neither the YVEX compiler nor YAI. Direct consumers pin this
+producer-owned SDK; the historical yai-sdk compatibility reexport is transitional
+and its explicitly breaking retirement is tracked by the platform Task.
 [ADR 0011](../decisions/0011-independent-platform-client.md) owns this dependency direction.
 
 Management operations consume Source/model/build/package, Host/Engine/Session,
