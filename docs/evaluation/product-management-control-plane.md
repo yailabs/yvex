@@ -17,12 +17,13 @@ publication: {html: true, pdf: true, index: true}
 
 The platform Task transfers MIT conformance fixtures from `yai-sdk` `7a2a19b0`
 into their producer repository. No SDK wire, computational implementation or
-installed service changes. The independent crate remains 0.2.0; the consumer
+installed service changes. A subsequent client-local initialization repair is
+qualified below. The independent crate remains 0.2.0; the consumer
 facade retirement is an independently versioned YAI SDK packaging change.
 
 | Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `integration.sdk-contract` | Public SDK and independent protocol fixtures | Rust crate, no runtime link | Exact identities and conservative recovery | 43 tests pass | Exact contracts | PASS | Independently buildable client |
+| `integration.sdk-contract` | Public SDK and independent protocol fixtures | Rust crate, no runtime link | Exact identities and conservative recovery | 45 tests pass, including concurrent first-use and unsafe-root controls | Exact contracts | PASS | Independently buildable client |
 | `structural.sdk-parity` | Operator registry and producer schemas | Current v1/v2/finite/network descriptors | Exact inventory/hash match; deltas refused | Pass | Exact | PASS | Projection matches producer, not installed capability |
 | `unit.sdk-contract-projection` | Declared public fields | Management/finite negative fixtures | Reject stale shape, fake authority and runtime promotion | 10 tests pass | Exact | PASS | Contract refusal boundaries |
 | `integration.sdk-management-ssh` | Public management v2 | Isolated loopback SSH and synthetic Jobs | One dispatch, exact recovery, wrong identity/pins refused | 11 mode controls plus recovery and key negatives pass | Exact correlation | PASS | Transport/recovery, not model execution |
@@ -41,6 +42,29 @@ The raw canonical QA records remain in `build/qa/evidence`; the six registered
 lanes above distinguish fixture conformance from deployment and Studio product
 acceptance. No inference, Host replacement, credential migration or Case effect
 was dispatched. Program P and the installed model are outside this change.
+
+### Concurrent first-use profile initialization
+
+Studio's isolated local-UDS test exposed `profile_storage_unavailable` before
+connection selection. Public SDK local discovery and profile enumeration could
+concurrently observe a missing directory, then one failed on `AlreadyExists`.
+The SDK regression starts twelve independent managers at a barrier for each of
+32 fresh nested roots. Before the correction it fails with that exact error;
+afterwards all readers observe one empty, private registry. Existing files,
+symlink aliases and insufficiently private roots still refuse.
+
+The existing directory owner now accepts concurrent creation only after inspecting
+the resulting component under the same ownership, type and permission rules.
+There is no request replay, credential fallback or relaxation of path trust.
+Studio also exposes initial local-discovery errors with an explicit read-only
+retry; a remote failure never silently switches to a local Host.
+
+Hosted QA initially misclassified the native-vault opt-in value `1` as a file
+asset. The registry now checks only the actual producer executable path; the test
+still requires the explicit native-vault opt-in, and hosted macOS supplies it.
+The former `b1cb4c87` run records 29 PASS / 0 FAIL / 1 BLOCKED on macOS; it is not
+a green run or native-vault proof. Final hosted results remain separately recorded
+by CI, and Studio's real isolated credential proof does not replace that lane.
 
 ## Managed Host lifecycle correction — 2026-10-07
 

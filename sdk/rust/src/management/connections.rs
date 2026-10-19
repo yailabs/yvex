@@ -368,27 +368,30 @@ fn private_dir(path: &Path) -> Result<(), Error> {
             std::path::Component::Normal(part) => current.push(part),
             _ => return Err(Error::local("invalid_profile_root")),
         }
-        match fs::symlink_metadata(&current) {
-            Ok(m) => {
-                let sticky_root = m.uid() == 0 && m.mode() & 0o1000 != 0;
-                if !m.is_dir()
-                    || m.file_type().is_symlink()
-                    || (m.uid() != uid && m.uid() != 0)
-                    || (m.mode() & 0o022 != 0 && !sticky_root)
-                {
-                    return Err(Error::local("untrusted_profile_storage"));
-                }
-                if current == path && (m.uid() != uid || m.mode() & 0o777 != 0o700) {
-                    return Err(Error::local("untrusted_profile_storage"));
-                }
-            }
+        let m = match fs::symlink_metadata(&current) {
+            Ok(m) => m,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                fs::DirBuilder::new()
-                    .mode(0o700)
-                    .create(&current)
-                    .map_err(|_| Error::local("profile_storage_unavailable"))?;
+                // Another independent manager can create this component after
+                // our lookup. AlreadyExists is not trust: inspect it below by
+                // the same rules as an existing directory, without following links.
+                match fs::DirBuilder::new().mode(0o700).create(&current) {
+                    Ok(()) => (),
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
+                    Err(_) => return Err(Error::local("profile_storage_unavailable")),
+                }
+                fs::symlink_metadata(&current)
+                    .map_err(|_| Error::local("profile_storage_unavailable"))?
             }
             Err(_) => return Err(Error::local("profile_storage_unavailable")),
+        };
+        let sticky_root = m.uid() == 0 && m.mode() & 0o1000 != 0;
+        if !m.is_dir()
+            || m.file_type().is_symlink()
+            || (m.uid() != uid && m.uid() != 0)
+            || (m.mode() & 0o022 != 0 && !sticky_root)
+            || (current == path && (m.uid() != uid || m.mode() & 0o777 != 0o700))
+        {
+            return Err(Error::local("untrusted_profile_storage"));
         }
     }
     Ok(())
@@ -539,6 +542,47 @@ mod tests {
         let alias = directory.path().join("alias");
         std::os::unix::fs::symlink(directory.path().join("profiles"), &alias).unwrap();
         assert!(ConnectionManager::with_store(alias, Arc::new(NoCredentials)).is_err());
+    }
+    #[test]
+    fn simultaneous_first_use_creates_one_private_profile_root() {
+        let (directory, _, _) = manager();
+        for round in 0..32 {
+            let root = directory.path().join(format!("first-{round}/nested/profiles"));
+            let barrier = Arc::new(std::sync::Barrier::new(12));
+            let workers: Vec<_> = (0..12)
+                .map(|_| {
+                    let root = root.clone();
+                    let barrier = barrier.clone();
+                    std::thread::spawn(move || {
+                        barrier.wait();
+                        ConnectionManager::with_store(root, Arc::new(NoCredentials))
+                            .and_then(|manager| manager.list())
+                    })
+                })
+                .collect();
+            let results: Vec<_> = workers.into_iter().map(|w| w.join().unwrap()).collect();
+            for result in results {
+                assert!(result.unwrap().is_empty());
+            }
+            assert_eq!(fs::metadata(root).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+    }
+    #[test]
+    fn existing_unsafe_profile_roots_still_refuse() {
+        let (directory, _, _) = manager();
+        let root = directory.path().join("unsafe");
+        fs::create_dir(&root).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(
+            ConnectionManager::with_store(root, Arc::new(NoCredentials)).err().unwrap().code,
+            "untrusted_profile_storage"
+        );
+        let file = directory.path().join("regular-file");
+        fs::write(&file, []).unwrap();
+        assert_eq!(
+            ConnectionManager::with_store(file, Arc::new(NoCredentials)).err().unwrap().code,
+            "untrusted_profile_storage"
+        );
     }
     #[test]
     fn parallel_snapshot_reads_share_the_registry_lock() {
