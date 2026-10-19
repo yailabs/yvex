@@ -429,16 +429,20 @@ proof is qualified; the DGX operator Host has not been migrated or restarted.
 ## Platform control-plane convergence
 
 2026-10-19: canonical SDK conformance now lives with the producer, including
-exact schema parity, ten projection negatives, isolated SSH recovery and public
-finite ABI fixtures. The independently versioned YAI facade retirement and
-Studio direct-consumer qualification proceed under the same platform Task;
+exact schema parity, twelve contract/fixture controls, isolated SSH recovery and
+public finite ABI fixtures. Source `d8882b8b` passes 138 Linux hermetic and
+30 native macOS tests, including credential lifecycle after feature-build
+isolation; chat-memory Valgrind controls report zero errors. YAI SDK
+0.8.0 `4f478d9f` retires the facade; Studio `cff6623c` consumes both SDKs directly
+and qualifies isolated native HTTPS/UDS and tiny CPU generation. Human acceptance
+remains pending under the same platform Task and STUDIO-T02;
 no computational runtime, installed service or Program P claim changes.
 [Evidence](../evaluation/product-management-control-plane.md#canonical-sdk-conformance-consolidation-2026-10-19).
 
 The selected milestone has qualified the independent MIT public SDK (`sdk/rust`
 0.2 and `@yvex/sdk`), explicit headless ownership, typed observation retention,
 profile v3 readiness and exact reviewed-build-plan fencing. Product management
-now has 40 operations; CLI classification covers 193 entries. CPU, protocol,
+now has 43 operations; the operator registry owns the CLI inventory. CPU, protocol,
 native-vault and recovery evidence is recorded in
 [control-plane evaluation](../evaluation/product-management-control-plane.md).
 Studio native visual acceptance and the complete real model-to-Case vertical

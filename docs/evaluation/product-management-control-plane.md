@@ -29,7 +29,7 @@ facade retirement is an independently versioned YAI SDK packaging change.
 | `integration.sdk-management-ssh` | Public management v2 | Isolated loopback SSH and synthetic Jobs | One dispatch, exact recovery, wrong identity/pins refused | 11 mode controls plus recovery and key negatives pass | Exact correlation | PASS | Transport/recovery, not model execution |
 | `integration.sdk-finite-ssh` | Public finite v1 | Isolated SSH, synthetic scores | Reject foreign generation/population, oversized/lost responses | 15 mode controls and key negatives pass | Exact identities | PASS | Separate finite transport |
 | `integration.sdk-finite-native` | Installed public declarations | Disposable C ABI peer | Preserve bounded result; reject invalid values and declaration drift | 42 feature tests, eight result negatives and three ABI-drift controls pass | Exact declarations | PASS | ABI/client conformance only |
-| Native vault integration | Existing TLS/credential contract | Explicit disposable producer and native credential store | No plaintext substitute | Not rerun in this checkpoint | Not applicable | BLOCKED | No new native-vault or live-service claim |
+| Native vault integration | Existing TLS/credential contract | Disposable macOS producer and native keychain, source `d8882b8b` | Exact executable, cross-process secret restoration, revoke distinct from outage | Hosted native lane: 30 PASS / 0 FAIL / 0 BLOCKED, including this control | Exact correlation; no plaintext substitute | PASS | Isolated native lifecycle, not operator service or model admission |
 
 The migrated SSH fixtures now create their temporary key roots beneath the
 user-owned home: OpenSSH StrictModes correctly refused the former shared `/tmp`
@@ -76,6 +76,21 @@ The override regression fails before this harness correction and passes after it
 the standalone default remains tested. This repairs test-build isolation, not
 the credential store or public API. Native end-to-end proof remains the separately
 reported hosted/desktop lane; no missing vault feature is treated as success.
+
+The corrected source `d8882b8b93ca6551ba113b383ca43189fae74f86` passes the
+[hosted macOS lane](https://github.com/yailabs/yvex/actions/runs/39262653111/job/118094206686),
+including the real native-vault fixture after the default-feature controls.
+Canonical receipt:
+`cae37d3a34242fe9ae1f83e6882ce7bd519dc1c88ef5526d76f324349aa88301`.
+All 30 tests pass; subsequent ownership and packaging checks also pass.
+The same source's Linux hermetic lane passes 138 tests with zero failures,
+skips, blocks or errors, receipt
+`38636d1dada10888bcff1a102755b656c9044afb61ec114afc005347f56dd1d7`.
+All ten subsequent chat-memory Valgrind controls report zero errors.
+YAI SDK `4f478d9f` and Studio `cff6623c` have independently green hosted CI.
+Studio's current native fixture, exact dependency revisions, known limitations
+and pending human review are retained in its
+[operator handoff](https://github.com/yailabs/studio/blob/cff6623c05a35515240e9472645aeb4434416fbb/docs/operator-qualification.md#sdk-ownership-19-october).
 
 ## Managed Host lifecycle correction — 2026-10-07
 
