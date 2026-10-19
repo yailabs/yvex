@@ -13,7 +13,9 @@ PRODUCER=Path(os.environ.get('YVEX_NETWORK_TEST_BINARY',str(ROOT/'yvex'))).resol
 def main():
     if os.environ.get('YVEX_SDK_TEST_NATIVE_CREDENTIALS')!='1':
         raise SystemExit('BLOCKED: set YVEX_SDK_TEST_NATIVE_CREDENTIALS=1 for isolated native vault test')
-    with tempfile.TemporaryDirectory(prefix='sdk-network-native-') as tmp:
+    # Darwin's /var temporary alias is intentionally refused by the SDK trust
+    # boundary and can also exceed sockaddr_un. Use a short, owned fixture root.
+    with tempfile.TemporaryDirectory(prefix='.yvex-sdk-native-', dir=Path.home().resolve()) as tmp:
         root=Path(tmp);root.chmod(0o700)
         for name in ['config','data','models','runtime','xdg']:(root/name).mkdir(mode=0o700)
         env={**os.environ,'YVEX_CONFIG_DIR':str(root/'config'),'YVEX_DATA_DIR':str(root/'data'),'YVEX_MODELS_ROOT':str(root/'models'),'YVEX_MODELS_REGISTRY':str(root/'config/models.local.json'),'XDG_RUNTIME_DIR':str(root/'runtime'),'XDG_DATA_HOME':str(root/'xdg'),'YVEX_SDK_CONNECTION_PROFILE_ROOT':str(root/'sdk-profiles')}
