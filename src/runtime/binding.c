@@ -79,12 +79,15 @@ static int binding_program_only_execution(
     const yvex_model_execution_descriptor *execution)
 {
     return execution &&
+           ((execution->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V3 &&
+             execution->layer_count && !execution->draft_layer_count) ||
+           (
            execution->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 &&
            execution->layer_count &&
            execution->sequence_mixer_layers == execution->layer_count &&
            !execution->attention_heads && !execution->kv_heads &&
            !execution->head_width && !execution->dense_ffn_width &&
-           !execution->draft_layer_count;
+           !execution->draft_layer_count));
 }
 static int bytes_put_u64(binding_bytes *bytes, unsigned long long value)
 {
@@ -1012,8 +1015,10 @@ static int prepare_validate(const yvex_runtime_binding_prepare_request *request,
          (!decoder && !program_only &&
           descriptor->model_execution.schema_version !=
               YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1)) ||
-        (!program_only && !yvex_runtime_private_binding_attention_ready(attention)) ||
-        (program_only && (request->attention_plan || request->draft_attention_plan)) ||
+        ((!program_only || descriptor->model_execution.swa_layers) &&
+         !yvex_runtime_private_binding_attention_ready(attention)) ||
+        (program_only && (request->draft_attention_plan ||
+            yvex_attention_plan_layer_count(request->attention_plan) != descriptor->model_execution.swa_layers)) ||
         (descriptor && descriptor->draft_layer_count &&
          !yvex_runtime_private_binding_attention_ready(draft_attention)))
         return binding_reject(
@@ -1023,7 +1028,7 @@ static int prepare_validate(const yvex_runtime_binding_prepare_request *request,
     if (materialization->tensor_count == 0ull ||
         materialization->tensor_count > BINDING_MAX_RECORDS ||
         descriptor->tensor_count != materialization->tensor_count ||
-        (!program_only &&
+        ((!program_only || descriptor->model_execution.swa_layers) &&
          (!attention || attention->layer_count == 0ull ||
           attention->layer_count > BINDING_MAX_LAYERS ||
           attention->required_binding_count == 0ull ||
@@ -1032,7 +1037,7 @@ static int prepare_validate(const yvex_runtime_binding_prepare_request *request,
           yvex_attention_plan_layer_count(request->attention_plan) !=
               attention->layer_count ||
           attention->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
-          (!decoder && descriptor->layer_count &&
+          (!decoder && !program_only && descriptor->layer_count &&
            attention->layer_count != descriptor->layer_count))) ||
         (descriptor->draft_layer_count &&
          (!draft_attention || draft_attention->tensor_scope != YVEX_TENSOR_SCOPE_DRAFT ||
@@ -1294,7 +1299,7 @@ static void parsed_plan_summary_finish(yvex_runtime_binding *binding)
     } else if (binding_program_only_execution(
                    &binding->descriptor.model_execution)) {
         binding->summary.recurrent_layer_count =
-            binding->descriptor.model_execution.layer_count;
+            binding->descriptor.model_execution.sequence_mixer_layers;
     }
     if (output)
         yvex_runtime_identity_copy(

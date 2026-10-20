@@ -234,7 +234,7 @@ typedef struct {
     unsigned int module_count;
     CUfunction embed_function;
     CUfunction embed_f16_function;
-    CUfunction rms_norm_f32_function, rms_norm_f16_function, rms_norm_bf16_policy_function;
+    CUfunction rms_norm_f32_function, rms_norm_f16_function, rms_norm_bf16_policy_function, rounded_rms_function;
     CUfunction rope_function;
     CUfunction matmul_function;
     CUfunction qtype_row_dot_function;
@@ -279,10 +279,10 @@ typedef struct {
     CUfunction moe_grouped_up_shared_function, moe_grouped_down_shared_function, moe_grouped_up_iq2_shared_function;
     CUfunction moe_reduce_rows_function;
     CUfunction moe_combine_rows_function;
-    CUfunction moe_swiglu_function;
-    CUfunction moe_accumulate_function;
+    CUfunction moe_swiglu_function, moe_accumulate_function;
+    CUfunction sigmoid_route_function, sigmoid_up_function, sigmoid_down_function;
     CUfunction mlp_function;
-    CUfunction attention_function;
+    CUfunction attention_function, eager_score_function, eager_softmax_function, eager_value_function;
     CUfunction rotary_half_function, rotary_half_plain_function, gqa_function,
         gqa_wide_function;
     CUfunction gqa_softmax_function, gqa_softmax_warp_function, attention_validate_function;
@@ -295,7 +295,7 @@ typedef struct {
     CUfunction conv2d_function, group_norm_silu_function;
     CUfunction alias_up_function, alias_down_function;
     CUfunction vector_update_function, clamp_function;
-    CUfunction gated_delta_convolution_function, gated_delta_recurrence_function;
+    CUfunction gated_delta_convolution_function, gated_delta_recurrence_function, short_conv_function;
     yvex_cuda_kernel_bundle_state kernel_bundle_state;
     yvex_backend_capability_reason kernel_bundle_reason;
     yvex_backend_operation_variant kernel_bundle_failure_variant;

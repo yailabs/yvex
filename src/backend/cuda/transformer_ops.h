@@ -17,6 +17,13 @@ int yvex_cuda_residual_pre(yvex_backend *, const yvex_mhc_device_request *,
 int yvex_cuda_weighted_rms_bf16(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
     yvex_device_tensor *, unsigned long long, unsigned long long, double,
     yvex_backend_operation_facts *, yvex_error *);
+int yvex_cuda_rounded_rms_bf16(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
+    yvex_device_tensor *, unsigned long long, unsigned long long, float,
+    yvex_backend_operation_facts *, yvex_error *);
+int yvex_cuda_routed_swiglu_workspace_values(const yvex_routed_swiglu_bf16_request *,
+    unsigned long long *, yvex_error *);
+int yvex_cuda_routed_swiglu_bf16(yvex_backend *, const yvex_routed_swiglu_device_request *,
+    yvex_backend_operation_facts *, yvex_error *);
 int yvex_cuda_residual_post(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
     const yvex_device_tensor *, const yvex_device_tensor *, unsigned long long, unsigned long long,
     unsigned long long, yvex_device_tensor *, yvex_backend_operation_facts *, yvex_error *);
@@ -84,6 +91,9 @@ int yvex_cuda_gated_delta_execute(
     const yvex_gated_delta_device_request *request,
     yvex_gated_delta_device_result *result,
     yvex_backend_operation_facts *facts, yvex_error *err);
+int yvex_cuda_short_conv_execute(yvex_backend *, const yvex_short_conv_geometry *,
+    const yvex_short_conv_device_request *, yvex_short_conv_device_result *,
+    yvex_backend_operation_facts *, yvex_error *);
 int yvex_cuda_transformer_rotary_half(
     yvex_backend *backend, yvex_device_tensor *values,
     const yvex_device_tensor *cosines, const yvex_device_tensor *sines,

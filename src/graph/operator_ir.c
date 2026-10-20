@@ -985,29 +985,32 @@ int yvex_operator_graph_ir_build_program(
     transformer_graph_builder builder = {0};
     yvex_operator_graph_request request = {0};
     unsigned long long node_capacity, edge_capacity, layer;
-    size_t operation, selective_ssd = 0u;
+    size_t operation, recurrent = 0u, causal = 0u;
     int rc = YVEX_OK;
 
     if (out) *out = NULL;
-    if (!out || !semantic || !model || !program || attention || draft_attention ||
+    if (!out || !semantic || !model || !program || draft_attention ||
         semantic->schema_version != YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2 ||
-        model->schema_version != YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 ||
+        (model->schema_version != YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 &&
+         model->schema_version != YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V3) ||
         strcmp(model->identity, semantic->semantic_payload_identity) ||
-        semantic->decoder_layer_count || semantic->attention_layer_count ||
-        model->sequence_mixer_layers != model->layer_count ||
-        model->attention_heads || model->kv_heads || model->head_width ||
-        model->dense_ffn_width)
+        semantic->decoder_layer_count ||
+        semantic->attention_layer_count != yvex_attention_plan_layer_count(attention) ||
+        (model->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 &&
+         (attention || model->sequence_mixer_layers != model->layer_count ||
+          model->attention_heads || model->kv_heads || model->head_width || model->dense_ffn_width)))
         return operator_refuse(
             err, YVEX_ERR_INVALID_ARG,
-            "program graph requires one sealed pure stateful program");
+            "program graph requires matching sealed program and state plans");
     for (operation = 0u; operation < yvex_ir_operation_count(program); ++operation) {
         const yvex_ir_operation *op =
             yvex_ir_operation_at(program, (yvex_ir_id)operation);
-        selective_ssd += op &&
-                         strcmp(op->definition->name,
-                                "sequence.selective_ssd") == 0;
+        recurrent += op && (!strcmp(op->definition->name, "sequence.selective_ssd") ||
+            !strcmp(op->definition->name, "sequence.double_gated_conv"));
+        causal += op && !strcmp(op->definition->name, "attention.causal");
     }
-    if (selective_ssd != model->layer_count)
+    if (recurrent != model->sequence_mixer_layers || causal != semantic->attention_layer_count ||
+        recurrent + causal != model->layer_count)
         return operator_refuse(
             err, YVEX_ERR_FORMAT,
             "typed program stateful-operation population is inconsistent");
@@ -1036,14 +1039,18 @@ int yvex_operator_graph_ir_build_program(
             &builder, YVEX_OPERATOR_EMBEDDING, YVEX_TENSOR_SCOPE_GLOBAL,
             YVEX_ATTENTION_NO_LAYER, 0ull, 1ull, model->hidden_width, 0ull))
         rc = YVEX_ERR_STATE;
-    for (layer = 0ull; rc == YVEX_OK && layer < model->layer_count; ++layer)
-        if (!transformer_node_add(
-                &builder, YVEX_OPERATOR_STATEFUL_SEQUENCE_MIXER,
-                YVEX_TENSOR_SCOPE_MAIN_LAYER, layer, 0ull,
-                model->hidden_width, model->hidden_width,
-                YVEX_MODEL_STATE_CLASS_BIT(
-                    YVEX_MODEL_STATE_RECURRENT_SEQUENCE)))
+    layer = 0u;
+    for (operation = 0u; rc == YVEX_OK && operation < yvex_ir_operation_count(program); ++operation) {
+        const yvex_ir_operation *op = yvex_ir_operation_at(program, (yvex_ir_id)operation);
+        int is_attention = !strcmp(op->definition->name, "attention.causal");
+        if (!is_attention && strcmp(op->definition->name, "sequence.selective_ssd") &&
+            strcmp(op->definition->name, "sequence.double_gated_conv")) continue;
+        if (!transformer_node_add(&builder, is_attention ? YVEX_OPERATOR_ATTENTION :
+                YVEX_OPERATOR_STATEFUL_SEQUENCE_MIXER, YVEX_TENSOR_SCOPE_MAIN_LAYER, layer++, 0ull,
+                model->hidden_width, model->hidden_width, YVEX_MODEL_STATE_CLASS_BIT(
+                    is_attention ? YVEX_MODEL_STATE_SWA_RING : YVEX_MODEL_STATE_RECURRENT_SEQUENCE)))
             rc = YVEX_ERR_STATE;
+    }
     if (rc == YVEX_OK &&
         (!transformer_node_add(
              &builder, YVEX_OPERATOR_NORMALIZATION,

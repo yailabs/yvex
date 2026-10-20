@@ -87,6 +87,32 @@ static int test_nfc_normalization(void)
     return 0;
 }
 
+static int test_bpe_source_options(void)
+{
+    yvex_tokenizer tokenizer = {0};
+    yvex_error err;
+    const char *valid[] = {
+        "{\"model\":{\"ignore_merges\":true}}",
+        "{\"model\":{\"ignore_merges\":false}}",
+        "{\"model\":{}}", "{}"};
+    for (size_t i = 0u; i < sizeof(valid) / sizeof(valid[0]); ++i) {
+        YVEX_TEST_ASSERT(yvex_tokenizer_bpe_options(&tokenizer, valid[i], strlen(valid[i]), &err) == YVEX_OK &&
+            tokenizer.bpe_ignore_merges == (i == 0u), "BPE option is explicit or the upstream false default");
+    }
+    const char *invalid[] = {
+        "{\"model\":{\"ignore_merges\":1}}",
+        "{\"model\":{\"ignore_merges\":true,\"ignore_merges\":false}}",
+        "{\"model\":{},\"model\":{}}", "{\"model\":{}}x", "{\"model\":null}", "{\"model\":[]}"};
+    for (size_t i = 0u; i < sizeof(invalid) / sizeof(invalid[0]); ++i)
+        YVEX_TEST_ASSERT(yvex_tokenizer_bpe_options(&tokenizer, invalid[i], strlen(invalid[i]), &err) ==
+            YVEX_ERR_FORMAT, "malformed or duplicate BPE source options refuse");
+    YVEX_TEST_ASSERT((yvex_tokenizer_unicode_class(0x301u) & TOKENIZER_UNICODE_LETTER_MARK) &&
+        !(yvex_tokenizer_unicode_class(0x301u) & TOKENIZER_UNICODE_LETTER) &&
+        (yvex_tokenizer_unicode_class(0x6f22u) & TOKENIZER_UNICODE_LETTER),
+        "source regex distinguishes combining marks from letters without excluding CJK");
+    return 0;
+}
+
 static int reasoning_capture_sink(void *opaque,
                                   yvex_reasoning_segment segment,
                                   const unsigned char *bytes,
@@ -1539,6 +1565,25 @@ static int test_incremental_decoder(void)
                          memcmp(batch.bytes, "\xf0\x9f\x98\x80ok", 6u) == 0,
                      "batch decode matches incremental bytes");
     yvex_tokenizer_decode_result_clear(&batch);
+    YVEX_TEST_ASSERT(yvex_tokenizer_decode(&tokenizer, NULL, 0u, &options, &batch, &err) == YVEX_OK &&
+                         batch.completed && !batch.byte_count && !batch.token_count &&
+                         !strcmp(batch.decoded_bytes_identity,
+                             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+                     "empty decode retains the independently known empty SHA-256 identity");
+    char empty_identity[YVEX_SHA256_HEX_CAP];
+    memcpy(empty_identity, batch.decoder_identity, sizeof(empty_identity));
+    yvex_tokenizer_decode_result_clear(&batch);
+    unsigned int control = 0u;
+    YVEX_TEST_ASSERT(yvex_tokenizer_decode(&tokenizer, &control, 1u, &options, &batch, &err) == YVEX_OK &&
+                         batch.completed && !batch.byte_count && batch.token_count == 1u &&
+                         batch.suppressed_special_count == 1u &&
+                         !strcmp(batch.decoded_bytes_identity,
+                             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") &&
+                         strcmp(batch.decoder_identity, empty_identity),
+                     "suppressed control has empty bytes but a distinct token-bound decode identity");
+    yvex_tokenizer_decode_result_clear(&batch);
+    YVEX_TEST_ASSERT(yvex_tokenizer_decode(&tokenizer, NULL, 1u, &options, &batch, &err) == YVEX_ERR_INVALID_ARG,
+                     "nonempty decode still requires actual token IDs");
     yvex_tokenizer_decoder_close(&decoder);
     yvex_tokenizer_decoder_close(&decoder);
     YVEX_TEST_ASSERT(!decoder, "decoder close is idempotent");
@@ -1753,6 +1798,8 @@ static int test_candidate_transactions(void)
 
 int yvex_test_runtime_tokenizer(void)
 {
+    if (test_bpe_source_options() != 0)
+        return 1;
     if (test_0731_source_prompt_modes() != 0)
         return 1;
     if (test_versioned_reasoning_instructions() != 0)

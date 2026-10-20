@@ -8,6 +8,112 @@
 #include "src/backend/cuda/dot_recovery.h"
 #include <yvex/internal/execution_batch.h>
 #include <yvex/internal/execution_observation.h>
+
+static __device__ float sigmoid_publish_bf16(float value)
+{
+    unsigned int bits = __float_as_uint(value);
+    if ((bits & 0x7f800000u) == 0x7f800000u) return value;
+    bits += 0x7fffu + ((bits >> 16u) & 1u);
+    return __uint_as_float(bits & 0xffff0000u);
+}
+
+/* One real row, not a synthetic expert population. Bias affects selection
+ * only. Match the scalar reference's normalization and ascending expert sum. */
+extern "C" __global__ void yvex_sigmoid_route_bf16(
+    const float *input, const float *logits, const float *bias, float *scratch,
+    unsigned long long hidden, unsigned long long middle, unsigned long long experts,
+    unsigned long long selected, float epsilon, float scale, int *status)
+{
+    if (*status) return;
+    unsigned long long row = blockIdx.x, stride = 2u * experts + selected + selected * middle;
+    for (unsigned long long i = threadIdx.x; i < hidden; i += blockDim.x) {
+        float x = input[row * hidden + i];
+        if (!isfinite(x) || x != sigmoid_publish_bf16(x)) atomicCAS(status, 0, 1);
+    }
+    if (threadIdx.x) return;
+    float *probability = scratch + row * stride, *weight = probability + experts;
+    float *chosen = weight + experts;
+    float scores[256];
+    unsigned int indices[256];
+    for (unsigned long long e = 0u; e < experts; ++e) {
+        float x = logits[row * experts + e];
+        if (!isfinite(x) || x != sigmoid_publish_bf16(x) || !isfinite(bias[e])) {
+            atomicCAS(status, 0, 2); return;
+        }
+        probability[e] = sigmoid_publish_bf16(__fdiv_rn(1.0f, __fadd_rn(1.0f, expf(-x))));
+        scores[e] = __fadd_rn(probability[e], bias[e]); indices[e] = (unsigned int)e; weight[e] = -1.0f;
+        if (!isfinite(scores[e])) { atomicCAS(status, 0, 2); return; }
+    }
+    for (unsigned long long i = 1u; i < experts; ++i) {
+        unsigned int e = indices[i];
+        unsigned long long j = i;
+        while (j && scores[indices[j - 1u]] < scores[e]) { indices[j] = indices[j - 1u]; --j; }
+        indices[j] = e;
+    }
+    if (selected < experts && scores[indices[selected - 1u]] == scores[indices[selected]]) {
+        atomicCAS(status, 0, 3); return;
+    }
+    float sum = 0.0f;
+    for (unsigned long long k = 0u; k < selected; ++k) sum = __fadd_rn(sum, probability[indices[k]]);
+    float denominator = sigmoid_publish_bf16(__fadd_rn(sigmoid_publish_bf16(sum), epsilon));
+    if (!isfinite(denominator) || denominator <= 0.0f) { atomicCAS(status, 0, 4); return; }
+    for (unsigned long long k = 0u; k < selected; ++k) {
+        unsigned int e = indices[k];
+        weight[e] = sigmoid_publish_bf16(__fmul_rn(
+            sigmoid_publish_bf16(__fdiv_rn(probability[e], denominator)), scale));
+        if (!isfinite(weight[e])) { atomicCAS(status, 0, 4); return; }
+    }
+    unsigned long long k = 0u;
+    for (unsigned long long e = 0u; e < experts; ++e)
+        if (weight[e] >= 0.0f) chosen[k++] = (float)e;
+}
+
+extern "C" __global__ void yvex_sigmoid_up_bf16(
+    const float *input, const unsigned char *gate, const unsigned char *up, float *scratch,
+    unsigned long long hidden, unsigned long long middle, unsigned long long experts,
+    unsigned long long selected, unsigned long long rows, int *status)
+{
+    unsigned long long job = (unsigned long long)blockIdx.x * (blockDim.x / 32u) + threadIdx.x / 32u;
+    if (__any_sync(0xffffffffu, *status != 0) || job >= rows * selected * middle) return;
+    unsigned long long j = job % middle, rank = (job / middle) % selected, row = job / (middle * selected);
+    unsigned long long stride = 2u * experts + selected + selected * middle;
+    float *chosen = scratch + row * stride + 2u * experts, *activation = chosen + selected;
+    unsigned long long e = (unsigned long long)chosen[rank], offset = (e * middle + j) * hidden * 2u;
+    float g = qtype_certified_dot_f64<YVEX_GGUF_QTYPE_BF16>(gate + offset, input + row * hidden, hidden, 0u);
+    float u = qtype_certified_dot_f64<YVEX_GGUF_QTYPE_BF16>(up + offset, input + row * hidden, hidden, 0u);
+    if (threadIdx.x & 31u) return;
+    g = sigmoid_publish_bf16(g); u = sigmoid_publish_bf16(u);
+    float a = sigmoid_publish_bf16(__fdiv_rn(g, __fadd_rn(1.0f, expf(-g))));
+    a = sigmoid_publish_bf16(__fmul_rn(a, u));
+    if (!isfinite(g) || !isfinite(u) || !isfinite(a)) { atomicCAS(status, 0, 5); return; }
+    activation[rank * middle + j] = a;
+}
+
+extern "C" __global__ void yvex_sigmoid_down_bf16(
+    const unsigned char *down, const float *scratch, float *output,
+    unsigned long long hidden, unsigned long long middle, unsigned long long experts,
+    unsigned long long selected, unsigned long long rows, int *status)
+{
+    unsigned long long job = (unsigned long long)blockIdx.x * (blockDim.x / 32u) + threadIdx.x / 32u;
+    if (__any_sync(0xffffffffu, *status != 0) || job >= rows * hidden) return;
+    unsigned long long j = job % hidden, row = job / hidden;
+    unsigned long long stride = 2u * experts + selected + selected * middle;
+    const float *weight = scratch + row * stride + experts, *chosen = weight + experts;
+    const float *activation = chosen + selected;
+    float sum = 0.0f;
+    for (unsigned long long k = 0u; k < selected; ++k) {
+        unsigned long long e = (unsigned long long)chosen[k], offset = (e * hidden + j) * middle * 2u;
+        float value = qtype_certified_dot_f64<YVEX_GGUF_QTYPE_BF16>(
+            down + offset, activation + k * middle, middle, 0u);
+        if (!(threadIdx.x & 31u)) {
+            value = sigmoid_publish_bf16(value);
+            sum = sigmoid_publish_bf16(__fadd_rn(sum, sigmoid_publish_bf16(__fmul_rn(value, weight[e]))));
+            if (!isfinite(value) || !isfinite(sum)) atomicCAS(status, 0, 6);
+        }
+    }
+    if (!(threadIdx.x & 31u) && !*status) output[job] = sum;
+}
+
 static __device__ float moe_warp_dot(
     const unsigned char *weight, const unsigned char *activation, unsigned long long extent,
     unsigned long long row_bytes, unsigned int qtype, int q8_input, int *status,

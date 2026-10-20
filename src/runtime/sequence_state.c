@@ -173,11 +173,6 @@ int yvex_sequence_state_open_for_backend(
     state->storage_backend = backend;
     rc = sequence_state_allocate_metadata(state, err);
     if (rc == YVEX_OK) rc = sequence_state_layout(state, plan, err);
-    for (size_t i = 0u; rc == YVEX_OK && backend != YVEX_BACKEND_KIND_CPU &&
-         i < plan->binding_count; ++i)
-        if (plan->bindings[i].schema_version == YVEX_SEQUENCE_STATE_CONV_SCHEMA_V2)
-            rc = sequence_state_refuse(err, YVEX_ERR_UNSUPPORTED,
-                "convolution-only state has no admitted device execution provider");
     if (rc == YVEX_OK && backend == YVEX_BACKEND_KIND_CPU)
         rc = sequence_state_allocate_banks(state, err);
     if (rc == YVEX_OK && !sequence_state_identity(state))
@@ -213,11 +208,11 @@ static int sequence_state_device_views(
                     state->device_banks[bank], layer->convolution_offset,
                     layer->binding.convolution_state_values,
                     &layer->device_convolution[bank]) ||
-                !yvex_backend_tensor_f32_subview(
+                (layer->binding.recurrent_state_values && !yvex_backend_tensor_f32_subview(
                     state->device_banks[bank],
                     state->convolution_values + layer->recurrent_offset,
                     layer->binding.recurrent_state_values,
-                    &layer->device_recurrent[bank]))
+                    &layer->device_recurrent[bank])))
                 return sequence_state_refuse(
                     err, YVEX_ERR_BOUNDS,
                     "recurrent device-state subview exceeds its bank");
@@ -297,7 +292,8 @@ static void sequence_state_view(
     const float *base = state->banks[bank];
 
     view->convolution = base + layer->convolution_offset;
-    view->recurrent = base + state->convolution_values + layer->recurrent_offset;
+    view->recurrent = layer->binding.recurrent_state_values ?
+        base + state->convolution_values + layer->recurrent_offset : NULL;
 }
 
 int yvex_sequence_state_begin(
@@ -351,8 +347,8 @@ int yvex_sequence_state_layer(
                              layer->convolution_offset;
     candidate->convolution_capacity =
         layer->binding.convolution_state_values;
-    candidate->recurrent = state->banks[candidate_bank] +
-        state->convolution_values + layer->recurrent_offset;
+    candidate->recurrent = layer->binding.recurrent_state_values ? state->banks[candidate_bank] +
+        state->convolution_values + layer->recurrent_offset : NULL;
     candidate->recurrent_capacity = layer->binding.recurrent_state_values;
     yvex_error_clear(err);
     return YVEX_OK;
@@ -382,13 +378,15 @@ int yvex_sequence_state_device_layer(
     if (state->committed_position) {
         committed->convolution =
             &layer->device_convolution[state->committed_bank];
-        committed->recurrent = &layer->device_recurrent[state->committed_bank];
+        committed->recurrent = layer->binding.recurrent_state_values ?
+            &layer->device_recurrent[state->committed_bank] : NULL;
     }
     candidate_bank = 1u - state->committed_bank;
     layer->device_convolution[candidate_bank].is_written = 0;
     layer->device_recurrent[candidate_bank].is_written = 0;
     candidate->convolution = &layer->device_convolution[candidate_bank];
-    candidate->recurrent = &layer->device_recurrent[candidate_bank];
+    candidate->recurrent = layer->binding.recurrent_state_values ?
+        &layer->device_recurrent[candidate_bank] : NULL;
     yvex_error_clear(err);
     return YVEX_OK;
 }
@@ -410,7 +408,7 @@ int yvex_sequence_state_stage(
         sequence_state_layer *layer = &state->layers[ordinal];
         unsigned int bank = 1u - state->committed_bank;
         if (!layer->device_convolution[bank].is_written ||
-            !layer->device_recurrent[bank].is_written)
+            (layer->binding.recurrent_state_values && !layer->device_recurrent[bank].is_written))
             return sequence_state_refuse(
                 err, YVEX_ERR_STATE,
                 "device recurrent layer must be fully written before staging");

@@ -173,16 +173,20 @@
     },
     {
       "id": "liquid-source-and-convolution",
-      "patterns": ["src/model/families/lfm2.c", "include/yvex/internal/families/lfm2.h",
+      "patterns": ["src/model/families/lfm2.c", "src/graph/families/lfm2.c", "include/yvex/internal/families/lfm2.h",
                    "tests/unit/lfm2.c", "tests/unit/short_conv.c", "tests/reference/lfm2_short_conv.py",
+                   "tests/unit/lfm2_program.c", "tests/reference/lfm2_operations.py", "tests/reference/lfm2_program.py",
+                   "tests/reference/lfm2_tokenizer.py",
                    "src/ir/sequence.c", "src/graph/sequence_mixer*.c",
-                   "src/runtime/program_sequence.c", "src/runtime/sequence_state.c"],
+                   "src/runtime/program_sequence.c", "src/runtime/sequence_state.c",
+                   "src/backend/cuda/routed_swiglu.c"],
       "lanes": ["fast", "structural", "numeric", "runtime", "sanitizer"],
       "tests": ["unit.lfm2_source", "unit.short_conv", "unit.ir", "unit.program",
                 "unit.sequence_state", "unit.sequence_state_session", "unit.sequence_mixer",
                 "unit.mamba2_source", "unit.qwen3_5_architecture", "reference.lfm2.short-conv",
-                "live.lfm2.source"],
-      "reason": "exact source roles, convolution-only state version, typed CPU implementation and transaction/refusal controls; real source/component evidence is separate from complete Liquid artifact, binding, CUDA, generation and model quality"
+                "reference.lfm2.moe", "reference.lfm2.program", "reference.lfm2.program.cuda",
+                "reference.lfm2.tokenizer", "live.lfm2.source"],
+      "reason": "exact source roles, convolution-only state version, typed CPU/CUDA consumers and transaction/refusal controls; registered accelerator gates require authorization, and scaled source evidence is separate from complete checkpoint generation and model quality"
     },
     {
       "id": "selective-ssm-source-and-state",

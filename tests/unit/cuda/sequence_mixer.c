@@ -9,6 +9,7 @@
 #include <yvex/internal/sequence_mixer.h>
 #include <yvex/internal/sequence_state.h>
 #include <yvex/internal/transformer.h>
+#include <yvex/internal/quant_numeric.h>
 
 #include "tests/test.h"
 
@@ -576,6 +577,120 @@ static int gated_delta_parity_case(
     return 0;
 }
 
+static int short_conv_cancel(void *opaque)
+{
+    unsigned int *calls = opaque;
+    return ++*calls == 3u; /* Admission, first chunk, then cancellation. */
+}
+
+static int short_conv_device_case(yvex_backend *backend)
+{
+    enum { WIDTH = 4, TAPS = 3, ROWS = 65, OUTPUT = WIDTH * ROWS, INPUT = OUTPUT * 3 };
+    float projection[INPUT], weight[WIDTH * TAPS], expected[OUTPUT], expected_state[WIDTH * TAPS];
+    float observed[OUTPUT], observed_state[WIDTH * TAPS], cpu_state[WIDTH * TAPS], cpu_output[OUTPUT];
+    yvex_device_tensor *input = NULL, *w = NULL, *output = NULL, *status = NULL;
+    yvex_short_conv_geometry g;
+    yvex_short_conv_device_request request = {0};
+    yvex_short_conv_device_result result;
+    yvex_backend_operation_facts facts;
+    yvex_sequence_state_binding binding;
+    yvex_sequence_state_plan plan = {.schema_version = YVEX_SEQUENCE_STATE_SCHEMA_V1,
+        .bindings = &binding, .binding_count = 1u};
+    yvex_sequence_state *owner = NULL;
+    yvex_sequence_device_state_view committed;
+    yvex_sequence_device_state_output candidate;
+    yvex_runtime_transaction_participant participant;
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    yvex_error err;
+    char before[65], after[65];
+#define CONV_CHECK(condition) YVEX_TEST_ASSERT((condition), "CUDA double-gated convolution: " #condition)
+    for (unsigned int i = 0u; i < INPUT; ++i) projection[i] = (float)((int)(i % 17u) - 8) / 8.0f;
+    for (unsigned int i = 0u; i < WIDTH * TAPS; ++i) weight[i] = (float)((int)(i % 7u) - 3) / 8.0f;
+    /* Independent direct time-indexed oracle. Dyadic products/sums are exactly
+     * representable, with explicit source BF16 publications, no native recurrence. */
+    for (int row = 0; row < ROWS; ++row) for (int c = 0; c < WIDTH; ++c) {
+        double sum = 0.0;
+        for (int tap = 0; tap < TAPS; ++tap) {
+            int t = row + tap - TAPS + 1;
+            if (t >= 0) {
+                float product = projection[t * WIDTH * 3 + c] * projection[t * WIDTH * 3 + 2 * WIDTH + c];
+                sum += (double)yvex_quant_bf16_decode(yvex_quant_bf16_encode(product)) * weight[c * TAPS + tap];
+            }
+        }
+        float convolved = yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)sum));
+        expected[row * WIDTH + c] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(
+            convolved * projection[row * WIDTH * 3 + WIDTH + c]));
+    }
+    for (int c = 0; c < WIDTH; ++c) for (int k = 0; k < TAPS; ++k) {
+        int t = ROWS + k - TAPS;
+        expected_state[c * TAPS + k] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(
+            projection[t * WIDTH * 3 + c] * projection[t * WIDTH * 3 + 2 * WIDTH + c]));
+    }
+    CONV_CHECK(ops && ops->short_conv_execute);
+    CONV_CHECK(yvex_short_conv_geometry_seal(&g, WIDTH, TAPS, &err) == YVEX_OK);
+    CONV_CHECK(yvex_sequence_state_binding_seal(&binding, 7u, g.state_values, 0u, g.identity, &err) == YVEX_OK);
+    CONV_CHECK(yvex_sequence_state_open_for_backend(&owner, &plan, YVEX_BACKEND_KIND_CUDA, &err) == YVEX_OK);
+    CONV_CHECK(yvex_sequence_state_attach_device(owner, backend, &err) == YVEX_OK);
+    CONV_CHECK(yvex_sequence_state_participant(owner, &participant, &err) == YVEX_OK);
+    CONV_CHECK(gated_delta_tensor_open(backend, "short-projection", INPUT, projection, &input, &err) == YVEX_OK);
+    CONV_CHECK(gated_delta_tensor_open(backend, "short-weight", WIDTH * TAPS, weight, &w, &err) == YVEX_OK);
+    CONV_CHECK(gated_delta_tensor_open(backend, "short-output", OUTPUT, NULL, &output, &err) == YVEX_OK);
+    CONV_CHECK(gated_delta_tensor_open(backend, "short-status", 1u, NULL, &status, &err) == YVEX_OK);
+    CONV_CHECK(yvex_sequence_state_begin(owner, 0u, ROWS, &err) == YVEX_OK);
+    CONV_CHECK(yvex_sequence_state_device_layer(owner, 7u, &committed, &candidate, &err) == YVEX_OK);
+    CONV_CHECK(!committed.convolution && !committed.recurrent && !candidate.recurrent);
+    request = (yvex_short_conv_device_request){.rows = ROWS, .projection = input, .weight = w,
+        .next_state = candidate.convolution, .output = output, .status = status};
+    CONV_CHECK(yvex_sequence_state_stage(owner, 7u, &err) == YVEX_ERR_STATE);
+    CONV_CHECK(ops->short_conv_execute(backend, &g, &request, &result, &facts, &err) == YVEX_OK);
+    CONV_CHECK(result.complete && result.rows_completed == ROWS && result.execution_chunks == 2u);
+    CONV_CHECK(facts.temporary_bytes == 4u && facts.kernel_launches == 2u && facts.state_bytes == 48u);
+    CONV_CHECK(yvex_backend_tensor_read(backend, output, observed, sizeof(observed), &err) == YVEX_OK);
+    CONV_CHECK(yvex_backend_tensor_read(backend, candidate.convolution, observed_state, sizeof(observed_state), &err) == YVEX_OK);
+    CONV_CHECK(!memcmp(expected, observed, sizeof(expected)) && !memcmp(expected_state, observed_state, sizeof(expected_state)));
+    CONV_CHECK(yvex_sequence_state_stage(owner, 7u, &err) == YVEX_OK);
+    CONV_CHECK(participant.prepare(participant.context, &err) == YVEX_OK);
+    participant.publish(participant.context);
+    CONV_CHECK(yvex_sequence_state_committed_identity(owner, before, &err) == YVEX_OK);
+    for (unsigned int bad = 0u; bad < 6u; ++bad) {
+        unsigned int calls = 0u;
+        CONV_CHECK(yvex_sequence_state_begin(owner, ROWS, ROWS, &err) == YVEX_OK);
+        CONV_CHECK(yvex_sequence_state_device_layer(owner, 7u, &committed, &candidate, &err) == YVEX_OK);
+        request.state = committed.convolution; request.next_state = candidate.convolution;
+        request.status = bad == 3u ? candidate.convolution : status;
+        request.cancel_requested = bad == 4u ? short_conv_cancel : NULL; request.cancel_context = &calls;
+        projection[0] = bad == 0u ? NAN : bad == 1u ? 0.1f : -1.0f;
+        weight[0] = bad == 2u ? INFINITY : -0.375f;
+        CONV_CHECK(yvex_backend_tensor_write(backend, input, projection, sizeof(projection), &err) == YVEX_OK);
+        CONV_CHECK(yvex_backend_tensor_write(backend, w, weight, sizeof(weight), &err) == YVEX_OK);
+        int rc = ops->short_conv_execute(backend, &g, &request, &result, &facts, &err);
+        CONV_CHECK(rc == (bad == 5u ? YVEX_OK : bad == 4u ? YVEX_ERR_CANCELLED : YVEX_ERR_FORMAT));
+        if (bad < 5u) {
+            CONV_CHECK(!result.complete && !candidate.convolution->is_written);
+            CONV_CHECK(yvex_sequence_state_stage(owner, 7u, &err) == YVEX_ERR_STATE);
+        } else {
+            yvex_short_conv_cpu_request cpu = {.rows = ROWS, .projection = projection, .weight = weight,
+                .state = expected_state, .projection_capacity = INPUT, .weight_capacity = WIDTH * TAPS,
+                .state_capacity = WIDTH * TAPS, .next_state = cpu_state, .next_state_capacity = WIDTH * TAPS,
+                .output = cpu_output, .output_capacity = OUTPUT};
+            yvex_short_conv_cpu_result cpu_result;
+            CONV_CHECK(yvex_short_conv_execute_cpu(&g, &cpu, &cpu_result, &err) == YVEX_OK);
+            CONV_CHECK(yvex_backend_tensor_read(backend, output, observed, sizeof(observed), &err) == YVEX_OK);
+            CONV_CHECK(yvex_backend_tensor_read(backend, candidate.convolution, observed_state, sizeof(observed_state), &err) == YVEX_OK);
+            CONV_CHECK(!memcmp(cpu_output, observed, sizeof(observed)) && !memcmp(cpu_state, observed_state, sizeof(cpu_state)));
+        }
+        CONV_CHECK(participant.abort(participant.context, &err) == YVEX_OK);
+        CONV_CHECK(yvex_sequence_state_committed_identity(owner, after, &err) == YVEX_OK && !strcmp(before, after));
+    }
+    CONV_CHECK(yvex_sequence_state_close_checked(&owner, &err) == YVEX_OK);
+    CONV_CHECK(yvex_backend_tensor_release(backend, &input, &err) == YVEX_OK);
+    CONV_CHECK(yvex_backend_tensor_release(backend, &w, &err) == YVEX_OK);
+    CONV_CHECK(yvex_backend_tensor_release(backend, &output, &err) == YVEX_OK);
+    CONV_CHECK(yvex_backend_tensor_release(backend, &status, &err) == YVEX_OK);
+#undef CONV_CHECK
+    return 0;
+}
+
 int yvex_cuda_test_sequence_mixer(void)
 {
     const yvex_gated_delta_requirement small = {
@@ -624,6 +739,7 @@ int yvex_cuda_test_sequence_mixer(void)
         return 77;
     }
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open CUDA gated-delta backend");
+    YVEX_TEST_ASSERT(short_conv_device_case(backend) == 0, "double-gated BF16 convolution and state lifecycle");
     YVEX_TEST_ASSERT(
         gated_delta_parity_case(
             backend, &small, 65ull, 0, 2ull, 6e-5, &maximum_difference) == 0,

@@ -99,23 +99,29 @@ static const physical_rule physical_rules[] = {
     {"mhc.residual_post", "mhc.residual_post.f64acc.bf16.v1", 0u, 0u},
     {"nn.rms_norm", "rms_norm.bf16.v1", 0u, 0x02u},
     {"nn.rms_norm", "rms_norm.f32.v1", 0u, 0x02u},
+    {"nn.rms_norm", "rms_norm.rounded_input.bf16.v2", 0u, 0x02u},
     {"nn.weighted_rms", "weighted_rms.f64scale.bf16.v1", 0u, 0x02u},
     {"nn.group_rms_norm", "group_rms_norm.bf16.vector4.v1", 0u, 0x02u},
+    {"nn.group_rms_norm", "group_rms_norm.rounded_input.bf16.v2", 0u, 0x02u},
     {"tensor.rotary_half", "rotary_half.bf16.products.v1", 0u, 0u},
     {"attention.full", "attention.full.f32acc.bf16.v1", 0u, 0u},
     {"attention.full", "attention.full.f32.v1", 0u, 0u},
     {"tensor.rotary_tables", "rotary_tables.f64.bf16.v1", 0u, 0u},
     {"tensor.masked_rows", "masked_rows.host.bf16.v1", 0u, 0u},
     {"nn.silu_product", "silu_product.bf16.v1", 0u, 0u},
+    {"nn.routed_swiglu", "routed_swiglu.sigmoid.bf16.v1", 0u, 0x3cu},
     {"tensor.add", "add.bf16.v1", 0u, 0u},
     {"tensor.add", "add.f32.v1", 0u, 0u},
     {"sequence.selective_ssd", "selective_ssd.cpu.f32state.v1",
      YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x7eu},
+    {"sequence.double_gated_conv", "double_gated_conv.bf16.v2",
+     YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x02u},
     {"sequence.double_gated_conv", "double_gated_conv.cpu.bf16.v1",
      YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x02u},
     {"sequence.gated_delta", "gated_delta.bf16.f32state.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
     {"sequence.gated_delta", "gated_delta.mixed.f32state.v2", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
     {"attention.gated_causal", "gated_causal.bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x18u},
+    {"attention.causal", "causal.eager_bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0u},
     {"tensor.reshape", "reshape.input_view.v1", 0u, 0u},
     {"tensor.cast", "cast.input_view.f32.v1", 0u, 0u}};
 
@@ -197,8 +203,10 @@ int yvex_program_physical_token_interface(const yvex_program_physical *p,
         view.recurrent_operations += !strcmp(s->implementation, "gated_delta.bf16.f32state.v1") ||
                                      !strcmp(s->implementation, "gated_delta.mixed.f32state.v2");
         view.recurrent_operations += !strcmp(s->implementation, "selective_ssd.cpu.f32state.v1");
-        view.recurrent_operations += !strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1");
-        view.attention_operations += !strcmp(s->implementation, "gated_causal.bf16.v1");
+        view.recurrent_operations += !strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1") ||
+            !strcmp(s->implementation, "double_gated_conv.bf16.v2");
+        view.attention_operations += !strcmp(s->implementation, "gated_causal.bf16.v1") ||
+            !strcmp(s->implementation, "causal.eager_bf16.v1");
         if (!strcmp(s->implementation, "embedding.bf16.v1") ||
             !strcmp(s->implementation, "embedding.encoded.f32.v1")) {
             const yvex_program_physical_value *weight = &p->values[s->operands[1]];
@@ -265,6 +273,10 @@ static const physical_rule *physical_rule_select(const yvex_program_physical *p,
     const char *semantic = op->definition->name;
     if (!strcmp(semantic, "sequence.gated_delta") && op->definition->version == 2u)
         return physical_rule_find("gated_delta.mixed.f32state.v2", 1);
+    if (!strcmp(semantic, "nn.rms_norm") && op->definition->version == 2u)
+        return physical_rule_find("rms_norm.rounded_input.bf16.v2", 1);
+    if (!strcmp(semantic, "nn.group_rms_norm") && op->definition->version == 2u)
+        return physical_rule_find("group_rms_norm.rounded_input.bf16.v2", 1);
     if (!strcmp(semantic, "nn.linear"))
         for (unsigned int i = 0u; i < op->attribute_count; ++i)
             if (!strcmp(op->attributes[i].name, "reduction")) {
@@ -310,6 +322,13 @@ static int physical_numeric_verify(const yvex_program_physical *p,
             return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
                 "operand storage class requires another physical implementation");
     if (!strcmp(s->implementation, "parameter.encoded.v1")) return YVEX_OK;
+    if (!strcmp(s->implementation, "routed_swiglu.sigmoid.bf16.v1")) {
+        for (i = 2u; i < 6u; ++i)
+            if (p->values[s->operands[i]].qtype != (i == 2u ? YVEX_GGUF_QTYPE_F32 : YVEX_GGUF_QTYPE_BF16))
+                return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+                    "biased sigmoid SwiGLU requires source BF16 experts and F32 routing bias");
+        return YVEX_OK; /* Semantic verification owns all coupled operand and publication types. */
+    }
     if (!strcmp(s->implementation, "gated_delta.mixed.f32state.v2")) {
         for (i = 4u; i < 8u; ++i) {
             unsigned int expected = i == 5u || i == 7u ? YVEX_GGUF_QTYPE_F32 : YVEX_GGUF_QTYPE_BF16;
@@ -556,7 +575,8 @@ static int physical_state_lower(yvex_program_physical *p, yvex_error *err)
         yvex_gated_delta_plan *d;
         yvex_ir_id root;
         int rc;
-        if (!strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1")) {
+        if (!strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1") ||
+            !strcmp(s->implementation, "double_gated_conv.bf16.v2")) {
             yvex_short_conv_geometry *g = p->short_conv[i] = calloc(1u, sizeof(*g));
             if (!g) return physical_refuse(err, YVEX_ERR_NOMEM, "convolution geometry allocation failed");
             root = p->values[s->operands[2]].state_root;
@@ -757,8 +777,10 @@ static int physical_steps_lower(yvex_program_physical *p, const yvex_ir_module *
             source->results, source->result_count) : NULL;
         yvex_program_physical_step *step = &p->steps[i];
         int parameter = rule && !strcmp(rule->semantic, "core.parameter");
-        if (!rule || (op->definition->version != 1u &&
-            !(op->definition->version == 2u && !strcmp(rule->implementation, "gated_delta.mixed.f32state.v2"))) ||
+        if (!rule || (op->definition->version != 1u && !(parameter && op->definition->version == 2u) &&
+            !(op->definition->version == 2u && (!strcmp(rule->implementation, "gated_delta.mixed.f32state.v2") ||
+                !strcmp(rule->implementation, "rms_norm.rounded_input.bf16.v2") ||
+                !strcmp(rule->implementation, "group_rms_norm.rounded_input.bf16.v2")))) ||
             source->operand_count > YVEX_PROGRAM_OPERAND_CAP || source->result_count > YVEX_PROGRAM_RESULT_CAP ||
             (!parameter && op->attribute_count > YVEX_PROGRAM_ATTRIBUTE_CAP) ||
             yvex_ir_operation_effects(m, source->semantic_operation) != rule->effects)
@@ -875,7 +897,9 @@ static int physical_verify(yvex_program_physical *p, yvex_error *err)
             rc = physical_refuse(err, YVEX_ERR_FORMAT, "physical operation/effects are not admitted");
         if (rc != YVEX_OK) break;
         r.operation = rule->semantic;
-        r.version = !strcmp(rule->implementation, "gated_delta.mixed.f32state.v2") ? 2u : 1u;
+        r.version = !strcmp(rule->implementation, "gated_delta.mixed.f32state.v2") ||
+            !strcmp(rule->implementation, "rms_norm.rounded_input.bf16.v2") ||
+            !strcmp(rule->implementation, "group_rms_norm.rounded_input.bf16.v2") ? 2u : 1u;
         for (j = 0u; rc == YVEX_OK && j < step->operand_count; ++j) {
             if (step->operands[j] >= defined)
                 rc = physical_refuse(err, YVEX_ERR_FORMAT, "physical operand has no preceding definition");

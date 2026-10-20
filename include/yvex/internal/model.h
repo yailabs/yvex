@@ -14,6 +14,11 @@
 
 #define YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1 1u
 #define YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 2u
+/* V3 retains the V2 scalar extent, but admits mixed dense/routed FFNs and
+ * activation_limit == 0 (no clamp). Its execution authority is a typed program,
+ * not the legacy decoder/MoE plan. V1/V2 identities and validation are unchanged. */
+#define YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V3 3u
+int yvex_model_execution_schema_supported(unsigned int version);
 #define YVEX_MODEL_EXECUTION_IDENTITY_CAP (YVEX_SHA256_HEX_BYTES + 1u)
 #define YVEX_MODEL_EXECUTION_FEATURE_LAYER_CAP 8u
 #define YVEX_MODEL_EXECUTION_SCALAR_COUNT_V1 56u
@@ -192,7 +197,10 @@ typedef enum {
     YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
     /* Causal 64-key online softmax, BF16 probabilities, F32 MMA; distinct
      * numerical realization, never an equivalent replacement for V1. */
-    YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1
+    YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1,
+    /* Eager attention: BF16 dot publication, scaled scores, probabilities and
+     * value contraction; F32 softmax. Distinct from both classes above. */
+    YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1
 } yvex_attention_compute_contract;
 
 /* Residual mixing projection only: all subsequent mHC operations retain

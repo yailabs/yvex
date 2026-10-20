@@ -79,6 +79,108 @@ extern "C" __global__ void yvex_rms_norm_bf16_policy_f32(
             float_to_bf16_rne(weight[index] * (inverse * input[offset + index]));
 }
 
+/* Deterministic rounded-input RMS class. Ordered separate F32 square/sum,
+ * exact sqrt/division rounding, BF16 normalized value then BF16 weight product.
+ * This is deliberately not the existing vector-four/F64 RMS realization. */
+extern "C" __global__ void yvex_rounded_rms_bf16(
+    const float *input, const float *weight, float *output,
+    unsigned long long width, float epsilon, int *status)
+{
+    __shared__ float inverse;
+    unsigned long long base = (unsigned long long)blockIdx.x * width;
+    if (threadIdx.x == 0u) {
+        float sum = 0.0f;
+        for (unsigned long long i = 0u; i < width; ++i) {
+            float value = input[base + i];
+            if (!isfinite(value)) atomicCAS(status, 0, 1);
+            sum = __fadd_rn(sum, __fmul_rn(value, value));
+        }
+        inverse = __fdiv_rn(1.0f, __fsqrt_rn(__fadd_rn(__fdiv_rn(sum, (float)width), epsilon)));
+        if (!isfinite(sum) || !isfinite(inverse)) atomicCAS(status, 0, 1);
+    }
+    __syncthreads();
+    for (unsigned long long i = threadIdx.x; i < width; i += blockDim.x) {
+        float value = float_to_bf16_rne(__fmul_rn(input[base + i], inverse));
+        value = float_to_bf16_rne(__fmul_rn(value, weight[i]));
+        if (!isfinite(weight[i]) || !isfinite(value)) atomicCAS(status, 0, 1);
+        output[base + i] = value;
+    }
+}
+
+extern "C" __global__ void yvex_eager_score_bf16(
+    const float *q, const float *k, float *scores, unsigned long long heads,
+    unsigned long long kvheads, unsigned long long dim, unsigned long long keys,
+    unsigned long long start, unsigned long long offset, unsigned long long rows,
+    unsigned long long qstride, unsigned long long kstride, int causal, int *status)
+{
+    unsigned long long i = (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= rows * heads * keys) return;
+    unsigned long long key = i % keys, head = i / keys % heads, row = i / keys / heads;
+    if (causal && key > start + offset + row) { scores[i] = -INFINITY; return; }
+    const float *query = q + (offset + row) * qstride + head * dim;
+    const float *history = k + key * kstride + (head / (heads / kvheads)) * dim;
+    float sum = 0.0f;
+    for (unsigned long long d = 0u; d < dim; ++d) {
+        if (!isfinite(query[d]) || !isfinite(history[d]) ||
+            query[d] != float_to_bf16_rne(query[d]) || history[d] != float_to_bf16_rne(history[d]))
+            atomicCAS(status, 0, 1);
+        sum = __fmaf_rn(query[d], history[d], sum);
+    }
+    sum = float_to_bf16_rne(sum);
+    sum = float_to_bf16_rne(__fmul_rn(sum, __fdiv_rn(1.0f, __fsqrt_rn((float)dim))));
+    if (!isfinite(sum)) atomicCAS(status, 0, 1);
+    scores[i] = sum;
+}
+
+extern "C" __global__ void yvex_eager_softmax_bf16(
+    float *scores, unsigned long long heads, unsigned long long keys,
+    unsigned long long start, unsigned long long offset, int causal, int *status)
+{
+    __shared__ float maximum, denominator;
+    unsigned long long row = (unsigned long long)blockIdx.x / heads;
+    unsigned long long visible = causal ? start + offset + row + 1u : keys;
+    float *p = scores + (unsigned long long)blockIdx.x * keys;
+    if (threadIdx.x == 0u) {
+        maximum = -INFINITY;
+        for (unsigned long long i = 0u; i < visible; ++i) maximum = fmaxf(maximum, p[i]);
+    }
+    __syncthreads();
+    for (unsigned long long i = threadIdx.x; i < visible; i += blockDim.x)
+        p[i] = expf(__fsub_rn(p[i], maximum));
+    __syncthreads();
+    if (threadIdx.x == 0u) {
+        denominator = 0.0f;
+        for (unsigned long long i = 0u; i < visible; ++i) denominator = __fadd_rn(denominator, p[i]);
+        if (!isfinite(denominator) || denominator <= 0.0f) atomicCAS(status, 0, 1);
+    }
+    __syncthreads();
+    for (unsigned long long i = threadIdx.x; i < visible; i += blockDim.x)
+        p[i] = float_to_bf16_rne(__fdiv_rn(p[i], denominator));
+}
+
+extern "C" __global__ void yvex_eager_value_bf16(
+    const float *probabilities, const float *value, float *output,
+    unsigned long long heads, unsigned long long kvheads, unsigned long long dim,
+    unsigned long long keys, unsigned long long start, unsigned long long offset,
+    unsigned long long rows, unsigned long long vstride, int causal, int *status)
+{
+    unsigned long long i = (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= rows * heads * dim) return;
+    unsigned long long row = i / dim / heads, head = i / dim % heads, lane = i % dim;
+    unsigned long long visible = causal ? start + offset + row + 1u : keys;
+    const float *p = probabilities + (row * heads + head) * keys;
+    const float *v = value + (head / (heads / kvheads)) * dim + lane;
+    float sum = 0.0f;
+    for (unsigned long long key = 0u; key < visible; ++key) {
+        float x = v[key * vstride];
+        if (!isfinite(x) || x != float_to_bf16_rne(x) || !isfinite(p[key])) atomicCAS(status, 0, 1);
+        sum = __fmaf_rn(p[key], x, sum);
+    }
+    sum = float_to_bf16_rne(sum);
+    if (!isfinite(sum)) atomicCAS(status, 0, 1);
+    output[(offset + row) * heads * dim + head * dim + lane] = sum;
+}
+
 /* Apply explicit rotate-half cos/sin tables to packed token/head vectors in place. */
 extern "C" __global__ void yvex_rotary_half_f32(
     float *values, const float *cosines, const float *sines,

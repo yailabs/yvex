@@ -574,6 +574,47 @@ int yvex_cuda_weighted_rms_bf16(yvex_backend *backend, const yvex_device_tensor 
     return rc;
 }
 
+int yvex_cuda_rounded_rms_bf16(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *weight, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, float epsilon,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_cuda_work work;
+    unsigned long long count;
+    const char *where = "cuda.rounded-rms";
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (!state || !facts || !rows || rows > INT_MAX || !width ||
+        !isfinite(epsilon) || epsilon <= 0.0f || !yvex_core_u64_mul(rows, width, &count) ||
+        count > SIZE_MAX / (2u * sizeof(float)) ||
+        !transformer_tensor(backend, input, count, 1) ||
+        !transformer_tensor(backend, weight, width, 1) ||
+        !transformer_tensor(backend, output, count, 0))
+        return cuda_transformer_refuse(err, YVEX_ERR_FORMAT, where, "bounded normalization operands required");
+    const yvex_device_tensor *sources[] = {input, weight};
+    for (size_t i = 0u; i < 2u; ++i) {
+        uintptr_t a = (uintptr_t)output->data, b = (uintptr_t)sources[i]->data;
+        if (a <= b ? b - a < output->bytes : a - b < sources[i]->bytes)
+            return cuda_transformer_refuse(err, YVEX_ERR_FORMAT, where, "normalization output cannot alias operands");
+    }
+    output->is_written = 0;
+    int rc = status_transaction_open(backend, &work, 0, where, err);
+    if (rc != YVEX_OK) return rc;
+    CUdeviceptr x = yvex_cuda_tensor_ptr(input), w = yvex_cuda_tensor_ptr(weight);
+    CUdeviceptr y = yvex_cuda_tensor_ptr(output);
+    void *args[] = {&x, &w, &y, &width, &epsilon, &work.status};
+    rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        state->rounded_rms_function, (unsigned int)rows, TRANSFORMER_BLOCK, 0u, args, where, err);
+    rc = status_transaction_close(&work, 1, 0, rc, facts, where, err);
+    if (rc == YVEX_OK) {
+        output->is_written = 1; facts->kernel_launches = 1u;
+        facts->active_weight_bytes = width * sizeof(float);
+        facts->activation_bytes = count * 2u * sizeof(float);
+        facts->compulsory_memory_facts_available = 1;
+    }
+    return rc;
+}
+
 static int transformer_launch(yvex_backend *backend, CUfunction function,
                               unsigned int grid, unsigned int shared_bytes,
                               void **parameters, const char *stage,

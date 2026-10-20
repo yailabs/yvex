@@ -739,8 +739,7 @@ static int specialization_build(
     prefill_width = model && model->maximum_context < YVEX_ENGINE_PREFILL_MAXIMUM_WIDTH
                         ? model->maximum_context : YVEX_ENGINE_PREFILL_MAXIMUM_WIDTH;
     if (!out || !package || !model || !prefill_width || !package->decision_count || maximum_width >= 63ull ||
-        (model->schema_version != YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1 &&
-         model->schema_version != YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2) ||
+        !yvex_model_execution_schema_supported(model->schema_version) ||
         (backend_kind != YVEX_BACKEND_KIND_CPU && backend_kind != YVEX_BACKEND_KIND_CUDA) ||
         (backend_kind == YVEX_BACKEND_KIND_CUDA && !backend))
         return specialization_refuse(err, YVEX_ERR_INVALID_ARG,
@@ -862,6 +861,10 @@ static int binding_backend_admit(
     const yvex_backend *backend, yvex_error *err)
 {
     yvex_backend_device_info device = {0};
+    if (binding && binding->summary.layer_count && kind == YVEX_BACKEND_KIND_CUDA &&
+        !binding->attention.cuda_execution_ready)
+        return specialization_refuse(err, YVEX_ERR_UNSUPPORTED,
+            "bound attention arithmetic has no admitted CUDA consumer");
     if (!binding || !binding->summary.layer_count || binding->attention.cpu_reference_ready)
         return YVEX_OK;
     if (kind != YVEX_BACKEND_KIND_CUDA)

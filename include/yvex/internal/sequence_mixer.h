@@ -36,6 +36,20 @@ typedef struct {
 int yvex_short_conv_execute_cpu(const yvex_short_conv_geometry *,
     const yvex_short_conv_cpu_request *, yvex_short_conv_cpu_result *, yvex_error *);
 
+/* F32 carriers of the same BF16 publications; status is one caller-owned
+ * four-byte device word. It is scratch, never recurrent model state. */
+typedef struct yvex_short_conv_device_request {
+    unsigned long long rows;
+    const yvex_device_tensor *projection, *weight, *state;
+    yvex_device_tensor *next_state, *output, *status;
+    int (*cancel_requested)(void *);
+    void *cancel_context;
+} yvex_short_conv_device_request;
+typedef struct yvex_short_conv_device_result {
+    unsigned long long rows_completed, state_values, output_values, execution_chunks;
+    int complete, cancelled;
+} yvex_short_conv_device_result;
+
 typedef struct yvex_gated_delta_plan {
     unsigned int schema_version;
     yvex_gated_delta_requirement requirement;

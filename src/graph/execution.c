@@ -25,8 +25,7 @@ static int execution_hash_finish(yvex_sha256 *hash,
 }
 static int execution_model_schema_supported(unsigned int schema_version)
 {
-    return schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1 ||
-           schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2;
+    return yvex_model_execution_schema_supported(schema_version);
 }
 static yvex_execution_consumer_class execution_consumer(yvex_tensor_role role)
 {

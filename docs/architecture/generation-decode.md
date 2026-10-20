@@ -35,6 +35,17 @@ terminal adapters project typed results; they do not infer model grammar from
 prose. [Speculation and finite results](advanced-generation.md) reuse this
 substrate where their distinct semantics apply.
 
+An empty batch, or a batch containing only suppressed special tokens, has a
+valid empty decoded-byte identity. Its token-bound decode identity still
+distinguishes the consumed token population; no fabricated text is published.
+
+For admitted ByteLevel BPE, the embedded source JSON also owns `ignore_merges`.
+The tokenizer derives that option after authenticating the JSON; no parallel
+policy store or artifact rewrite is involved. BPE applies the leftmost
+minimum-rank pair and re-evaluates new neighbors before another merge. The
+`llama-bpe` pre-tokenizer consumes its own regex semantics, not DeepSeek's CJK
+and letter/mark segmentation. Source-token parity is separately qualified.
+
 ## Generation vocabulary
 
 Prefill, ordinary decode, DSpark draft, target verification, and correction are

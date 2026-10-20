@@ -14,6 +14,75 @@ publication: {html: true, pdf: true, index: true}
 
 [Up](README.md)
 
+## Liquid source-to-binding continuation — 2026-10-20
+
+Program P now constructs the complete pinned
+[Liquid LFM2.5 program and artifact](../model-families/lfm2.md), not only its
+convolution component. This remains an **IN PROGRESS** model delivery:
+no complete-checkpoint generation, CUDA numerical execution, throughput or
+held-out quality is established.
+
+The retained construction maps all 7,610 source tensors to 428 BF16/F32
+terminals without quantization. Native roundtrip and the independent GGUF reader
+check 47,943,180,288 parameter bytes. Artifact `ffd820b1…` is unchanged when
+convolution lowering v2 produces binding `29b412a3…`; the earlier CPU binding
+`4bce9e08…` remains a control. These are separate parameter and executable
+identities, not a new checkpoint or a QAD representation.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Parameter construction | Authenticated original shards; native and independent readers | Complete original BF16/F32 checkpoint | Preserve scalar bits, shapes and lineage | All 428 terminals checked; full GGUF and bindings produced | No parameter approximation | PASS | Reproducible physical package, not inference |
+| `reference.lfm2.program` | Pinned unmodified upstream computation | Three public deterministic conv/attention/conv blocks | Hidden states, tied logits, three greedy steps and state continuity agree | 96 hidden and 192 logit values equal; continuation, chunk/single, cancellation and retry pass | Exact equality | PASS | Scaled CPU computational composition |
+| `reference.lfm2.tokenizer` | Exact original tokenizer, `tokenizers` 0.22.2 | 128 public vectors; actual GGUF and both bindings | Identical token IDs and decoded bytes; literal controls stay literal | Exact agreement after BPE and regex corrections | Zero differences | PASS | Tokenizer, not chat/template or native tools |
+| Cross-family tokenizer | Official 0731 encoding and `tokenizers` 0.20.3 | Retained DeepSeek artifact/binding | Preserve upstream and native encoding controls | Official vectors and 13 encode/decode cases pass | Exact equality | PASS | No observed tokenizer regression in the examined DeepSeek population |
+| Runtime sanitizers | ASan, LeakSanitizer, UBSan | Canonical runtime/tiny product path; separately instrumented Liquid reference program | No memory or undefined-behavior violation | Both scopes pass | Halt on sanitizer violation | PASS | CPU fixture execution and cleanup |
+| Resource readback | Canonical compiler and capacity owners | New binding, CPU, context 4096, width 32, bounded 2-GiB process | Refuse a complete model that cannot fit | `fixed runtime resources exceed usable memory`; no Engine | No reserve relaxation | PASS | Refusal, not GB10 capacity |
+| CUDA / full checkpoint | Registered device and real-model gates | Prepared kernels and complete binding | Independent device and complete-model evidence | Not dispatched | Unavailable | BLOCKED | Compilation only; fresh hardware authority required |
+
+The CPU numerical and tokenizer checks use source `b8ce6664…`, tree
+`c821d49c…`, dirty source delta
+`42400d5f0d98247f6cb536768ae7ed1ef618cb52ad763c5d93fe34628028339c`.
+The binding producer build is `d146fcf4…`, executable SHA-256
+`1a0f9d153e7df0f3522fb656fcb558aea0a9daae3ecba9a03665af647fda17b3`.
+Subsequent documentation records these observations without changing their
+computational source. Native QA receipts include `27a524e1…` (program),
+`d230ad85…` (new-binding tokenizer), `98aa8551…` (DeepSeek reference) and
+`7c95f6d9…` (runtime sanitizers), under `build/qa/evidence/`.
+
+Negative predecessors remain retained. Simultaneous BPE pair replacement
+misencoded 17 newlines; the corrected merge order agrees with the independent
+tokenizer. Over-strict optional-field admission rejected the minimal runtime
+fixture and was corrected without accepting malformed fields. A separate
+extended-suite attempt with an 8-GiB process `memory.high` correctly refused
+the tiny model because that envelope could not preserve the 8-GiB reserve.
+That is a test-envelope refusal, not a Liquid numerical failure; the reserve
+and admission policy are not weakened.
+
+The final software population has 140 distinct CI controls with passing
+observations, not one all-green CI run. Receipt `38b31538…` records 135 PASS,
+three FAIL from the process-memory reserve boundary and two BLOCKED for absent
+Node/npm. The same computational source then passes all five focused reruns:
+Rust shell/PTY `fdad8434…`, tiny production vertical `bc56067c…`, binding
+`4edc3287…`, OpenAI SDK `1a153314…` and terminal flow `02b16d94…`.
+The reruns use a bounded 14-GiB `memory.high` / 16-GiB `memory.max` scope
+and isolated Node 22.20.0; the original reserve, production services and source
+are unchanged. CI and reruns retain stable source delta
+`1c1aa71ca1b7834a4c023f37c016023c15f968dfb246ef650e3969541e3b7cb5`.
+The preceding fast suite is 107 PASS (`41ec5b2a…`). All 21 structural controls
+pass within the final CI population, and the generated HTML reader has 510 pages.
+Fresh source audit `5f17d0b9…`, MoE reference `944e4fda…` and acquired convolution
+reference `d6c385ea…` also pass: 112 exact routed outputs, 18,432 exact convolution
+outputs and 6,144 exact state values. These remain local software/component
+evidence, not hosted CI, device execution or independent whole-model quality.
+
+Private source/reference and production records are under
+`lfm2-native-20261020.Et9I6kxu` and `lfm2-production-20261020.FCtOqX1v` in the
+canonical model-evidence root. No accelerator dispatch, installed rollout or
+YAI request accompanies this checkpoint. The independent original-BF16
+llama.cpp control, complete-model numerical comparison and sustained GB10
+measurements remain separate gates. Liquid does not close the r17 incident
+or DeepSeek's 20/700 objectives.
+
 ## Mainline consolidation — 2026-10-18
 
 The operator selects publication of the accumulated Program P source, contracts

@@ -10,6 +10,164 @@
 static const double attention_pi =
     3.14159265358979323846264338327950288;
 
+static float routed_bf16(float x)
+{
+    return yvex_quant_bf16_decode(yvex_quant_bf16_encode(x));
+}
+
+static int routed_refuse(yvex_error *err, const char *why)
+{
+    yvex_error_set(err, YVEX_ERR_FORMAT, "numeric.routed-swiglu", why);
+    return YVEX_ERR_FORMAT;
+}
+
+int yvex_routed_swiglu_workspace_values(const yvex_routed_swiglu_bf16_request *r,
+    unsigned long long *values, yvex_error *err)
+{
+    unsigned long long population;
+    if (values) *values = 0u;
+    if (!r || !values || !r->rows || !r->hidden || !r->intermediate ||
+        !r->experts || r->experts > 256u || !r->selected || r->selected > r->experts ||
+        !isfinite(r->normalization_epsilon) || r->normalization_epsilon <= 0.0f ||
+        !isfinite(r->routed_scale) || r->routed_scale <= 0.0f ||
+        !yvex_core_u64_mul(r->rows, r->hidden, &population) || population > SIZE_MAX / sizeof(float) ||
+        !yvex_core_u64_mul(r->rows, r->experts, &population) || population > SIZE_MAX / sizeof(float) ||
+        !yvex_core_u64_add(r->experts * 2u, r->intermediate, values) ||
+        *values > SIZE_MAX / sizeof(float))
+        return routed_refuse(err, "invalid bounded routed workspace geometry");
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int routed_bank(const yvex_component_encoded_weight *w,
+    unsigned long long experts, unsigned long long rows, unsigned long long columns)
+{
+    unsigned long long count, bytes, stride;
+    return w && w->encoded && w->qtype == YVEX_GGUF_QTYPE_BF16 &&
+        yvex_core_u64_mul(experts, rows, &count) && w->row_count == count &&
+        w->row_width == columns && yvex_core_u64_mul(columns, 2u, &stride) &&
+        w->row_bytes == stride && yvex_core_u64_mul(count, stride, &bytes) &&
+        w->encoded_bytes == bytes && bytes <= SIZE_MAX;
+}
+
+static int routed_dot(const yvex_component_encoded_weight *w, unsigned long long row,
+    const float *input, float *out, yvex_error *err)
+{
+    yvex_quant_failure failure;
+    int rc = yvex_quant_cpu_dot(w->qtype, w->encoded + row * w->row_bytes,
+        (size_t)w->row_bytes, input, w->row_width, out, &failure, err);
+    if (rc != YVEX_OK) return rc;
+    *out = routed_bf16(*out);
+    return isfinite(*out) ? YVEX_OK : routed_refuse(err, "non-finite expert projection");
+}
+
+static int routed_disjoint(const void *a, unsigned long long an, const void *b, unsigned long long bn)
+{
+    uintptr_t x = (uintptr_t)a, y = (uintptr_t)b;
+    return x && y && an <= UINTPTR_MAX - x && bn <= UINTPTR_MAX - y &&
+        (x + an <= y || y + bn <= x);
+}
+
+static int routed_selection(const yvex_routed_swiglu_bf16_request *r,
+    const float *logits, float *probability, float *selected, yvex_error *err)
+{
+    unsigned long long indices[256];
+    float scores[256];
+    for (unsigned long long e = 0u; e < r->experts; ++e) {
+        if (!isfinite(logits[e]) || logits[e] != routed_bf16(logits[e]) || !isfinite(r->bias[e]))
+            return routed_refuse(err, "routing requires finite BF16 logits and F32 bias");
+        probability[e] = routed_bf16(1.0f / (1.0f + expf(-logits[e])));
+        scores[e] = probability[e] + r->bias[e]; indices[e] = e; selected[e] = -1.0f;
+        if (!isfinite(scores[e])) return routed_refuse(err, "non-finite biased routing score");
+    }
+    /* Stable insertion sort is bounded by the admitted 256-expert operation,
+     * independent of names and topology. Selection ties across the cutoff
+     * lack an independent source top-k ordering guarantee and fail closed. */
+    for (unsigned long long i = 1u; i < r->experts; ++i) {
+        unsigned long long expert = indices[i], j = i;
+        while (j && scores[indices[j - 1u]] < scores[expert]) {
+            indices[j] = indices[j - 1u]; --j;
+        }
+        indices[j] = expert;
+    }
+    if (r->selected < r->experts && scores[indices[r->selected - 1u]] == scores[indices[r->selected]])
+        return routed_refuse(err, "ambiguous top-k boundary has no source ordering proof");
+    float sum = 0.0f;
+    for (unsigned long long k = 0u; k < r->selected; ++k) sum += probability[indices[k]];
+    float denominator = routed_bf16(routed_bf16(sum) + r->normalization_epsilon);
+    if (!isfinite(denominator) || denominator <= 0.0f)
+        return routed_refuse(err, "invalid routing normalization");
+    for (unsigned long long k = 0u; k < r->selected; ++k) {
+        unsigned long long e = indices[k];
+        selected[e] = routed_bf16(routed_bf16(probability[e] / denominator) * r->routed_scale);
+        if (!isfinite(selected[e])) return routed_refuse(err, "non-finite routing weight");
+    }
+    return YVEX_OK;
+}
+
+int yvex_routed_swiglu_bf16(const yvex_routed_swiglu_bf16_request *r, yvex_error *err)
+{
+    unsigned long long scratch, input_count, logits_count;
+    if (!r || !r->input || !r->logits || !r->bias || !r->output || !r->workspace ||
+        !r->rows || !r->hidden || !r->intermediate || !r->experts || r->experts > 256u ||
+        !r->selected || r->selected > r->experts ||
+        !isfinite(r->normalization_epsilon) || r->normalization_epsilon <= 0.0f ||
+        !isfinite(r->routed_scale) || r->routed_scale <= 0.0f ||
+        !yvex_core_u64_mul(r->rows, r->hidden, &input_count) || input_count > SIZE_MAX / sizeof(float) ||
+        !yvex_core_u64_mul(r->rows, r->experts, &logits_count) || logits_count > SIZE_MAX / sizeof(float) ||
+        !yvex_core_u64_add(r->experts * 2u, r->intermediate, &scratch) ||
+        scratch > SIZE_MAX / sizeof(float) || r->workspace_values < scratch ||
+        !routed_bank(r->gate, r->experts, r->intermediate, r->hidden) ||
+        !routed_bank(r->up, r->experts, r->intermediate, r->hidden) ||
+        !routed_bank(r->down, r->experts, r->hidden, r->intermediate))
+        return routed_refuse(err, "bounded BF16 expert banks, populations and workspace are required");
+    const void *inputs[] = {r->input, r->logits, r->bias, r->gate->encoded, r->up->encoded, r->down->encoded};
+    unsigned long long sizes[] = {input_count * sizeof(float), logits_count * sizeof(float),
+        r->experts * sizeof(float), r->gate->encoded_bytes, r->up->encoded_bytes, r->down->encoded_bytes};
+    if (!routed_disjoint(r->output, input_count * sizeof(float), r->workspace, scratch * sizeof(float)))
+        return routed_refuse(err, "expert workspace overlaps output");
+    for (size_t i = 0u; i < sizeof(inputs) / sizeof(*inputs); ++i)
+        if (!routed_disjoint(r->output, input_count * sizeof(float), inputs[i], sizes[i]) ||
+            !routed_disjoint(r->workspace, scratch * sizeof(float), inputs[i], sizes[i]))
+            return routed_refuse(err, "expert writable storage overlaps a source operand");
+    for (unsigned long long i = 0u; i < input_count; ++i)
+        if (!isfinite(r->input[i]) || r->input[i] != routed_bf16(r->input[i]))
+            return routed_refuse(err, "expert input is not finite BF16");
+    float *probability = r->workspace, *selected = probability + r->experts;
+    float *activation = selected + r->experts;
+    for (unsigned long long row = 0u; row < r->rows; ++row) {
+        int rc = routed_selection(r, r->logits + row * r->experts, probability, selected, err);
+        if (rc != YVEX_OK) return rc;
+        float *output = r->output + row * r->hidden;
+        memset(output, 0, (size_t)r->hidden * sizeof(float));
+        for (unsigned long long e = 0u; e < r->experts; ++e) {
+            if (selected[e] < 0.0f) continue;
+            if (r->cancel_requested && r->cancel_requested(r->cancel_context)) {
+                yvex_error_set(err, YVEX_ERR_CANCELLED, "numeric.routed-swiglu", "expert execution cancelled");
+                return YVEX_ERR_CANCELLED;
+            }
+            for (unsigned long long j = 0u; j < r->intermediate; ++j) {
+                float gate, up;
+                rc = routed_dot(r->gate, e * r->intermediate + j, r->input + row * r->hidden, &gate, err);
+                if (rc == YVEX_OK)
+                    rc = routed_dot(r->up, e * r->intermediate + j, r->input + row * r->hidden, &up, err);
+                if (rc != YVEX_OK) return rc;
+                activation[j] = routed_bf16(routed_bf16(gate / (1.0f + expf(-gate))) * up);
+                if (!isfinite(activation[j])) return routed_refuse(err, "non-finite expert activation");
+            }
+            for (unsigned long long j = 0u; j < r->hidden; ++j) {
+                float down;
+                rc = routed_dot(r->down, e * r->hidden + j, activation, &down, err);
+                if (rc != YVEX_OK) return rc;
+                output[j] = routed_bf16(output[j] + routed_bf16(down * selected[e]));
+                if (!isfinite(output[j])) return routed_refuse(err, "non-finite expert accumulation");
+            }
+        }
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 int yvex_clamped_swiglu_bf16(const float *gate, const float *up, unsigned long long count,
     double limit, float route_weight, float *output, yvex_error *err)
 {
@@ -662,6 +820,7 @@ int yvex_attention_compute_round(yvex_attention_compute_contract contract,
                                  float *values, unsigned long long count)
 {
     return (contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 ||
+            contract == YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1 ||
             contract == YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) && numeric_bf16_round(values, count);
 }
 

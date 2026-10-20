@@ -323,6 +323,14 @@ native support. GPU experiments require fresh ownership/authorization and full
 resource admission; the resident 0731 remains protected. The r17 recovery Task
 retains its unresolved cause and evidence while its investigation is deferred.
 Liquid execution cannot close r17 or the DeepSeek 20/700 exits.
+The continuation has produced the complete lossless GGUF and runtime bindings, with
+independent three-block CPU hidden/logit and transactional controls. CUDA
+convolution/state, rounded-input normalization, eager attention and routed SwiGLU
+consumers compile with backend-owned scratch costing but have not been
+dispatched. Source-tokenizer parity and CPU ASan/LSan/UBSan controls are retained;
+the compiled candidate binding is reopened by tokenizer and compiler consumers.
+Complete CUDA numerical execution, whole-checkpoint generation,
+quality and performance remain IN PROGRESS; production is not closure.
 
 The 2026-10-17 CPU continuation connects admitted IQ2 reconstruction producers
 to the same physical-policy search, checked canonical plans and policy export.

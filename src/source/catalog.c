@@ -360,7 +360,8 @@ int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths
     }
     if (strcmp(family, "deepseek") != 0 && strcmp(family, "glm") != 0 &&
         strcmp(family, "qwen") != 0 && strcmp(family, "gemma") != 0 &&
-        strcmp(family, "minimax-h3") != 0 && strcmp(family, "mamba2") != 0) {
+        strcmp(family, "minimax-h3") != 0 && strcmp(family, "mamba2") != 0 &&
+        strcmp(family, "lfm2") != 0) {
         yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "operator_paths",
                         "unknown family: %s", family);
         return YVEX_ERR_INVALID_ARG;
@@ -369,7 +370,8 @@ int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths
         const char *target = !strcmp(family, "deepseek") ? YVEX_SOURCE_RELEASE_TARGET_ID :
                              !strcmp(family, "qwen") ? YVEX_SOURCE_QWEN3_8_27B_TARGET_ID :
                              !strcmp(family, "minimax-h3") ? YVEX_SOURCE_MINIMAX_H3_TARGET_ID :
-                             !strcmp(family, "mamba2") ? "mamba-codestral-7b-v0.1" : NULL;
+                             !strcmp(family, "mamba2") ? "mamba-codestral-7b-v0.1" :
+                             !strcmp(family, "lfm2") ? "lfm2.5-24b-a2b" : NULL;
         if (!target) {
             yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "operator_paths",
                            "no qualified default source; select a model catalog record or local path");

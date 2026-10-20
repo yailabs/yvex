@@ -639,7 +639,7 @@ int yvex_attention_plan_capabilities_match(
     const yvex_attention_summary *summary,
     const yvex_attention_layer_plan *layers, unsigned long long count)
 {
-    int cpu = 1;
+    int cpu = 1, cuda = 1, eager = 0;
     if (!summary || !layers || !count || summary->layer_count != count) return 0;
     for (unsigned long long i = 0ull; i < count; ++i) {
         const yvex_attention_layer_plan *layer = layers + i;
@@ -656,6 +656,13 @@ int yvex_attention_plan_capabilities_match(
         }
         if (layer->compute_contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1)
             continue;
+        if (layer->compute_contract == YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1) {
+            if (!attention_uses_dense_qkv(layer) || layer->attention_class != YVEX_ATTENTION_CLASS_SWA ||
+                layer->compression_ratio || layer->mhc_projection || layer->matrix_projection ||
+                layer->mhc_attention_pre_and_post) return 0;
+            eager = 1;
+            continue;
+        }
         if (layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1 ||
             layer->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
             layer->head_dimension != 512ull || !layer->query_heads ||
@@ -667,9 +674,14 @@ int yvex_attention_plan_capabilities_match(
             return 0;
         cpu = 0;
     }
+    /* Earlier eager bindings sealed a CPU-only capability projection. Retain
+     * that conservative claim without changing its identity or promoting it to
+     * CUDA. New compilation publishes the implemented consumer explicitly. */
+    int cuda_match = summary->cuda_execution_ready == cuda ||
+        (eager && cpu && cuda && summary->cuda_execution_ready == 0);
     return summary->history_contract_ready == 1 && summary->state_delta_contract_ready == 1 &&
-        summary->cpu_reference_ready == cpu && summary->cuda_execution_ready == 1 &&
-        summary->full_execution_ready == 1;
+        summary->cpu_reference_ready == cpu && cuda_match &&
+        summary->full_execution_ready == (cpu || summary->cuda_execution_ready);
 }
 
 #undef PLAN_FIELD
@@ -1023,6 +1035,7 @@ int yvex_attention_plan_import(yvex_attention_plan **out,
         if (layer->ordinal != i || layer->tensor_scope != summary->tensor_scope ||
             layer->tensor_scope == YVEX_TENSOR_SCOPE_GLOBAL ||
             (layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+             layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1 &&
              layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) ||
             !yvex_core_u64_add(required, layer->required_binding_count, &required) ||
             !yvex_core_u64_add(payload, layer->payload_bytes_bound, &payload) ||
@@ -1327,6 +1340,7 @@ static int attention_plan_build(
         }
         if (layer->compute_contract !=
             YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 && layer->compute_contract !=
+            YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1 && layer->compute_contract !=
             YVEX_ATTENTION_COMPUTE_BF16_ONLINE64_F32_MMA_V1) {
             rc = yvex_attention_reject(
                 failure, YVEX_ATTENTION_FAILURE_NUMERIC, NULL,
@@ -1374,6 +1388,8 @@ static int attention_plan_build(
             layer->mhc_projection || layer->matrix_projection)
             plan->summary.cpu_reference_ready = 0;
     }
+    plan->summary.full_execution_ready =
+        plan->summary.cpu_reference_ready || plan->summary.cuda_execution_ready;
     if (!yvex_attention_plan_capabilities_match(&plan->summary, plan->layers, layer_count)) {
         yvex_attention_plan_close(plan);
         return yvex_attention_reject(failure, YVEX_ATTENTION_FAILURE_NUMERIC, NULL,

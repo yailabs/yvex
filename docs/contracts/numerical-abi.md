@@ -292,6 +292,39 @@ independent CPU decoder, plus exceptional/prior-status refusal, output canaries
 and immutable input. Complete-model characterization does not replace
 independent checkpoint or representation-quality evidence.
 
+## Hybrid BF16 program publications
+
+The Liquid program uses explicit operations, not family-name backend switches:
+
+| Operation / realization | Numerical obligation |
+| --- | --- |
+| `rms_norm.rounded_input.bf16.v2`, grouped equivalent | Ordered separate F32 square/sum; BF16 normalized value before BF16 weight product |
+| `double_gated_conv.bf16.v2` | BF16 `B*X`, source-ordered F32 FMA convolution, BF16 convolution and `C` product; candidate-only state mutation |
+| `routed_swiglu.sigmoid.bf16.v1` | BF16 sigmoid; F32 selection-only bias; selected normalization, expert outputs and ascending-expert accumulation with explicit BF16 publications |
+| `BF16_EAGER_V1` / `causal.eager_bf16.v1` | BF16 QK contraction and scaled score; F32 stable softmax with BF16 normalized probability; BF16 probability/value output |
+
+The convolution's earlier `.cpu.bf16.v1` remains CPU-only. Its backend-neutral
+v2 changes executable realization, not parameter encoding. CUDA consumers of
+convolution, rounded-input RMS, eager attention and routed SwiGLU are implemented
+but await device qualification. Existing exact-F32 and block-online attention
+classes are unchanged. A retained CPU-only eager binding stays CPU-only; new
+compilation must seal a new capability projection to admit the CUDA consumer.
+
+The routed CUDA consumer tiles at most eight real rows, retains only selected
+expert intermediates, and resolves immutable BF16 banks through the existing
+resident mapping. Its dot consumer certifies source-ordered F64-to-F32 publication
+before BF16 rounding. Routing and accumulation preserve the scalar operation's
+ordering; no activation Q8 approximation is introduced. The backend reports its
+workspace requirement to native program preparation. Eager attention separately
+tiles eight query positions with strided causal K/V access and explicit
+score/probability publications. Both consumers refuse graph capture rather than
+claiming an unqualified captured execution path.
+
+Routed selection refuses ties across the top-k cutoff without an independent
+source ordering guarantee. Missing consumers and unsupported classes refuse
+rather than changing arithmetic. The [Liquid reference controls](../model-families/lfm2.md#integrated-cpu-numerical-reference)
+do not establish whole-checkpoint quality or CUDA parity.
+
 ## Explicit block-online BF16 attention class
 
 `BF16_ONLINE64_F32_MMA_V1` is a distinct, opt-in numerical realization, not

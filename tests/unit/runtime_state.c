@@ -3048,6 +3048,7 @@ static int test_cpu_stateful_attention(void)
     fixture.plan.summary.csa_layer_count = fixture.plan.summary.hca_layer_count = 0u;
     fixture.layers[0].query_lora_rank = 0u;
     fixture.layers[0].sliding_window = 8u;
+    fixture.layers[0].compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
     yvex_graph_attention_capacity_request capacity_request = {
         .scope = YVEX_ATTENTION_PROBE_SCOPE_FULL, .token_count = 4u, .execution_count = 1u};
     YVEX_TEST_ASSERT(state_open(&provider, &fixture.plan, ULLONG_MAX, &failure, &err) == YVEX_OK &&

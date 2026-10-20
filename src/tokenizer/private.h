@@ -52,13 +52,15 @@ struct yvex_tokenizer {
     unsigned long long added_token_count;
     unsigned long long added_bucket_start[257];
     unsigned int byte_token_ids[256];
+    int bpe_ignore_merges; /* Derived from the digest-bound embedded source JSON. */
 };
 
 enum {
     TOKENIZER_UNICODE_NUMBER = 1u << 0,
     TOKENIZER_UNICODE_LETTER_MARK = 1u << 1,
     TOKENIZER_UNICODE_PUNCT_SYMBOL = 1u << 2,
-    TOKENIZER_UNICODE_SPACE = 1u << 3
+    TOKENIZER_UNICODE_SPACE = 1u << 3,
+    TOKENIZER_UNICODE_LETTER = 1u << 4
 };
 
 int yvex_tokenizer_utf8_next(const unsigned char *bytes, unsigned long long count,
@@ -74,6 +76,8 @@ int yvex_tokenizer_execution_seal(yvex_tokenizer *tokenizer, const yvex_gguf *gg
 int yvex_tokenizer_execution_seal_hf_json(yvex_tokenizer *tokenizer,
                                           const char *json, size_t json_bytes,
                                           yvex_error *err);
+int yvex_tokenizer_bpe_options(yvex_tokenizer *tokenizer, const char *json,
+    size_t count, yvex_error *err);
 int yvex_tokenizer_prompt_render_v2(
     yvex_rendered_prompt *out, const yvex_tokenizer *tokenizer,
     const yvex_prompt_message *messages, unsigned long long message_count,

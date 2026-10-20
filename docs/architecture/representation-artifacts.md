@@ -136,8 +136,13 @@ transaction. Exact scalar storage preserves source bits, checks finite values,
 and does not allocate a stacked weight copy. Cancellation or invalid data in a
 later operand aborts the entire terminal; staged bytes are not a published tensor.
 Scalar output encodings are admitted; block-quantized `STACK` consumers are not.
-This is a generic parameter-production mechanism, not a complete Liquid model
-recipe, runtime binding or inference qualification.
+The Liquid family composes this generic mechanism into its complete lossless
+recipe. Expert-major banks retain `[experts, rows, columns]` in the typed program;
+the encoded consumer checks `experts * rows` physical rows and the unchanged
+column stride. The complete
+[artifact and CPU binding](../model-families/lfm2.md#complete-parameter-and-program-construction)
+are verified separately. Aggregation and structural readback are not inference
+or model-quality qualification.
 
 `unit.quant_execute` covers canonical lowering/profile planning, byte-exact
 ordered BF16 output, cancellation/reuse, inner-axis refusal and nonfinite

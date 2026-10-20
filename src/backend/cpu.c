@@ -530,6 +530,69 @@ static int cpu_weighted_rms_bf16(yvex_backend *backend, const yvex_device_tensor
     return cpu_neural_publish(&output, 1u, err);
 }
 
+static int cpu_rounded_rms_bf16(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *weight, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, float epsilon,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long sizes[2] = {0u, width};
+    if (!rows || !width || !isfinite(epsilon) || epsilon <= 0.0f ||
+        !yvex_core_u64_mul(rows, width, sizes)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.rounded-rms", "invalid normalization geometry or epsilon");
+        return YVEX_ERR_FORMAT;
+    }
+    int rc = cpu_neural_admit(backend, (const yvex_device_tensor *[]){input, weight}, sizes, 2u,
+        &output, sizes, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    const float *x = (const float *)input->data, *w = (const float *)weight->data;
+    float *y = (float *)output->data;
+    for (unsigned long long row = 0u; row < rows; ++row) {
+        float sum = 0.0f;
+        for (unsigned long long i = 0u; i < width; ++i) {
+            /* Volatile publication prevents contraction of the separate
+             * square and accumulation required by this deterministic class. */
+            volatile float square = x[row * width + i] * x[row * width + i];
+            sum += square;
+        }
+        float inverse = 1.0f / sqrtf(sum / (float)width + epsilon);
+        if (!isfinite(sum) || !isfinite(inverse)) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.rounded-rms", "non-finite normalization reduction");
+            return YVEX_ERR_FORMAT;
+        }
+        for (unsigned long long i = 0u; i < width; ++i) {
+            float normalized = yvex_quant_bf16_decode(yvex_quant_bf16_encode(x[row * width + i] * inverse));
+            y[row * width + i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(normalized * w[i]));
+        }
+    }
+    facts->active_weight_bytes = weight->bytes;
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_routed_swiglu(yvex_backend *backend, const yvex_routed_swiglu_device_request *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long sizes[3], results[2];
+    if (!r || !yvex_core_u64_mul(r->geometry.rows, r->geometry.hidden, sizes) ||
+        !yvex_core_u64_mul(r->geometry.rows, r->geometry.experts, sizes + 1u) ||
+        yvex_routed_swiglu_workspace_values(&r->geometry, results + 1u, err) != YVEX_OK) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.routed-swiglu", "bounded operation geometry required");
+        return YVEX_ERR_FORMAT;
+    }
+    sizes[2] = r->geometry.experts; results[0] = sizes[0];
+    yvex_device_tensor *outputs[] = {r->output, r->workspace};
+    int rc = cpu_neural_admit(backend, (const yvex_device_tensor *[]){r->input, r->logits, r->bias},
+        sizes, 3u, outputs, results, 2u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_routed_swiglu_bf16_request request = r->geometry;
+    request.input = (const float *)r->input->data; request.logits = (const float *)r->logits->data;
+    request.bias = (const float *)r->bias->data; request.output = (float *)r->output->data;
+    request.workspace = (float *)r->workspace->data; request.workspace_values = results[1];
+    rc = yvex_routed_swiglu_bf16(&request, err);
+    if (rc == YVEX_OK) rc = cpu_neural_publish(outputs, 2u, err);
+    facts->compulsory_memory_facts_available = 0;
+    return rc;
+}
+
 static int cpu_scaled_residual_f32(yvex_backend *backend, const yvex_device_tensor *input,
     const yvex_device_tensor *update, const yvex_device_tensor *scale, yvex_device_tensor *output,
     unsigned long long rows, unsigned long long width, yvex_backend_operation_facts *facts, yvex_error *err)
@@ -657,10 +720,10 @@ static int cpu_swiglu_split_f32(yvex_backend *backend, const yvex_device_tensor 
     return cpu_neural_publish(&output, 1u, err);
 }
 
-static int cpu_rotary_half_f32(yvex_backend *backend, yvex_device_tensor *value,
+static int cpu_rotary_half(yvex_backend *backend, yvex_device_tensor *value,
     const yvex_device_tensor *cosine, const yvex_device_tensor *sine, unsigned long long rows,
     unsigned long long heads, unsigned long long head, unsigned long long rotary,
-    yvex_backend_operation_facts *facts, yvex_error *err)
+    int bf16_products, yvex_backend_operation_facts *facts, yvex_error *err)
 {
     unsigned long long width, count, table;
     if (!facts || !rows || !heads || !head || !rotary || rotary > head || (rotary & 1u) ||
@@ -689,12 +752,37 @@ static int cpu_rotary_half_f32(yvex_backend *backend, yvex_device_tensor *value,
                 float a = x[lane], b = x[rotary / 2u + lane];
                 float c = ((const float *)cosine->data)[row * rotary + lane];
                 float s = ((const float *)sine->data)[row * rotary + lane];
-                x[lane] = a * c - b * s;
-                x[rotary / 2u + lane] = b * c + a * s;
+                if (bf16_products) {
+                    float ac = yvex_quant_bf16_decode(yvex_quant_bf16_encode(a * c));
+                    float bs = yvex_quant_bf16_decode(yvex_quant_bf16_encode(b * s));
+                    float bc = yvex_quant_bf16_decode(yvex_quant_bf16_encode(b * c));
+                    float as = yvex_quant_bf16_decode(yvex_quant_bf16_encode(a * s));
+                    x[lane] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(ac - bs));
+                    x[rotary / 2u + lane] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(bc + as));
+                } else {
+                    x[lane] = a * c - b * s;
+                    x[rotary / 2u + lane] = b * c + a * s;
+                }
             }
     facts->activation_bytes = value->bytes + cosine->bytes + sine->bytes;
     facts->compulsory_memory_facts_available = 1;
     return cpu_neural_publish(&value, 1u, err);
+}
+
+static int cpu_rotary_half_f32(yvex_backend *backend, yvex_device_tensor *value,
+    const yvex_device_tensor *cosine, const yvex_device_tensor *sine, unsigned long long rows,
+    unsigned long long heads, unsigned long long head, unsigned long long rotary,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    return cpu_rotary_half(backend, value, cosine, sine, rows, heads, head, rotary, 0, facts, err);
+}
+
+static int cpu_rotary_half_bf16(yvex_backend *backend, yvex_device_tensor *value,
+    const yvex_device_tensor *cosine, const yvex_device_tensor *sine, unsigned long long rows,
+    unsigned long long heads, unsigned long long head, unsigned long long rotary,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    return cpu_rotary_half(backend, value, cosine, sine, rows, heads, head, rotary, 1, facts, err);
 }
 
 static int cpu_attention_workspace(const yvex_transformer_attention_requirement *r,
@@ -716,11 +804,12 @@ static int cpu_attention_workspace(const yvex_transformer_attention_requirement 
     }
     if (!r->deterministic || r->layout != YVEX_TRANSFORMER_ATTENTION_LAYOUT_TOKEN_HEAD_DIM ||
         (r->mask != YVEX_TRANSFORMER_ATTENTION_MASK_FULL && r->mask != YVEX_TRANSFORMER_ATTENTION_MASK_CAUSAL) ||
-        r->numeric_contract != YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32 ||
+        (r->numeric_contract != YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32 &&
+         r->numeric_contract != YVEX_TRANSFORMER_ATTENTION_NUMERIC_BF16_EAGER) ||
         r->query_dtype != YVEX_DTYPE_F32 || r->key_dtype != YVEX_DTYPE_F32 ||
         r->value_dtype != YVEX_DTYPE_F32 || r->output_dtype != YVEX_DTYPE_F32) {
         *bytes = 0u;
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "cpu.attention", "only deterministic F32 attention is admitted");
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "cpu.attention", "attention numerical class is not admitted");
         return YVEX_ERR_UNSUPPORTED;
     }
     return YVEX_OK;
@@ -749,6 +838,19 @@ static int cpu_full_attention(yvex_backend *backend, const yvex_transformer_atte
     rc = cpu_neural_admit(backend, (const yvex_device_tensor *[]){request->query, request->key, request->value},
         sizes, 3u, &output, &result, 1u, facts, err);
     if (rc != YVEX_OK) return rc;
+    if (r->numeric_contract == YVEX_TRANSFORMER_ATTENTION_NUMERIC_BF16_EAGER)
+        for (size_t i = 0u; i < 3u; ++i) {
+            const yvex_device_tensor *operand = i == 0u ? request->query : i == 1u ? request->key : request->value;
+            const float *input = (const float *)operand->data;
+            for (unsigned long long row = 0u; row < (i ? r->key_value_tokens : r->query_tokens); ++row)
+                for (unsigned long long j = 0u; j < widths[i]; ++j) {
+                    float x = input[row * strides[i] + j];
+                    if (!isfinite(x) || yvex_quant_bf16_decode(yvex_quant_bf16_encode(x)) != x) {
+                        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.attention", "eager attention requires BF16 operands");
+                        return YVEX_ERR_FORMAT;
+                    }
+                }
+        }
     yvex_backend_tensor_desc d = {.name = "attention-scores", .dtype = YVEX_DTYPE_F32,
         .rank = 1u, .dims = {r->key_value_tokens}, .bytes = bytes};
     if (scratch && (!backend_tensor_owner_is(backend, scratch) || scratch->bytes < bytes ||
@@ -767,6 +869,7 @@ static int cpu_full_attention(yvex_backend *backend, const yvex_transformer_atte
     const float *v = (const float *)request->value->data;
     float *scores = (float *)scratch->data, *y = (float *)output->data;
     float scale = 1.0f / sqrtf((float)r->head_dimension);
+    int eager = r->numeric_contract == YVEX_TRANSFORMER_ATTENTION_NUMERIC_BF16_EAGER;
     memset(y, 0, (size_t)result * sizeof(float));
     for (unsigned long long row = 0u; row < r->query_tokens && rc == YVEX_OK; ++row) {
         unsigned long long keys = r->mask == YVEX_TRANSFORMER_ATTENTION_MASK_CAUSAL ?
@@ -779,7 +882,9 @@ static int cpu_full_attention(yvex_backend *backend, const yvex_transformer_atte
                 for (unsigned long long lane = 0u; lane < r->head_dimension; ++lane)
                     score += q[row * strides[0] + head * r->head_dimension + lane] *
                         k[key * strides[1] + kvhead * r->head_dimension + lane];
+                if (eager) score = yvex_quant_bf16_decode(yvex_quant_bf16_encode(score));
                 scores[key] = score * scale;
+                if (eager) scores[key] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(scores[key]));
                 if (scores[key] > maximum) maximum = scores[key];
             }
             for (unsigned long long key = 0u; key < keys; ++key) {
@@ -789,10 +894,16 @@ static int cpu_full_attention(yvex_backend *backend, const yvex_transformer_atte
             if (!isfinite(sum) || sum <= 0.0f) { rc = YVEX_ERR_FORMAT; break; }
             for (unsigned long long key = 0u; key < keys; ++key) {
                 float probability = scores[key] / sum;
+                if (eager) probability = yvex_quant_bf16_decode(yvex_quant_bf16_encode(probability));
                 for (unsigned long long lane = 0u; lane < r->head_dimension; ++lane)
                     y[row * widths[0] + head * r->head_dimension + lane] +=
                         probability * v[key * strides[2] + kvhead * r->head_dimension + lane];
             }
+            if (eager)
+                for (unsigned long long lane = 0u; lane < r->head_dimension; ++lane) {
+                    float *value = y + row * widths[0] + head * r->head_dimension + lane;
+                    *value = yvex_quant_bf16_decode(yvex_quant_bf16_encode(*value));
+                }
         }
     }
     yvex_error cleanup;
@@ -1164,6 +1275,9 @@ static const yvex_backend_transformer_operations *cpu_transformer_operations(con
         .feature_mean = cpu_stream_mean, .final = cpu_mhc_head, .residual_post = cpu_residual_post,
         .residual_pre = cpu_residual_pre,
         .linear_bias_f32 = cpu_linear_bias_f32, .normalization_f32 = cpu_normalization_f32,
+        .rounded_rms_bf16 = cpu_rounded_rms_bf16,
+        .routed_swiglu_bf16 = cpu_routed_swiglu,
+        .routed_swiglu_workspace_values = yvex_routed_swiglu_workspace_values,
         .centered_norm_unbiased_f32 = cpu_centered_norm_unbiased_f32,
         .weighted_rms_bf16 = cpu_weighted_rms_bf16,
         .sinusoidal_embedding = cpu_sinusoidal_embedding,
@@ -1172,6 +1286,7 @@ static const yvex_backend_transformer_operations *cpu_transformer_operations(con
         .multiply_f32 = cpu_multiply_f32,
         .gelu = cpu_gelu_f32,
         .swiglu_split_f32 = cpu_swiglu_split_f32, .rotary_half_f32 = cpu_rotary_half_f32,
+        .rotary_half_bf16 = cpu_rotary_half_bf16,
         .attention_workspace_required = cpu_attention_workspace, .attention_execute = cpu_full_attention};
     (void)backend;
     return &operations;

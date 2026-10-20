@@ -21,6 +21,7 @@ typedef struct {
     const yvex_transform_source_value *source;
     const yvex_transform_value *terminal;
     const yvex_physical_execution_decision *physical;
+    unsigned long long expert_count;
 } program_realization;
 
 typedef struct {
@@ -50,6 +51,41 @@ static const yvex_transform_value *program_identity_source(const yvex_transform_
         value = yvex_transform_ir_node_input_at(ir, node, 0u);
     }
     return NULL;
+}
+
+/* An explicitly requested bank denotes the source-ordered expert matrices,
+ * not an alias for expert zero. Validate all operands before exposing its
+ * anchor to lookup; filenames and matching byte counts are not a proof. */
+static const yvex_transform_source_value *program_expert_bank(
+    const yvex_transform_ir *ir, const yvex_transform_value *terminal,
+    unsigned long long *count)
+{
+    const yvex_transform_node *node = yvex_transform_ir_node_at(ir, terminal->producer_node_id);
+    const yvex_transform_source_value *first = NULL;
+    if (!node || node->kind != YVEX_TRANSFORM_OP_STACK || node->axis ||
+        node->numeric != YVEX_TRANSFORM_NUMERIC_EXACT ||
+        node->ordering != YVEX_TRANSFORM_ORDER_AXIS || !node->input_count ||
+        terminal->shape.rank != 3u || terminal->shape.dims[0] != node->input_count)
+        return NULL;
+    for (unsigned long long i = 0u; i < node->input_count; ++i) {
+        const yvex_transform_value *value = yvex_transform_ir_node_input_at(ir, node, i);
+        const yvex_transform_source_value *source = value && value->kind == YVEX_TRANSFORM_VALUE_SOURCE ?
+            yvex_transform_ir_source_at(ir, value->source_index) : NULL;
+        if (!source || source->expert_index != i || source->shape.rank != 2u ||
+            source->value_dtype != terminal->dtype ||
+            source->role_hint != terminal->logical_key.role ||
+            source->scope != terminal->logical_key.scope ||
+            source->subsystem != terminal->logical_key.subsystem ||
+            source->layer_index != terminal->logical_key.layer_index ||
+            source->auxiliary_index != terminal->logical_key.auxiliary_index ||
+            source->shape.dims[0] != terminal->shape.dims[1] ||
+            source->shape.dims[1] != terminal->shape.dims[2] ||
+            (first && source->source_dtype != first->source_dtype))
+            return NULL;
+        if (!first) first = source;
+    }
+    *count = node->input_count;
+    return first;
 }
 
 static int program_realization_order(const void *left, const void *right)
@@ -96,8 +132,14 @@ static int program_realizations(const yvex_transform_ir *transform,
     for (index = 0u; index < ts->terminal_count; ++index) {
         const yvex_transform_value *terminal = yvex_transform_ir_terminal_at(transform, index);
         const yvex_transform_value *source = program_identity_source(transform, terminal, ts->node_count);
-        if (!source) continue;
-        map[used].source = yvex_transform_ir_source_at(transform, source->source_index);
+        if (!terminal) {
+            free(map);
+            free(decisions);
+            return program_refuse(err, YVEX_ERR_FORMAT, "transformation terminal is unresolved");
+        }
+        map[used].source = source ? yvex_transform_ir_source_at(transform, source->source_index) :
+            program_expert_bank(transform, terminal, &map[used].expert_count);
+        if (!map[used].source) continue;
         map[used].terminal = terminal;
         map[used].physical = decisions[index];
         if (!map[used].source || !terminal || terminal->canonical_ordinal != index) {
@@ -137,7 +179,8 @@ static int program_parameter_type(const yvex_ir_type *type, const program_realiz
         yvex_quant_numeric_capability_at(binding->physical->canonical_qtype);
     uint32_t index;
     if (!type || type->kind != YVEX_IR_TENSOR || !type->rank ||
-        type->rank != source->shape.rank || type->rank != terminal->shape.rank ||
+        type->rank != source->shape.rank + (binding->expert_count ? 1u : 0u) ||
+        type->rank != terminal->shape.rank ||
         program_dtype(type->scalar) != source->value_dtype || source->value_dtype != terminal->dtype ||
         terminal->logical_key.role != binding->physical->role ||
         (unsigned int)terminal->logical_key.scope != (unsigned int)binding->physical->scope ||
@@ -150,8 +193,8 @@ static int program_parameter_type(const yvex_ir_type *type, const program_realiz
         return 0;
     for (index = 0u; index < type->rank; ++index) {
         if (type->shape[index].symbol != YVEX_IR_NONE ||
-            type->shape[index].extent != source->shape.dims[index] ||
-            source->shape.dims[index] != terminal->shape.dims[index] ||
+            type->shape[index].extent != terminal->shape.dims[index] ||
+            (!binding->expert_count && source->shape.dims[index] != terminal->shape.dims[index]) ||
             !yvex_core_u64_mul(elements, type->shape[index].extent, &elements)) return 0;
     }
     /* Canonical row layout is a physical projection of the last logical axis.
@@ -160,7 +203,9 @@ static int program_parameter_type(const yvex_ir_type *type, const program_realiz
     shape[1] = binding->physical->canonical_row_count;
     return yvex_gguf_qtype_validate_tensor_storage(binding->physical->canonical_qtype,
                shape, 2u, binding->physical->encoded_bytes, &storage) == YVEX_GGUF_QTYPE_STORAGE_OK &&
-           binding->physical->layout == YVEX_EXECUTION_LAYOUT_CANONICAL_ROW &&
+           binding->physical->expert_count == binding->expert_count &&
+           binding->physical->layout == (binding->expert_count > 1u ?
+               YVEX_EXECUTION_LAYOUT_EXPERT_MAJOR : YVEX_EXECUTION_LAYOUT_CANONICAL_ROW) &&
            binding->physical->canonical_row_width == type->shape[type->rank - 1u].extent &&
            yvex_core_u64_mul(binding->physical->canonical_row_width,
                               binding->physical->canonical_row_count, &physical_elements) &&
@@ -190,6 +235,11 @@ static int program_parameters_resolve(yvex_program_parameters *result,
             return program_refuse(err, YVEX_ERR_UNSUPPORTED, "parameter has no identity-preserving realization");
         if (low + 1u < count && !strcmp(map[low + 1u].source->source_name, symbol->value.text))
             return program_refuse(err, YVEX_ERR_FORMAT, "parameter realization is ambiguous");
+        const yvex_ir_attribute *experts = yvex_ir_attribute_get(module, id, "expert_count");
+        if ((op->definition->version == 2u) != (map[low].expert_count != 0u) ||
+            (experts && experts->value.integer != map[low].expert_count))
+            return program_refuse(err, YVEX_ERR_FORMAT,
+                "parameter bank intent differs from its ordered source population");
         if (!program_parameter_type(yvex_ir_type_at(module,
                 yvex_ir_value_at(module, op->results[0])->type), &map[low])) {
             yvex_error_setf(

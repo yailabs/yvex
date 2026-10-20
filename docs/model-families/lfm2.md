@@ -12,13 +12,14 @@ publication: {html: true, pdf: true, index: true}
 
 [Model families](README.md) · [Program P](../research/physical-model-compiler.md)
 
-**Current boundary:** upstream-verified source payload, exact configuration and
-complete tensor-role accounting, plus an executable CPU double-gated convolution
-through typed physical programs and common transactional state. The parameter
-compiler also supports lossless outer-axis scalar aggregation; its complete
-Liquid recipe remains open. This is not full-model
-inference support. No Liquid Engine, native generation, CUDA performance,
-checkpoint-quality qualification or YAI provider acceptance is established.
+**Current boundary:** complete hybrid/MoE program, lossless BF16/F32 parameter
+recipe, independently verified full GGUF and reimported runtime bindings.
+A three-block scaled program agrees exactly with a pinned external CPU
+reference. CUDA convolution, normalization, eager-attention and routed-expert
+consumers compile but have not been dispatched. These are not whole-checkpoint
+inference results. No Liquid Engine, complete-checkpoint generation, performance,
+held-out quality or YAI
+acceptance is established.
 
 ## Checkpoint and representation
 
@@ -33,13 +34,44 @@ checkpoint-quality qualification or YAI provider acceptance is established.
 | Reference implementation | Transformers v5.12.1, `ddb849abe009d1089e6c691bfc897f27211c663c` |
 | Model license | Source-retained LFM Open License v1.0; not the YVEX MIT code license |
 | Official GGUF reference | `LiquidAI/LFM2.5-24B-A2B-GGUF`, observed revision `0912d33141f77e10705345a6732bfd83f0252fdc` |
-| YVEX artifact / binding | Not produced or admitted |
+| YVEX artifact | `ffd820b1614f994c4e146c49f5e29278029623ef86a90f67efee95f7bcd7612c` |
+| Produced CPU realization binding | `4bce9e08d9f641befcf40b162589c39251245797aeb2e73947dd35138b5fd159` |
+| Compiled CPU/CUDA candidate binding | `29b412a3ac72019b0c1e657e79b23a4514fb36153e4fb665645b6447682a4df2`; no CUDA execution claim |
 
 The [official GGUF record](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B-GGUF)
 identifies **QAD-Q4_0 as a separately quantization-aware-distilled checkpoint**.
 It cannot provide same-checkpoint quality evidence for an ordinary quantization
 of the original BF16 source. A QAD-versus-original comparison changes both
 representation and checkpoint; it is not an isolated engine comparison.
+
+### Exact tokenizer execution
+
+The produced artifact retains the original tokenizer JSON and its authenticated
+125,017-ID domain. `llama-bpe` now executes its actual regex alternatives,
+including letter/mark distinctions, contractions and newline-terminated
+whitespace. The embedded `ignore_merges` boolean permits whole-piece vocabulary
+lookup. Otherwise merges apply one leftmost minimum-rank pair at a time:
+merging every occurrence simultaneously is incorrect for this source's
+non-topological merge ranks.
+
+The independent `tokenizers` 0.22.2 producer in
+[`tests/reference/lfm2_tokenizer.py`](../../tests/reference/lfm2_tokenizer.py)
+checks 128 public vectors against the actual GGUF and binding: multilingual and
+control bytes, added tokens, repeated newlines and deterministic mixed text.
+Initial execution split 17 newlines into IDs `[2,1]` instead of `[0,3]`; after
+the correction the expanded vector set agrees exactly on IDs and decoded bytes.
+Separate empty-decode, literal-control and malformed-option checks cover identity
+and refusal. Missing BPE options retain their false default, including previously
+admitted minimal fixture metadata; malformed or duplicate options still refuse.
+This does not establish chat-template, native-tool or full-model qualification.
+Unicode letter tables are reproducible from digest-pinned Unicode 15.0.0 data
+with `tools/generate_tokenizer_unicode.py`; existing notices apply.
+
+The acquired source also includes `chat_template.jinja`, digest
+`ea663864491de7ade391839479860ca95541f892f72665c73251fbd4643b1bef`.
+The current binding deliberately admits `verbatim-lfm2-v1`, not that template's
+reasoning and Python-like native-call grammar. Raw tokenizer-aware continuation
+and source-faithful conversation adaptation are separate qualification gates.
 
 The native source catalog authenticates the pinned index; the
 [family interpreter](../../src/model/families/lfm2.c) checks the exact repository
@@ -86,9 +118,12 @@ rows, a BF16 `[width, 1, kernel]` parameter and an F32-carried
 The verifier checks dimensions, precision, state domains and declared read/write
 effects. Stale-state returns and incompatible parameter encodings refuse.
 
-The common [physical lowering](../../src/graph/program_physical.c) selects
-`double_gated_conv.cpu.bf16.v1`, derives sealed geometry and a convolution-only
-state binding. Binding schema v2 denotes this new state class; existing v1
+The common [physical lowering](../../src/graph/program_physical.c) derives sealed
+geometry and a convolution-only state binding. The initial
+`double_gated_conv.cpu.bf16.v1` remains CPU-only; the new
+`double_gated_conv.bf16.v2` carries the same arithmetic to an explicit device
+consumer as well. Compilation is not device qualification.
+Binding schema v2 denotes this state class; existing v1
 bindings and their identities retain the mandatory recurrent population.
 The plan container remains v1 and validates each binding's schema.
 
@@ -97,14 +132,105 @@ state roots and prepared parameters. The existing sequence-state owner allocates
 two banks, stages a successor and commits or aborts with the session transaction.
 For width 2,048/kernel 3 each bank is 24,576 bytes. Parameters, activations and
 the rest of the model are additional costs; these bank counts are not a model
-admission estimate. No convolution scratch allocation is required.
+admission estimate. CPU execution needs no convolution scratch. CUDA uses a
+four-byte status word allocated and accounted by program-sequence preparation.
 
 The CPU realization uses ordered F32 fused multiply-add per tap, BF16
 round-to-nearest-even publications and finite, BF16-exact operand checks.
 It refuses overlapping input/output/state buffers, insufficient capacities,
 stale geometry and nonfinite operands/results. Cancellation or numeric refusal
-does not publish candidate state. CUDA and Metal execution are not admitted
-for this realization.
+does not publish candidate state. The CUDA implementation assigns independent
+channels to threads, preserves tap ordering and checks completion in at most
+64-row chunks. Its compiled, undispatched controls cover invalid operands,
+overlapping scratch, cancellation, continuation and transactional abort.
+Metal remains unsupported.
+
+CUDA routed SwiGLU consumes resident source BF16 banks without copying or
+preparing another complete weight population. Its at-most-eight-row tile uses
+`64 + min(rows,8) * (2*experts + selected + selected*intermediate)` F32 carrier
+values, including aligned status storage. The exact source geometry at four
+selected experts uses 201,088 bytes for eight rows. The backend query owns this
+scratch geometry; common program preparation allocates, accounts and releases
+it. It is not total model memory. Ascending-expert accumulation, BF16 publications
+and cutoff-tie refusal remain explicit. Eager attention uses a separate bounded
+score tile and the existing transactional K/V owner.
+
+The registered `reference.lfm2.program.cuda` runs the same pinned scaled
+program as the CPU reference, including chunk/single, cancellation, retry and
+allocation cleanup. `cuda.program` adds routed invalid-input/weight/tie and
+scratch-reuse controls. These are prepared accelerator gates, **not executed
+evidence**. Whole-checkpoint admission and generation remain separate.
+
+## Complete parameter and program construction
+
+The family producer compiles embedding, rounded-input RMS, nongated GQA with
+half-split rotary, dense SwiGLU, biased-sigmoid routed SwiGLU, residuals, final
+RMS and tied output. Explicit state roots distinguish ten K/V populations from
+thirty convolution histories. No recurrent SSM matrices or attention gates are
+manufactured.
+
+The complete recipe maps 7,610 source tensors to 428 terminals: 390 BF16 and
+38 F32 bias vectors. Ordered axis-zero `STACK` gathers each expert bank.
+Expert-major addressing counts rows across the expert axis. Scalar bits are
+preserved; this is not quantization or QAD. The tokenizer reader supports the
+source's pair-array merges without inventing absent BOS/EOS insertion settings.
+
+| Produced fact | Retained value |
+| --- | --- |
+| GGUF bytes | 47,969,264,224 |
+| Parameter bytes checked against source | 47,943,180,288 across all 428 terminals |
+| Transformation | `a161c69911d1e270bd0c53f85de6fb773367ec186f352d2d0b8fb82e3dbfe6c8` |
+| Physical policy | `fe9a0e69e792e64e1dead0f5dd23f732019f79279e2ff2389693f2e5ea7ca581` |
+| Verification | Native roundtrip and independent GGUF reader accepted |
+| Production observation | 254.32 seconds; process RSS about 304 MiB; bounded cgroup peak about 1.077 GiB |
+| Binding preparation observation | 45.35 seconds; maximum process RSS 150,272 KiB; no Engine created |
+
+The first binding describes the CPU realization before convolution lowering v2.
+The new binding above seals the changed executable program. Its forward program
+is `62cd22f8ab8d4f4444679d46146463c216d00d73eb5328340b70ec5bc0333bc4`;
+the source graph and parameter identities are unchanged. Preparation took
+48.87 seconds with 150,388 KiB maximum process RSS and no Engine creation.
+Both bindings remain intact. The immutable GGUF is reused without copying weights.
+
+The `compile optimize` CPU readbacks of both bindings resolve the exact block/expert population,
+834 forward operations and three tied-output operations. Resource admission
+correctly refuses `fixed runtime resources exceed usable memory` inside its
+deliberately bounded 2-GiB verification cgroup. This is not a measurement of
+exclusive GB10 model capacity.
+
+Private production/readback records, including separate executable/build/delta
+identities, are under
+`/home/dgmothx/lab/models/evidence/lfm2-production-20261020.FCtOqX1v`.
+No weights, private vectors or build products are committed.
+The [compiler evidence](../evaluation/compiler-evidence.md#liquid-source-to-binding-continuation-2026-10-20)
+records the source-stable CPU qualification and its explicit remaining gates.
+
+## Integrated CPU numerical reference
+
+[`tests/reference/lfm2_program.py`](../../tests/reference/lfm2_program.py)
+executes unmodified bodies from pinned Transformers v5.12.1 with public
+deterministic weights: three blocks (convolution/attention/convolution),
+hidden width 16 and four experts/top two. It is independent computation.
+
+An initial discrepancy exposed a missing numerical distinction: eager attention
+publishes QK contraction, scaled scores, normalized probabilities and output in
+BF16. The former F32 score/probability path is not equivalent. The explicit
+`BF16_EAGER_V1` class corrects those boundaries rather than relaxing tolerance.
+
+| Control | Before | Corrected observation | Claim |
+| --- | --- | --- | --- |
+| Hidden state | 45/96 unequal; max absolute difference 0.01171875 | 96/96 exactly equal | Scaled CPU program |
+| Logits | 79/192 unequal; max absolute difference 0.00390625 | 192/192 exactly equal | Scaled CPU tied head |
+| Three greedy steps | Not promoted | Exact reference continuation | Bounded synthetic continuation |
+| State lifecycle | Separate control | Chunk/single equality; cancellation, abort and retry pass | CPU transactional composition |
+
+Failure receipt:
+`47bf7fb788ec8b19f32aa2260929d3e860e4993db8158bd529f645f95e0ea39e`.
+Corrected receipt:
+`cfdd1779ba58f04d8a71757b12670ac92f631d0f49cc74ea090dbce939d39bf7`.
+The corrected receipt belongs to the CPU binding-producing snapshot, not a
+later CUDA candidate. Full-checkpoint logits, NLL/PPL, held-out quality and
+performance remain unavailable.
 
 ## Numerical and lifecycle evidence
 
@@ -213,10 +339,10 @@ reference.lfm2.short-conv`. Source auditing uses `YVEX_LFM2_SOURCE`,
 
 | Owner | Required next result |
 | --- | --- |
-| Family / typed program | Complete source-derived hybrid forward/output program, including nongated GQA and source-specific biased-sigmoid MoE numerics |
-| Parameter compiler | Integrate the implemented lossless scalar `STACK` into the complete family recipe and terminal mapping; no reuse of a scaled MXFP4 reconstruction rule |
-| Artifact / binding | Reproducible writer, independent reader, payload lineage, tokenizer/padded-output policy and authenticated runtime binding |
-| Backend / deployment | Admitted convolution, attention and MoE implementations with complete workspace/state/preparation costs |
+| Family / typed program | Whole-checkpoint numerical validation of the implemented hybrid program; scaled CPU composition does not suffice |
+| Parameter compiler | Full lossless recipe produced; quantized alternatives need separate lineage and quality evidence |
+| Artifact / binding | Verified artifact and CPU binding retained; changed executable programs need their own binding and tokenizer-aware generation validation |
+| Backend / deployment | Qualify implemented CUDA convolution/normalization/eager attention/routed SwiGLU, then independently admit full workspace/state/preparation costs |
 | Evaluation | Independent layer/logit/held-out quality controls and actual native generation |
 | GB10 comparison | Fresh operator authority, full capacity admission and uncontended same-machine llama.cpp/YVEX workloads |
 

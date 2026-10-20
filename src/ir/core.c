@@ -31,6 +31,16 @@ static int core_parameter(const yvex_ir_module *m, yvex_ir_id id, yvex_error *er
     if (type->kind != YVEX_IR_TENSOR || !source ||
         !yvex_sha256_hex_valid(source->value.text))
         return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "parameter requires logical tensor and source identity");
+    if (op->definition->version == 2u) {
+        const yvex_ir_attribute *count = yvex_ir_attribute_get(m, id, "expert_count");
+        if (!count || !count->value.integer || type->rank != 3u ||
+            type->shape[0].symbol != YVEX_IR_NONE || type->shape[0].extent != count->value.integer ||
+            (type->scalar != YVEX_IR_BF16 && type->scalar != YVEX_IR_F32))
+            return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "expert bank requires exact outer-axis geometry");
+        for (unsigned int axis = 1u; axis < type->rank; ++axis)
+            if (type->shape[axis].symbol != YVEX_IR_NONE || !type->shape[axis].extent)
+                return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "expert bank cannot have dynamic parameter axes");
+    }
     return YVEX_OK;
 }
 
@@ -166,6 +176,9 @@ const yvex_ir_dialect *yvex_ir_core_dialect(void)
 {
     static const yvex_ir_attribute_rule parameter[] = {
         {"parameter", YVEX_IR_ATTR_SYMBOL, 1}, {"source", YVEX_IR_ATTR_TEXT, 1}};
+    static const yvex_ir_attribute_rule expert_bank[] = {
+        {"parameter", YVEX_IR_ATTR_SYMBOL, 1}, {"source", YVEX_IR_ATTR_TEXT, 1},
+        {"expert_count", YVEX_IR_ATTR_U64, 1}};
     static const yvex_ir_attribute_rule callee[] = {{"callee", YVEX_IR_ATTR_SYMBOL, 1}};
     static const yvex_ir_attribute_rule integer[] = {{"value", YVEX_IR_ATTR_U64, 1}};
     static const yvex_ir_attribute_rule observation[] = {{"tag", YVEX_IR_ATTR_U64, 1}};
@@ -174,6 +187,9 @@ const yvex_ir_dialect *yvex_ir_core_dialect(void)
          YVEX_IR_PUBLISH | YVEX_IR_ORDERED, observation, 1u, 0, core_observe},
         {"core.identity", 1u, 1u, 1u, 1u, 1u, 0u, YVEX_IR_PURE, NULL, 0u, 0, core_identity},
         {"core.parameter", 1u, 0u, 0u, 1u, 1u, 0u, YVEX_IR_PURE, parameter, 2u, 0, core_parameter},
+        /* The symbol anchors expert zero; the parameter join proves the entire
+         * ordered, homogeneous STACK. V1 cannot silently acquire this meaning. */
+        {"core.parameter", 2u, 0u, 0u, 1u, 1u, 0u, YVEX_IR_PURE, expert_bank, 3u, 0, core_parameter},
         {"core.index", 1u, 0u, 0u, 1u, 1u, 0u, YVEX_IR_PURE, integer, 1u, 0, core_index},
         {"core.call", 1u, 0u, IR_OBJECT_LIMIT, 0u, IR_OBJECT_LIMIT,
          0u, 0u, callee, 1u, 0, core_call},

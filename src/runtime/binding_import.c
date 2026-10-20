@@ -238,7 +238,8 @@ int yvex_runtime_private_binding_policies_match_model(
     unsigned long long expanded, features;
     if (!model || !transformer || !logits || !speculation ||
         !binding_logits_policy_valid(logits)) return 0;
-    if (model->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2)
+    if (model->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 ||
+        model->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V3)
         return binding_policy_not_applicable(
                    transformer, speculation);
     return model->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1 &&
@@ -416,8 +417,9 @@ int yvex_runtime_private_binding_attention_ready(
     return attention && attention->history_contract_ready &&
            attention->state_delta_contract_ready &&
            (attention->cpu_reference_ready == 0 || attention->cpu_reference_ready == 1) &&
-           attention->cuda_execution_ready &&
-           attention->full_execution_ready;
+           (attention->cuda_execution_ready == 0 || attention->cuda_execution_ready == 1) &&
+           (attention->cpu_reference_ready || attention->cuda_execution_ready) &&
+           attention->full_execution_ready == 1;
 }
 
 int yvex_runtime_private_binding_identity_chain_valid(
@@ -491,6 +493,17 @@ static int binding_attention_layers_valid(
                 found = 1;
             }
             if (!found) return 0;
+        } else if (binding->descriptor.model_execution.schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V3) {
+            const yvex_operator_graph_ir *graph = yvex_compiled_model_plan_operator_graph(binding->plan);
+            const yvex_operator_graph_summary *summary = yvex_operator_graph_ir_summary(graph);
+            unsigned long long seen = 0u;
+            int found = 0;
+            for (unsigned long long i = 0u; summary && i < summary->node_count; ++i) {
+                const yvex_operator_node *node = yvex_operator_graph_ir_node_at(graph, i);
+                if (!node || node->kind != YVEX_OPERATOR_ATTENTION) continue;
+                if (seen++ == attention) { expected_layer = node->layer_index; found = 1; break; }
+            }
+            if (!found) return 0;
         }
         if (actual->ordinal != attention || actual->layer_index != expected_layer ||
             actual->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
@@ -506,12 +519,16 @@ static int binding_program_only(const yvex_runtime_binding *binding)
         ? &binding->descriptor.model_execution : NULL;
 
     return execution &&
+           ((execution->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V3 &&
+             execution->layer_count && !execution->draft_layer_count &&
+             binding->summary.layer_count == execution->swa_layers) ||
+           (
            execution->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 &&
            execution->layer_count &&
            execution->sequence_mixer_layers == execution->layer_count &&
            !execution->attention_heads && !execution->kv_heads &&
            !execution->head_width && !execution->dense_ffn_width &&
-           !execution->draft_layer_count && !binding->summary.layer_count;
+           !execution->draft_layer_count && !binding->summary.layer_count));
 }
 
 static const char *binding_canonical_records_mismatch(
@@ -540,7 +557,7 @@ static const char *binding_canonical_records_mismatch(
     if (!decoder &&
         (binding->summary.decoder_layer_count ||
          binding->summary.recurrent_layer_count !=
-             (program_only ? binding->descriptor.model_execution.layer_count : 0ull) ||
+             (program_only ? binding->descriptor.model_execution.sequence_mixer_layers : 0ull) ||
          binding->summary.decoder_plan_identity[0]))
         return "decoder-absence";
     if (!binding->summary.tensor_count || (!binding->summary.layer_count && !program_only))
@@ -577,7 +594,7 @@ static const char *binding_canonical_records_mismatch(
         return "model-execution-geometry";
     if (!binding_policies_valid(binding)) return "execution-policies";
     if (!compiled_plan_valid(binding)) return "compiled-model-plan";
-    if (!program_only &&
+    if ((!program_only || binding->summary.layer_count) &&
         (!yvex_runtime_private_binding_attention_ready(&binding->attention) ||
          !yvex_attention_plan_capabilities_match(&binding->attention,
              binding->layers, binding->summary.layer_count) ||
@@ -591,7 +608,7 @@ static const char *binding_canonical_records_mismatch(
         return "attention-plan";
     if (!yvex_runtime_private_binding_identity_chain_valid(
             &binding->admission, &binding->materialization,
-            &binding->descriptor, program_only ? NULL : &binding->attention))
+            &binding->descriptor, binding->summary.layer_count ? &binding->attention : NULL))
         return "identity-chain";
     if (binding->summary.draft_layer_count &&
         (!yvex_runtime_private_binding_attention_ready(&binding->draft_attention) ||
@@ -672,7 +689,7 @@ int yvex_runtime_private_binding_validate(
     if (!yvex_compiled_graph_identities(
             yvex_compiled_model_plan_operator_graph_identity(binding->plan),
             &binding->materialization, &binding->descriptor,
-            program_only ? NULL : &binding->attention,
+            binding->summary.layer_count ? &binding->attention : NULL,
             binding->summary.draft_layer_count ? &binding->draft_attention : NULL,
             semantic, executable)) {
         *field = "graph-identity-inputs";

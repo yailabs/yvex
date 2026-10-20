@@ -89,9 +89,18 @@ upstream-payload-verified native v3 manifest, complete tensor-role checks and
 a typed CPU double-gated convolution using common physical lowering and
 transactional state. The parameter compiler can stream homogeneous scalar
 outer-axis STACK operations without an aggregate weight copy. Source
-metadata and component numerics do not admit the complete model: hybrid/MoE
-program composition, parameter production, artifact/binding, CUDA execution,
-whole-model quality and performance remain open. QAD-Q4_0 is a distinct
+metadata and component numerics do not admit the complete model. The continuation
+now produces a complete hybrid/MoE program, lossless GGUF, independently checked
+payload and runtime bindings, including the compiled CUDA candidate. A pinned
+three-block CPU reference matches hidden states, logits and bounded continuation
+after correcting eager-attention BF16
+publication. CUDA convolution/normalization, eager attention and routed SwiGLU
+consumers compile with explicit scratch admission; device controls are prepared
+but undispatched. Exact source-tokenizer vectors and CPU sanitizer controls pass;
+the new binding is reopened without creating an Engine.
+Complete CUDA execution, whole-checkpoint generation/quality
+and performance remain open.
+QAD-Q4_0 is a distinct
 distilled checkpoint, not a source-matched quantization control. The r17 recovery
 Task remains unresolved and deferred; the installed 0731 and services are unchanged.
 

@@ -14,6 +14,7 @@
 #include "tests/support/vision_program.h"
 #include "tests/support/dense_program.h"
 #include <yvex/internal/program_kernels.h>
+#include <yvex/internal/quant_numeric.h>
 #include <yvex/qtype.h>
 #include <math.h>
 #include <stdint.h>
@@ -786,8 +787,169 @@ static int program_mhc_barrier_control(void)
     return 0;
 }
 
+static int program_bf16_tensor(yvex_backend *b, unsigned long long count, const float *source,
+    yvex_device_tensor **out, yvex_error *err)
+{
+    yvex_backend_tensor_desc d = {.name = "bf16-publication-control", .dtype = YVEX_DTYPE_F32,
+        .rank = 1u, .dims = {count}, .bytes = count * sizeof(float)};
+    int rc = yvex_backend_tensor_alloc(b, &d, out, err);
+    return rc == YVEX_OK && source ? yvex_backend_tensor_write(b, *out, source, d.bytes, err) : rc;
+}
+
+static int program_bf16_primitives(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
+    yvex_backend_memory_stats before, after;
+    yvex_device_tensor *input = NULL, *weight = NULL, *output = NULL, *q = NULL, *k = NULL, *v = NULL;
+    yvex_backend_operation_facts facts;
+    float x[] = {1, -1, 1, -1, 0, 0, 0, 0}, w[] = {0.5f, 1, 2, 3};
+    const float expected[] = {0.25f, -0.5f, 1, -1.5f, 0, 0, 0, 0};
+    float actual[16], query[16] = {0}, key[24] = {0}, value[24] = {0};
+    yvex_error err = {0};
+#define BF16_CHECK(c) YVEX_TEST_ASSERT((c), "BF16 device publication: " #c)
+    BF16_CHECK(yvex_backend_open(&backend, &options, &err) == YVEX_OK);
+    BF16_CHECK(yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK);
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    BF16_CHECK(ops && ops->rounded_rms_bf16 && ops->attention_execute);
+    BF16_CHECK(program_bf16_tensor(backend, 8u, x, &input, &err) == YVEX_OK);
+    BF16_CHECK(program_bf16_tensor(backend, 4u, w, &weight, &err) == YVEX_OK);
+    BF16_CHECK(program_bf16_tensor(backend, 16u, NULL, &output, &err) == YVEX_OK);
+    yvex_device_tensor norm_output;
+    BF16_CHECK(yvex_backend_tensor_f32_subview(output, 0u, 8u, &norm_output));
+    BF16_CHECK(ops->rounded_rms_bf16(backend, input, weight, &norm_output, 2u, 4u, 3.0f, &facts, &err) == YVEX_OK);
+    BF16_CHECK(yvex_backend_tensor_read(backend, &norm_output, actual, sizeof(expected), &err) == YVEX_OK &&
+        !memcmp(actual, expected, sizeof(expected)));
+    x[0] = NAN;
+    BF16_CHECK(yvex_backend_tensor_write(backend, input, x, sizeof(x), &err) == YVEX_OK);
+    BF16_CHECK(ops->rounded_rms_bf16(backend, input, weight, &norm_output, 2u, 4u, 3.0f, &facts, &err) ==
+        YVEX_ERR_FORMAT && !norm_output.is_written);
+    /* Strided K/V backing with padding poisoned: padding is not an operand. */
+    for (unsigned int row = 0u; row < 3u; ++row) for (unsigned int d = 0u; d < 8u; ++d) {
+        key[row * 8u + d] = d < 4u ? 0.0f : NAN;
+        value[row * 8u + d] = d < 4u ? (float)(2u + row * 4u) : NAN;
+    }
+    BF16_CHECK(program_bf16_tensor(backend, 16u, query, &q, &err) == YVEX_OK);
+    BF16_CHECK(program_bf16_tensor(backend, 24u, key, &k, &err) == YVEX_OK);
+    BF16_CHECK(program_bf16_tensor(backend, 24u, value, &v, &err) == YVEX_OK);
+    yvex_transformer_attention_request r = {
+        .requirement = {.query_tokens = 2u, .key_value_tokens = 3u, .query_start = 1u,
+            .query_heads = 2u, .key_value_heads = 1u, .head_dimension = 4u,
+            .key_token_stride = 8u, .value_token_stride = 8u,
+            .query_dtype = YVEX_DTYPE_F32, .key_dtype = YVEX_DTYPE_F32,
+            .value_dtype = YVEX_DTYPE_F32, .output_dtype = YVEX_DTYPE_F32,
+            .layout = YVEX_TRANSFORMER_ATTENTION_LAYOUT_TOKEN_HEAD_DIM,
+            .mask = YVEX_TRANSFORMER_ATTENTION_MASK_CAUSAL,
+            .numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_BF16_EAGER, .deterministic = 1},
+        .query = q, .key = k, .value = v, .output = output};
+    unsigned long long budget = 0u;
+    BF16_CHECK(ops->attention_workspace_required(&r.requirement, &budget, &err) == YVEX_OK && budget == 304u);
+    for (unsigned int run = 0u; run < 3u; ++run) {
+        key[0] = run == 1u ? 0.1f : 0.0f;
+        BF16_CHECK(yvex_backend_tensor_write(backend, k, key, sizeof(key), &err) == YVEX_OK);
+        int rc = ops->attention_execute(backend, &r, &facts, &err);
+        BF16_CHECK(rc == (run == 1u ? YVEX_ERR_FORMAT : YVEX_OK));
+        if (run == 1u) { BF16_CHECK(!output->is_written); continue; }
+        BF16_CHECK(facts.kernel_launches == 3u && facts.temporary_bytes <= budget);
+        BF16_CHECK(yvex_backend_tensor_read(backend, output, actual, sizeof(actual), &err) == YVEX_OK);
+        for (unsigned int i = 0u; i < 16u; ++i) BF16_CHECK(actual[i] == (i < 8u ? 4.0f : 6.0f));
+    }
+    yvex_device_tensor *all[] = {input, weight, output, q, k, v};
+    for (size_t i = 0u; i < sizeof(all) / sizeof(*all); ++i)
+        BF16_CHECK(yvex_backend_tensor_release(backend, &all[i], &err) == YVEX_OK);
+    BF16_CHECK(yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes);
+    BF16_CHECK(yvex_backend_close_checked(&backend, &err) == YVEX_OK);
+#undef BF16_CHECK
+    return 0;
+}
+
+static int routed_cancel_after_tile(void *context) { return ++*(unsigned int *)context > 1u; }
+
+static int program_sigmoid_routed(void)
+{
+    yvex_backend *b = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
+    yvex_error err = {0};
+    yvex_device_tensor *resident = NULL, *x = NULL, *logits = NULL, *bias = NULL, *y = NULL, *scratch = NULL;
+    yvex_backend_memory_stats before, after;
+    unsigned char *arena = NULL;
+    float input[36], scores[36] = {0}, biases[] = {0.5f, 1.0f, 1.5f, 2.0f};
+    float expected[36], actual[36], cpu_scratch[12];
+    yvex_component_encoded_weight banks[3];
+    yvex_backend_operation_facts facts;
+    unsigned long long count = 0u;
+#define ROUTED_CHECK(c) YVEX_TEST_ASSERT((c), "sigmoid routed device: " #c)
+    ROUTED_CHECK(yvex_backend_open(&b, &options, &err) == YVEX_OK);
+    ROUTED_CHECK(yvex_backend_get_memory_stats(b, &before, &err) == YVEX_OK);
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(b);
+    ROUTED_CHECK(ops && ops->routed_swiglu_bf16 && ops->routed_swiglu_workspace_values);
+    yvex_backend_tensor_desc d = {.name = "sigmoid-routed-weights", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {384u}, .bytes = 384u};
+    ROUTED_CHECK(yvex_backend_resident_alloc(b, &d, &resident, &arena, &err) == YVEX_OK);
+    for (size_t i = 0u; i < 192u; ++i) {
+        unsigned short value = yvex_quant_bf16_encode((float)((int)(i % 7u) - 3) / 16.0f);
+        arena[2u * i] = (unsigned char)value; arena[2u * i + 1u] = (unsigned char)(value >> 8u);
+    }
+    resident->is_written = 1;
+    ROUTED_CHECK(yvex_backend_resident_attach(b, arena, 384u, resident, 1u, &err) == YVEX_OK);
+    for (size_t i = 0u; i < 3u; ++i) banks[i] = (yvex_component_encoded_weight){
+        .encoded = arena + i * 128u, .encoded_bytes = 128u, .row_count = 16u,
+        .row_width = 4u, .row_bytes = 8u, .qtype = YVEX_GGUF_QTYPE_BF16};
+    for (size_t i = 0u; i < 36u; ++i) input[i] = (float)((int)(i % 5u) - 2) / 4.0f;
+    yvex_routed_swiglu_bf16_request g = {.rows = 9u, .hidden = 4u, .intermediate = 4u,
+        .experts = 4u, .selected = 2u, .normalization_epsilon = 1e-6f, .routed_scale = 1.0f,
+        .input = input, .logits = scores, .bias = biases, .gate = banks, .up = banks + 1u,
+        .down = banks + 2u, .output = expected, .workspace = cpu_scratch, .workspace_values = 12u};
+    ROUTED_CHECK(yvex_routed_swiglu_bf16(&g, &err) == YVEX_OK);
+    ROUTED_CHECK(ops->routed_swiglu_workspace_values(&g, &count, &err) == YVEX_OK && count == 208u);
+    ROUTED_CHECK(program_bf16_tensor(b, 36u, input, &x, &err) == YVEX_OK);
+    ROUTED_CHECK(program_bf16_tensor(b, 36u, scores, &logits, &err) == YVEX_OK);
+    ROUTED_CHECK(program_bf16_tensor(b, 4u, biases, &bias, &err) == YVEX_OK);
+    ROUTED_CHECK(program_bf16_tensor(b, 36u, NULL, &y, &err) == YVEX_OK);
+    ROUTED_CHECK(program_bf16_tensor(b, count, NULL, &scratch, &err) == YVEX_OK);
+    yvex_routed_swiglu_device_request r = {.geometry = g, .input = x, .logits = logits,
+        .bias = bias, .output = y, .workspace = scratch};
+    /* Same geometry, reused workspace, independent failure classes and recovery.
+     * The pinned whole-program fixture supplies the separate upstream oracle. */
+    for (unsigned int run = 0u; run < 6u; ++run) {
+        unsigned int cancelled = 0u;
+        unsigned char saved[2] = {arena[64], arena[65]};
+        if (run == 1u) input[0] = NAN;
+        if (run == 2u) { arena[64] = 0xc0u; arena[65] = 0x7fu; }
+        if (run == 3u) biases[2] = 1.0f;
+        r.geometry.cancel_requested = run == 4u ? routed_cancel_after_tile : NULL;
+        r.geometry.cancel_context = &cancelled;
+        ROUTED_CHECK(yvex_backend_tensor_write(b, x, input, sizeof(input), &err) == YVEX_OK);
+        ROUTED_CHECK(yvex_backend_tensor_write(b, bias, biases, sizeof(biases), &err) == YVEX_OK);
+        int rc = ops->routed_swiglu_bf16(b, &r, &facts, &err);
+        if (run == 0u || run == 5u) {
+            ROUTED_CHECK(rc == YVEX_OK && y->is_written && facts.kernel_launches == 6u &&
+                facts.temporary_bytes == count * sizeof(float));
+            ROUTED_CHECK(yvex_backend_tensor_read(b, y, actual, sizeof(actual), &err) == YVEX_OK &&
+                !memcmp(actual, expected, sizeof(actual)));
+        } else ROUTED_CHECK(rc == (run == 4u ? YVEX_ERR_CANCELLED : YVEX_ERR_FORMAT) && !y->is_written);
+        input[0] = -0.5f; biases[2] = 1.5f; arena[64] = saved[0]; arena[65] = saved[1];
+    }
+    r.workspace = y;
+    ROUTED_CHECK(ops->routed_swiglu_bf16(b, &r, &facts, &err) == YVEX_ERR_FORMAT);
+    r.workspace = scratch;
+    ROUTED_CHECK(yvex_backend_resident_detach(b, &err) == YVEX_OK);
+    ROUTED_CHECK(ops->routed_swiglu_bf16(b, &r, &facts, &err) == YVEX_ERR_FORMAT);
+    yvex_device_tensor *all[] = {x, logits, bias, y, scratch, resident};
+    for (size_t i = 0u; i < sizeof(all) / sizeof(*all); ++i)
+        ROUTED_CHECK(yvex_backend_tensor_release(b, &all[i], &err) == YVEX_OK);
+    ROUTED_CHECK(yvex_backend_get_memory_stats(b, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes);
+    ROUTED_CHECK(yvex_backend_close_checked(&b, &err) == YVEX_OK);
+#undef ROUTED_CHECK
+    return 0;
+}
+
 int yvex_cuda_test_program(void)
 {
+    if (program_bf16_primitives()) return 1;
+    if (program_sigmoid_routed()) return 1;
     const unsigned int mixing_streams[] = {1u, 2u, 3u, 4u, 7u, 8u, 9u, 16u};
     for (size_t i = 0u; i < sizeof(mixing_streams) / sizeof(mixing_streams[0]); ++i)
         if (test_mhc_sinkhorn_order(mixing_streams[i])) return 1;

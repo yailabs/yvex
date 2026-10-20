@@ -1,6 +1,51 @@
 /* Exact F32 physical kernels for the backend-neutral gated-delta sequence mixer. */
 #include "src/backend/cuda/kernel_primitives.h"
 
+static __device__ int short_conv_operand(float value)
+{
+    return isfinite(value) && value == float_to_bf16_rne(value);
+}
+
+/* One thread owns one channel's ordered history. Channels are independent;
+ * neither rows nor taps are reordered. Chunk boundaries use candidate state. */
+extern "C" __global__ void yvex_short_conv_bf16(
+    const float *projection, const float *weight, const float *state,
+    float *next_state, float *output, unsigned long long width,
+    unsigned long long taps, unsigned long long offset, unsigned long long rows,
+    int initialize, int *status)
+{
+    unsigned long long channel = (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (channel >= width) return;
+    float *history = next_state + channel * taps;
+    const float *w = weight + channel * taps;
+    for (unsigned long long k = 0ull; k < taps; ++k) {
+        float previous = initialize ? (state ? state[channel * taps + k] : 0.0f) : history[k];
+        if (!short_conv_operand(w[k]) || !short_conv_operand(previous)) {
+            atomicCAS(status, 0, 1);
+            return;
+        }
+        if (initialize) history[k] = previous;
+    }
+    for (unsigned long long row = offset; row < offset + rows; ++row) {
+        const float *p = projection + row * width * 3ull;
+        if (!short_conv_operand(p[channel]) || !short_conv_operand(p[width + channel]) ||
+            !short_conv_operand(p[2ull * width + channel])) {
+            atomicCAS(status, 0, 2);
+            return;
+        }
+        float value = float_to_bf16_rne(__fmul_rn(p[channel], p[2ull * width + channel]));
+        if (!isfinite(value)) { atomicCAS(status, 0, 3); return; }
+        for (unsigned long long k = 1ull; k < taps; ++k) history[k - 1ull] = history[k];
+        history[taps - 1ull] = value;
+        float sum = 0.0f;
+        for (unsigned long long k = 0ull; k < taps; ++k) sum = __fmaf_rn(history[k], w[k], sum);
+        sum = float_to_bf16_rne(sum);
+        value = float_to_bf16_rne(__fmul_rn(p[width + channel], sum));
+        if (!isfinite(sum) || !isfinite(value)) { atomicCAS(status, 0, 4); return; }
+        output[row * width + channel] = value;
+    }
+}
+
 static __device__ __forceinline__ float gated_delta_silu(float value)
 {
     if (value >= 0.0f) return value / (1.0f + expf(-value));

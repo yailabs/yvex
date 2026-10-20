@@ -85,7 +85,10 @@ typedef struct {
 
 /* Compile exact parameter references through Transformation IR to Physical IR.
  * A source symbol must have one shape/type-preserving identity realization.
- * Other transformations require explicit computation legalization, not guessed
+ * Core parameter v2 explicitly requests an expert bank anchored at expert zero:
+ * the join proves every homogeneous outer-axis STACK operand and ordinal.
+ * V1 references never inherit that meaning. Other transformations require
+ * explicit computation legalization, not guessed
  * aliasing. Payload bytes, device allocation and target selection are absent.
  * The result retains its immutable program and owns compact terminal handles;
  * source and physical compiler objects may close after successful construction. */

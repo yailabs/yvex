@@ -724,6 +724,51 @@ static int source_verify_lfs_tokenizer_metadata(void)
             strcmp(summary->pre_tokenizer, "qwen2") == 0,
         "LFS tokenizer identity and nullable policy seal exact metadata");
     yvex_gguf_tokenizer_metadata_release(&metadata);
+    {
+        static const char absent_flags[] =
+            "{\"bos_token\":null,\"eos_token\":\"<eos>\",\"pad_token\":null}";
+        snprintf(path, sizeof(path), "%s/tokenizer_config.json", root);
+        YVEX_TEST_ASSERT(source_verify_write_text(path, absent_flags) &&
+            source_verify_write_metadata(root, "tokenizer_config.json") &&
+            yvex_gguf_tokenizer_metadata_load(&metadata, &verification, 3u, "qwen2",
+                1024u * 1024u, &failure, &err) == YVEX_OK,
+            "absent optional flags do not invent token insertion");
+        summary = yvex_gguf_tokenizer_summary_get(metadata);
+        YVEX_TEST_ASSERT(summary && !summary->add_bos_token_declared &&
+            !summary->add_eos_token_declared && !summary->add_bos_token && !summary->add_eos_token,
+            "absence remains distinct from declared false");
+        yvex_gguf_tokenizer_metadata_release(&metadata);
+        const char *merges[] = {"[\"a b\"]", "[[\"a\",\"b\"]]",
+            "[[\"\\u010a\",\"b\"],\"a b\"]", "[[]]", "[[\"a\"]]",
+            "[[\"a\",\"b\",\"c\"]]", "[[\"a\",2]]", "[[\"a\",\"b\",]]",
+            "[[\"a\",\"b\"],]", "[[\"a b\",\"c\"]]", "[[\"\",\"b\"]]",
+            "[[\"a\\u0000\",\"b\"]]", "["};
+        for (size_t i = 0u; i < sizeof(merges) / sizeof(merges[0]); ++i) {
+            char json[1024];
+            snprintf(json, sizeof(json),
+                "{\"added_tokens\":[{\"id\":2,\"content\":\"<eos>\",\"special\":true}],"
+                "\"model\":{\"type\":\"BPE\",\"vocab\":{\"a\":0,\"b\":1},\"merges\":%s}}", merges[i]);
+            snprintf(path, sizeof(path), "%s/tokenizer.json", root);
+            YVEX_TEST_ASSERT(source_verify_write_text(path, json) &&
+                source_verify_write_metadata_sha256(root, "tokenizer.json", json),
+                "authenticate each independent BPE serialization control");
+            int rc = yvex_gguf_tokenizer_metadata_load(&metadata, &verification, 3u,
+                "qwen2", 1024u * 1024u, &failure, &err);
+            if (i < 3u) {
+                const unsigned char *bytes;
+                size_t length;
+                const char *expected = i == 2u ? "\xc4\x8a b" : "a b";
+                YVEX_TEST_ASSERT(rc == YVEX_OK &&
+                    yvex_gguf_tokenizer_merge_at(metadata, 0u, &bytes, &length) &&
+                    length == strlen(expected) && !memcmp(bytes, expected, length),
+                    "string/pair merges preserve exact token bytes and rank");
+            } else {
+                YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && !metadata,
+                    "malformed or ambiguous merge pairs refuse without publication");
+            }
+            yvex_gguf_tokenizer_metadata_release(&metadata);
+        }
+    }
     YVEX_TEST_ASSERT(system("rm -rf build/tests/source-lfs-tokenizer") == 0,
                      "release LFS tokenizer metadata fixture");
     return 0;

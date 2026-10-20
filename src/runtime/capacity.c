@@ -937,7 +937,8 @@ static int capacity_decoder_attention_workspace(
             .output_dtype = YVEX_DTYPE_F32,
             .layout = YVEX_TRANSFORMER_ATTENTION_LAYOUT_TOKEN_HEAD_DIM,
             .mask = YVEX_TRANSFORMER_ATTENTION_MASK_CAUSAL,
-            .numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32,
+            .numeric_contract = layer->compute_contract == YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1 ?
+                YVEX_TRANSFORMER_ATTENTION_NUMERIC_BF16_EAGER : YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32,
             .deterministic = 1};
         unsigned long long bytes;
         int rc = yvex_runtime_stateful_attention_workspace_required(

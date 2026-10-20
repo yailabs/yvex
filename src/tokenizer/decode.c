@@ -248,7 +248,10 @@ static int decode_identities(const yvex_tokenizer *tokenizer, const unsigned int
     if (!yvex_sha256_final(&hash, digest))
         return 0;
     yvex_sha256_hex(digest, result->token_ids_identity);
-    if (yvex_artifact_sha256_hex_bytes(result->bytes, result->byte_count,
+    /* Empty input and fully suppressed control tokens legitimately produce no
+     * allocation. Hash the empty byte string without changing the hash API. */
+    const unsigned char *bytes = result->byte_count ? result->bytes : (const unsigned char *)"";
+    if (yvex_artifact_sha256_hex_bytes(bytes, result->byte_count,
                                        result->decoded_bytes_identity, NULL) != YVEX_OK)
         return 0;
     yvex_sha256_init(&hash);

@@ -10,6 +10,9 @@ extern "C" {
 typedef struct yvex_gated_delta_plan yvex_gated_delta_plan;
 typedef struct yvex_gated_delta_device_request yvex_gated_delta_device_request;
 typedef struct yvex_gated_delta_device_result yvex_gated_delta_device_result;
+typedef struct yvex_short_conv_geometry yvex_short_conv_geometry;
+typedef struct yvex_short_conv_device_request yvex_short_conv_device_request;
+typedef struct yvex_short_conv_device_result yvex_short_conv_device_result;
 struct yvex_convolution_2d_geometry;
 /* Pure bounded gate-product numerical contract shared by compiled execution
  * and selected-expert compatibility. The caller owns publication on success. */
@@ -45,6 +48,27 @@ typedef struct yvex_component_encoded_weight {
     unsigned long long encoded_bytes, row_count, row_width, row_bytes;
     unsigned int qtype;
 } yvex_component_encoded_weight;
+/* Sigmoid probabilities are BF16; F32 bias affects only selection. The
+ * selected weights normalize in BF16, experts publish BF16 and are combined
+ * in ascending source-expert order. A tied selection boundary is refused. */
+typedef struct {
+    unsigned long long rows, hidden, intermediate, experts, selected;
+    float normalization_epsilon, routed_scale;
+    const float *input, *logits, *bias;
+    const yvex_component_encoded_weight *gate, *up, *down;
+    float *output, *workspace;
+    unsigned long long workspace_values;
+    int (*cancel_requested)(void *);
+    void *cancel_context;
+} yvex_routed_swiglu_bf16_request;
+int yvex_routed_swiglu_bf16(const yvex_routed_swiglu_bf16_request *, yvex_error *);
+int yvex_routed_swiglu_workspace_values(const yvex_routed_swiglu_bf16_request *,
+    unsigned long long *, yvex_error *);
+typedef struct {
+    yvex_routed_swiglu_bf16_request geometry;
+    const yvex_device_tensor *input, *logits, *bias;
+    yvex_device_tensor *output, *workspace;
+} yvex_routed_swiglu_device_request;
 typedef struct {
     unsigned long long batch, input_channels, output_channels, input_length;
     unsigned long long kernel_size, stride, dilation, padding, output_padding;
@@ -166,7 +190,8 @@ typedef enum {
 } yvex_transformer_attention_mask;
 typedef enum {
     YVEX_TRANSFORMER_ATTENTION_NUMERIC_UNKNOWN = 0,
-    YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32
+    YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32,
+    YVEX_TRANSFORMER_ATTENTION_NUMERIC_BF16_EAGER
 } yvex_transformer_attention_numeric_contract;
 typedef struct yvex_transformer_attention_requirement {
     unsigned long long query_tokens, key_value_tokens, query_start;
@@ -285,6 +310,14 @@ struct yvex_backend_transformer_operations {
     int (*group_rms_norm_bf16)(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
                               yvex_device_tensor *, unsigned long long, unsigned long long, float,
                               yvex_backend_operation_facts *, yvex_error *);
+    /* Ordered F32 square/sum, BF16 normalized value, then BF16 weight product. */
+    int (*rounded_rms_bf16)(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
+                           yvex_device_tensor *, unsigned long long, unsigned long long, float,
+                           yvex_backend_operation_facts *, yvex_error *);
+    int (*routed_swiglu_bf16)(yvex_backend *, const yvex_routed_swiglu_device_request *,
+                            yvex_backend_operation_facts *, yvex_error *);
+    int (*routed_swiglu_workspace_values)(const yvex_routed_swiglu_bf16_request *,
+                                        unsigned long long *, yvex_error *);
     int (*residual_post)(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
                          const yvex_device_tensor *, const yvex_device_tensor *,
                          unsigned long long, unsigned long long, unsigned long long,
@@ -316,6 +349,9 @@ struct yvex_backend_transformer_operations {
                                const yvex_gated_delta_device_request *,
                                yvex_gated_delta_device_result *,
                                yvex_backend_operation_facts *, yvex_error *);
+    int (*short_conv_execute)(yvex_backend *, const yvex_short_conv_geometry *,
+                              const yvex_short_conv_device_request *, yvex_short_conv_device_result *,
+                              yvex_backend_operation_facts *, yvex_error *);
     int (*linear_workspace_required)(const yvex_transformer_linear_compile_request *,
                                      unsigned long long *, yvex_error *);
     int (*linear_compile)(yvex_backend *, const yvex_transformer_linear_compile_request *,

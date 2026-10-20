@@ -728,6 +728,8 @@ static int exact_policy_admit(yvex_tokenizer *tokenizer, const yvex_gguf *gguf,
                        "tokenizer JSON/config identities differ from the compiled policy");
         return YVEX_ERR_UNSUPPORTED;
     }
+    if (policy->model_policy == YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL)
+        return yvex_tokenizer_bpe_options(tokenizer, json, (size_t)json_count, err);
     return YVEX_OK;
 }
 
@@ -871,7 +873,8 @@ int yvex_tokenizer_execution_seal_hf_json(yvex_tokenizer *tokenizer,
         yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.hf-json", "admitted ByteLevel BPE source required");
         return YVEX_ERR_FORMAT;
     }
-    rc = vocabulary_build(tokenizer, 1, err);
+    rc = yvex_tokenizer_bpe_options(tokenizer, json, json_bytes, err);
+    if (rc == YVEX_OK) rc = vocabulary_build(tokenizer, 1, err);
     if (rc != YVEX_OK) return rc;
     while (capacity < 131072u) capacity *= 2u;
     tokenizer->merge_index = calloc((size_t)capacity, sizeof(*tokenizer->merge_index));
@@ -1123,6 +1126,59 @@ static unsigned long long next_piece(const tokenizer_span *span, unsigned long l
     return next;
 }
 
+static unsigned int llama_class(uint32_t point)
+{
+    unsigned int c = yvex_tokenizer_unicode_class(point);
+    /* Regex White_Space excludes the four Python-only information separators. */
+    return point >= 0x1cu && point <= 0x1fu ? c & ~TOKENIZER_UNICODE_SPACE : c;
+}
+
+/* Source regex alternations, in order: contractions, optional-prefix letters,
+ * 1..3 numbers, optional-space nonletters, newline-terminated whitespace,
+ * trailing whitespace and ordinary whitespace. Marks are not letters. */
+static unsigned long long llama_piece(const tokenizer_span *span, unsigned long long offset)
+{
+    uint32_t point, following;
+    unsigned long long next, after, end, prior, newline;
+    if (!span_peek(span, offset, &point, &next)) return span->count;
+    if (point == '\'') {
+        const char *suffixes[] = {"s", "t", "re", "ve", "m", "ll", "d"};
+        for (size_t i = 0u; i < sizeof(suffixes) / sizeof(suffixes[0]); ++i) {
+            end = next; size_t j = 0u;
+            while (suffixes[i][j] && span_peek(span, end, &following, &after)) {
+                if (following >= 'A' && following <= 'Z') following += 'a' - 'A';
+                if (following == 0x17fu) following = 's';
+                if (following != (unsigned char)suffixes[i][j]) break;
+                end = after; j++;
+            }
+            if (!suffixes[i][j]) return end;
+        }
+    }
+    unsigned int c = llama_class(point), letter_number = TOKENIZER_UNICODE_LETTER | TOKENIZER_UNICODE_NUMBER;
+    if (c & TOKENIZER_UNICODE_LETTER) return take_class(span, offset, TOKENIZER_UNICODE_LETTER);
+    if (point != '\r' && point != '\n' && !(c & letter_number) &&
+        span_peek(span, next, &following, &after) && (llama_class(following) & TOKENIZER_UNICODE_LETTER))
+        return take_class(span, next, TOKENIZER_UNICODE_LETTER);
+    if (c & TOKENIZER_UNICODE_NUMBER) return take_numbers(span, offset, 3u);
+    end = point == ' ' ? next : offset;
+    unsigned long long begin = end;
+    while (span_peek(span, end, &following, &after) &&
+        !(llama_class(following) & (letter_number | TOKENIZER_UNICODE_SPACE))) end = after;
+    if (end > begin) {
+        while (span_peek(span, end, &following, &after) && (following == '\r' || following == '\n')) end = after;
+        return end;
+    }
+    end = prior = offset; newline = offset;
+    while (span_peek(span, end, &following, &after) && (llama_class(following) & TOKENIZER_UNICODE_SPACE)) {
+        prior = end; end = after;
+        if (following == '\r' || following == '\n') newline = end;
+    }
+    if (newline > offset) return newline;
+    if (end == span->count) return end;
+    if (prior > offset) return prior;
+    return end > offset ? end : next;
+}
+
 /* Append a prompt token ID under the caller's admitted encoding-buffer bound.
  * This bound is not a requested model-completion length. */
 static int encode_append(yvex_tokens *tokens, unsigned int token_id,
@@ -1168,6 +1224,20 @@ static int bpe_piece(const yvex_tokenizer *tokenizer, const unsigned char *bytes
 
     if (!count)
         return YVEX_OK;
+    if (tokenizer->bpe_ignore_merges) {
+        byte_builder encoded = {0};
+        unsigned int whole;
+        for (index = 0u; index < count && rc == YVEX_OK; ++index) {
+            unsigned char unit[4];
+            size_t size = utf8_put(byte_codepoint(bytes[index]), unit);
+            rc = builder_append(&encoded, unit, size, err);
+        }
+        int found = rc == YVEX_OK && vocab_lookup(tokenizer, encoded.data, encoded.count, &whole);
+        free(encoded.data);
+        if (rc != YVEX_OK) return rc;
+        if (found && whole < tokenizer->plan.base_vocabulary_size)
+            return encode_append(tokens, whole, maximum, err);
+    }
     if (count > SIZE_MAX / sizeof(*symbols))
         return YVEX_ERR_NOMEM;
     symbols = malloc((size_t)count * sizeof(*symbols));
@@ -1215,26 +1285,23 @@ static int bpe_piece(const yvex_tokenizer *tokenizer, const unsigned char *bytes
     }
     while (symbol_count > 1u) {
         const tokenizer_merge_slot *best = NULL;
-        unsigned long long write = 0u;
+        unsigned long long position = 0u;
         for (index = 0u; index + 1u < symbol_count; ++index) {
             const tokenizer_merge_slot *candidate =
                 merge_lookup(tokenizer, symbols[index], symbols[index + 1u]);
-            if (candidate && (!best || candidate->rank < best->rank))
-                best = candidate;
+            if (candidate && (!best || candidate->rank < best->rank)) {
+                best = candidate; position = index;
+            }
         }
         if (!best)
             break;
-        for (index = 0u; index < symbol_count;) {
-            uint64_t pair = index + 1u < symbol_count
-                ? ((uint64_t)symbols[index] << 32u) | symbols[index + 1u] : UINT64_MAX;
-            if (pair == best->pair) {
-                symbols[write++] = best->merged_id;
-                index += 2u;
-            } else {
-                symbols[write++] = symbols[index++];
-            }
-        }
-        symbol_count = write;
+        /* Recompute after the leftmost minimum-rank pair. A newly created pair
+         * can outrank another occurrence of the old pair (non-topological ranks).
+         * Merging every occurrence simultaneously changes source BPE semantics. */
+        symbols[position] = best->merged_id;
+        memmove(symbols + position + 1u, symbols + position + 2u,
+            (size_t)(symbol_count - position - 2u) * sizeof(*symbols));
+        symbol_count--;
     }
     for (index = 0u; index < symbol_count && rc == YVEX_OK; ++index)
         rc = encode_append(tokens, symbols[index], maximum, err);
@@ -1310,7 +1377,8 @@ static int ordinary_encode(const yvex_tokenizer *tokenizer, const unsigned char 
     }
 
     while (span.offset < span.count) {
-        unsigned long long end = next_piece(&span, span.offset, qwen2_pretokenizer);
+        unsigned long long end = !strcmp(tokenizer->compiled_policy.tokenizer_pre, "llama-bpe")
+            ? llama_piece(&span, span.offset) : next_piece(&span, span.offset, qwen2_pretokenizer);
         int rc;
         if (end <= span.offset || end > span.count) {
             yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.encode.pretokenizer",

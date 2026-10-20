@@ -25,6 +25,36 @@ static int source_digest(const char *json, size_t count, const char *expected)
     return strcmp(observed, expected) == 0;
 }
 
+/* The source JSON is already identity-checked by the caller. Only an actual
+ * boolean model.ignore_merges is accepted; absent preserves BPE's default. */
+int yvex_tokenizer_bpe_options(yvex_tokenizer *tokenizer, const char *json,
+    size_t count, yvex_error *err)
+{
+    yvex_json cursor; yvex_json_iter root, model; yvex_json_item item;
+    char key[128]; int seen = 0, flag_seen = 0, ignore = 0;
+    yvex_json_init(&cursor, json, count);
+    if (!tokenizer || !yvex_json_iter_begin(&cursor, &root, YVEX_JSON_COLLECTION_OBJECT))
+        goto invalid;
+    while ((item = yvex_json_object_member(&root, key, sizeof(key))) == YVEX_JSON_ITEM_READY) {
+        if (strcmp(key, "model")) {
+            if (!yvex_json_skip_value(&cursor)) goto invalid;
+            continue;
+        }
+        if (seen++ || !yvex_json_iter_begin(&cursor, &model, YVEX_JSON_COLLECTION_OBJECT)) goto invalid;
+        while ((item = yvex_json_object_member(&model, key, sizeof(key))) == YVEX_JSON_ITEM_READY) {
+            if (!strcmp(key, "ignore_merges")) {
+                if (flag_seen++ || !yvex_json_bool(&cursor, &ignore)) goto invalid;
+            } else if (!yvex_json_skip_value(&cursor)) goto invalid;
+        }
+        if (item != YVEX_JSON_ITEM_END) goto invalid;
+    }
+    if (item != YVEX_JSON_ITEM_END || !yvex_json_complete(&cursor)) goto invalid;
+    tokenizer->bpe_ignore_merges = ignore;
+    return YVEX_OK;
+invalid:
+    return hf_refuse(err, YVEX_ERR_FORMAT, "source BPE options are malformed");
+}
+
 static int vocabulary_read(yvex_tokenizer *tokenizer, const char *json,
                            unsigned long long expected, yvex_error *err)
 {

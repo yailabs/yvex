@@ -378,9 +378,229 @@ static int lfm_snapshot_audit(const yvex_lfm2_architecture *a, const yvex_source
 {
     return lfm_audit(a, NULL, s, out, err);
 }
+typedef struct {
+    yvex_ir_module *module;
+    const yvex_lfm2_architecture *a;
+    const char *source;
+    yvex_ir_id block, sequence, hidden, convolution, kv, position;
+    char prefix[64];
+    int rc;
+    yvex_error *error;
+} lfm_program;
+
+static yvex_ir_id lfm_type(lfm_program *b, yvex_ir_type_kind kind, yvex_ir_scalar scalar,
+    const uint64_t *shape, uint32_t rank, const char *domain, int rows)
+{
+    yvex_ir_type t = {.kind = kind, .scalar = scalar, .rank = rank};
+    yvex_ir_id id = YVEX_IR_NONE;
+    for (uint32_t i = 0u; i < rank; ++i) t.shape[i] = (yvex_ir_extent){YVEX_IR_NONE, shape[i]};
+    if (rows) t.shape[0] = (yvex_ir_extent){b->sequence, 0u};
+    if (domain) yvex_core_text_copy(t.domain, sizeof(t.domain), domain);
+    if (b->rc == YVEX_OK) b->rc = yvex_ir_type_intern(b->module, &t, &id, b->error);
+    return id;
+}
+
+static yvex_ir_id lfm_rows(lfm_program *b, uint64_t width, yvex_ir_scalar scalar)
+{
+    uint64_t shape[] = {1u, width};
+    return lfm_type(b, YVEX_IR_TENSOR, scalar, shape, 2u, NULL, 1);
+}
+
+static yvex_ir_id lfm_emit(lfm_program *b, const char *name, uint32_t version,
+    const yvex_ir_id *args, size_t inputs, const yvex_ir_id *types, size_t outputs,
+    const yvex_ir_attribute *attrs, size_t count)
+{
+    yvex_ir_id op = YVEX_IR_NONE;
+    yvex_ir_operation_request r = {.operation = name, .version = version,
+        .operands = args, .operand_count = inputs, .result_types = types, .result_count = outputs,
+        .attributes = attrs, .attribute_count = count};
+    if (b->rc == YVEX_OK) b->rc = yvex_ir_operation_add(b->module, b->block, &r, &op, b->error);
+    return op;
+}
+
+static yvex_ir_id lfm_result(lfm_program *b, yvex_ir_id op, uint32_t ordinal)
+{
+    const yvex_ir_operation *operation = yvex_ir_operation_at(b->module, op);
+    return operation && ordinal < operation->result_count ? operation->results[ordinal] : YVEX_IR_NONE;
+}
+
+static yvex_ir_id lfm_parameter(lfm_program *b, const char *suffix, const uint64_t *shape,
+    uint32_t rank, yvex_ir_scalar scalar, int bank)
+{
+    yvex_ir_attribute attrs[] = {{.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL},
+        {.name = "source", .kind = YVEX_IR_ATTR_TEXT},
+        {.name = "expert_count", .kind = YVEX_IR_ATTR_U64, .value.integer = b->a->experts}};
+    yvex_ir_id type = lfm_type(b, YVEX_IR_TENSOR, scalar, shape, rank, NULL, 0);
+    (void)snprintf(attrs[0].value.text, sizeof(attrs[0].value.text), "%s%s", b->prefix, suffix);
+    yvex_core_text_copy(attrs[1].value.text, sizeof(attrs[1].value.text), b->source);
+    return lfm_result(b, lfm_emit(b, "core.parameter", bank ? 2u : 1u, NULL, 0u, &type, 1u,
+        attrs, bank ? 3u : 2u), 0u);
+}
+
+static yvex_ir_id lfm_linear(lfm_program *b, yvex_ir_id input, const char *name,
+    uint64_t columns, uint64_t rows)
+{
+    uint64_t shape[] = {rows, columns};
+    yvex_ir_id args[] = {input, lfm_parameter(b, name, shape, 2u, YVEX_IR_BF16, 0)};
+    yvex_ir_id type = lfm_rows(b, rows, YVEX_IR_BF16);
+    return lfm_result(b, lfm_emit(b, "nn.linear", 1u, args, 2u, &type, 1u, NULL, 0u), 0u);
+}
+
+static yvex_ir_id lfm_norm(lfm_program *b, yvex_ir_id input, const char *name,
+    uint64_t width, uint64_t group)
+{
+    uint64_t shape[] = {group};
+    yvex_ir_id args[] = {input, lfm_parameter(b, name, shape, 1u, YVEX_IR_BF16, 0)};
+    yvex_ir_id type = lfm_rows(b, width, YVEX_IR_BF16);
+    yvex_ir_attribute attrs[] = {
+        {.name = "epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = b->a->norm_epsilon},
+        {.name = "weight_offset", .kind = YVEX_IR_ATTR_F64, .value.real = 0.0}};
+    return lfm_result(b, lfm_emit(b, group == width ? "nn.rms_norm" : "nn.group_rms_norm",
+        2u, args, 2u, &type, 1u, attrs, group == width ? 2u : 1u), 0u);
+}
+
+static yvex_ir_id lfm_mixer(lfm_program *b, yvex_ir_id input, yvex_ir_id start,
+    yvex_ir_id *state, yvex_lfm2_mixer mixer)
+{
+    const yvex_lfm2_architecture *a = b->a;
+    yvex_ir_id op, types[] = {b->hidden, mixer == YVEX_LFM2_MIXER_CONV ? b->convolution : b->kv};
+    if (mixer == YVEX_LFM2_MIXER_CONV) {
+        uint64_t weight[] = {a->hidden, 1u, a->convolution_kernel};
+        yvex_ir_id args[] = {lfm_linear(b, input, "conv.in_proj.weight", a->hidden, 3u * a->hidden),
+            lfm_parameter(b, "conv.conv.weight", weight, 3u, YVEX_IR_BF16, 0), *state};
+        yvex_ir_attribute attrs[] = {
+            {.name = "width", .kind = YVEX_IR_ATTR_U64, .value.integer = a->hidden},
+            {.name = "convolution_kernel", .kind = YVEX_IR_ATTR_U64, .value.integer = a->convolution_kernel}};
+        op = lfm_emit(b, "sequence.double_gated_conv", 1u, args, 3u, types, 2u, attrs, 2u);
+    } else {
+        uint64_t kv = a->kv_heads * a->head_width;
+        yvex_ir_id q = lfm_linear(b, input, "self_attn.q_proj.weight", a->hidden, a->hidden);
+        yvex_ir_id k = lfm_linear(b, input, "self_attn.k_proj.weight", a->hidden, kv);
+        yvex_ir_id v = lfm_linear(b, input, "self_attn.v_proj.weight", a->hidden, kv);
+        q = lfm_norm(b, q, "self_attn.q_layernorm.weight", a->hidden, a->head_width);
+        k = lfm_norm(b, k, "self_attn.k_layernorm.weight", kv, a->head_width);
+        yvex_ir_id args[] = {q, k, v, start, *state};
+        yvex_ir_attribute attrs[] = {
+            {.name = "query_heads", .kind = YVEX_IR_ATTR_U64, .value.integer = a->heads},
+            {.name = "kv_heads", .kind = YVEX_IR_ATTR_U64, .value.integer = a->kv_heads},
+            {.name = "head_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = a->head_width},
+            {.name = "rotary_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = a->head_width},
+            {.name = "maximum_context", .kind = YVEX_IR_ATTR_U64, .value.integer = a->context},
+            {.name = "theta", .kind = YVEX_IR_ATTR_U64, .value.integer = (uint64_t)a->rope_theta}};
+        op = lfm_emit(b, "attention.causal", 1u, args, 5u, types, 2u, attrs, 6u);
+    }
+    *state = lfm_result(b, op, 1u);
+    return lfm_linear(b, lfm_result(b, op, 0u), mixer == YVEX_LFM2_MIXER_CONV ?
+        "conv.out_proj.weight" : "self_attn.out_proj.weight", a->hidden, a->hidden);
+}
+
+static yvex_ir_id lfm_ffn(lfm_program *b, yvex_ir_id input, int dense)
+{
+    const yvex_lfm2_architecture *a = b->a;
+    if (dense) {
+        yvex_ir_id gate = lfm_linear(b, input, "feed_forward.w1.weight", a->hidden, a->intermediate);
+        yvex_ir_id up = lfm_linear(b, input, "feed_forward.w3.weight", a->hidden, a->intermediate);
+        yvex_ir_id args[] = {gate, up}, type = lfm_rows(b, a->intermediate, YVEX_IR_BF16);
+        yvex_ir_id activation = lfm_result(b, lfm_emit(b, "nn.silu_product", 1u,
+            args, 2u, &type, 1u, NULL, 0u), 0u);
+        return lfm_linear(b, activation, "feed_forward.w2.weight", a->intermediate, a->hidden);
+    }
+    uint64_t gate_shape[] = {a->experts, a->expert_intermediate, a->hidden};
+    uint64_t down_shape[] = {a->experts, a->hidden, a->expert_intermediate}, bias_shape[] = {a->experts};
+    yvex_ir_id args[] = {input, lfm_linear(b, input, "feed_forward.gate.weight", a->hidden, a->experts),
+        lfm_parameter(b, "feed_forward.expert_bias", bias_shape, 1u, YVEX_IR_F32, 0),
+        lfm_parameter(b, "feed_forward.experts.0.w1.weight", gate_shape, 3u, YVEX_IR_BF16, 1),
+        lfm_parameter(b, "feed_forward.experts.0.w3.weight", gate_shape, 3u, YVEX_IR_BF16, 1),
+        lfm_parameter(b, "feed_forward.experts.0.w2.weight", down_shape, 3u, YVEX_IR_BF16, 1)};
+    yvex_ir_attribute attrs[] = {
+        {.name = "selected_experts", .kind = YVEX_IR_ATTR_U64, .value.integer = a->selected_experts},
+        {.name = "normalization_epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = 1e-6},
+        {.name = "routed_scale", .kind = YVEX_IR_ATTR_F64, .value.real = a->routed_scale}};
+    return lfm_result(b, lfm_emit(b, "nn.routed_swiglu", 1u, args, 6u, &b->hidden, 1u, attrs, 3u), 0u);
+}
+
+static yvex_ir_id lfm_add(lfm_program *b, yvex_ir_id x, yvex_ir_id y)
+{
+    yvex_ir_id args[] = {x, y};
+    return lfm_result(b, lfm_emit(b, "tensor.add", 1u, args, 2u, &b->hidden, 1u, NULL, 0u), 0u);
+}
+
+static int lfm_functions(lfm_program *b)
+{
+    const yvex_lfm2_architecture *a = b->a;
+    yvex_ir_id args[YVEX_LFM2_LAYER_CAP + 2u], types[YVEX_LFM2_LAYER_CAP + 1u];
+    yvex_ir_id results[YVEX_LFM2_LAYER_CAP + 1u], function, input, start;
+    uint64_t token_shape[] = {1u}, embedding[] = {a->vocabulary, a->hidden};
+    args[0] = lfm_type(b, YVEX_IR_TENSOR, YVEX_IR_INDEX, token_shape, 1u, NULL, 1);
+    args[1] = b->position; types[0] = b->hidden;
+    for (uint64_t l = 0u; l < a->layers; ++l)
+        args[l + 2u] = types[l + 1u] = a->mixer[l] == YVEX_LFM2_MIXER_CONV ? b->convolution : b->kv;
+    if (b->rc == YVEX_OK)
+        b->rc = yvex_ir_function_add(b->module, "forward", args, a->layers + 2u,
+            types, a->layers + 1u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, &function, b->error);
+    if (b->rc != YVEX_OK) return b->rc;
+    b->block = yvex_ir_function_at(b->module, function)->body;
+    memcpy(args, yvex_ir_block_at(b->module, b->block)->arguments, (a->layers + 2u) * sizeof(*args));
+    start = args[1];
+    memcpy(results + 1u, args + 2u, a->layers * sizeof(*args));
+    args[1] = lfm_parameter(b, "model.embed_tokens.weight", embedding, 2u, YVEX_IR_BF16, 0);
+    input = lfm_result(b, lfm_emit(b, "nn.embedding", 1u, args, 2u, &b->hidden, 1u, NULL, 0u), 0u);
+    for (uint64_t l = 0u; b->rc == YVEX_OK && l < a->layers; ++l) {
+        (void)snprintf(b->prefix, sizeof(b->prefix), "model.layers.%llu.", (unsigned long long)l);
+        yvex_ir_id norm = lfm_norm(b, input, "operator_norm.weight", a->hidden, a->hidden);
+        yvex_ir_id update = lfm_mixer(b, norm, start, &results[l + 1u], a->mixer[l]);
+        input = lfm_add(b, input, update);
+        norm = lfm_norm(b, input, "ffn_norm.weight", a->hidden, a->hidden);
+        update = lfm_ffn(b, norm, l < a->dense_layers);
+        input = lfm_add(b, input, update);
+    }
+    b->prefix[0] = '\0';
+    results[0] = lfm_norm(b, input, "model.embedding_norm.weight", a->hidden, a->hidden);
+    (void)lfm_emit(b, "core.return", 1u, results, a->layers + 1u, NULL, 0u, NULL, 0u);
+    types[0] = lfm_rows(b, a->vocabulary, YVEX_IR_F32);
+    if (b->rc == YVEX_OK)
+        b->rc = yvex_ir_function_add(b->module, "output", &b->hidden, 1u, types, 1u, 0u, &function, b->error);
+    if (b->rc != YVEX_OK) return b->rc;
+    b->block = yvex_ir_function_at(b->module, function)->body;
+    input = yvex_ir_block_at(b->module, b->block)->arguments[0];
+    input = lfm_linear(b, input, "model.embed_tokens.weight", a->hidden, a->vocabulary);
+    results[0] = lfm_result(b, lfm_emit(b, "tensor.cast", 1u, &input, 1u, types, 1u, NULL, 0u), 0u);
+    (void)lfm_emit(b, "core.return", 1u, results, 1u, NULL, 0u, NULL, 0u);
+    return b->rc;
+}
+
+static int lfm_program_build(yvex_ir_module **out, const yvex_lfm2_architecture *a,
+    const char *source, yvex_error *err)
+{
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect(), *yvex_ir_sequence_dialect()};
+    yvex_lfm2_architecture checked;
+    lfm_program b = {.a = a, .source = source, .error = err};
+    if (out) *out = NULL;
+    if (!out || !a || !a->complete || !yvex_sha256_hex_valid(source))
+        return lfm_refuse(err, YVEX_ERR_INVALID_ARG, "complete source architecture and payload identity required");
+    checked = *a;
+    if (!lfm_config_seal(&checked) || strcmp(checked.identity, a->identity) ||
+        floor(a->rope_theta) != a->rope_theta || a->rope_theta >= (double)UINT64_MAX)
+        return lfm_refuse(err, YVEX_ERR_FORMAT, "mutated or unsupported source geometry");
+    b.rc = yvex_ir_module_open(&b.module, "lfm2_moe", source, dialects, 3u, err);
+    yvex_ir_dimension rows = {.name = "sequence", .minimum = 1u, .maximum = a->context, .multiple = 1u};
+    if (b.rc == YVEX_OK) b.rc = yvex_ir_dimension_add(b.module, &rows, &b.sequence, err);
+    b.hidden = lfm_rows(&b, a->hidden, YVEX_IR_BF16);
+    b.position = lfm_type(&b, YVEX_IR_SCALAR, YVEX_IR_INDEX, NULL, 0u, NULL, 0);
+    uint64_t conv[] = {a->hidden, a->convolution_kernel}, kv[] = {2u, a->context, a->kv_heads, a->head_width};
+    b.convolution = lfm_type(&b, YVEX_IR_STATE, YVEX_IR_F32, conv, 2u, "convolution.causal", 0);
+    b.kv = lfm_type(&b, YVEX_IR_STATE, YVEX_IR_BF16, kv, 4u, "attention.causal_kv", 0);
+    if (b.rc == YVEX_OK) b.rc = lfm_functions(&b);
+    if (b.rc == YVEX_OK) b.rc = yvex_ir_seal(b.module, err);
+    yvex_ir_pass passes[] = {*yvex_ir_canonical_pass(), *yvex_ir_dead_code_pass()};
+    if (b.rc == YVEX_OK) b.rc = yvex_ir_pass_pipeline(b.module, passes, 2u, out, NULL, err);
+    yvex_ir_module_close(&b.module);
+    return b.rc;
+}
+
 const yvex_lfm2_api *yvex_model_register_lfm2(void)
 {
-    static const yvex_lfm2_api api = {1u, lfm_config_parse, lfm_open, lfm_classify,
-        lfm_table_audit, lfm_snapshot_audit};
+    static const yvex_lfm2_api api = {2u, lfm_config_parse, lfm_open, lfm_classify,
+        lfm_table_audit, lfm_snapshot_audit, lfm_program_build};
     return &api;
 }

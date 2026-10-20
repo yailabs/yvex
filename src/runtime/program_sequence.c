@@ -22,6 +22,7 @@ struct yvex_program_sequence {
     const yvex_attention_layer_plan **attention;
     const char *attention_identity;
     yvex_device_tensor *scratch[SEQUENCE_SCRATCH_COUNT];
+    yvex_device_tensor *convolution_status;
     float *rope, *state, *ssd_workspace;
     unsigned long long *positions;
     unsigned long long capacity, rope_width, kv_width, host_bytes, device_bytes;
@@ -55,6 +56,24 @@ static int sequence_refuse(yvex_error *err, yvex_status status, const char *why)
     return status;
 }
 
+static int sequence_convolution_scratch_open(yvex_program_sequence *c,
+    unsigned long long limit, yvex_error *err)
+{
+    if (yvex_backend_kind_of(c->session->backend) == YVEX_BACKEND_KIND_CPU) return YVEX_OK;
+    for (size_t i = 0u; i < c->summary->step_count; ++i) {
+        if (!yvex_program_physical_short_conv_at(c->program, i)) continue;
+        unsigned long long total;
+        yvex_backend_tensor_desc d = {.name = "program-convolution-status",
+            .dtype = YVEX_DTYPE_F32, .rank = 1u, .dims = {1u}, .bytes = sizeof(float)};
+        if (!yvex_core_u64_add(c->device_bytes, d.bytes, &total) || (limit && total > limit))
+            return sequence_refuse(err, YVEX_ERR_BOUNDS, "convolution status exceeds device admission");
+        int rc = yvex_backend_tensor_alloc(c->session->backend, &d, &c->convolution_status, err);
+        if (rc == YVEX_OK) c->device_bytes = total;
+        return rc;
+    }
+    return YVEX_OK;
+}
+
 static int sequence_facts(yvex_backend_operation_facts *a, const yvex_backend_operation_facts *b)
 {
 #define SEQUENCE_FACT_ADD(member) if (!yvex_core_u64_add(a->member, b->member, &a->member)) return 0
@@ -78,7 +97,10 @@ static int sequence_attention_bind(yvex_program_sequence *c, const yvex_model_en
         const yvex_program_physical_step *s = yvex_program_physical_step_at(c->program, i);
         const yvex_attention_layer_plan *a;
         unsigned long long query, kv;
-        if (strcmp(s->implementation, "gated_causal.bf16.v1")) continue;
+        if (strcmp(s->implementation, "gated_causal.bf16.v1") &&
+            strcmp(s->implementation, "causal.eager_bf16.v1")) continue;
+        yvex_attention_compute_contract numeric = !strcmp(s->implementation, "causal.eager_bf16.v1") ?
+            YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1 : YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
         a = yvex_attention_plan_layer_at(model->attention, ordinal++);
         if (!a || a->query_heads != yvex_program_physical_attribute(s, "query_heads")->value.integer ||
             a->kv_heads != yvex_program_physical_attribute(s, "kv_heads")->value.integer ||
@@ -86,7 +108,7 @@ static int sequence_attention_bind(yvex_program_sequence *c, const yvex_model_en
             a->rope_head_dimension != yvex_program_physical_attribute(s, "rotary_dimension")->value.integer ||
             a->position.theta != yvex_program_physical_attribute(s, "theta")->value.integer ||
             a->sliding_window != yvex_program_physical_attribute(s, "maximum_context")->value.integer ||
-            a->position.scaling_factor != 1u || a->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 ||
+            a->position.scaling_factor != 1u || a->compute_contract != numeric ||
             !yvex_core_u64_mul(a->query_heads, a->head_dimension, &query) ||
             !yvex_core_u64_mul(a->kv_heads, a->head_dimension, &kv))
             return sequence_refuse(err, YVEX_ERR_FORMAT, "attention provider differs from its compiled operation");
@@ -178,15 +200,23 @@ int yvex_program_sequence_open(yvex_program_sequence **out, const yvex_program_p
             (yvex_backend_kind_of(session->backend) != YVEX_BACKEND_KIND_CPU || !session->sequence_state))
             rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED,
                 "double-gated convolution requires common host sequence state and the CPU backend");
+        if (!strcmp(implementation, "double_gated_conv.bf16.v2") &&
+            (!session->sequence_state || (yvex_backend_kind_of(session->backend) != YVEX_BACKEND_KIND_CPU &&
+             (!c->ops || !c->ops->short_conv_execute))))
+            rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "double-gated convolution backend unavailable");
         if (!strcmp(implementation, "gated_causal.bf16.v1") &&
             (!c->ops || !c->ops->bf16_round || !c->ops->rotary_half_f32 ||
              !c->ops->split_interleaved_two_f32 || !c->ops->sigmoid_product_bf16 ||
              !session->attention_state_provider))
             rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "compiled attention requires an admitted state backend");
+        if (!strcmp(implementation, "causal.eager_bf16.v1") &&
+            (!c->ops || !c->ops->bf16_round || !c->ops->rotary_half_bf16 || !session->attention_state_provider))
+            rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "causal BF16-product attention backend is unavailable");
     }
     if (rc == YVEX_OK) rc = sequence_attention_bind(c, model, widths, err);
     if (rc == YVEX_OK) rc = sequence_ssd_scratch_open(c, host_limit, err);
     if (rc == YVEX_OK) rc = sequence_scratch_open(c, widths, host_limit, device_limit, err);
+    if (rc == YVEX_OK) rc = sequence_convolution_scratch_open(c, device_limit, err);
     if (rc != YVEX_OK) (void)yvex_program_sequence_close(&c, NULL);
     *out = c;
     return rc;
@@ -215,7 +245,8 @@ static int sequence_rotary(yvex_program_sequence *c, const yvex_program_device_i
     yvex_backend_operation_facts *facts, yvex_error *err)
 {
     unsigned long long width = a->rope_head_dimension, values = r->rows * width, token, coordinate;
-    unsigned long long start = r->arguments[r->step->operands[5]].index;
+    int gated = !strcmp(r->step->implementation, "gated_causal.bf16.v1");
+    unsigned long long start = r->arguments[r->step->operands[gated ? 5u : 3u]].index;
     float *cosines = c->rope, *sines = cosines + values;
     yvex_device_tensor cosine, sine;
     yvex_backend_operation_facts current = {0};
@@ -228,18 +259,27 @@ static int sequence_rotary(yvex_program_sequence *c, const yvex_program_device_i
         double angle = (double)(start + token) * pow((double)a->position.theta, -(double)(2u * pair) / (double)width);
         cosines[index] = yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)cos(angle)));
         sines[index] = yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)sin(angle)));
+        if (!gated) {
+            float frequency = 1.0f / powf((float)a->position.theta, (float)(2u * pair) / (float)width);
+            float source_angle = (float)(start + token) * frequency;
+            cosines[index] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(cosf(source_angle)));
+            sines[index] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(sinf(source_angle)));
+        }
     }
     rc = yvex_backend_tensor_write(c->session->backend, &cosine, cosines, cosine.bytes, err);
     if (rc == YVEX_OK) rc = yvex_backend_tensor_write(c->session->backend, &sine, sines, sine.bytes, err);
     if (rc == YVEX_OK) {
-        current.h2d_bytes = cosine.bytes + sine.bytes;
+        if (yvex_backend_kind_of(c->session->backend) != YVEX_BACKEND_KIND_CPU)
+            current.h2d_bytes = cosine.bytes + sine.bytes;
         if (!sequence_facts(facts, &current)) rc = sequence_refuse(err, YVEX_ERR_BOUNDS, "rotary counters overflowed");
     }
-    if (rc == YVEX_OK) rc = c->ops->rotary_half_f32(c->session->backend, q, &cosine, &sine, r->rows,
+    if (rc == YVEX_OK) rc = (gated ? c->ops->rotary_half_f32 : c->ops->rotary_half_bf16)(
+        c->session->backend, q, &cosine, &sine, r->rows,
         a->query_heads, a->head_dimension, width, &current, err);
     if (rc == YVEX_OK && !sequence_facts(facts, &current)) rc = YVEX_ERR_BOUNDS;
     if (rc == YVEX_OK) rc = sequence_round(c, q, facts, err);
-    if (rc == YVEX_OK) rc = c->ops->rotary_half_f32(c->session->backend, k, &cosine, &sine, r->rows,
+    if (rc == YVEX_OK) rc = (gated ? c->ops->rotary_half_f32 : c->ops->rotary_half_bf16)(
+        c->session->backend, k, &cosine, &sine, r->rows,
         a->kv_heads, a->head_dimension, width, &current, err);
     if (rc == YVEX_OK && !sequence_facts(facts, &current)) rc = YVEX_ERR_BOUNDS;
     if (rc == YVEX_OK) rc = sequence_round(c, k, facts, err);
@@ -250,6 +290,7 @@ static int sequence_attention(yvex_program_sequence *c, const yvex_program_devic
     const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
 {
     const yvex_program_physical_step *s = r->step;
+    int gated = !strcmp(s->implementation, "gated_causal.bf16.v1");
     const yvex_attention_layer_plan *a = c->attention[r->step_index];
     const yvex_ir_attribute *epsilon = yvex_program_physical_attribute(s, "qk_epsilon");
     yvex_device_tensor q, gate, k, mixed;
@@ -258,8 +299,8 @@ static int sequence_attention(yvex_program_sequence *c, const yvex_program_devic
     yvex_runtime_stateful_attention_result result = {0};
     yvex_attention_failure failure = {0};
     unsigned long long qwidth = a->query_heads * a->head_dimension, kwidth = a->kv_heads * a->head_dimension;
-    yvex_ir_id root = yvex_program_physical_value_at(c->program, s->operands[6])->state_root;
-    unsigned long long start = r->arguments[s->operands[5]].index;
+    yvex_ir_id root = yvex_program_physical_value_at(c->program, s->operands[gated ? 6u : 4u])->state_root;
+    unsigned long long start = r->arguments[s->operands[gated ? 5u : 3u]].index;
     unsigned long long maximum = yvex_program_physical_attribute(s, "maximum_context")->value.integer;
     int rc;
     if (start > maximum || r->rows > maximum - start)
@@ -269,28 +310,35 @@ static int sequence_attention(yvex_program_sequence *c, const yvex_program_devic
         !sequence_view(c, SEQUENCE_KEY, r->rows, kwidth, &k) ||
         !sequence_view(c, SEQUENCE_MIXED, r->rows, qwidth, &mixed))
         return sequence_refuse(err, YVEX_ERR_FORMAT, "attention state/workspace differs from compiled input");
-    rc = c->ops->split_interleaved_two_f32(c->session->backend, &r->values[s->operands[0]], &q, &gate,
-        r->rows, a->query_heads, a->head_dimension, &current, err);
+    if (gated)
+        rc = c->ops->split_interleaved_two_f32(c->session->backend, &r->values[s->operands[0]], &q, &gate,
+            r->rows, a->query_heads, a->head_dimension, &current, err);
+    else {
+        rc = yvex_backend_tensor_copy(c->session->backend, &q, &r->values[s->operands[0]], err);
+        if (rc == YVEX_OK && yvex_backend_kind_of(c->session->backend) != YVEX_BACKEND_KIND_CPU)
+            current.d2d_bytes = q.bytes;
+    }
     if (rc == YVEX_OK && !sequence_facts(facts, &current)) rc = YVEX_ERR_BOUNDS;
     /* Input SSA values are immutable even when one imported topology currently
      * has no other use. Normalization/RoPE mutate only operation scratch. */
     if (rc == YVEX_OK)
         rc = yvex_backend_tensor_copy(c->session->backend, &k, &r->values[s->operands[1]], err);
-    if (rc == YVEX_OK && !yvex_core_u64_add(facts->d2d_bytes, k.bytes, &facts->d2d_bytes))
+    if (rc == YVEX_OK && yvex_backend_kind_of(c->session->backend) != YVEX_BACKEND_KIND_CPU &&
+        !yvex_core_u64_add(facts->d2d_bytes, k.bytes, &facts->d2d_bytes))
         rc = YVEX_ERR_BOUNDS;
     q.dims[0] = r->rows * a->query_heads; q.dims[1] = a->head_dimension;
     k.dims[0] = r->rows * a->kv_heads; k.dims[1] = a->head_dimension;
-    if (rc == YVEX_OK) rc = yvex_backend_op_rms_norm(c->session->backend, &q,
+    if (rc == YVEX_OK && gated) rc = yvex_backend_op_rms_norm(c->session->backend, &q,
         yvex_program_kernels_small_weight(c->kernels, s->operands[3]), (float)epsilon->value.real, &q, err);
-    if (rc == YVEX_OK) rc = sequence_round(c, &q, facts, err);
-    if (rc == YVEX_OK) rc = yvex_backend_op_rms_norm(c->session->backend, &k,
+    if (rc == YVEX_OK && gated) rc = sequence_round(c, &q, facts, err);
+    if (rc == YVEX_OK && gated) rc = yvex_backend_op_rms_norm(c->session->backend, &k,
         yvex_program_kernels_small_weight(c->kernels, s->operands[4]), (float)epsilon->value.real, &k, err);
-    if (rc == YVEX_OK) rc = sequence_round(c, &k, facts, err);
+    if (rc == YVEX_OK && gated) rc = sequence_round(c, &k, facts, err);
     if (rc == YVEX_OK) rc = sequence_rotary(c, r, a, &q, &k, facts, err);
     request.backend = c->session->backend; request.state = c->session->attention_state_provider;
     request.residency = c->session->state_residency; request.layer = a;
     request.attention_plan_identity = c->attention_identity; request.input_identity = options->input_identity;
-    request.layer_ordinal = a->ordinal; request.token_position = r->arguments[s->operands[5]].index;
+    request.layer_ordinal = a->ordinal; request.token_position = start;
     request.token_count = r->rows; request.query = &q; request.key = &k;
     request.value = &r->values[s->operands[2]]; request.output = &mixed;
     request.host_workspace = c->state; request.host_workspace_values = c->capacity * c->kv_width * 4u;
@@ -298,6 +346,13 @@ static int sequence_attention(yvex_program_sequence *c, const yvex_program_devic
     request.cancellation.requested = options->cancel_requested; request.cancellation.context = options->cancel_context;
     if (rc == YVEX_OK) rc = yvex_runtime_stateful_attention_execute(&request, &result, &failure, err);
     if (rc == YVEX_OK && !sequence_facts(facts, &result.attention)) rc = YVEX_ERR_BOUNDS;
+    if (rc == YVEX_OK && !gated) {
+        rc = yvex_backend_tensor_copy(c->session->backend, &r->values[s->results[0]], &mixed, err);
+        if (rc == YVEX_OK && yvex_backend_kind_of(c->session->backend) != YVEX_BACKEND_KIND_CPU &&
+            !yvex_core_u64_add(facts->d2d_bytes, mixed.bytes, &facts->d2d_bytes)) rc = YVEX_ERR_BOUNDS;
+        if (rc == YVEX_OK) rc = sequence_round(c, &r->values[s->results[0]], facts, err);
+        return rc;
+    }
     if (rc == YVEX_OK) rc = c->ops->sigmoid_product_bf16(c->session->backend, &mixed, &gate,
         &r->values[s->results[0]], r->rows * qwidth, &current, err);
     if (rc == YVEX_OK && !sequence_facts(facts, &current)) rc = YVEX_ERR_BOUNDS;
@@ -454,9 +509,37 @@ static int sequence_ssd(yvex_program_sequence *c, const yvex_program_device_invo
     return rc;
 }
 
+static int sequence_short_conv_device(yvex_program_sequence *c, const yvex_program_device_invocation *r,
+    const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    const yvex_short_conv_geometry *g = yvex_program_physical_short_conv_at(c->program, r->step_index);
+    yvex_ir_id root = yvex_program_physical_value_at(c->program, s->operands[2])->state_root;
+    yvex_sequence_device_state_view committed = {0};
+    yvex_sequence_device_state_output candidate = {0};
+    yvex_short_conv_device_request request = {0};
+    yvex_short_conv_device_result result = {0};
+    if (!g || !c->convolution_status || !c->ops || !c->ops->short_conv_execute ||
+        r->arguments[root].state_handle != root)
+        return sequence_refuse(err, YVEX_ERR_FORMAT, "convolution device state or implementation unavailable");
+    int rc = yvex_sequence_state_device_layer(c->session->sequence_state, root, &committed, &candidate, err);
+    request.rows = r->rows; request.projection = &r->values[s->operands[0]];
+    request.weight = yvex_program_kernels_small_weight(c->kernels, s->operands[1]);
+    request.state = committed.convolution; request.next_state = candidate.convolution;
+    request.output = &r->values[s->results[0]]; request.status = c->convolution_status;
+    request.cancel_requested = options->cancel_requested; request.cancel_context = options->cancel_context;
+    if (rc == YVEX_OK) rc = c->ops->short_conv_execute(c->session->backend, g, &request, &result, facts, err);
+    if (rc == YVEX_OK && !result.complete)
+        rc = sequence_refuse(err, YVEX_ERR_STATE, "convolution backend did not complete candidate state");
+    if (rc == YVEX_OK) rc = yvex_sequence_state_stage(c->session->sequence_state, root, err);
+    return rc;
+}
+
 static int sequence_short_conv(yvex_program_sequence *c, const yvex_program_device_invocation *r,
     const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
 {
+    if (yvex_backend_kind_of(c->session->backend) != YVEX_BACKEND_KIND_CPU)
+        return sequence_short_conv_device(c, r, options, facts, err);
     const yvex_program_physical_step *s = r->step;
     const yvex_short_conv_geometry *g = yvex_program_physical_short_conv_at(c->program, r->step_index);
     yvex_ir_id root = yvex_program_physical_value_at(c->program, s->operands[2])->state_root;
@@ -508,9 +591,11 @@ int yvex_program_sequence_invoke(yvex_program_sequence *c, const yvex_program_de
         return sequence_delta(c, r, options, facts, err);
     if (!strcmp(r->step->implementation, "selective_ssd.cpu.f32state.v1"))
         return sequence_ssd(c, r, options, facts, err);
-    if (!strcmp(r->step->implementation, "double_gated_conv.cpu.bf16.v1"))
+    if (!strcmp(r->step->implementation, "double_gated_conv.cpu.bf16.v1") ||
+        !strcmp(r->step->implementation, "double_gated_conv.bf16.v2"))
         return sequence_short_conv(c, r, options, facts, err);
-    if (!strcmp(r->step->implementation, "gated_causal.bf16.v1"))
+    if (!strcmp(r->step->implementation, "gated_causal.bf16.v1") ||
+        !strcmp(r->step->implementation, "causal.eager_bf16.v1"))
         return sequence_attention(c, r, options, facts, err);
     return sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "operation has no admitted state implementation");
 }
@@ -530,6 +615,10 @@ int yvex_program_sequence_close(yvex_program_sequence **out, yvex_error *err)
     if (!c) return YVEX_OK;
     for (i = 0u; i < SEQUENCE_SCRATCH_COUNT; ++i) if (c->scratch[i]) {
         rc = yvex_backend_tensor_release(c->session->backend, &c->scratch[i], err);
+        if (rc != YVEX_OK) return rc;
+    }
+    if (c->convolution_status) {
+        rc = yvex_backend_tensor_release(c->session->backend, &c->convolution_status, err);
         if (rc != YVEX_OK) return rc;
     }
     free(c->ssd_workspace); free(c->positions); free(c->state); free(c->rope); free(c->attention); free(c);

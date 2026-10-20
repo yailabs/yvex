@@ -123,6 +123,101 @@ static int gated_delta_ranges_overlap(const yvex_device_tensor *first,
            second_start < first_start + (uintptr_t)first->bytes;
 }
 
+static int short_conv_device_valid(yvex_backend *b, const yvex_short_conv_geometry *g,
+    const yvex_short_conv_device_request *r, unsigned long long *values)
+{
+    unsigned long long projected;
+    if (!r || !r->rows || !yvex_core_u64_mul(r->rows, g->width, values) ||
+        !yvex_core_u64_mul(r->rows, g->projection_width, &projected) ||
+        *values > SIZE_MAX / (4u * sizeof(float)) || projected > SIZE_MAX / sizeof(float) ||
+        g->width > (unsigned long long)INT_MAX * GATED_DELTA_CONVOLUTION_BLOCK ||
+        !gated_delta_tensor(b, r->projection, projected, 1) ||
+        !gated_delta_tensor(b, r->weight, g->state_values, 1) ||
+        (r->state && !gated_delta_tensor(b, r->state, g->state_values, 1)) ||
+        !gated_delta_tensor(b, r->next_state, g->state_values, 0) ||
+        !gated_delta_tensor(b, r->output, *values, 0) ||
+        !gated_delta_tensor(b, r->status, 1u, 0) || r->status->bytes != sizeof(int)) return 0;
+    const yvex_device_tensor *read[] = {r->projection, r->weight, r->state};
+    const yvex_device_tensor *write[] = {r->next_state, r->output, r->status};
+    for (size_t i = 0u; i < 3u; ++i) {
+        for (size_t j = 0u; j < 3u; ++j)
+            if (gated_delta_ranges_overlap(write[i], read[j])) return 0;
+        for (size_t j = i + 1u; j < 3u; ++j)
+            if (gated_delta_ranges_overlap(write[i], write[j])) return 0;
+    }
+    return 1;
+}
+
+int yvex_cuda_short_conv_execute(yvex_backend *backend, const yvex_short_conv_geometry *g,
+    const yvex_short_conv_device_request *r, yvex_short_conv_device_result *out,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const char *where = "cuda.sequence-mixer.short-conv";
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    unsigned long long values = 0u, offset = 0u, queue_syncs = 0u, device_syncs = 0u;
+    int rc, status_value = 0;
+    if (out) memset(out, 0, sizeof(*out));
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (!state || !out || !facts)
+        return gated_delta_refuse(err, YVEX_ERR_INVALID_ARG, where, "backend, result and facts required");
+    rc = yvex_short_conv_geometry_validate(g, err);
+    if (rc != YVEX_OK) return rc;
+    if (!short_conv_device_valid(backend, g, r, &values))
+        return gated_delta_refuse(err, YVEX_ERR_FORMAT, where, "bounded disjoint device operands required");
+    r->output->is_written = r->next_state->is_written = r->status->is_written = 0;
+    if (r->cancel_requested && r->cancel_requested(r->cancel_context)) {
+        out->cancelled = 1;
+        return gated_delta_refuse(err, YVEX_ERR_CANCELLED, where, "cancelled before candidate mutation");
+    }
+    rc = yvex_backend_tensor_zero(backend, r->status, err);
+    CUdeviceptr projection = yvex_cuda_tensor_ptr(r->projection), weight = yvex_cuda_tensor_ptr(r->weight);
+    CUdeviceptr old_state = r->state ? yvex_cuda_tensor_ptr(r->state) : 0u;
+    CUdeviceptr next = yvex_cuda_tensor_ptr(r->next_state), output = yvex_cuda_tensor_ptr(r->output);
+    CUdeviceptr status = yvex_cuda_tensor_ptr(r->status);
+    unsigned long long width = g->width, taps = g->kernel;
+    while (rc == YVEX_OK && offset < r->rows) {
+        unsigned long long count = r->rows - offset;
+        int initialize = offset == 0u, device_wide = 0;
+        if (r->cancel_requested && r->cancel_requested(r->cancel_context)) {
+            out->cancelled = 1;
+            rc = gated_delta_refuse(err, YVEX_ERR_CANCELLED, where, "cancelled before candidate publication");
+            break;
+        }
+        if (count > GATED_DELTA_TOKEN_CHUNK) count = GATED_DELTA_TOKEN_CHUNK;
+        void *args[] = {&projection, &weight, &old_state, &next, &output,
+            &width, &taps, &offset, &count, &initialize, &status};
+        rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            state->short_conv_function, (unsigned int)((width + 255u) / 256u), 256u, 0u,
+            args, where, err);
+        if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(
+            backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, &device_wide, where, err);
+        if (rc == YVEX_OK) {
+            if (device_wide) device_syncs++; else queue_syncs++;
+            rc = yvex_cuda_status(&state->driver,
+                state->driver.cuMemcpyDtoH_v2(&status_value, status, sizeof(status_value)), where, err);
+        }
+        if (rc == YVEX_OK && status_value) {
+            const char *why = status_value == 1 ? "invalid convolution weight or committed state" :
+                status_value == 2 ? "invalid BF16 projected operand" :
+                status_value == 3 ? "nonfinite BF16 gate product" : "nonfinite convolution publication";
+            rc = gated_delta_refuse(err, YVEX_ERR_FORMAT, where, why);
+        }
+        if (rc == YVEX_OK) { offset += count; out->execution_chunks++; out->rows_completed = offset; }
+    }
+    if (rc != YVEX_OK) return rc;
+    out->complete = 1; out->state_values = g->state_values; out->output_values = values;
+    r->next_state->is_written = r->output->is_written = 1;
+    facts->kernel_launches = out->execution_chunks;
+    facts->queue_synchronizations = queue_syncs; facts->device_synchronizations = device_syncs;
+    facts->download_count = out->execution_chunks; facts->d2h_bytes = out->execution_chunks * sizeof(int);
+    facts->activation_bytes = values * 4u * sizeof(float);
+    facts->active_weight_bytes = g->state_values * sizeof(float);
+    facts->state_bytes = g->state_values * sizeof(float) * (r->state ? 2u : 1u);
+    facts->temporary_bytes = sizeof(int); facts->compulsory_memory_facts_available = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int gated_delta_mutable_ranges_valid(
     const yvex_gated_delta_device_request *request)
 {

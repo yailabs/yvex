@@ -3,12 +3,15 @@
 #ifndef INCLUDE_YVEX_INTERNAL_FAMILIES_LFM2_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_FAMILIES_LFM2_H_INCLUDED
 #include <yvex/internal/source.h>
+#include <yvex/internal/ir.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
 #define YVEX_LFM2_TARGET "lfm2.5-24b-a2b"
 #define YVEX_LFM2_REPOSITORY "LiquidAI/LFM2.5-24B-A2B"
 #define YVEX_LFM2_REVISION "1769516ac588c4c558089c94f27d96b0dc67b183"
+#define YVEX_LFM2_ADAPTER_ID 0x4c464d325f4d4full
+#define YVEX_LFM2_ADAPTER_VERSION 1ull
 #define YVEX_LFM2_LAYER_CAP 128u
 #define YVEX_LFM2_EXPERT_CAP 256u
 typedef enum {
@@ -69,8 +72,16 @@ typedef struct {
                        yvex_lfm2_inventory *, yvex_error *);
     int (*snapshot_audit)(const yvex_lfm2_architecture *, const yvex_source_tensor_snapshot *,
                          yvex_lfm2_inventory *, yvex_error *);
+    int (*program_build)(yvex_ir_module **, const yvex_lfm2_architecture *, const char *, yvex_error *);
 } yvex_lfm2_api;
 const yvex_lfm2_api *yvex_model_register_lfm2(void);
+/* Graph-owned parameter recipe; source interpretation remains with the API above. */
+struct yvex_transform_ir;
+struct yvex_artifact_lowering_map;
+struct yvex_compilation_source_failure;
+int yvex_lfm2_source_lower(struct yvex_transform_ir **,
+    struct yvex_artifact_lowering_map **, const yvex_source_verification *,
+    yvex_source_tensor_snapshot *, struct yvex_compilation_source_failure *, yvex_error *);
 #ifdef __cplusplus
 }
 #endif

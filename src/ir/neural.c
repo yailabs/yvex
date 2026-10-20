@@ -1,5 +1,6 @@
 /* Logical neural semantics. Physical tensor encoding is deliberately absent. */
 #include "src/ir/private.h"
+#include <math.h>
 
 #include <string.h>
 
@@ -432,6 +433,44 @@ static int neural_norm(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
                               "normalization requires positive epsilon and exact channel weights");
     if (op->operand_count == 3u && !yvex_ir_type_equal(weight, neural_input(m, op, 2u)))
         return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "normalization bias has incompatible geometry");
+    if (op->definition->version == 2u) {
+        const yvex_ir_attribute *offset = yvex_ir_attribute_get(m, id, "weight_offset");
+        if (strcmp(op->definition->name, "nn.rms_norm") || input->scalar != YVEX_IR_BF16 ||
+            weight->scalar != YVEX_IR_BF16 || (offset && offset->value.real != 0.0))
+            return yvex_ir_refuse(err, YVEX_ERR_FORMAT,
+                "rounded-input RMSNorm requires BF16 publication and direct source weights");
+    }
+    return YVEX_OK;
+}
+
+static int neural_routed_swiglu(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_operation *op = &m->operations[id];
+    const yvex_ir_type *x = neural_input(m, op, 0u), *logits = neural_input(m, op, 1u);
+    const yvex_ir_type *bias = neural_input(m, op, 2u), *gate = neural_input(m, op, 3u);
+    const yvex_ir_type *up = neural_input(m, op, 4u), *down = neural_input(m, op, 5u);
+    uint64_t selected = yvex_ir_attribute_get(m, id, "selected_experts")->value.integer;
+    double epsilon = yvex_ir_attribute_get(m, id, "normalization_epsilon")->value.real;
+    double scale = yvex_ir_attribute_get(m, id, "routed_scale")->value.real;
+    if (!neural_float_tensor(x) || x->scalar != YVEX_IR_BF16 || x->rank != 2u ||
+        x->shape[1].symbol != YVEX_IR_NONE || !yvex_ir_type_equal(x, neural_output(m, op, 0u)) ||
+        !neural_float_tensor(logits) || logits->scalar != YVEX_IR_BF16 || logits->rank != 2u ||
+        !yvex_ir_extent_equal(x->shape[0], logits->shape[0]) || logits->shape[1].symbol != YVEX_IR_NONE ||
+        !logits->shape[1].extent || logits->shape[1].extent > 256u ||
+        !selected || selected > logits->shape[1].extent || !isfinite(epsilon) || epsilon <= 0.0 ||
+        !isfinite(scale) || scale <= 0.0 || !neural_float_tensor(bias) || bias->scalar != YVEX_IR_F32 ||
+        bias->rank != 1u || !yvex_ir_extent_equal(bias->shape[0], logits->shape[1]) ||
+        !neural_float_tensor(gate) || gate->scalar != YVEX_IR_BF16 || gate->rank != 3u ||
+        !yvex_ir_type_equal(gate, up) || !neural_float_tensor(down) ||
+        down->scalar != YVEX_IR_BF16 || down->rank != 3u ||
+        !yvex_ir_extent_equal(gate->shape[0], logits->shape[1]) ||
+        !yvex_ir_extent_equal(down->shape[0], gate->shape[0]) ||
+        !yvex_ir_extent_equal(gate->shape[2], x->shape[1]) ||
+        !yvex_ir_extent_equal(down->shape[1], x->shape[1]) ||
+        !yvex_ir_extent_equal(down->shape[2], gate->shape[1]) ||
+        gate->shape[1].symbol != YVEX_IR_NONE || !gate->shape[1].extent)
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT,
+            "routed SwiGLU requires coupled BF16 banks and biased sigmoid geometry");
     return YVEX_OK;
 }
 
@@ -450,6 +489,8 @@ static int neural_group_norm(const yvex_ir_module *m, yvex_ir_id id, yvex_error 
         input->shape[1].extent % weight->shape[0].extent || !epsilon || epsilon->value.real <= 0.0)
         return yvex_ir_refuse(err, YVEX_ERR_FORMAT,
             "group RMS normalization requires complete static channel groups and positive epsilon");
+    if (op->definition->version == 2u && input->scalar != YVEX_IR_BF16)
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "rounded-input grouped RMSNorm requires BF16");
     return YVEX_OK;
 }
 
@@ -854,6 +895,9 @@ static int neural_indexed_conditioning(const yvex_ir_module *m, yvex_ir_id id, y
 
 const yvex_ir_dialect *yvex_ir_neural_dialect(void)
 {
+    static const yvex_ir_attribute_rule routed[] = {
+        {"selected_experts", YVEX_IR_ATTR_U64, 1},
+        {"normalization_epsilon", YVEX_IR_ATTR_F64, 1}, {"routed_scale", YVEX_IR_ATTR_F64, 1}};
     static const yvex_ir_attribute_rule linear[] = {{"reduction", YVEX_IR_ATTR_U64, 0}};
     static const yvex_ir_attribute_rule norm[] = {
         {"epsilon", YVEX_IR_ATTR_F64, 1}, {"weight_offset", YVEX_IR_ATTR_F64, 1}};
@@ -900,6 +944,7 @@ const yvex_ir_dialect *yvex_ir_neural_dialect(void)
         {"grid_width", YVEX_IR_ATTR_U64, 1}, {"block_size", YVEX_IR_ATTR_U64, 1},
         {"theta", YVEX_IR_ATTR_F64, 1}};
     static const yvex_ir_operation_definition operations[] = {
+        {"nn.routed_swiglu", 1u, 6u, 6u, 1u, 1u, 0u, 0u, routed, 3u, 0, neural_routed_swiglu},
         {"tensor.index_linearize", 1u, 2u, 2u, 1u, 1u, 0u, 0u, index_domain, 2u, 0, neural_index_linearize},
         {"tensor.cast", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_cast},
         {"nn.indexed_modulate", 1u, 3u, 3u, 1u, 1u, 0u, 0u, modulation, 2u, 0, neural_indexed_conditioning},
@@ -939,8 +984,11 @@ const yvex_ir_dialect *yvex_ir_neural_dialect(void)
         {"tensor.grid_rotary", 1u, 0u, 0u, 2u, 2u, 0u, 0u, grid_rotary, 4u, 0, neural_grid},
         {"nn.embedding", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_embedding},
         {"nn.rms_norm", 1u, 2u, 2u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
+        /* T5 ordering: BF16(x * rsqrt(mean(x^2) + eps)), then BF16(weight * result). */
+        {"nn.rms_norm", 2u, 2u, 2u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
         {"nn.weighted_rms", 1u, 2u, 2u, 1u, 1u, 0u, 0u, group_norm, 1u, 0, neural_weighted_rms},
         {"nn.group_rms_norm", 1u, 2u, 2u, 1u, 1u, 0u, 0u, group_norm, 1u, 0, neural_group_norm},
+        {"nn.group_rms_norm", 2u, 2u, 2u, 1u, 1u, 0u, 0u, group_norm, 1u, 0, neural_group_norm},
         {"tensor.rotary_half", 1u, 3u, 3u, 1u, 1u, 0u, 0u, rotary, 1u, 0, neural_rotary_half},
         /* F32 tables/products; only the final result rounds to the value type. */
         {"tensor.rotary_half_f32", 1u, 3u, 3u, 1u, 1u, 0u, 0u, rotary, 1u, 0, neural_rotary_half},

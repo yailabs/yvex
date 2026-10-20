@@ -38,6 +38,7 @@ struct yvex_program_kernels {
     unsigned long long host_staging_bytes;
     yvex_device_tensor *signal_workspace;
     yvex_device_tensor *encoded_workspace;
+    yvex_device_tensor *routed_workspace;
 };
 
 static int kernel_refuse(yvex_error *err, yvex_status status, const char *why)
@@ -271,6 +272,44 @@ static int kernel_signal_prepare(yvex_program_kernels *c, yvex_error *err)
     return rc == YVEX_OK ? kernel_account(c, 0u, d.bytes, err) : rc;
 }
 
+static yvex_routed_swiglu_bf16_request kernel_routed_geometry(const yvex_program_kernels *c,
+    const yvex_program_physical_step *s, unsigned long long rows)
+{
+    const yvex_ir_type *bank = &yvex_program_physical_value_at(c->program, s->operands[3])->type;
+    return (yvex_routed_swiglu_bf16_request){
+        .rows = rows, .hidden = bank->shape[2].extent, .intermediate = bank->shape[1].extent,
+        .experts = bank->shape[0].extent,
+        .selected = yvex_program_physical_attribute(s, "selected_experts")->value.integer,
+        .normalization_epsilon = (float)yvex_program_physical_attribute(s, "normalization_epsilon")->value.real,
+        .routed_scale = (float)yvex_program_physical_attribute(s, "routed_scale")->value.real,
+        .gate = c->weights + s->operands[3], .up = c->weights + s->operands[4],
+        .down = c->weights + s->operands[5]};
+}
+
+static int kernel_routed_prepare(yvex_program_kernels *c, yvex_error *err)
+{
+    unsigned long long maximum = 0u;
+    for (size_t i = 0u; i < c->summary->step_count; ++i) {
+        const yvex_program_physical_step *s = yvex_program_physical_step_at(c->program, i);
+        if (strcmp(s->implementation, "routed_swiglu.sigmoid.bf16.v1")) continue;
+        yvex_routed_swiglu_bf16_request geometry = kernel_routed_geometry(c, s, c->summary->maximum_rows);
+        unsigned long long count;
+        if (!c->ops || !c->ops->routed_swiglu_workspace_values)
+            return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "routed operation workspace authority is unavailable");
+        int rc = c->ops->routed_swiglu_workspace_values(&geometry, &count, err);
+        if (rc != YVEX_OK) return rc;
+        if (count > maximum) maximum = count;
+    }
+    if (!maximum) return YVEX_OK;
+    yvex_backend_tensor_desc d = {.name = "program-routed-workspace", .dtype = YVEX_DTYPE_F32,
+        .rank = 1u, .dims = {maximum}};
+    if (!yvex_core_u64_mul(maximum, sizeof(float), &d.bytes) || d.bytes > SIZE_MAX ||
+        (c->device_limit && d.bytes > c->device_limit - c->device_bytes))
+        return kernel_refuse(err, YVEX_ERR_BOUNDS, "routed workspace exceeds preparation budget");
+    int rc = yvex_backend_tensor_alloc(c->backend, &d, &c->routed_workspace, err);
+    return rc == YVEX_OK ? kernel_account(c, 0u, d.bytes, err) : rc;
+}
+
 static int kernel_f32_bind(yvex_program_kernels *c, const yvex_program_physical_step *s,
     int *handled, yvex_error *err)
 {
@@ -330,6 +369,17 @@ static int kernel_f32_bind(yvex_program_kernels *c, const yvex_program_physical_
         if (!c->ops || !c->ops->normalization_f32) goto unavailable;
         return kernel_small_prepare(c, s->operands[1],
             yvex_program_physical_attribute(s, "weight_offset")->value.real, err);
+    }
+    if (!strcmp(s->implementation, "rms_norm.rounded_input.bf16.v2") ||
+        !strcmp(s->implementation, "group_rms_norm.rounded_input.bf16.v2")) {
+        if (!c->ops || !c->ops->rounded_rms_bf16) goto unavailable;
+        return kernel_small_prepare(c, s->operands[1], 0.0, err);
+    }
+    if (!strcmp(s->implementation, "routed_swiglu.sigmoid.bf16.v1")) {
+        if (!c->ops || !c->ops->routed_swiglu_bf16 || !c->ops->routed_swiglu_workspace_values) goto unavailable;
+        for (unsigned int i = 3u; i < 6u; ++i)
+            if (!c->weights[s->operands[i]].encoded) goto unavailable;
+        return kernel_small_prepare(c, s->operands[2], 0.0, err);
     }
     if (!strcmp(s->implementation, "channel_bias.f32.v1")) {
         if (!c->ops || !c->ops->channel_bias) goto unavailable;
@@ -490,8 +540,11 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
                 rc = kernel_small_prepare(c, s->operands[j], 0.0, err);
             continue;
         }
-        if (!strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1")) {
-            if (yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU)
+        if (!strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1") ||
+            !strcmp(s->implementation, "double_gated_conv.bf16.v2")) {
+            if (yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU &&
+                (!strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1") ||
+                 !c->ops || !c->ops->short_conv_execute))
                 return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "double-gated convolution is CPU-qualified only");
             rc = kernel_small_prepare(c, s->operands[1], 0.0, err);
             continue;
@@ -622,6 +675,7 @@ int yvex_program_kernels_open(yvex_program_kernels **out, const yvex_program_phy
     if (rc == YVEX_OK) rc = kernel_sources_prepare(c, err);
     if (rc == YVEX_OK) rc = kernel_signal_prepare(c, err);
     if (rc == YVEX_OK) rc = kernel_instructions_bind(c, err);
+    if (rc == YVEX_OK) rc = kernel_routed_prepare(c, err);
     if (rc != YVEX_OK) (void)yvex_program_kernels_close(&c, NULL);
     *out = c;
     return rc;
@@ -1515,6 +1569,50 @@ static int kernel_input_view(yvex_program_kernels *c, const yvex_program_device_
     return YVEX_OK;
 }
 
+static int kernel_rounded_norm(yvex_program_kernels *c, const yvex_program_device_invocation *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    const yvex_device_tensor *weight = c->small[s->operands[1]];
+    const yvex_device_tensor *x = &r->values[s->operands[0]];
+    unsigned long long width = weight->bytes / sizeof(float), groups = x->bytes / sizeof(float) / width;
+    return c->ops->rounded_rms_bf16(c->backend, x, weight, &r->values[s->results[0]],
+        groups, width, (float)yvex_program_physical_attribute(s, "epsilon")->value.real, facts, err);
+}
+
+static int kernel_routed_execute(yvex_program_kernels *c, const yvex_program_device_invocation *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    yvex_routed_swiglu_bf16_request geometry = kernel_routed_geometry(c, s, r->rows);
+    unsigned long long count;
+    int rc = c->ops->routed_swiglu_workspace_values(&geometry, &count, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_device_tensor workspace;
+    if (!yvex_backend_tensor_f32_subview(c->routed_workspace, 0u, count, &workspace))
+        return kernel_refuse(err, YVEX_ERR_STATE, "routed operation workspace not admitted");
+    geometry.cancel_requested = r->cancel_requested; geometry.cancel_context = r->cancel_context;
+    yvex_routed_swiglu_device_request request = {
+        .geometry = geometry,
+        .input = &r->values[s->operands[0]], .logits = &r->values[s->operands[1]],
+        .bias = c->small[s->operands[2]], .output = &r->values[s->results[0]], .workspace = &workspace};
+    return c->ops->routed_swiglu_bf16(c->backend, &request, facts, err);
+}
+
+static int kernel_prepared_linear(yvex_program_kernels *c, const yvex_program_device_invocation *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    const program_kernel_linear *l = &c->linears[c->linear_slots[r->step_index]];
+    yvex_transformer_linear_execution_request request = {
+        .executable = r->rows == 1u ? l->single : l->multiple,
+        .weight = &c->weights[s->operands[1]], .input = &r->values[s->operands[0]],
+        .output = &r->values[s->results[0]]};
+    if (!request.executable || (r->rows != 1u && l->prepared_multiple_rows != r->rows))
+        return kernel_refuse(err, YVEX_ERR_STATE, "linear invocation requires exact prepared population");
+    return c->ops->linear_execute(c->backend, &request, facts, err);
+}
+
 int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_device_invocation *r,
                                 yvex_backend_operation_facts *facts, yvex_error *err)
 {
@@ -1681,21 +1779,16 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
     if (!strcmp(s->implementation, "linear.encoded.f32.v1") || !strcmp(s->implementation, "linear.f32_acc.v1") ||
         !strcmp(s->implementation, "linear.row_dot.f32.v1") || !strcmp(s->implementation, "linear.row_dot.q8.v1"))
         return kernel_encoded_linear(c, r, input, output, facts, err);
-    if (!strcmp(s->implementation, "linear.bf16.f32acc.v1")) {
-        const program_kernel_linear *l = &c->linears[c->linear_slots[r->step_index]];
-        yvex_transformer_linear_execution_request request = {
-            .executable = r->rows == 1u ? l->single : l->multiple,
-            .weight = &c->weights[s->operands[1]], .input = input, .output = output};
-        if (!request.executable || (r->rows != 1u && l->prepared_multiple_rows != r->rows))
-            return kernel_refuse(err, YVEX_ERR_STATE, "linear invocation requires exact prepared population");
-        return c->ops->linear_execute(c->backend, &request, facts, err);
-    }
+    if (!strcmp(s->implementation, "linear.bf16.f32acc.v1"))
+        return kernel_prepared_linear(c, r, facts, err);
     if (!strcmp(s->implementation, "embedding.bf16.v1") ||
         !strcmp(s->implementation, "embedding.encoded.f32.v1"))
         return kernel_embedding(c, r, output, facts, err);
     if (!strcmp(s->implementation, "silu_product.bf16.v1"))
         return c->ops->silu_product_bf16(c->backend, input, &r->values[s->operands[1]], output,
             output->bytes / sizeof(float), facts, err);
+    if (!strcmp(s->implementation, "routed_swiglu.sigmoid.bf16.v1"))
+        return kernel_routed_execute(c, r, facts, err);
     if (!strcmp(s->implementation, "add.bf16.v1"))
         return c->ops->add_bf16(c->backend, input, &r->values[s->operands[1]], output,
             r->rows, output->dims[1], facts, err);
@@ -1705,6 +1798,9 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
                                          (float)epsilon->value.real, output, err);
         return rc == YVEX_OK ? c->ops->bf16_round(c->backend, output, output->bytes / sizeof(float), facts, err) : rc;
     }
+    if (!strcmp(s->implementation, "rms_norm.rounded_input.bf16.v2") ||
+        !strcmp(s->implementation, "group_rms_norm.rounded_input.bf16.v2"))
+        return kernel_rounded_norm(c, r, facts, err);
     if (!strcmp(s->implementation, "group_rms_norm.bf16.vector4.v1")) {
         const yvex_ir_type *weight = &yvex_program_physical_value_at(c->program, s->operands[1])->type;
         const yvex_ir_attribute *epsilon = yvex_program_physical_attribute(s, "epsilon");
@@ -1732,6 +1828,8 @@ int yvex_program_kernels_close(yvex_program_kernels **out, yvex_error *err)
     size_t i;
     int rc;
     if (!c) return YVEX_OK;
+    if (c->routed_workspace &&
+        (rc = yvex_backend_tensor_release(c->backend, &c->routed_workspace, err)) != YVEX_OK) return rc;
     if (c->signal_workspace &&
         (rc = yvex_backend_tensor_release(c->backend, &c->signal_workspace, err)) != YVEX_OK) return rc;
     if (c->encoded_workspace &&

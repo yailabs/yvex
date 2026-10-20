@@ -172,7 +172,7 @@ static int conv_program(void)
     yvex_backend_tensor_desc d = {.name = "conv-input", .dtype = YVEX_DTYPE_F32,
         .rank = 2u, .dims = {9u, 12u}, .bytes = 108u * sizeof(float)};
     conv_dispatch context = {0};
-    const yvex_program_device_kernel implementation = {"double_gated_conv.cpu.bf16.v1", conv_invoke};
+    const yvex_program_device_kernel implementation = {"double_gated_conv.bf16.v2", conv_invoke};
     float projection[108], weight[12], expected[36], expected_state[12], actual[36];
     unsigned char encoded[24];
     char before[65], after[65];
@@ -203,8 +203,10 @@ static int conv_program(void)
     }
     CHECK(yvex_sequence_state_plan_measure(&plan, &cost, &err) == YVEX_OK &&
           cost.committed_bytes == 48u && cost.candidate_bytes == 48u && !cost.recurrent_values);
-    CHECK(yvex_sequence_state_open_for_backend(&unsupported, &plan, YVEX_BACKEND_KIND_CUDA, &err) ==
-          YVEX_ERR_UNSUPPORTED && !unsupported);
+    /* Metadata admission is not device attachment or numerical qualification. */
+    CHECK(yvex_sequence_state_open_for_backend(&unsupported, &plan, YVEX_BACKEND_KIND_CUDA, &err) == YVEX_OK);
+    CHECK(yvex_sequence_state_begin(unsupported, 0u, 1u, &err) == YVEX_ERR_INVALID_ARG);
+    yvex_sequence_state_close(&unsupported);
     CHECK(yvex_sequence_state_open(&state, &plan, &err) == YVEX_OK);
     CHECK(yvex_backend_open(&backend, &options, &err) == YVEX_OK);
     CHECK(yvex_program_kernels_open(&context.kernels, copy, &parameter, 1u, backend, 0u, 0u, &err) == YVEX_OK);

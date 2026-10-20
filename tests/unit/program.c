@@ -237,6 +237,129 @@ static int program_test_module(yvex_ir_module **out, int variant, yvex_error *er
     return rc == YVEX_OK ? yvex_ir_seal(*out, err) : rc;
 }
 
+static int program_bank_fixture(yvex_ir_module **m, yvex_transform_ir **t,
+    yvex_physical_execution_ir **p, unsigned int variant, yvex_error *err)
+{
+    yvex_transform_builder *builder = NULL;
+    yvex_transform_failure failure;
+    yvex_transform_header header = {.schema_version = YVEX_TRANSFORM_IR_SCHEMA_VERSION,
+        .logical_model_identity = program_other, .source_snapshot_identity = 7u, .coverage_identity = 9u,
+        .required_payload_identity = program_source, .payload_trust_class = "local_payload_snapshot_sealed",
+        .expected_source_count = 2u, .expected_terminal_count = 1u};
+    unsigned long long inputs[2], terminal, node;
+    int rc = yvex_transform_builder_create(&builder, &header, NULL, &failure, err);
+    for (unsigned int i = 0u; rc == YVEX_OK && i < 2u; ++i) {
+        yvex_transform_source_spec source = {.source_name = i ? "expert1" : "expert0",
+            .shard_name = "fixture.safetensors", .source_tensor_index = i, .requirement_index = i,
+            .source_snapshot_identity = 7u, .source_dtype = YVEX_NATIVE_DTYPE_BF16,
+            .value_dtype = YVEX_TRANSFORM_DTYPE_BF16, .shape = {.rank = 2u, .dims = {3u, 4u}},
+            .relative_begin = i * 24u, .relative_end = (i + 1u) * 24u, .requirement_identity = 11u + i,
+            .scope = YVEX_TRANSFORM_SCOPE_MAIN_LAYER, .subsystem = YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT,
+            .role_hint = YVEX_TENSOR_ROLE_MOE_EXPERT_GATE, .layer_index = 0u,
+            .auxiliary_index = YVEX_TRANSFORM_IR_NO_ID, .expert_index = variant == 4u ? 1u - i : i,
+            .required_uses = 1u};
+        rc = yvex_transform_builder_add_source(builder, &source, inputs + i, &failure, err);
+    }
+    yvex_transform_value_spec value = {.kind = YVEX_TRANSFORM_VALUE_TERMINAL,
+        .semantic_id = 100u, .canonical_ordinal = 0u, .shape = {.rank = 3u, .dims = {2u, 3u, 4u}},
+        .dtype = YVEX_TRANSFORM_DTYPE_BF16, .precision = {.flags = YVEX_TRANSFORM_PRECISION_EXACT,
+            .allowed_physical_classes = YVEX_TRANSFORM_PHYSICAL_BF16},
+        .logical_key = {.scope = YVEX_TRANSFORM_SCOPE_MAIN_LAYER,
+            .subsystem = YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT, .role = YVEX_TENSOR_ROLE_MOE_EXPERT_GATE,
+            .layer_index = 0u, .auxiliary_index = YVEX_TRANSFORM_IR_NO_ID, .group_index = YVEX_TRANSFORM_IR_NO_ID}};
+    yvex_transform_node_spec stack = {.kind = YVEX_TRANSFORM_OP_STACK, .input_value_ids = inputs,
+        .input_count = 2u, .axis = 0u, .numeric = YVEX_TRANSFORM_NUMERIC_EXACT,
+        .ordering = YVEX_TRANSFORM_ORDER_AXIS,
+        .payload_execution_required = 1};
+    if (rc == YVEX_OK) rc = yvex_transform_builder_declare_value(builder, &value, &terminal, &failure, err);
+    stack.output_value_id = terminal;
+    if (rc == YVEX_OK) rc = yvex_transform_builder_add_node(builder, &stack, &node, &failure, err);
+    if (rc == YVEX_OK) rc = yvex_transform_builder_seal(builder, t, &failure, err);
+    yvex_transform_builder_release(&builder);
+    yvex_ir_type type = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16, .rank = 3u,
+        .shape = {{YVEX_IR_NONE, variant == 2u ? 3u : 2u}, {YVEX_IR_NONE, 3u}, {YVEX_IR_NONE, 4u}}};
+    yvex_ir_id tensor, index_type, function, block = YVEX_IR_NONE, operation, result;
+    yvex_ir_type index = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16, .rank = 2u,
+        .shape = {{YVEX_IR_NONE, 1u}, {YVEX_IR_NONE, 4u}}};
+    if (rc == YVEX_OK) rc = yvex_ir_module_open(m, "expert_bank", program_source, yvex_ir_core_dialect(), 1u, err);
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(*m, &type, &tensor, err);
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(*m, &index, &index_type, err);
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(*m, "bank", &index_type, 1u, &index_type, 1u, 0u, &function, err);
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(*m, function)->body;
+        yvex_ir_attribute attrs[] = {{.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL},
+            {.name = "source", .kind = YVEX_IR_ATTR_TEXT},
+            {.name = "expert_count", .kind = YVEX_IR_ATTR_U64, .value.integer = type.shape[0].extent}};
+        yvex_core_text_copy(attrs[0].value.text, sizeof(attrs[0].value.text), variant == 3u ? "expert1" : "expert0");
+        yvex_core_text_copy(attrs[1].value.text, sizeof(attrs[1].value.text), program_source);
+        yvex_ir_operation_request r = {.operation = "core.parameter", .version = variant == 1u ? 1u : 2u,
+            .result_types = &tensor, .result_count = 1u, .attributes = attrs,
+            .attribute_count = variant == 1u ? 2u : 3u};
+        rc = yvex_ir_operation_add(*m, block, &r, &operation, err);
+    }
+    if (rc == YVEX_OK) {
+        result = yvex_ir_block_at(*m, block)->arguments[0];
+        yvex_ir_operation_request r = {.operation = "core.return", .operands = &result, .operand_count = 1u};
+        rc = yvex_ir_operation_add(*m, block, &r, &operation, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(*m, err);
+    yvex_physical_execution_summary summary = {.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
+        .decision_count = 1u};
+    yvex_physical_execution_decision decision = {.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
+        .terminal_tensor_id = 0u, .role = YVEX_TENSOR_ROLE_MOE_EXPERT_GATE,
+        .scope = YVEX_TENSOR_SCOPE_MAIN_LAYER, .layer_index = 0u, .predictor_index = YVEX_TRANSFORM_IR_NO_ID,
+        .canonical_qtype = YVEX_GGUF_QTYPE_BF16, .canonical_row_width = 4u, .canonical_row_count = 6u,
+        .encoded_offset = 64u, .encoded_bytes = 48u, .alignment = 32u,
+        .expert_count = variant == 5u ? 3u : 2u,
+        .consumer = YVEX_EXECUTION_CONSUMER_ROUTED_GATE_UP,
+        .layout = variant == 6u ? YVEX_EXECUTION_LAYOUT_CANONICAL_ROW : YVEX_EXECUTION_LAYOUT_EXPERT_MAJOR,
+        .sharing = YVEX_EXECUTION_SHARING_MODEL_READ_ONLY};
+    yvex_core_text_copy(summary.physical_variant_identity, sizeof(summary.physical_variant_identity), program_other);
+    yvex_core_text_copy(decision.terminal_identity, sizeof(decision.terminal_identity), program_source);
+    if (rc == YVEX_OK) rc = yvex_physical_execution_ir_import(p, &summary, &decision, 1u, err);
+    return rc;
+}
+
+static int program_test_bank(void)
+{
+    for (unsigned int variant = 0u; variant < 7u; ++variant) {
+        yvex_ir_module *m = NULL;
+        yvex_transform_ir *t = NULL;
+        yvex_physical_execution_ir *p = NULL;
+        yvex_program_parameters *binding = NULL;
+        yvex_error err;
+        int rc = program_bank_fixture(&m, &t, &p, variant, &err);
+        if (rc != YVEX_OK) fprintf(stderr, "bank fixture %u: %s\n", variant, err.message);
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "bank source, program and physical declarations independently seal");
+        rc = yvex_program_parameters_compile(&binding, m, t, p, &err);
+        if (!variant && rc != YVEX_OK) fprintf(stderr, "bank join: %s\n", err.message);
+        YVEX_TEST_ASSERT(variant ? rc != YVEX_OK && !binding : rc == YVEX_OK,
+            "explicit expert-major bank joins; alias, count, anchor, ordering and physical population mismatch refuse");
+        if (!variant) {
+            yvex_program_execution *execution = NULL;
+            yvex_program_physical *physical = NULL, *reopened = NULL;
+            yvex_core_bytes bytes = {.maximum = 65536u};
+            const yvex_program_parameter *entry = yvex_program_parameter_at(binding, 0u);
+            yvex_program_parameter_binding constant = {entry->value, entry->terminal, YVEX_GGUF_QTYPE_BF16};
+            rc = yvex_program_execution_compile(&execution, m, &err);
+            if (rc == YVEX_OK)
+                rc = yvex_program_physical_compile(&physical, execution, "bank", &constant, 1u, program_other, &err);
+            if (rc != YVEX_OK) fprintf(stderr, "bank physical: %s\n", err.message);
+            YVEX_TEST_ASSERT(rc == YVEX_OK,
+                "bank legalizes to one encoded physical terminal without duplicating weights");
+            YVEX_TEST_ASSERT(yvex_program_physical_encode(physical, &bytes, &err) == YVEX_OK &&
+                yvex_program_physical_decode(&reopened, bytes.data, bytes.count, &err) == YVEX_OK,
+                "bank survives physical program publication");
+            free(bytes.data);
+            yvex_program_physical_close(&reopened); yvex_program_physical_close(&physical);
+            yvex_program_execution_close(&execution);
+        }
+        yvex_program_parameters_close(&binding); yvex_physical_execution_ir_close(&p);
+        yvex_transform_ir_release(&t); yvex_ir_module_close(&m);
+    }
+    return 0;
+}
+
 static int program_test_transform(yvex_transform_ir **out, int variant, yvex_error *err)
 {
     unsigned int copies = variant == 5 || variant == 10 ? 2u : 1u, index;
@@ -1108,6 +1231,7 @@ static int program_target_state_cleanup(void)
 
 int yvex_test_program(void)
 {
+    if (program_test_bank()) return 1;
     if (test_shared_expert(YVEX_BACKEND_KIND_CPU)) return 1;
     if (test_shared_target(YVEX_BACKEND_KIND_CPU)) return 1;
     if (program_test_value_layout()) return 1;

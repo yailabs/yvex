@@ -356,10 +356,35 @@ static int tokenizer_parse_vocab(yvex_gguf_tokenizer_metadata *metadata, tokeniz
     }
 }
 
+/* Hugging Face BPE serializes merges as either legacy strings or pairs.
+ * GGUF stores "left right"; reject pairs that cannot preserve that boundary. */
+static int tokenizer_parse_merge(tokenizer_arena *arena, tokenizer_json *json,
+                                 tokenizer_string_ref *merge) {
+    const unsigned char *begin, *end;
+    tokenizer_string_ref part;
+    size_t start = arena->count;
+    if (json->cursor >= json->end) return 0;
+    if (*json->cursor == '"')
+        return tokenizer_json_string_raw(json, &begin, &end) &&
+               tokenizer_decode_string(arena, begin, end, merge);
+    if (*json->cursor++ != '[') return 0;
+    for (unsigned int i = 0u; i < 2u; ++i) {
+        if (!tokenizer_json_string_raw(json, &begin, &end) ||
+            !tokenizer_decode_string(arena, begin, end, &part) || !part.length ||
+            memchr(arena->data + part.offset, ' ', part.length) ||
+            memchr(arena->data + part.offset, 0, part.length)) return 0;
+        tokenizer_json_space(json);
+        if (json->cursor >= json->end || *json->cursor++ != (i ? ']' : ','))
+            return 0;
+        if (!i && !tokenizer_arena_byte(arena, ' ')) return 0;
+    }
+    *merge = (tokenizer_string_ref){.offset = start, .length = arena->count - start,
+                                   .present = 1};
+    return 1;
+}
+
 static int tokenizer_parse_merges(yvex_gguf_tokenizer_metadata *metadata, tokenizer_json *json) {
     tokenizer_string_ref merge;
-    const unsigned char *begin;
-    const unsigned char *end;
 
     tokenizer_json_space(json);
     if (json->cursor >= json->end || *json->cursor++ != '[')
@@ -370,8 +395,7 @@ static int tokenizer_parse_merges(yvex_gguf_tokenizer_metadata *metadata, tokeni
             json->cursor++;
             return metadata->summary.merge_count != 0u;
         }
-        if (*json->cursor != '"' || !tokenizer_json_string_raw(json, &begin, &end) ||
-            !tokenizer_decode_string(&metadata->arena, begin, end, &merge))
+        if (!tokenizer_parse_merge(&metadata->arena, json, &merge))
             return 0;
         if (metadata->summary.merge_count >= metadata->merge_capacity &&
             !tokenizer_merges_grow(metadata))
@@ -383,6 +407,9 @@ static int tokenizer_parse_merges(yvex_gguf_tokenizer_metadata *metadata, tokeni
         if (*json->cursor == ']')
             continue;
         if (*json->cursor++ != ',')
+            return 0;
+        tokenizer_json_space(json);
+        if (json->cursor >= json->end || *json->cursor == ']')
             return 0;
     }
 }
@@ -751,7 +778,9 @@ static int tokenizer_parse_config(yvex_gguf_tokenizer_metadata *metadata,
             goto malformed;
     }
     tokenizer_json_space(&json);
-    if (json.cursor != json.end || (seen & 29u) != 29u)
+    /* Special-token identities remain mandatory. Optional insertion flags can
+     * be absent as well as null; neither is an affirmative insertion policy. */
+    if (json.cursor != json.end || (seen & 28u) != 28u)
         goto malformed;
     return YVEX_OK;
 malformed:

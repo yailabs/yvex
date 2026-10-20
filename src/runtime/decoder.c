@@ -117,8 +117,9 @@ static int decoder_physical_invoke(void *opaque, const yvex_program_device_invoc
     int delta = !strcmp(name, "gated_delta.bf16.f32state.v1") ||
                 !strcmp(name, "gated_delta.mixed.f32state.v2");
     int ssd = !strcmp(name, "selective_ssd.cpu.f32state.v1");
-    int convolution = !strcmp(name, "double_gated_conv.cpu.bf16.v1");
-    int attention = !strcmp(name, "gated_causal.bf16.v1");
+    int convolution = !strcmp(name, "double_gated_conv.cpu.bf16.v1") ||
+        !strcmp(name, "double_gated_conv.bf16.v2");
+    int attention = !strcmp(name, "gated_causal.bf16.v1") || !strcmp(name, "causal.eager_bf16.v1");
     unsigned long long started = yvex_core_monotonic_ns();
     int rc;
     if (delta || ssd || convolution || attention) {
@@ -175,6 +176,9 @@ static int decoder_physical_open(yvex_runtime_decoder_execution_context *c, yvex
         {"linear.bf16.f32acc.v1", decoder_physical_invoke},
         {"linear.encoded.f32.v1", decoder_physical_invoke},
         {"rms_norm.bf16.v1", decoder_physical_invoke},
+        {"rms_norm.rounded_input.bf16.v2", decoder_physical_invoke},
+        {"group_rms_norm.rounded_input.bf16.v2", decoder_physical_invoke},
+        {"routed_swiglu.sigmoid.bf16.v1", decoder_physical_invoke},
         {"rms_norm.f32.v1", decoder_physical_invoke},
         {"silu_product.bf16.v1", decoder_physical_invoke},
         {"add.bf16.v1", decoder_physical_invoke},
@@ -183,7 +187,9 @@ static int decoder_physical_open(yvex_runtime_decoder_execution_context *c, yvex
         {"gated_delta.mixed.f32state.v2", decoder_physical_invoke},
         {"selective_ssd.cpu.f32state.v1", decoder_physical_invoke},
         {"double_gated_conv.cpu.bf16.v1", decoder_physical_invoke},
-        {"gated_causal.bf16.v1", decoder_physical_invoke}};
+        {"double_gated_conv.bf16.v2", decoder_physical_invoke},
+        {"gated_causal.bf16.v1", decoder_physical_invoke},
+        {"causal.eager_bf16.v1", decoder_physical_invoke}};
     const yvex_program_physical_summary *s = yvex_program_physical_summary_get(c->physical);
     const yvex_program_physical_value *output = yvex_program_physical_value_at(c->physical,
         yvex_program_physical_result_at(c->physical, 0u));

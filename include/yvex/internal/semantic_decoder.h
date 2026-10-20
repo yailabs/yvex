@@ -78,7 +78,7 @@ int yvex_selective_ssd_geometry_validate(
  * Input projection is [B,C,X]; state retains K previous B*X publications.
  * Numeric v1: BF16 inputs/weights/gate products/output, ordered F32 tap sum. */
 #define YVEX_SHORT_CONV_SCHEMA_V1 1u
-typedef struct {
+typedef struct yvex_short_conv_geometry {
     unsigned int schema_version;
     unsigned long long width, kernel, projection_width, state_values;
     char identity[YVEX_SEMANTIC_DECODER_IDENTITY_CAP];

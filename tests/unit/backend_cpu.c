@@ -201,7 +201,7 @@ static int test_attention_workspace(void)
     unsigned long long bytes;
     YVEX_TEST_ASSERT(ops->attention_workspace_required(&requirement, &bytes, &err) == YVEX_OK && bytes == 8u,
         "CPU implementation, not compiler, declares score workspace");
-    for (unsigned int test = 0u; test < 8u; ++test) {
+    for (unsigned int test = 0u; test < 11u; ++test) {
         yvex_device_tensor scratch = *t[4];
         yvex_transformer_attention_request r = {.requirement = requirement, .query = t[0], .key = t[1],
             .value = t[2], .output = t[3], .workspace = &scratch};
@@ -214,10 +214,16 @@ static int test_attention_workspace(void)
         if (test == 5u) r.requirement.numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_UNKNOWN;
         if (test == 6u) r.workspace = NULL;
         if (test == 7u) r.requirement.query_heads = 0u;
+        if (test >= 8u) r.requirement.numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_BF16_EAGER;
+        if (test >= 9u) {
+            float invalid[4] = {test == 9u ? 0.1f : NAN, 0, 0, 0};
+            YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, t[0], invalid, sizeof(invalid), &err) == YVEX_OK,
+                "non-BF16 and nonfinite negative operands");
+        }
         YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, t[3], sentinel, sizeof(sentinel), &err) == YVEX_OK,
             "output sentinel reset");
         int rc = ops->attention_execute(backend, &r, &facts, &err);
-        if (test == 0u || test == 6u) {
+        if (test == 0u || test == 6u || test == 8u) {
             YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(backend, t[3], actual,
                 sizeof(actual), &err) == YVEX_OK, "borrowed and temporary workspace both execute");
             for (size_t i = 0u; i < 4u; ++i)
@@ -228,7 +234,7 @@ static int test_attention_workspace(void)
     for (size_t i = 0u; i < 5u; ++i)
         YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, t + i, &err) == YVEX_OK, "attention tensor cleanup");
     YVEX_TEST_ASSERT(yvex_backend_close_checked(&backend, &err) == YVEX_OK, "attention backend cleanup");
-    printf("CPU attention: workspace=8 bytes; borrowed/local exact [4,6,4,6]; six negative cases preserve sentinel\n");
+    printf("CPU attention: F32/eager-BF16 workspace=8 bytes; exact [4,6,4,6]; eight negatives preserve sentinel\n");
     return 0;
 }
 

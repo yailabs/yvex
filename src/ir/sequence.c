@@ -201,9 +201,10 @@ invalid:
 static int sequence_attention_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
 {
     const yvex_ir_operation *op = &m->operations[id];
+    int gated = !strcmp(op->definition->name, "attention.gated_causal");
     const yvex_ir_type *query = sequence_operand(m, op, 0u);
-    const yvex_ir_type *position = sequence_operand(m, op, 5u);
-    const yvex_ir_type *state = sequence_operand(m, op, 6u);
+    const yvex_ir_type *position = sequence_operand(m, op, gated ? 5u : 3u);
+    const yvex_ir_type *state = sequence_operand(m, op, gated ? 6u : 4u);
     uint64_t heads = yvex_ir_attribute_get(m, id, "query_heads")->value.integer;
     uint64_t kv_heads = yvex_ir_attribute_get(m, id, "kv_heads")->value.integer;
     uint64_t head = yvex_ir_attribute_get(m, id, "head_dimension")->value.integer;
@@ -212,21 +213,21 @@ static int sequence_attention_verify(const yvex_ir_module *m, yvex_ir_id id, yve
     uint64_t theta = yvex_ir_attribute_get(m, id, "theta")->value.integer;
     uint64_t shape[] = {2u, context, kv_heads, head};
     unsigned long long q_width, kv_width, combined;
-    double epsilon = yvex_ir_attribute_get(m, id, "qk_epsilon")->value.real;
+    double epsilon = gated ? yvex_ir_attribute_get(m, id, "qk_epsilon")->value.real : 1.0;
     if (!heads || !kv_heads || heads % kv_heads || !head || !context || theta <= 1u ||
         !rotary || rotary > head || rotary % 2u || epsilon <= 0.0 ||
         !yvex_core_u64_mul(heads, head, &q_width) || !yvex_core_u64_mul(kv_heads, head, &kv_width) ||
-        !yvex_core_u64_mul(q_width, 2u, &combined) ||
+        !yvex_core_u64_mul(q_width, gated ? 2u : 1u, &combined) ||
         !sequence_rows(query, query->shape[0], combined) ||
         !sequence_rows(sequence_operand(m, op, 1u), query->shape[0], kv_width) ||
         !sequence_rows(sequence_operand(m, op, 2u), query->shape[0], kv_width) ||
-        !sequence_static(sequence_operand(m, op, 3u), YVEX_IR_TENSOR, YVEX_IR_BF16, &head, 1u, NULL) ||
-        !sequence_static(sequence_operand(m, op, 4u), YVEX_IR_TENSOR, YVEX_IR_BF16, &head, 1u, NULL) ||
+        (gated && (!sequence_static(sequence_operand(m, op, 3u), YVEX_IR_TENSOR, YVEX_IR_BF16, &head, 1u, NULL) ||
+        !sequence_static(sequence_operand(m, op, 4u), YVEX_IR_TENSOR, YVEX_IR_BF16, &head, 1u, NULL))) ||
         position->kind != YVEX_IR_SCALAR || position->scalar != YVEX_IR_INDEX ||
         !sequence_static(state, YVEX_IR_STATE, YVEX_IR_BF16, shape, 4u, "attention.causal_kv") ||
         !sequence_rows(&m->types[m->values[op->results[0]].type], query->shape[0], q_width) ||
-        !sequence_state_result(m, op, 6u, 1u))
-        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "gated causal attention operands or state geometry disagree");
+        !sequence_state_result(m, op, gated ? 6u : 4u, 1u))
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "causal attention operands or state geometry disagree");
     return YVEX_OK;
 }
 
@@ -265,7 +266,12 @@ const yvex_ir_dialect *yvex_ir_sequence_dialect(void)
         {"sequence.gated_delta", 2u, 10u, 10u, 3u, 3u, 0u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
          delta, sizeof(delta) / sizeof(delta[0]), 0, sequence_delta_verify},
         {"attention.gated_causal", 1u, 7u, 7u, 2u, 2u, 0u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
-         attention, sizeof(attention) / sizeof(attention[0]), 0, sequence_attention_verify}};
+         attention, sizeof(attention) / sizeof(attention[0]), 0, sequence_attention_verify},
+        /* Q/K normalization is explicit. BF16-product RoPE and eager causal
+         * GQA publish dot, scaled scores, probabilities and output in BF16;
+         * softmax is F32. The KV successor preserves those exact operands. */
+        {"attention.causal", 1u, 5u, 5u, 2u, 2u, 0u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
+         attention, 6u, 0, sequence_attention_verify}};
     static const yvex_ir_dialect dialect = {operations, sizeof(operations) / sizeof(operations[0])};
     return &dialect;
 }

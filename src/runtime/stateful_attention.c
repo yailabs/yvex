@@ -119,6 +119,10 @@ static int stateful_geometry_build(
         return stateful_refuse(
             err, YVEX_ERR_FORMAT,
             "stateful attention layer ordinal does not match the compiled decoder");
+    if (request->layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+        request->layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1)
+        return stateful_refuse(err, YVEX_ERR_UNSUPPORTED,
+                               "stateful attention numerical class has no direct-Q/K/V consumer");
     if (
         !request->layer->query_heads || !request->layer->kv_heads ||
         request->layer->query_heads % request->layer->kv_heads ||
@@ -436,7 +440,8 @@ int yvex_runtime_stateful_attention_execute(
             .value_dtype = YVEX_DTYPE_F32, .output_dtype = YVEX_DTYPE_F32,
             .layout = YVEX_TRANSFORMER_ATTENTION_LAYOUT_TOKEN_HEAD_DIM,
             .mask = YVEX_TRANSFORMER_ATTENTION_MASK_CAUSAL,
-            .numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32,
+            .numeric_contract = request->layer->compute_contract == YVEX_ATTENTION_COMPUTE_BF16_EAGER_V1 ?
+                YVEX_TRANSFORMER_ATTENTION_NUMERIC_BF16_EAGER : YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32,
             .deterministic = 1};
         attention.query = request->query;
         attention.key = &key_history;
