@@ -74,6 +74,15 @@ Three backing-integrity negatives and one same-length wire-corruption control
 refuse. This closes the missing-input boundary, not r17's numerical cause;
 no inference, historical replay, installed change or YAI Work is performed.
 
+The subsequent [exact-input diagnostic](../evaluation/provider-output-recovery.md#exact-input-numerical-diagnostic-2026-10-20)
+runs both recovered bodies on the unchanged installed executable. The first
+returns a valid native call matching the historical assistant; the continuation
+reaches 735 tokens/EOS without CUDA refusal, then fails offered-function lookup.
+All 249 observed six-row MoE samples have finite operands and zero status.
+Diagnostic synchronization can mask ordering faults: r17 is not causally repaired.
+The same 16K profile is restored, Host PID 3279954 / generation 2, management
+unchanged. Two authorized requests are consumed; no tool effect or YAI Work.
+
 The 2026-10-17 local CPU continuation composes IQ2 producer alternatives with
 canonical parameter plans and unchanged calibration/compatibility owners.
 Default search and public management are unchanged; the opt-in CLI projection

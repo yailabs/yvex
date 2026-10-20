@@ -57,6 +57,13 @@ same-length wire bytes remain refused. Original input recovery is now earned;
 numerical root cause, correction, real execution, rollout and YAI acceptance
 remain separate open gates in this IN PROGRESS Task. No new inference or replay.
 
+The subsequent [two-request exact-input diagnostic](../evaluation/provider-output-recovery.md#exact-input-numerical-diagnostic-2026-10-20)
+produces one historical-assistant-equivalent native call, then a distinct
+offered-function refusal after 735 tokens/EOS. Status 20 does not recur under
+diagnostic synchronization; 249 sampled six-row MoE executions are finite.
+The operator's same-binary 16K profile is restored. Numerical causality and
+accepted continuation remain open; no rollout, YAI replay or Task closure.
+
 The separately authorized 2026-10-16 real-response forensics stays within
 `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. It records an unrecoverable original
 response boundary and exact pinned producer/consumer fixture controls, not a

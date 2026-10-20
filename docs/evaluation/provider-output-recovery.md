@@ -15,6 +15,71 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## Exact-input numerical diagnostic — 2026-10-20
+
+**IN PROGRESS: the two original inputs execute, but the r17 numerical fault is
+not reproduced or repaired.** These are newly authorized, isolated diagnostics,
+not redispatch of either YAI Work. No generated tool is executed.
+
+| Qualification dimension | Exact configuration |
+| --- | --- |
+| Executable | Installed source `3aa7e69c05cbcf882a5b3da0a25a2bc5f6318564`; SHA-256 `bb3ae5149483429fe1122f92fddceea89ed93ba28480174d463af7f2450223e8` |
+| Model / artifact | DeepSeek-V4-Flash-0731, source `7872f01b1d1fe23eabc4c98b48bffcef5a386062`; artifact `25d29155aa86505ce0aa5a1c5535f9ed6e3b073d1803409a646b1f643423f041` |
+| Binding | `091f933e11d8dd129e86d186f622c20f637ffe98b23d2d78fe118bd1a2199632` |
+| Workload | Exact recovered bodies below; 8,151 then 9,723 input tokens; unchanged 2,048-token output ceiling, `high`, temperature zero, seed zero |
+| Execution | One GB10, CUDA, unchanged MXFP4/Q2 representation and speculative strategy; context 16,384, physical prefill chunk 512; isolated fresh generation 1 |
+| Observer | Same executable under GDB; layer 0, six verification rows / 36 routed pairs; explicit diagnostic stream completion before workspace reuse |
+
+The controller validates existing GPU/model locks, idle operator requests,
+sessions, clients and leases, exact binary/profile identities and the unchanged
+reserve. The first attempt refuses capacity before inference; restoration also
+refuses while the empty Host retains anonymous storage. An explicitly authorized
+same-image Host restart restores the original profile without changing management
+or protected configuration. A subsequent empty-debugger startup refuses an
+overlong Unix socket path, without unloading the operator engine. Both negative
+attempts are retained; neither consumes an inference. The corrected short-runtime
+path admits the isolated profile and executes exactly two requests.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Capture positive / negative | Actual debugger controller; CPU-only mock Driver | Finite storage; one NaN Q8 scale at block 7 | Separate valid data from injected status 20 | Both controls pass; device/host status and first invalid block recovered | Exact predicates; no CUDA arithmetic exercised | PASS 2/2 | Capture mechanism only |
+| First original request | Exact wire digest; retained authenticated original assistant | 8,151 positions | Preserve offered function identity and arguments | HTTP 200, `tool_calls`, 642 committed tokens; function/arguments, content and reasoning match the original assistant exactly | Byte equality of those fields; generated call IDs excluded | CHARACTERIZED | One real accepted native call; no tool effect |
+| Original r17 input | Exact wire digest; unchanged installed executable | 9,723 positions | Capture status 20 if reproduced | 735 committed tokens, EOS; no CUDA refusal; HTTP 400 `function_not_offered at invocation byte 79` | Original failed after 274 tokens; observer changes scheduling | NOT REPRODUCED | Numerical fault remains open; final response is not accepted |
+| MoE operand observations | Stream-completed device storage versus pinned host completion | 121 first-request and 128 second-request samples | Capture first nonfinite Q8/F32 value or status mismatch | 71,712 Q8 scales and 18,358,272 F32 values finite; all 249 device/host statuses zero | Exact finiteness and status equality | PASS, bounded observation | No invalid operand in sampled executions; not independent model numerics |
+| Workspace allocations | Actual installed allocator entry/return | Three 560,686,312-byte allocations | Retain return code and output presence | All return success with non-null outputs | Exact Driver result | CHARACTERIZED | Separate allocator-failure defect is not observed here |
+| Restoration | Independent typed Host/Engine reads and configuration comparison | Same artifact/binding/profile | Restore operator service after isolated cgroup retirement | Host PID 3279954, generation 2, context 16,384; management PID 2458152 unchanged | Same installed SHA; no restart during the two-request campaign | PASS | Operator profile restored; not YAI acceptance |
+
+The fresh first response reproduces the historical assistant's actual function,
+arguments and reasoning, not just an equal token count. The second request still
+uses the original authenticated continuation byte-for-byte. Its new parser
+refusal is **separate from status 20**: the named predicate is exact offered-name
+lookup after invocation-name parsing, not a proven JSON or outer-grammar error.
+The rejected raw completion was not retained, so its function spelling and
+model-versus-parser causality cannot be independently reconstructed here.
+No validator is relaxed and no synthetic success is substituted.
+
+The debugger adds a completion barrier at the observed MoE boundary. It can mask
+an asynchronous lifetime/ordering defect; a fresh Host also differs from the
+original accumulated runtime state. These observations therefore neither prove
+a repair nor establish that synchronization caused success. The first invalid
+device operand and its originating write remain missing. The next discriminating
+control must preserve ordinary asynchronous execution and capture the failure
+before overwrite, rather than repeat another synchronized substitute workload.
+The two-request diagnostic budget is exhausted; no automatic retry follows.
+
+Raw private evidence and reproducible `summarize.py` are retained under
+`/home/dgmothx/lab/models/evidence/r17-exact-causal-20261020.IBXh9lgw`, with the
+completed campaign in `attempt3/summary.json`. The original wires, response,
+reasoning, debugger storage and proprietary recovery fixture stay out of Git.
+The controller's measured engine-absence upper bound is 326.359 seconds;
+instrumented request durations are not performance qualifications.
+
+No production source, arithmetic, ABI, numerical tolerance or architecture
+changes in this diagnostic. The allocator correction `4dc4e8a2` remains a
+separate, not-installed source repair. Original r17 causal closure, an accepted
+continuation, live YAI Work, independent checkpoint quality and Program P
+performance remain unearned.
+
 ## Original r17 wire recovered offline — 2026-10-20
 
 **The exact request is recovered; numerical causality remains open.** The
