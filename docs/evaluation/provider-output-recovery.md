@@ -15,6 +15,58 @@ publication: {html: true, pdf: true, index: true}
 Task: `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. Program P remains separately
 IN PROGRESS; this correction owns no compiler/performance intervention.
 
+## Original r17 wire recovered offline — 2026-10-20
+
+**The exact request is recovered; numerical causality remains open.** The
+first request and the failing continuation are reconstructed from retained
+ContextFrames, immutable Case transitions and authenticated private continuation
+backing on Exon. Neither current Case rendering nor a substitute prompt is used.
+No inference, preflight, SEND, historical Work replay or installed change occurs.
+
+The retained Core renderer reproduces both recorded rendered-input identities.
+Tool lowering uses the original method bodies from Core `3d25534b`; a private
+fixture links the retained engine library with Rust 1.98.1. The first request
+also matches its full original SHA-256 before any private backing is read.
+The continuation's AES-GCM binding includes the original Case, tenant,
+participant, principal, invocation, target/model, protocol profile, qualification,
+credential revision and canonical result digest. Its exact associated-data
+identity selects the existing encrypted object. The authenticated native call
+matches the canonical Case-read observation; all 3,974 feedback bytes are retained.
+
+| Control | Authority / input | Expected | Observed | Result / claim |
+| --- | --- | --- | --- | --- |
+| Initial wire | Retained `ProviderInputObservation`; original rendered input and tools | 26,986 bytes; SHA-256 `47f46b47a7e9d17a144806a3d74d6f6f4d6861ff7b9a76865fb0430b4770ed84` | Exact count and digest | PASS: first original body recovered offline |
+| r17 wire | Retained second observation; authenticated assistant and canonical feedback | 32,281 bytes; SHA-256 `de6776e4b2ddb79adcd46b51507ebc985debc99cc055542fb435a5cd01e2500d` | Exact count and digest | PASS: failing original body recovered offline |
+| Backing negatives | Existing AES-GCM owner format and scope | Refuse modified ciphertext, associated data and nonce | Three independent `InvalidTag` refusals | PASS: unauthenticated backing is not accepted |
+| Wire negative | Complete-body identity fence | Refuse same-length one-byte corruption | Digest mismatch; no export | PASS: length or equivalent-looking JSON cannot establish recovery |
+| Runtime / numerics | Original producer, model and failure | Capture first invalid operand and originating write | NOT RUN; no new accelerator authorization consumed | UNQUALIFIED: no r17 repair or accepted final response |
+
+The two recovered bodies remain only in a private 0700 directory on Exon,
+with mode 0600. Private request contents, reasoning, keys, tool values and
+proprietary Core source are not published. The inspection uses a read-only
+LMDB snapshot, not the store constructor that provisions databases. This recovery
+writes no Core/YVEX executable source, Case history or runtime state; concurrent
+Core and Program P changes are preserved. Services and Engine generation remain
+unchanged. The configured LAN SSH destination is unavailable; the existing
+Tailscale identity permits this read-only recovery without configuration changes.
+
+Private reconstruction and refusal controls are retained on Exon under
+`/home/mothx/.cache/tmp/yvex-r17-offline-20261020.Kx37Nz`; metadata and fixture
+sources are under
+`/home/dgmothx/lab/models/evidence/r17-offline-20261020.02dmv8` on Spark.
+Reverification uses the retained `recover_wire.py` with the original observation
+directory and private output directory, plus `--verify-only`; it performs no
+provider transport and does not rewrite the recovered bodies.
+
+This closes the missing-input boundary, not the original status-20 cause. The
+allocator correction `4dc4e8a2` has completed hosted Linux/macOS QA, but is not
+installed and cannot inherit incident causality from these byte controls. The
+next discriminating experiment needs fresh authorization for an identity-bound
+real diagnostic capturing the Q8/weight operands and buffer/completion lineage
+before workspace reuse. The prior public-source GDB run, r20 SIGSEGV and driver
+allocation errors remain separate observations. No unrelated performance probe
+or YAI retry follows from reconstruction.
+
 ## Workspace allocation refusal and real debugger control — 2026-10-19
 
 **IN PROGRESS; a source allocation defect is reproduced and repaired; original

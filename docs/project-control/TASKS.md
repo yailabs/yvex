@@ -50,6 +50,13 @@ allocator defect is independently reproduced and source-corrected; it does not
 yet explain r17 or the historical crash. Same-binary/profile recovery is observed;
 the correction's live validation and YAI Work remain open in this same Task.
 
+The 2026-10-20 [offline reconstruction](../evaluation/provider-output-recovery.md#original-r17-wire-recovered-offline-2026-10-20)
+recovers the two original request bodies with exact full-body digest/count
+agreement and authenticated continuation. Modified ciphertext, scope, nonce and
+same-length wire bytes remain refused. Original input recovery is now earned;
+numerical root cause, correction, real execution, rollout and YAI acceptance
+remain separate open gates in this IN PROGRESS Task. No new inference or replay.
+
 The separately authorized 2026-10-16 real-response forensics stays within
 `V010.PROVIDER.DEEPSEEK.OUTPUT.RECOVERY.0`. It records an unrecoverable original
 response boundary and exact pinned producer/consumer fixture controls, not a

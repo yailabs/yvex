@@ -67,6 +67,13 @@ source, but neither historical crash nor r17 causality is established. Installed
 code is unchanged; Host PID 1955840 has the original 16K profile, generation 2.
 YAI acceptance and a real run of the correction remain unqualified.
 
+On 2026-10-20, [offline reconstruction](../evaluation/provider-output-recovery.md#original-r17-wire-recovered-offline-2026-10-20)
+recovers both original request bodies with exact lengths and full SHA-256
+agreement, including authenticated private continuation and all feedback bytes.
+Three backing-integrity negatives and one same-length wire-corruption control
+refuse. This closes the missing-input boundary, not r17's numerical cause;
+no inference, historical replay, installed change or YAI Work is performed.
+
 The 2026-10-17 local CPU continuation composes IQ2 producer alternatives with
 canonical parameter plans and unchanged calibration/compatibility owners.
 Default search and public management are unchanged; the opt-in CLI projection
