@@ -218,8 +218,8 @@ PY
 COLUMNS=70 NO_COLOR=1 "$YVEX_BIN" model list \
     --models-root "$MODELS_ROOT" --registry "$REGISTRY" >"$ROOT/models-narrow.out"
 python3 - "$ROOT/models-narrow.out" <<'PY'
-import pathlib, sys
-assert '2representations' in ''.join(pathlib.Path(sys.argv[1]).read_text().split())
+import pathlib, re, sys
+assert re.search(r'^\s+REPRS\s+2$', pathlib.Path(sys.argv[1]).read_text(), re.M)
 PY
 
 # Styling is a TTY-only projection, and NO_COLOR removes every escape byte
@@ -291,7 +291,10 @@ for columns in (40, 80, 180):
         assert semantic[0] == semantic[1], (name, columns)
         if name == 'list':
             assert 'tiny-managed' in semantic[0] and 'tiny-external' in semantic[0]
-            assert re.search(r'^tiny-managed\s+VERIFIED(?:\s|·)', semantic[0], re.M)
+            if columns < 80:
+                assert re.search(r'^tiny-managed\n\s+STATE\s+VERIFIED$', semantic[0], re.M)
+            else:
+                assert re.search(r'^tiny-managed\s+VERIFIED\s', semantic[0], re.M)
         if name == 'detail':
             assert 'payload-verified' in semantic[0] and 'not launchable' in semantic[0]
         if name == 'error':
@@ -309,7 +312,7 @@ contains "$ROOT/model-show.out" 'payload-verified'
 contains "$ROOT/model-show.out" 'not launchable'
 test "$(grep -c 'storage.*managed' "$ROOT/model-show.out")" -eq 2
 
-"$YVEX_BIN" model list --all --models-root "$MODELS_ROOT" \
+COLUMNS=120 "$YVEX_BIN" model list --all --models-root "$MODELS_ROOT" \
     --registry "$REGISTRY" >"$ROOT/local-models-all.out"
 python3 - "$ROOT/local-models-all.out" <<'PY'
 from pathlib import Path
@@ -318,7 +321,8 @@ text = Path(sys.argv[1]).read_text()
 # --all changes visibility, not the list/detail information hierarchy. Exact
 # source records are qualified above in JSON and model show, not a list dump.
 assert len(re.findall(r'^tiny-managed\s+VERIFIED(?:\s|·)', text, re.M)) == 1
-assert '2 representations' in text and 'tiny-external' in text
+assert re.search(r'^tiny-managed\s+VERIFIED\s+.+\s+2\s*$', text, re.M)
+assert 'REPRS' in text.splitlines()[0] and 'tiny-external' in text
 PY
 
 "$YVEX_BIN" model search tiny --provider local --models-root "$MODELS_ROOT" \

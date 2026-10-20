@@ -133,6 +133,16 @@ The relevant commands have different responsibilities:
 - `yvex chat` uses the already resident model through the local protocol and
   never creates another model copy.
 
+The ordinary `model list` separates recorded families and aligns model, state,
+execution, format, size and representation count in a table. Narrow terminals
+use stacked records instead of squeezed columns. `LOADED` (cyan) is resident;
+`READY` (green) is loadable but not necessarily resident or resource-admitted;
+`REMOTE` (gray) is not acquired. Amber states identify unfinished local
+preparation; red states identify a block or unsupported family. The printed
+legend preserves those distinctions with `NO_COLOR` or redirected output.
+Size refers to the selected file/source, **not RAM use**. Use `model show MODEL`
+or `model list --wide` for provenance and `host memory` for actual memory facts.
+
 The host keeps the immutable artifact mapping as canonical backing. A compiled
 artifact-backed placement registers that mapping once for CUDA addressability;
 compiler-required derived layouts instead own their separately accounted managed

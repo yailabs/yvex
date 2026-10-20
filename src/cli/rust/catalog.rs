@@ -956,6 +956,135 @@ fn model_detail(facts: &Value, width: usize, styled: bool) -> Result<String, Err
     Ok(output)
 }
 
+fn state_presentation(state: &str) -> (replai::Role, &'static str) {
+    use replai::Role;
+    match state {
+        "LOADED" => (Role::Accent, "resident engine observed"),
+        "READY" => (Role::Success, "loadable; admission required"),
+        "REMOTE" => (Role::Dim, "remote source; not acquired"),
+        "SOURCE" => (Role::Warning, "local source; not prepared"),
+        "VERIFIED" => (Role::Warning, "verified source; no runtime"),
+        "EXTERNAL" => (Role::Warning, "external source; no runtime"),
+        "PREPARING" => (Role::Warning, "artifact; no runtime profile"),
+        "UNBOUND" => (Role::Warning, "source has no runtime binding"),
+        "BLOCKED" => (Role::Error, "source/profile unavailable"),
+        "UNSUPPORTED" => (Role::Error, "unrecognized family"),
+        _ => (Role::Dim, "state unavailable"),
+    }
+}
+
+fn model_list(
+    models: &[ModelSnapshot],
+    engines: &[raw::yvex_server_engine_summary],
+    width: usize,
+    styled: bool,
+) -> Result<String, Error> {
+    use replai::{Alignment::Left, Alignment::Right, Role};
+    if models.is_empty() {
+        return Ok("no models in the catalog\n".into());
+    }
+    let width = presentation::destination_width(width);
+    let mut entries: Vec<_> = models
+        .iter()
+        .map(|model| (display_name(model), facts(model, engines)))
+        .collect();
+    // Group only by recorded family, never infer architecture from model names.
+    entries.sort_by_key(|(name, view)| {
+        (
+            view.contract["family"]
+                .as_str()
+                .unwrap_or("")
+                .to_lowercase(),
+            name.to_lowercase(),
+        )
+    });
+    let mut rows = Vec::new();
+    for (name, view) in &entries {
+        let f = &view.contract;
+        let family = f["family"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .unwrap_or("unknown");
+        let state = f["state"].as_str().unwrap();
+        let execution = f["execution"].as_str().unwrap();
+        let format = f["format"].as_str().unwrap();
+        let bytes = size(view.size);
+        let count = f["representation_count"].to_string();
+        rows.push((
+            format!("family: {family}"),
+            vec![
+                (Role::Default, name.clone()),
+                (state_presentation(state).0, state.into()),
+                (Role::Default, execution.into()),
+                (Role::Dim, format.into()),
+                (Role::Default, bytes),
+                (Role::Dim, count),
+            ],
+        ));
+    }
+    let mut output = presentation::grouped_table(
+        &[
+            ("MODEL / FAMILY", Left),
+            ("STATE", Left),
+            ("EXECUTION", Left),
+            ("FORMAT", Left),
+            ("SIZE", Right),
+            ("REPRS", Right),
+        ],
+        &rows,
+        width,
+        styled,
+    )
+    .map_err(|e| failure(&e.to_string()))?;
+    for model in models
+        .iter()
+        .filter(|model| model.entry.profile_launchable == 0)
+    {
+        for profile in model
+            .profiles
+            .iter()
+            .filter(|p| p.launchable == 0 && p.blocker[0] != 0)
+        {
+            let reason = format!("{}\n{}", display_name(model), ffi::text(&profile.blocker));
+            output.push_str(
+                &presentation::spans(
+                    &[(Role::Error, "BLOCKER  "), (Role::Default, &reason)],
+                    width,
+                    styled,
+                )
+                .map_err(|e| failure(&e.to_string()))?,
+            );
+        }
+    }
+    let states: std::collections::BTreeSet<_> = entries
+        .iter()
+        .filter_map(|(_, view)| view.contract["state"].as_str())
+        .collect();
+    for state in states {
+        let (role, meaning) = state_presentation(state);
+        output.push_str(
+            &presentation::spans(
+                &[(role, state), (Role::Dim, "  "), (Role::Dim, meaning)],
+                width,
+                styled,
+            )
+            .map_err(|e| failure(&e.to_string()))?,
+        );
+    }
+    output.push_str(
+        &presentation::spans(
+            &[(
+                Role::Dim,
+                "Size: file/source bytes, not RAM.\nReprs: recorded representations.",
+            )],
+            width,
+            styled,
+        )
+        .map_err(|e| failure(&e.to_string()))?,
+    );
+    Ok(output)
+}
+
 pub(crate) fn dispatch(
     invocation: &Invocation<'_>,
     width: usize,
@@ -1019,6 +1148,14 @@ pub(crate) fn dispatch(
     } else {
         String::new()
     };
+    if selector.is_none()
+        && !invocation.has("--wide")
+        && !invocation.has("--audit")
+        && invocation.value("--output") != Some("audit")
+    {
+        output.push_str(&model_list(&models, &engines, width, styled)?);
+        return Ok(output);
+    }
     // Visibility follows the native catalog, just as the JSON projection does.
     // Working-set selection controls deployment intent, not catalog membership.
     for model in &models {
@@ -1026,11 +1163,7 @@ pub(crate) fn dispatch(
         let name = display_name(model);
         let facts = view.contract;
         let state = facts["state"].as_str().unwrap();
-        let state_role = match state {
-            "LOADED" | "READY" => replai::Role::Success,
-            "BLOCKED" | "UNSUPPORTED" | "UNBOUND" => replai::Role::Warning,
-            _ => replai::Role::Dim,
-        };
+        let state_role = state_presentation(state).0;
         let metadata = format!(
             " · {} · {} · {} · {} representations",
             facts["execution"].as_str().unwrap(),
@@ -1778,6 +1911,20 @@ mod tests {
         model.sources.push(source);
         assert_eq!(model_state(&model), "UNSUPPORTED");
         assert!(facts(&model, &[]).contract["selected_profile"].is_null());
+        assert_ne!(
+            state_presentation("LOADED").0,
+            state_presentation("READY").0
+        );
+        assert_ne!(
+            state_presentation("READY").0,
+            state_presentation("REMOTE").0
+        );
+        assert_ne!(
+            state_presentation("REMOTE").0,
+            state_presentation("SOURCE").0
+        );
+        assert_eq!(state_presentation("BLOCKED").0, replai::Role::Error);
+        assert!(state_presentation("READY").1.contains("admission required"));
     }
 
     #[test]

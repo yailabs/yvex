@@ -241,6 +241,24 @@ pub fn table(
     width: usize,
     styled: bool,
 ) -> Result<String, replai::EditError> {
+    let rows = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|value| (Role::Default, value.clone()))
+                .collect()
+        })
+        .collect::<Vec<_>>();
+    styled_table(headings, &rows, width, styled)
+}
+
+/// The producer assigns cell emphasis; REPLAI retains column and Unicode layout.
+pub(crate) fn styled_table(
+    headings: &[(&str, Alignment)],
+    rows: &[Vec<(Role, String)>],
+    width: usize,
+    styled: bool,
+) -> Result<String, replai::EditError> {
     let width = destination_width(width);
     let columns = headings
         .iter()
@@ -255,12 +273,70 @@ pub fn table(
         .iter()
         .map(|row| {
             row.iter()
-                .map(|value| safe_text(value, Role::Default))
+                .map(|(role, value)| safe_text(value, *role))
                 .collect::<Result<Vec<_>, _>>()
         })
         .collect::<Result<Vec<_>, _>>()?;
     Document::new(vec![Block::Table { columns, rows }])?
         .render(width, Theme::from_environment(styled))
+}
+
+/// Grouped inventory uses one shared column geometry, or labeled records on
+/// narrow destinations. Group names and cell roles come from the caller.
+pub(crate) fn grouped_table(
+    headings: &[(&str, Alignment)],
+    rows: &[(String, Vec<(Role, String)>)],
+    width: usize,
+    styled: bool,
+) -> Result<String, replai::EditError> {
+    let width = destination_width(width);
+    let mut output = String::new();
+    let mut table_rows = Vec::new();
+    let mut previous = None;
+    for (group, cells) in rows {
+        if headings.is_empty() || cells.len() != headings.len() {
+            return Err(replai::EditError::InvalidRange);
+        }
+        if previous != Some(group) {
+            if width >= 80 {
+                if previous.is_some() {
+                    table_rows.push(vec![(Role::Default, String::new()); headings.len()]);
+                }
+                let mut title = vec![(Role::Default, String::new()); headings.len()];
+                title[0] = (Role::Strong, group.clone());
+                table_rows.push(title);
+            } else {
+                output.push_str(&spans(&[(Role::Strong, group)], width, styled)?);
+            }
+            previous = Some(group);
+        }
+        if width >= 80 {
+            table_rows.push(cells.clone());
+        } else {
+            output.push_str(&spans(&[(Role::Strong, &cells[0].1)], width, styled)?);
+            let fields = headings
+                .iter()
+                .zip(cells)
+                .skip(1)
+                .map(|((label, _), (role, value))| {
+                    Ok((safe_text(label, Role::Dim)?, safe_text(value, *role)?))
+                })
+                .collect::<Result<Vec<_>, replai::EditError>>()?;
+            output.push_str(
+                &Document::new(vec![Block::KeyValue(fields)])?.render_indented(
+                    width,
+                    Theme::from_environment(styled),
+                    2,
+                )?,
+            );
+            output.push('\n');
+        }
+    }
+    if width >= 80 {
+        output = styled_table(headings, &table_rows, width, styled)?;
+        output.push('\n');
+    }
+    Ok(output)
 }
 
 pub fn lines(lines: &[String], width: usize, styled: bool) -> Result<String, replai::EditError> {
@@ -362,6 +438,45 @@ pub fn record(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn grouped_inventory_keeps_unicode_states_and_family_separation() {
+        let headings = [("MODEL", Alignment::Left), ("STATE", Alignment::Left)];
+        let rows = [
+            (
+                "family: first".into(),
+                vec![
+                    (Role::Default, "café 界".into()),
+                    (Role::Accent, "LOADED".into()),
+                ],
+            ),
+            (
+                "family: second".into(),
+                vec![
+                    (Role::Default, "other".into()),
+                    (Role::Success, "READY".into()),
+                ],
+            ),
+        ];
+        for width in [40, 80, 100, 120, 180] {
+            let text = grouped_table(&headings, &rows, width, false).unwrap();
+            for value in [
+                "café 界",
+                "LOADED",
+                "READY",
+                "family: first",
+                "family: second",
+            ] {
+                assert!(text.contains(value));
+            }
+            assert!(!text.contains('\u{1b}'));
+            assert!(text.lines().any(|line| line.trim().is_empty()));
+            for line in text.lines() {
+                assert!(replai::WidthPolicy::UnicodeNarrow.measure(line).unwrap() <= width);
+            }
+        }
+        assert!(grouped_table(&headings[..1], &rows, 120, false).is_err());
+    }
+
     #[test]
     fn flow_preserves_long_identifiers_logical_lines_and_immediate_fragments() {
         let identifier = "long_identifier_".repeat(40);

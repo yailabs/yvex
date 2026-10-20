@@ -41,12 +41,15 @@ def normalized(value):
     return value
 
 
-def terminal_output(binary: Path, words: list[str], environment: dict[str, str]) -> str:
+def terminal_output(binary: Path, words: list[str], environment: dict[str, str],
+                    columns: int | None = None) -> str:
     """Capture bounded catalog output through a real terminal, without a host."""
     master, slave = pty.openpty()
     attributes = termios.tcgetattr(slave)
     attributes[1] &= ~termios.OPOST
     termios.tcsetattr(slave, termios.TCSANOW, attributes)
+    if columns is not None:
+        termios.tcsetwinsize(slave, (40, columns))
     process = None
     try:
         os.set_blocking(master, False)
@@ -292,6 +295,10 @@ def catalogs(binary: Path, reference: Path | None) -> int:
         for width in (40, 80, 180):
             result = invoke(binary, ["profile", "list", *common], {**environment, "COLUMNS": str(width)})
             assert result.returncode == 0 and "malformed-binding:" in result.stdout, result
+            count += 1
+            listing = invoke(binary, ["model", "list", *common], {**environment, "COLUMNS": str(width)})
+            assert listing.returncode == 0 and "malformed-binding:" in listing.stdout, listing
+            assert "BLOCKED" in listing.stdout and "BLOCKER" in listing.stdout, listing
             count += 1
         detailed = invoke(binary, ["model", "show", "v4-flash", *common],
                           {**environment, "COLUMNS": "220"})
@@ -1437,23 +1444,45 @@ def local_acquisition(binary: Path, reference: Path | None) -> int:
             count += 1
         # Source-only entries outside the working set must remain visible in
         # the ordinary catalog, just as in the canonical machine projection.
+        other_source = directory / "hybrid.gguf"
+        other_source.write_bytes(b"independent source fixture; not executable")
+        result = invoke(binary, ["model", "pull", str(other_source), "--reference",
+                                "--models-root", str(models), "--family", "lfm2",
+                                "--name", "hybrid-fixture", "--json"], environment)
+        assert result.returncode == 0, result
         listing = ["model", "list", "--models-root", str(models)]
         catalog = json.loads(invoke(binary, [*listing, "--json"], environment).stdout)["models"]
         assert any(not model["profiles"] and not model["working_set"] for model in catalog), catalog
-        for width in (40, 80, 180):
+        families = sorted({model["family"] for model in catalog})
+        assert len(families) >= 2, families
+        for width in (40, 80, 100, 120, 180, 240):
             env = {**environment, "COLUMNS": str(width), "TERM": "xterm-256color"}
             plain = invoke(binary, listing, env)
             assert plain.returncode == 0, plain
             for model in catalog:
                 assert model["selector"] in plain.stdout, (model, plain.stdout)
+            headings = [line.strip() for line in plain.stdout.splitlines()
+                        if line.strip().startswith("family: ")]
+            assert headings == [f"family: {family}" for family in families], plain.stdout
+            assert re.search(r"\n[ \t]*\nfamily: ", plain.stdout), plain.stdout
+            assert "not RAM" in " ".join(plain.stdout.split())
+            if width >= 80:
+                assert all(key in plain.stdout.splitlines()[0]
+                           for key in ("MODEL / FAMILY", "STATE", "EXECUTION", "FORMAT", "SIZE", "REPRS"))
+            else:
+                assert "MODEL / FAMILY" not in plain.stdout
+            assert all(len(line) <= width for line in plain.stdout.splitlines()), plain.stdout
             styled_env = dict(env)
             styled_env.pop("NO_COLOR", None)
-            styled = terminal_output(binary, listing, styled_env)
+            # The PTY's actual geometry overrides a deliberately stale COLUMNS.
+            styled_env["COLUMNS"] = "25"
+            styled = terminal_output(binary, listing, styled_env, columns=width)
             assert "\x1b[" in styled, styled
             assert re.sub(r"\x1b\[[0-9;]*m", "", styled) == plain.stdout
             for disabled in ({"NO_COLOR": ""}, {"TERM": "dumb"}):
-                assert terminal_output(binary, listing, {**styled_env, **disabled}) == plain.stdout
-            machine = terminal_output(binary, [*listing, "--json"], styled_env)
+                assert terminal_output(binary, listing, {**styled_env, **disabled},
+                                       columns=width) == plain.stdout
+            machine = terminal_output(binary, [*listing, "--json"], styled_env, columns=width)
             assert "\x1b" not in machine and json.loads(machine)["models"] == catalog
             count += 5
         for words, expected in [

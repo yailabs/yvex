@@ -705,14 +705,16 @@ python3 tests/support/human_field.py "$ROOT/list-composite-mismatch.out" 'launch
 grep 'component does not match the current family execution contract' \
   "$ROOT/list-composite-mismatch.out"
 
-"$YVEX_BIN" model list --models-root "$CATALOG_ROOT" --registry "$REG" \
+COLUMNS=120 "$YVEX_BIN" model list --models-root "$CATALOG_ROOT" --registry "$REG" \
   > "$ROOT/library-friendly.out"
 python3 - "$ROOT/library-friendly.out" <<'PY'
 from pathlib import Path
 import re, sys
 text = Path(sys.argv[1]).read_text()
 for name in ('DeepSeek-V4-Flash', 'MiniMax-H3'):
-    assert re.search(r'^' + re.escape(name) + r'\s+BLOCKED · not current ·', text, re.M)
+    assert re.search(r'^' + re.escape(name) + r'\s+BLOCKED\s+not current\s+gguf\s+', text, re.M)
+assert all(label in text.splitlines()[0] for label in ('MODEL / FAMILY', 'STATE', 'REPRS'))
+assert 'family: deepseek4' in text and 'family: minimax-h3' in text
 PY
 ! grep 'provider:huggingface' "$ROOT/library-friendly.out"
 "$YVEX_BIN" source list --models-root "$RECON_ROOT" --registry "$REG" \

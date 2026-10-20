@@ -88,6 +88,15 @@ the objects those operations resolve or authorize. The bounded
 [product identity controls](../evaluation/retained-observations.md#program-p-native-model-titles-and-retained-selectors-2026-10-16)
 retain compatibility selectors, unknown-target fallback and refusal posture.
 
+The ordinary human model list groups entries by the catalog's recorded family,
+with aligned columns on wide terminals and stacked records below 80 columns.
+State labels and a local legend remain visible without color: cyan `LOADED`
+means an observed resident Engine; green `READY` means a launchable profile,
+still subject to resource admission. Remote sources are muted, incomplete local
+preparation is amber, and blocked/unsupported entries are red. File/source size
+is not RAM residency. This presentation neither sorts nor changes JSON v4,
+filters catalog membership, renames families, nor grants execution capability.
+
 Operator projections consume the native identity-verification result and typed
 materialization outcome, not human output or failure-injection environment
 variables. A private diagnostic boundary retains failed-work phase, byte counts
