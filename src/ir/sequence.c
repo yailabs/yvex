@@ -45,6 +45,31 @@ static int sequence_state_result(const yvex_ir_module *m, const yvex_ir_operatio
     return m->values[op->operands[input]].type == m->values[op->results[output]].type;
 }
 
+/* B,C,X are contiguous projected channel groups. BF16 B*X is convolved
+ * causally with no activation/bias, rounded to BF16 and multiplied by C.
+ * The state holds K BF16-exact values in its F32 carrier, oldest first. */
+static int sequence_short_conv_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_operation *op = &m->operations[id];
+    const yvex_ir_type *projection = sequence_operand(m, op, 0u);
+    uint64_t width = yvex_ir_attribute_get(m, id, "width")->value.integer;
+    uint64_t kernel = yvex_ir_attribute_get(m, id, "convolution_kernel")->value.integer;
+    uint64_t weight[] = {width, 1u, kernel}, state[] = {width, kernel};
+    unsigned long long projected, state_values;
+    if (!width || kernel < 2u || kernel > 64u ||
+        !yvex_core_u64_mul(width, 3u, &projected) ||
+        !yvex_core_u64_mul(width, kernel, &state_values) ||
+        state_values > SIZE_MAX / sizeof(float) ||
+        !sequence_rows(projection, projection->shape[0], projected) ||
+        !sequence_static(sequence_operand(m, op, 1u), YVEX_IR_TENSOR, YVEX_IR_BF16, weight, 3u, NULL) ||
+        !sequence_static(sequence_operand(m, op, 2u), YVEX_IR_STATE, YVEX_IR_F32,
+                         state, 2u, "convolution.causal") ||
+        !sequence_rows(&m->types[m->values[op->results[0]].type], projection->shape[0], width) ||
+        !sequence_state_result(m, op, 2u, 1u))
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "double-gated convolution geometry or state versions disagree");
+    return YVEX_OK;
+}
+
 static int sequence_ssd_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
 {
     const yvex_ir_operation *op = &m->operations[id];
@@ -207,6 +232,8 @@ static int sequence_attention_verify(const yvex_ir_module *m, yvex_ir_id id, yve
 
 const yvex_ir_dialect *yvex_ir_sequence_dialect(void)
 {
+    static const yvex_ir_attribute_rule short_conv[] = {
+        {"width", YVEX_IR_ATTR_U64, 1}, {"convolution_kernel", YVEX_IR_ATTR_U64, 1}};
     static const yvex_ir_attribute_rule ssd[] = {
         {"heads", YVEX_IR_ATTR_U64, 1}, {"head_dimension", YVEX_IR_ATTR_U64, 1},
         {"state_dimension", YVEX_IR_ATTR_U64, 1}, {"groups", YVEX_IR_ATTR_U64, 1},
@@ -225,6 +252,9 @@ const yvex_ir_dialect *yvex_ir_sequence_dialect(void)
         {"maximum_context", YVEX_IR_ATTR_U64, 1}, {"theta", YVEX_IR_ATTR_U64, 1},
         {"qk_epsilon", YVEX_IR_ATTR_F64, 1}};
     static const yvex_ir_operation_definition operations[] = {
+        {"sequence.double_gated_conv", 1u, 3u, 3u, 2u, 2u, 0u,
+         YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
+         short_conv, sizeof(short_conv) / sizeof(short_conv[0]), 0, sequence_short_conv_verify},
         {"sequence.selective_ssd", 1u, 9u, 9u, 3u, 3u, 0u,
          YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
          ssd, sizeof(ssd) / sizeof(ssd[0]), 0, sequence_ssd_verify},

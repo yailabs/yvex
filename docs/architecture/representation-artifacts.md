@@ -123,6 +123,29 @@ qualified hardware-aware recommendation remain unearned exits of the selected
 
 ## Physical policy
 
+### Scalar outer-axis aggregation
+
+The parameter compiler executes the existing Transformation IR `STACK` for
+homogeneous direct BF16/F16/F32 sources on axis zero. Container lowering
+distinguishes the inserted population axis from each source axis; routed-expert
+contributions must retain their exact expert ordinals. Other axes and computed
+operands refuse before byte execution.
+
+The executor streams one operand at a time through the existing terminal
+transaction. Exact scalar storage preserves source bits, checks finite values,
+and does not allocate a stacked weight copy. Cancellation or invalid data in a
+later operand aborts the entire terminal; staged bytes are not a published tensor.
+Scalar output encodings are admitted; block-quantized `STACK` consumers are not.
+This is a generic parameter-production mechanism, not a complete Liquid model
+recipe, runtime binding or inference qualification.
+
+`unit.quant_execute` covers canonical lowering/profile planning, byte-exact
+ordered BF16 output, cancellation/reuse, inner-axis refusal and nonfinite
+second-operand refusal with source lineage. Existing IDENTITY, scale-paired,
+checked-cast and MXFP4 expert controls remain independent regressions.
+
+### Terminal representation decisions
+
 A physical variant resolves physical class, storage qtype, tensor and row
 geometry, encoded size, approximation/calibration obligations, policy identity,
 and backend-compute availability for every terminal tensor. The requested

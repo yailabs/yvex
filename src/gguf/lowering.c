@@ -12,7 +12,7 @@
 #include <string.h>
 
 static const char *const lowering_transform_names[] = {
-    "direct", "fp8-e4m3-e8m0-pair", "expert-mxfp4-repack", "i64-to-i32"
+    "direct", "fp8-e4m3-e8m0-pair", "expert-mxfp4-repack", "i64-to-i32", "scalar-stack"
 };
 
 static const char *const lowering_failure_names[] = {
@@ -111,7 +111,9 @@ static const map_transform_projection map_transforms[YVEX_TRANSFORM_OP_COUNT] = 
     [YVEX_TRANSFORM_OP_CHECKED_CAST] = {
         YVEX_ARTIFACT_LOWERING_TRANSFORM_I64_TO_I32, 26u, 1},
     [YVEX_TRANSFORM_OP_EXPERT_AGGREGATE] = {
-        YVEX_ARTIFACT_LOWERING_TRANSFORM_EXPERT_MXFP4, 39u, 1}
+        YVEX_ARTIFACT_LOWERING_TRANSFORM_EXPERT_MXFP4, 39u, 1},
+    [YVEX_TRANSFORM_OP_STACK] = {
+        YVEX_ARTIFACT_LOWERING_TRANSFORM_SCALAR_STACK, YVEX_GGUF_NO_FORCED_QTYPE, 1}
 };
 
 
@@ -372,6 +374,7 @@ static int map_descriptor_begin(map_builder *builder,
     descriptor->expert_count = node->expert_count;
     if (collection >= YVEX_TENSOR_COLLECTION_COUNT ||
         !map_transform(node, &descriptor->transform, &qtype) ||
+        (node->kind == YVEX_TRANSFORM_OP_STACK && node->axis != 0u) ||
         terminal->shape.rank > YVEX_TENSOR_MAX_DIMS) {
         return map_reject_descriptor(
             builder, YVEX_ARTIFACT_LOWERING_FAILURE_LOWERING_DIVERGENCE,
@@ -386,11 +389,16 @@ static int map_descriptor_begin(map_builder *builder,
             terminal->shape.dims[source_axis];
         descriptor->source_axis_for_logical[dimension] = source_axis;
     }
-    if (node->kind == YVEX_TRANSFORM_OP_EXPERT_AGGREGATE) {
-        descriptor->source_axis_for_logical[0] = 1u;
-        descriptor->source_axis_for_logical[1] = 0u;
-        descriptor->source_axis_for_logical[2] =
-            YVEX_ARTIFACT_LOWERING_AGGREGATED_AXIS;
+    if (node->kind == YVEX_TRANSFORM_OP_EXPERT_AGGREGATE ||
+        node->kind == YVEX_TRANSFORM_OP_STACK) {
+        for (dimension = 0u; dimension < descriptor->logical_rank; ++dimension) {
+            unsigned int axis = descriptor->logical_rank - dimension - 1u;
+            descriptor->source_axis_for_logical[dimension] =
+                axis == node->axis ? YVEX_ARTIFACT_LOWERING_AGGREGATED_AXIS : axis - 1u;
+        }
+        if (node->kind == YVEX_TRANSFORM_OP_STACK &&
+            collection == YVEX_TENSOR_COLLECTION_ROUTED_EXPERT)
+            descriptor->expert_count = node->input_count;
     }
     if (!yvex_gguf_name_map_resolve(
             descriptor->role, scope == YVEX_TENSOR_SCOPE_DRAFT,
@@ -469,6 +477,16 @@ static int map_descriptor_add_source(
             descriptor->emitted_name, 1u, 0u);
     source = yvex_transform_ir_source_at(
         builder->transform_ir, value->source_index);
+    if (node->kind == YVEX_TRANSFORM_OP_STACK && source &&
+        ((source->source_dtype != YVEX_NATIVE_DTYPE_BF16 &&
+          source->source_dtype != YVEX_NATIVE_DTYPE_F16 &&
+          source->source_dtype != YVEX_NATIVE_DTYPE_F32) ||
+         (descriptor->collection == YVEX_TENSOR_COLLECTION_ROUTED_EXPERT &&
+          source->expert_index != input_index)))
+        return map_reject_descriptor(
+            builder, YVEX_ARTIFACT_LOWERING_FAILURE_LOWERING_DIVERGENCE,
+            descriptor, source->expert_index, source->source_name,
+            descriptor->emitted_name, input_index, source->expert_index);
     if (!source || index >= builder->policy->source_contribution_count ||
         source->requirement_index >= builder->policy->source_contribution_count ||
         source->shape.rank > YVEX_TENSOR_MAX_DIMS ||
@@ -900,7 +918,7 @@ static const yvex_artifact_lowering_metadata *lowering_metadata_find(
 
 static const char *lowering_transform_name(yvex_artifact_lowering_transform transform)
 {
-    return transform <= YVEX_ARTIFACT_LOWERING_TRANSFORM_I64_TO_I32
+    return transform <= YVEX_ARTIFACT_LOWERING_TRANSFORM_SCALAR_STACK
         ? lowering_transform_names[transform] : "unknown";
 }
 

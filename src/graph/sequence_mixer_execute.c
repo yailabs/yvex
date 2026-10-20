@@ -6,6 +6,102 @@
 #include <string.h>
 
 #include <yvex/internal/core.h>
+#include <yvex/internal/quant_numeric.h>
+
+typedef struct { const float *data; unsigned long long count; } short_conv_span;
+
+static int short_conv_overlap(short_conv_span a, short_conv_span b)
+{
+    uintptr_t left = (uintptr_t)a.data, right = (uintptr_t)b.data;
+    if (!left || !right || !a.count || !b.count) return 0;
+    if (a.count > (UINTPTR_MAX - left) / sizeof(float) ||
+        b.count > (UINTPTR_MAX - right) / sizeof(float)) return 1;
+    return left < right + b.count * sizeof(float) && right < left + a.count * sizeof(float);
+}
+
+static int short_conv_bf16(float value)
+{
+    return isfinite(value) && value == yvex_quant_bf16_decode(yvex_quant_bf16_encode(value));
+}
+
+static int short_conv_admit(const yvex_short_conv_geometry *g, const yvex_short_conv_cpu_request *r)
+{
+    unsigned long long projection, output;
+    short_conv_span inputs[3], outputs[2];
+    if (!r || !r->rows || !r->projection || !r->weight || !r->next_state || !r->output ||
+        !yvex_core_u64_mul(r->rows, g->projection_width, &projection) ||
+        !yvex_core_u64_mul(r->rows, g->width, &output) ||
+        projection > SIZE_MAX / sizeof(float) || output > SIZE_MAX / sizeof(float) ||
+        r->projection_capacity < projection || r->weight_capacity < g->state_values ||
+        (r->state && r->state_capacity < g->state_values) ||
+        r->next_state_capacity < g->state_values || r->output_capacity < output) return 0;
+    inputs[0] = (short_conv_span){r->projection, projection};
+    inputs[1] = (short_conv_span){r->weight, g->state_values};
+    inputs[2] = (short_conv_span){r->state, g->state_values};
+    outputs[0] = (short_conv_span){r->next_state, g->state_values};
+    outputs[1] = (short_conv_span){r->output, output};
+    if (short_conv_overlap(outputs[0], outputs[1])) return 0;
+    for (size_t i = 0u; i < 2u; ++i)
+        for (size_t j = 0u; j < 3u; ++j)
+            if (short_conv_overlap(outputs[i], inputs[j])) return 0;
+    return 1;
+}
+
+int yvex_short_conv_execute_cpu(const yvex_short_conv_geometry *g,
+    const yvex_short_conv_cpu_request *r, yvex_short_conv_cpu_result *out, yvex_error *err)
+{
+    int rc;
+    if (out) memset(out, 0, sizeof(*out));
+    if (!out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "graph.short-conv", "result required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = yvex_short_conv_geometry_validate(g, err);
+    if (rc != YVEX_OK) return rc;
+    if (!short_conv_admit(g, r)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "graph.short-conv", "incomplete, overlapping or overflowing buffers");
+        return YVEX_ERR_BOUNDS;
+    }
+    /* Validate immutable operands before any candidate publication. */
+    for (unsigned long long i = 0u; i < g->state_values; ++i)
+        if (!short_conv_bf16(r->weight[i]) || (r->state && !short_conv_bf16(r->state[i]))) goto numeric;
+    if (r->state) memcpy(r->next_state, r->state, (size_t)g->state_values * sizeof(float));
+    else memset(r->next_state, 0, (size_t)g->state_values * sizeof(float));
+    for (unsigned long long row = 0u; row < r->rows; ++row) {
+        const float *p = r->projection + row * g->projection_width;
+        if (r->cancel_requested && r->cancel_requested(r->cancel_context)) {
+            out->cancelled = 1;
+            yvex_error_set(err, YVEX_ERR_CANCELLED, "graph.short-conv", "candidate convolution cancelled");
+            return YVEX_ERR_CANCELLED;
+        }
+        for (unsigned long long c = 0u; c < g->width; ++c) {
+            float *history = r->next_state + c * g->kernel;
+            const float *w = r->weight + c * g->kernel;
+            float value, sum = 0.0f;
+            if (!short_conv_bf16(p[c]) || !short_conv_bf16(p[g->width + c]) ||
+                !short_conv_bf16(p[2u * g->width + c])) goto numeric;
+            value = yvex_quant_bf16_decode(yvex_quant_bf16_encode(p[c] * p[2u * g->width + c]));
+            if (!isfinite(value)) goto numeric;
+            memmove(history, history + 1u, (size_t)(g->kernel - 1u) * sizeof(float));
+            history[g->kernel - 1u] = value;
+            for (unsigned long long k = 0u; k < g->kernel; ++k) sum = fmaf(history[k], w[k], sum);
+            sum = yvex_quant_bf16_decode(yvex_quant_bf16_encode(sum));
+            value = yvex_quant_bf16_decode(yvex_quant_bf16_encode(p[g->width + c] * sum));
+            if (!isfinite(value) || !isfinite(sum)) goto numeric;
+            r->output[row * g->width + c] = value;
+        }
+        out->rows_completed++;
+    }
+    out->state_values = g->state_values;
+    out->output_values = r->rows * g->width;
+    out->complete = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+numeric:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "graph.short-conv",
+                   "invalid BF16 operand or nonfinite convolution publication");
+    return YVEX_ERR_FORMAT;
+}
 
 static int mixer_execute_refuse(yvex_error *err, yvex_status status,
                                 const char *reason)

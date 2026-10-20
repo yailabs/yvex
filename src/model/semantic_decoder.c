@@ -8,6 +8,46 @@
 
 #include <yvex/internal/core.h>
 
+int yvex_short_conv_geometry_seal(yvex_short_conv_geometry *out, unsigned long long width,
+                                  unsigned long long kernel, yvex_error *err)
+{
+    yvex_short_conv_geometry g = {.schema_version = YVEX_SHORT_CONV_SCHEMA_V1,
+        .width = width, .kernel = kernel};
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    if (out) memset(out, 0, sizeof(*out));
+    if (!out || !width || kernel < 2u || kernel > 64u ||
+        !yvex_core_u64_mul(width, 3u, &g.projection_width) ||
+        !yvex_core_u64_mul(width, kernel, &g.state_values) ||
+        g.state_values > SIZE_MAX / sizeof(float)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "model.short-conv", "invalid double-gated convolution geometry");
+        return YVEX_ERR_BOUNDS;
+    }
+    yvex_sha256_init(&hash);
+    yvex_sha256_update_text(&hash, "yvex.sequence.double-gated-conv.bf16-f32.v1");
+    yvex_sha256_update_u64(&hash, width);
+    yvex_sha256_update_u64(&hash, kernel);
+    yvex_sha256_final(&hash, digest);
+    yvex_sha256_hex(digest, g.identity);
+    *out = g;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_short_conv_geometry_validate(const yvex_short_conv_geometry *g, yvex_error *err)
+{
+    yvex_short_conv_geometry checked;
+    if (!g || g->schema_version != YVEX_SHORT_CONV_SCHEMA_V1 ||
+        yvex_short_conv_geometry_seal(&checked, g->width, g->kernel, err) != YVEX_OK ||
+        checked.projection_width != g->projection_width || checked.state_values != g->state_values ||
+        !yvex_sha256_hex_valid(g->identity) || strcmp(checked.identity, g->identity)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "model.short-conv", "short convolution geometry is stale or unsealed");
+        return YVEX_ERR_FORMAT;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int gated_delta_requirement_valid(
     const yvex_gated_delta_requirement *requirement)
 {

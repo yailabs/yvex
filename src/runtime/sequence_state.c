@@ -173,6 +173,11 @@ int yvex_sequence_state_open_for_backend(
     state->storage_backend = backend;
     rc = sequence_state_allocate_metadata(state, err);
     if (rc == YVEX_OK) rc = sequence_state_layout(state, plan, err);
+    for (size_t i = 0u; rc == YVEX_OK && backend != YVEX_BACKEND_KIND_CPU &&
+         i < plan->binding_count; ++i)
+        if (plan->bindings[i].schema_version == YVEX_SEQUENCE_STATE_CONV_SCHEMA_V2)
+            rc = sequence_state_refuse(err, YVEX_ERR_UNSUPPORTED,
+                "convolution-only state has no admitted device execution provider");
     if (rc == YVEX_OK && backend == YVEX_BACKEND_KIND_CPU)
         rc = sequence_state_allocate_banks(state, err);
     if (rc == YVEX_OK && !sequence_state_identity(state))

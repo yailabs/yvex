@@ -117,15 +117,16 @@ static int decoder_physical_invoke(void *opaque, const yvex_program_device_invoc
     int delta = !strcmp(name, "gated_delta.bf16.f32state.v1") ||
                 !strcmp(name, "gated_delta.mixed.f32state.v2");
     int ssd = !strcmp(name, "selective_ssd.cpu.f32state.v1");
+    int convolution = !strcmp(name, "double_gated_conv.cpu.bf16.v1");
     int attention = !strcmp(name, "gated_causal.bf16.v1");
     unsigned long long started = yvex_core_monotonic_ns();
     int rc;
-    if (delta || ssd || attention) {
+    if (delta || ssd || convolution || attention) {
         yvex_program_sequence_request options = {c->program_request->input_identity,
             c->options.cancel_requested, c->options.cancel_context};
         rc = yvex_program_sequence_invoke(c->program_sequence, r, &options, facts, err);
         if (rc == YVEX_OK) {
-            c->program_result->recurrent_layers += (unsigned int)(delta || ssd);
+            c->program_result->recurrent_layers += (unsigned int)(delta || ssd || convolution);
             c->program_result->attention_layers += (unsigned int)attention;
             c->program_result->layers_executed++;
         }
@@ -181,6 +182,7 @@ static int decoder_physical_open(yvex_runtime_decoder_execution_context *c, yvex
         {"gated_delta.bf16.f32state.v1", decoder_physical_invoke},
         {"gated_delta.mixed.f32state.v2", decoder_physical_invoke},
         {"selective_ssd.cpu.f32state.v1", decoder_physical_invoke},
+        {"double_gated_conv.cpu.bf16.v1", decoder_physical_invoke},
         {"gated_causal.bf16.v1", decoder_physical_invoke}};
     const yvex_program_physical_summary *s = yvex_program_physical_summary_get(c->physical);
     const yvex_program_physical_value *output = yvex_program_physical_value_at(c->physical,

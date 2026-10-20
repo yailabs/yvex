@@ -57,7 +57,8 @@ static int quant_artifact_lowering_tensor(
     const quant_artifact_lowering_context *context = opaque;
     const yvex_artifact_lowering_descriptor *row = context
         ? yvex_artifact_lowering_operations.descriptor_at(context->map, ordinal) : NULL;
-    const yvex_artifact_lowering_contribution *source = row && row->contribution_count == 1ull
+    const yvex_artifact_lowering_contribution *source = row && row->contribution_count &&
+        (row->contribution_count == 1ull || row->transform == YVEX_ARTIFACT_LOWERING_TRANSFORM_SCALAR_STACK)
         ? yvex_artifact_lowering_operations.contribution_at(context->map, row->contribution_offset) : NULL;
     const yvex_quant_artifact_lowering_rule *rule = row
         ? quant_artifact_rule_find(context->policy, row->transform,
@@ -118,8 +119,12 @@ static int quant_artifact_lowering_api(
         const yvex_quant_artifact_lowering_rule *rule = &policy->rules[index];
 
         if (rule->operation >= YVEX_TRANSFORM_OP_COUNT ||
-            (rule->source_dtype && (rule->transform != YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT ||
-              (rule->source_dtype != YVEX_NATIVE_DTYPE_BF16 && rule->source_dtype != YVEX_NATIVE_DTYPE_F32))) ||
+            (rule->source_dtype &&
+             ((rule->transform != YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT &&
+               rule->transform != YVEX_ARTIFACT_LOWERING_TRANSFORM_SCALAR_STACK) ||
+              (rule->source_dtype != YVEX_NATIVE_DTYPE_BF16 &&
+               rule->source_dtype != YVEX_NATIVE_DTYPE_F16 &&
+               rule->source_dtype != YVEX_NATIVE_DTYPE_F32))) ||
             !yvex_quant_numeric_capability_at(rule->source_faithful_qtype) ||
             !yvex_quant_numeric_capability_at(rule->release_qtype))
             return 0;
@@ -308,7 +313,8 @@ quant_descriptor_matches(const yvex_transform_ir *ir, const yvex_transform_value
         unsigned int terminal_axis = terminal->shape.rank - dimension - 1u;
         unsigned int source_axis = terminal_axis;
 
-        if (node->kind == YVEX_TRANSFORM_OP_EXPERT_AGGREGATE) {
+        if (node->kind == YVEX_TRANSFORM_OP_EXPERT_AGGREGATE ||
+            node->kind == YVEX_TRANSFORM_OP_STACK) {
             source_axis = terminal_axis == node->axis  ? UINT_MAX
                           : terminal_axis > node->axis ? terminal_axis - 1u
                                                        : terminal_axis;
@@ -483,6 +489,37 @@ static int quant_summary_add(yvex_quant_candidate_summary *summary,
  * Fills decision geometry, constraints, compute facts, and identity. Typed refusal covers
  * precision, codec, binding, geometry, or identity.
  */
+static int quant_stack_admitted(const yvex_transform_ir *ir, const yvex_transform_node *node,
+                                unsigned long long ordinal, yvex_quant_failure *failure,
+                                yvex_error *err) {
+    unsigned long long index;
+    yvex_native_dtype dtype = YVEX_NATIVE_DTYPE_UNKNOWN;
+
+    if (node->kind != YVEX_TRANSFORM_OP_STACK) return YVEX_OK;
+    if (!node->input_count || node->axis != 0u)
+        return quant_plan_fail(failure, YVEX_QUANT_FAILURE_UNSUPPORTED_OPERATION, ordinal,
+                               ULLONG_MAX, 0u, node->axis, UINT_MAX, node->kind, err,
+                               YVEX_ERR_UNSUPPORTED, "scalar STACK requires outermost axis zero");
+    for (index = 0u; index < node->input_count; ++index) {
+        const yvex_transform_value *input = yvex_transform_ir_node_input_at(ir, node, index);
+        const yvex_transform_source_value *source =
+            input && input->kind == YVEX_TRANSFORM_VALUE_SOURCE
+                ? yvex_transform_ir_source_at(ir, input->source_index) : NULL;
+        if (!source ||
+            (source->source_dtype != YVEX_NATIVE_DTYPE_BF16 &&
+             source->source_dtype != YVEX_NATIVE_DTYPE_F16 &&
+             source->source_dtype != YVEX_NATIVE_DTYPE_F32) ||
+            (index && source->source_dtype != dtype))
+            return quant_plan_fail(failure, YVEX_QUANT_FAILURE_UNSUPPORTED_OPERATION, ordinal,
+                                   input ? input->source_index : ULLONG_MAX, dtype,
+                                   source ? source->source_dtype : 0u, UINT_MAX, node->kind,
+                                   err, YVEX_ERR_UNSUPPORTED,
+                                   "scalar STACK requires homogeneous direct floating sources");
+        dtype = source->source_dtype;
+    }
+    return YVEX_OK;
+}
+
 static int quant_build_qtype_decision(unsigned int qtype,
                                           const yvex_transform_binding *binding,
                                           const yvex_transform_value *terminal,
@@ -494,6 +531,8 @@ static int quant_build_qtype_decision(unsigned int qtype,
     yvex_transform_physical_decision binding_decision;
     yvex_transform_failure transform_failure;
     int rc;
+    rc = quant_stack_admitted(yvex_transform_binding_ir(binding), node, ordinal, failure, err);
+    if (rc != YVEX_OK) return rc;
     if (qtype == UINT_MAX)
         return quant_plan_fail(failure, YVEX_QUANT_FAILURE_PRECISION_CONSTRAINT, ordinal,
                                ULLONG_MAX, 1u, 0u, qtype, node->kind, err, YVEX_ERR_UNSUPPORTED,
@@ -951,6 +990,8 @@ static int quant_explicit_decision_build(quant_build_context *context,
                                ULLONG_MAX, capability->transform_kind_mask, node->kind, spec->qtype,
                                node->kind, context->err, YVEX_ERR_UNSUPPORTED,
                                "explicit qtype does not admit the terminal operation");
+    rc = quant_stack_admitted(context->ir, node, ordinal, context->failure, context->err);
+    if (rc != YVEX_OK) return rc;
     if (spec->row_axis != 0u)
         return quant_plan_fail(context->failure, YVEX_QUANT_FAILURE_INVALID_ROW_AXIS, ordinal,
                                ULLONG_MAX, 0u, spec->row_axis, spec->qtype, node->kind,

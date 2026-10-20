@@ -174,6 +174,10 @@ int yvex_program_sequence_open(yvex_program_sequence **out, const yvex_program_p
             (yvex_backend_kind_of(session->backend) != YVEX_BACKEND_KIND_CPU || !session->sequence_state))
             rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED,
                 "selective SSD baseline requires common host sequence state and the CPU backend");
+        if (!strcmp(implementation, "double_gated_conv.cpu.bf16.v1") &&
+            (yvex_backend_kind_of(session->backend) != YVEX_BACKEND_KIND_CPU || !session->sequence_state))
+            rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED,
+                "double-gated convolution requires common host sequence state and the CPU backend");
         if (!strcmp(implementation, "gated_causal.bf16.v1") &&
             (!c->ops || !c->ops->bf16_round || !c->ops->rotary_half_f32 ||
              !c->ops->split_interleaved_two_f32 || !c->ops->sigmoid_product_bf16 ||
@@ -450,6 +454,48 @@ static int sequence_ssd(yvex_program_sequence *c, const yvex_program_device_invo
     return rc;
 }
 
+static int sequence_short_conv(yvex_program_sequence *c, const yvex_program_device_invocation *r,
+    const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    const yvex_short_conv_geometry *g = yvex_program_physical_short_conv_at(c->program, r->step_index);
+    yvex_ir_id root = yvex_program_physical_value_at(c->program, s->operands[2])->state_root;
+    const yvex_device_tensor *weight = yvex_program_kernels_small_weight(c->kernels, s->operands[1]);
+    const yvex_device_tensor *projection = &r->values[s->operands[0]];
+    yvex_device_tensor *output = &r->values[s->results[0]];
+    yvex_sequence_state_view committed = {0};
+    yvex_sequence_state_output candidate = {0};
+    yvex_short_conv_cpu_request request = {0};
+    yvex_short_conv_cpu_result result = {0};
+    int rc;
+    if (!g || r->arguments[root].state_handle != root || !projection->is_written ||
+        !weight || !weight->is_written || !weight->data)
+        return sequence_refuse(err, YVEX_ERR_FORMAT, "double-gated convolution operands or state binding invalid");
+    rc = yvex_sequence_state_layer(c->session->sequence_state, root, &committed, &candidate, err);
+    request.rows = r->rows;
+    request.projection = (const float *)(const void *)projection->data;
+    request.projection_capacity = projection->bytes / sizeof(float);
+    request.weight = (const float *)(const void *)weight->data;
+    request.weight_capacity = weight->bytes / sizeof(float);
+    request.state = committed.convolution;
+    request.state_capacity = candidate.convolution_capacity;
+    request.next_state = candidate.convolution;
+    request.next_state_capacity = candidate.convolution_capacity;
+    request.output = (float *)(void *)output->data;
+    request.output_capacity = output->bytes / sizeof(float);
+    request.cancel_requested = options->cancel_requested;
+    request.cancel_context = options->cancel_context;
+    if (rc == YVEX_OK) rc = yvex_short_conv_execute_cpu(g, &request, &result, err);
+    if (rc == YVEX_OK) rc = yvex_sequence_state_stage(c->session->sequence_state, root, err);
+    output->is_written = rc == YVEX_OK;
+    if (rc == YVEX_OK) {
+        facts->activation_bytes = output->bytes;
+        facts->state_bytes = g->state_values * sizeof(float);
+        facts->compulsory_memory_facts_available = 1;
+    }
+    return rc;
+}
+
 int yvex_program_sequence_invoke(yvex_program_sequence *c, const yvex_program_device_invocation *r,
     const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
 {
@@ -462,6 +508,8 @@ int yvex_program_sequence_invoke(yvex_program_sequence *c, const yvex_program_de
         return sequence_delta(c, r, options, facts, err);
     if (!strcmp(r->step->implementation, "selective_ssd.cpu.f32state.v1"))
         return sequence_ssd(c, r, options, facts, err);
+    if (!strcmp(r->step->implementation, "double_gated_conv.cpu.bf16.v1"))
+        return sequence_short_conv(c, r, options, facts, err);
     if (!strcmp(r->step->implementation, "gated_causal.bf16.v1"))
         return sequence_attention(c, r, options, facts, err);
     return sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "operation has no admitted state implementation");

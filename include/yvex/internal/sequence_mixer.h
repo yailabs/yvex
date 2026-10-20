@@ -15,6 +15,26 @@ extern "C" {
 
 #define YVEX_SEQUENCE_MIXER_IDENTITY_CAP 65u
 #define YVEX_SEQUENCE_STATE_SCHEMA_V1 1u
+/* Convolution-only state; V1 retains its mandatory recurrent population. */
+#define YVEX_SEQUENCE_STATE_CONV_SCHEMA_V2 2u
+
+/* CPU buffers contain BF16-exact values in F32 storage. Only candidate state
+ * and output may be written; failure/cancellation never commits either. */
+typedef struct {
+    unsigned long long rows;
+    const float *projection, *weight, *state;
+    unsigned long long projection_capacity, weight_capacity, state_capacity;
+    float *next_state, *output;
+    unsigned long long next_state_capacity, output_capacity;
+    int (*cancel_requested)(void *);
+    void *cancel_context;
+} yvex_short_conv_cpu_request;
+typedef struct {
+    unsigned long long rows_completed, state_values, output_values;
+    int complete, cancelled;
+} yvex_short_conv_cpu_result;
+int yvex_short_conv_execute_cpu(const yvex_short_conv_geometry *,
+    const yvex_short_conv_cpu_request *, yvex_short_conv_cpu_result *, yvex_error *);
 
 typedef struct yvex_gated_delta_plan {
     unsigned int schema_version;

@@ -166,6 +166,8 @@ int yvex_program_physical_token_interface(const yvex_program_physical *,
 const yvex_gated_delta_plan *yvex_program_physical_delta_at(const yvex_program_physical *, size_t step);
 const yvex_selective_ssd_geometry *yvex_program_physical_ssd_at(
     const yvex_program_physical *, size_t step);
+const yvex_short_conv_geometry *yvex_program_physical_short_conv_at(
+    const yvex_program_physical *, size_t step);
 int yvex_program_physical_sequence_state(const yvex_program_physical *, yvex_sequence_state_plan *);
 
 #ifdef __cplusplus

@@ -75,6 +75,7 @@ typedef struct {
     yvex_native_dtype dtype;
     unsigned int scalar_bytes;
     unsigned long long source_index;
+    unsigned long long first_element;
     unsigned char partial[8];
     unsigned int partial_used;
 } quant_exact_copy_stream;
@@ -1011,7 +1012,9 @@ static int quant_exact_copy_consume(void *opaque, const unsigned char *bytes, si
 
     if (!stream || !bytes || stream->scalar_bytes == 0u ||
         stream->scalar_bytes > sizeof(stream->partial) ||
-        !yvex_core_u64_mul(stream->emitter->element_index, stream->scalar_bytes, &expected_offset) ||
+        stream->emitter->element_index < stream->first_element ||
+        !yvex_core_u64_mul(stream->emitter->element_index - stream->first_element,
+                           stream->scalar_bytes, &expected_offset) ||
         !yvex_core_u64_add(expected_offset, stream->partial_used, &expected_offset) ||
         logical_offset != expected_offset)
         return quant_execute_fail(failure, YVEX_QUANT_FAILURE_SOURCE_SHORT_READ,
@@ -1209,28 +1212,30 @@ static int quant_expert_consume(void *opaque, const unsigned char *bytes, size_t
 }
 
 /*
- * Execute one IR IDENTITY terminal as exact copy, conversion, or selected quantization.
+ * Stream one direct scalar operand as exact copy, conversion or selected quantization.
  *
  * Rejects arity, dtype, or partial-scalar violations and propagates transaction failure.
  */
 static int quant_execute_identity(quant_executor *executor, const yvex_quant_decision *decision,
-                                  const yvex_transform_node *node, quant_emitter *emitter,
+                                  const yvex_transform_node *node, unsigned long long operand,
+                                  quant_emitter *emitter,
                                   yvex_quant_failure *failure, yvex_error *err,
                                   unsigned long long *payload_bytes, unsigned long long *chunks,
                                   unsigned long long *sources) {
-    const yvex_transform_value *input = yvex_transform_ir_node_input_at(executor->ir, node, 0u);
+    const yvex_transform_value *input = yvex_transform_ir_node_input_at(executor->ir, node, operand);
     const yvex_transform_source_value *source =
-        input ? yvex_transform_ir_source_at(executor->ir, input->source_index) : NULL;
+        input && input->kind == YVEX_TRANSFORM_VALUE_SOURCE
+            ? yvex_transform_ir_source_at(executor->ir, input->source_index) : NULL;
     quant_scalar_stream stream;
     quant_exact_copy_stream exact;
     int exact_copy;
     int rc;
 
-    if (!source || node->input_count != 1u)
+    if (!source)
         return quant_execute_fail(failure, YVEX_QUANT_FAILURE_UNSUPPORTED_OPERATION, decision,
                                   input ? input->source_index : ULLONG_MAX, ULLONG_MAX, ULLONG_MAX,
                                   1u, node->input_count, err, YVEX_ERR_FORMAT,
-                                  "IDENTITY requires exactly one bound source value");
+                                  "scalar streaming requires a bound direct source value");
     memset(&stream, 0, sizeof(stream));
     stream.emitter = emitter;
     stream.dtype = source->source_dtype;
@@ -1251,6 +1256,7 @@ static int quant_execute_identity(quant_executor *executor, const yvex_quant_dec
     exact.dtype = source->source_dtype;
     exact.scalar_bytes = stream.scalar_bytes;
     exact.source_index = input->source_index;
+    exact.first_element = emitter->element_index;
     rc = quant_read_source(executor, decision, input->source_index,
                            exact_copy ? quant_exact_copy_consume : quant_scalar_consume,
                            exact_copy ? (void *)&exact : (void *)&stream, failure, err,
@@ -1263,6 +1269,34 @@ static int quant_execute_identity(quant_executor *executor, const yvex_quant_dec
     if (rc == YVEX_OK)
         *sources = 1u;
     return rc;
+}
+
+/* Outer-axis STACK preserves input order without allocating an aggregate weight buffer. */
+static int quant_execute_scalars(quant_executor *executor, const yvex_quant_decision *decision,
+                                 const yvex_transform_node *node, quant_emitter *emitter,
+                                 yvex_quant_failure *failure, yvex_error *err,
+                                 unsigned long long *payload_bytes, unsigned long long *chunks,
+                                 unsigned long long *sources) {
+    unsigned long long operand;
+
+    if ((node->kind == YVEX_TRANSFORM_OP_IDENTITY && node->input_count != 1u) ||
+        (node->kind == YVEX_TRANSFORM_OP_STACK && node->axis != 0u))
+        return quant_execute_fail(failure, YVEX_QUANT_FAILURE_UNSUPPORTED_OPERATION, decision,
+                                  ULLONG_MAX, ULLONG_MAX, ULLONG_MAX, 0u, node->axis, err,
+                                  YVEX_ERR_UNSUPPORTED, "scalar streaming geometry is unsupported");
+    for (operand = 0u; operand < node->input_count; ++operand) {
+        unsigned long long bytes = 0u, reads = 0u, count = 0u;
+        int rc = quant_execute_identity(executor, decision, node, operand, emitter, failure, err,
+                                        &bytes, &reads, &count);
+        if (rc != YVEX_OK) return rc;
+        if (!yvex_core_u64_add(*payload_bytes, bytes, payload_bytes) ||
+            !yvex_core_u64_add(*chunks, reads, chunks) ||
+            !yvex_core_u64_add(*sources, count, sources))
+            return quant_execute_fail(failure, YVEX_QUANT_FAILURE_BYTE_OVERFLOW, decision,
+                                      ULLONG_MAX, ULLONG_MAX, ULLONG_MAX, ULLONG_MAX, operand,
+                                      err, YVEX_ERR_BOUNDS, "scalar source accounting overflowed");
+    }
+    return YVEX_OK;
 }
 
 static int quant_execute_scale_pair(quant_executor *executor, const yvex_quant_decision *decision,
@@ -1507,8 +1541,9 @@ static int quant_execute_terminal(quant_executor *executor, unsigned long long o
     opened = 1;
     switch (node->kind) {
     case YVEX_TRANSFORM_OP_IDENTITY:
-        rc = quant_execute_identity(executor, decision, node, &emitter, failure, err, payload_bytes,
-                                    chunks, sources);
+    case YVEX_TRANSFORM_OP_STACK:
+        rc = quant_execute_scalars(executor, decision, node, &emitter, failure, err, payload_bytes,
+                                   chunks, sources);
         break;
     case YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR:
         rc = quant_execute_scale_pair(executor, decision, node, &emitter, failure, err,

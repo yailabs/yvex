@@ -312,6 +312,18 @@ The existing Mamba proof remains the non-Transformer control. Technique referenc
 are not implemented capabilities; 20/700 and independent quality remain unearned.
 No second implementation Task or installed-engine replacement is selected.
 
+On 2026-10-20 the operator prioritizes native Liquid
+`LiquidAI/LFM2.5-24B-A2B` qualification within this same Program P Task,
+using acquired revision `1769516ac588c4c558089c94f27d96b0dc67b183`.
+The selected exit is authenticated source → family semantics → native parameter
+production/binding → complete execution → independent numerical and same-GB10
+llama.cpp comparison. QAD-Q4_0 has separate distilled-checkpoint lineage; it is
+not a source-matched quantization control. Source acquisition does not establish
+native support. GPU experiments require fresh ownership/authorization and full
+resource admission; the resident 0731 remains protected. The r17 recovery Task
+retains its unresolved cause and evidence while its investigation is deferred.
+Liquid execution cannot close r17 or the DeepSeek 20/700 exits.
+
 The 2026-10-17 CPU continuation connects admitted IQ2 reconstruction producers
 to the same physical-policy search, checked canonical plans and policy export.
 The opt-in local request/result are versioned separately; default search and

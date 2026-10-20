@@ -74,6 +74,19 @@ int yvex_selective_ssd_geometry_seal(
 int yvex_selective_ssd_geometry_validate(
     const yvex_selective_ssd_geometry *geometry, yvex_error *err);
 
+/* Double-gated causal depthwise convolution, not a selective SSM or DeltaNet.
+ * Input projection is [B,C,X]; state retains K previous B*X publications.
+ * Numeric v1: BF16 inputs/weights/gate products/output, ordered F32 tap sum. */
+#define YVEX_SHORT_CONV_SCHEMA_V1 1u
+typedef struct {
+    unsigned int schema_version;
+    unsigned long long width, kernel, projection_width, state_values;
+    char identity[YVEX_SEMANTIC_DECODER_IDENTITY_CAP];
+} yvex_short_conv_geometry;
+int yvex_short_conv_geometry_seal(yvex_short_conv_geometry *, unsigned long long width,
+    unsigned long long kernel, yvex_error *);
+int yvex_short_conv_geometry_validate(const yvex_short_conv_geometry *, yvex_error *);
+
 typedef struct {
     unsigned long long ordinal, layer_index;
     yvex_tensor_scope tensor_scope;

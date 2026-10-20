@@ -490,6 +490,12 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
                 rc = kernel_small_prepare(c, s->operands[j], 0.0, err);
             continue;
         }
+        if (!strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1")) {
+            if (yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU)
+                return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "double-gated convolution is CPU-qualified only");
+            rc = kernel_small_prepare(c, s->operands[1], 0.0, err);
+            continue;
+        }
         if (!strcmp(s->implementation, "weighted_rms.f64scale.bf16.v1")) {
             if (!c->ops || !c->ops->weighted_rms_bf16)
                 return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "weighted RMS numerical implementation unavailable");

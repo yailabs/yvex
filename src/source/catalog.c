@@ -418,6 +418,24 @@ static const yvex_source_logical_model release_logical_model = {
 
 static const yvex_source_target_identity source_target_identities[] = {
     {
+        /* Source authentication only; no executable-family or QAD admission. */
+        .target_id = "lfm2.5-24b-a2b",
+        .family_key = "lfm2",
+        .family_display = "Liquid LFM2",
+        .model_name = "LFM2.5-24B-A2B",
+        .upstream_repo_id = "LiquidAI/LFM2.5-24B-A2B",
+        .source_dir_leaf = "LFM2.5-24B-A2B",
+        .upstream_revision = "1769516ac588c4c558089c94f27d96b0dc67b183",
+        .upstream_index_path = "model.safetensors.index.json",
+        .upstream_index_oid = "e8f8c9634d441f49c0e652841ad0c263404b82ef",
+        .upstream_index_size = 701253ull,
+        .upstream_inventory_authority = "upstream-index",
+        .config_model_type = "lfm2_moe",
+        .config_architecture = "Lfm2MoeForCausalLM",
+        .config_validation = YVEX_SOURCE_CONFIG_VALIDATION_FAMILY_SEMANTIC,
+        .required_sidecars = YVEX_SOURCE_SIDECARS_TEXT,
+    },
+    {
         .target_id = YVEX_SOURCE_RELEASE_TARGET_ID,
         .family_key = YVEX_SOURCE_RELEASE_FAMILY_KEY,
         .family_display = YVEX_SOURCE_RELEASE_FAMILY_DISPLAY,
@@ -583,7 +601,9 @@ static const yvex_source_acquisition_target source_acquisition_targets[] = {
 
 const yvex_source_target_identity *yvex_source_release_identity(void)
 {
-    return &source_target_identities[0];
+    /* Adding an independently acquired family must not retarget the existing
+     * release alias or any consumer holding its artifact/source contract. */
+    return yvex_source_target_identity_find(YVEX_SOURCE_RELEASE_TARGET_ID);
 }
 
 const yvex_source_target_identity *yvex_source_target_identity_find(
@@ -631,7 +651,7 @@ const yvex_source_acquisition_target *yvex_source_acquisition_target_find(
 int yvex_source_is_release_target(const char *target_id)
 {
     return target_id &&
-           strcmp(target_id, source_target_identities[0].target_id) == 0;
+           strcmp(target_id, YVEX_SOURCE_RELEASE_TARGET_ID) == 0;
 }
 
 int yvex_source_target_path(char *out, size_t cap, const char *models_root,

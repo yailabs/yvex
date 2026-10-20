@@ -83,6 +83,18 @@ Diagnostic synchronization can mask ordering faults: r17 is not causally repaire
 The same 16K profile is restored, Host PID 3279954 / generation 2, management
 unchanged. Two authorized requests are consumed; no tool effect or YAI Work.
 
+The operator subsequently prioritizes [Liquid LFM2.5 native qualification](../model-families/lfm2.md)
+within Program P. The exact acquired original BF16 checkpoint now has an
+upstream-payload-verified native v3 manifest, complete tensor-role checks and
+a typed CPU double-gated convolution using common physical lowering and
+transactional state. The parameter compiler can stream homogeneous scalar
+outer-axis STACK operations without an aggregate weight copy. Source
+metadata and component numerics do not admit the complete model: hybrid/MoE
+program composition, parameter production, artifact/binding, CUDA execution,
+whole-model quality and performance remain open. QAD-Q4_0 is a distinct
+distilled checkpoint, not a source-matched quantization control. The r17 recovery
+Task remains unresolved and deferred; the installed 0731 and services are unchanged.
+
 The 2026-10-17 local CPU continuation composes IQ2 producer alternatives with
 canonical parameter plans and unchanged calibration/compatibility owners.
 Default search and public management are unchanged; the opt-in CLI projection

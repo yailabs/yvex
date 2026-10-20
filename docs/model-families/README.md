@@ -22,6 +22,7 @@ Start with the [integration contract](integration.md). Each dossier separates up
 - [Model-Family Integration Contract](integration.md)
 - [Laya typed-decisions: first finite-decision model pressure](laya.md)
 - [Mamba2 pure-SSM compiler boundary](mamba2.md)
+- [Liquid LFM2.5 native qualification](lfm2.md)
 - [MiniMax-H3 FL2VA Family Record](minimax-h3.md)
 
 - [Qwen3.8-27B Text Record](qwen3.8-text.md)

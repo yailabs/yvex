@@ -20,6 +20,7 @@ struct yvex_program_physical {
     yvex_ir_id *results;
     yvex_gated_delta_plan **delta;
     yvex_selective_ssd_geometry **ssd;
+    yvex_short_conv_geometry **short_conv;
     yvex_sequence_state_binding *sequence;
     size_t sequence_count;
 };
@@ -110,6 +111,8 @@ static const physical_rule physical_rules[] = {
     {"tensor.add", "add.f32.v1", 0u, 0u},
     {"sequence.selective_ssd", "selective_ssd.cpu.f32state.v1",
      YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x7eu},
+    {"sequence.double_gated_conv", "double_gated_conv.cpu.bf16.v1",
+     YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x02u},
     {"sequence.gated_delta", "gated_delta.bf16.f32state.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
     {"sequence.gated_delta", "gated_delta.mixed.f32state.v2", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
     {"attention.gated_causal", "gated_causal.bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x18u},
@@ -194,6 +197,7 @@ int yvex_program_physical_token_interface(const yvex_program_physical *p,
         view.recurrent_operations += !strcmp(s->implementation, "gated_delta.bf16.f32state.v1") ||
                                      !strcmp(s->implementation, "gated_delta.mixed.f32state.v2");
         view.recurrent_operations += !strcmp(s->implementation, "selective_ssd.cpu.f32state.v1");
+        view.recurrent_operations += !strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1");
         view.attention_operations += !strcmp(s->implementation, "gated_causal.bf16.v1");
         if (!strcmp(s->implementation, "embedding.bf16.v1") ||
             !strcmp(s->implementation, "embedding.encoded.f32.v1")) {
@@ -518,12 +522,15 @@ static void physical_state_clear(yvex_program_physical *p)
 {
     for (size_t i = 0u; p->delta && i < p->summary.step_count; ++i) free(p->delta[i]);
     for (size_t i = 0u; p->ssd && i < p->summary.step_count; ++i) free(p->ssd[i]);
+    for (size_t i = 0u; p->short_conv && i < p->summary.step_count; ++i) free(p->short_conv[i]);
     free(p->sequence);
     free(p->delta);
     free(p->ssd);
+    free(p->short_conv);
     p->sequence = NULL;
     p->delta = NULL;
     p->ssd = NULL;
+    p->short_conv = NULL;
     p->sequence_count = 0u;
 }
 
@@ -535,8 +542,9 @@ static int physical_state_lower(yvex_program_physical *p, yvex_error *err)
     physical_state_clear(p);
     p->delta = calloc(p->summary.step_count, sizeof(*p->delta));
     p->ssd = calloc(p->summary.step_count, sizeof(*p->ssd));
+    p->short_conv = calloc(p->summary.step_count, sizeof(*p->short_conv));
     p->sequence = calloc(p->summary.input_count, sizeof(*p->sequence));
-    if (!p->delta || !p->ssd || !p->sequence)
+    if (!p->delta || !p->ssd || !p->short_conv || !p->sequence)
         return physical_refuse(err, YVEX_ERR_NOMEM, "state implementation projection allocation failed");
     for (i = 0u; i < p->summary.step_count; ++i) {
         const yvex_program_physical_step *s = &p->steps[i];
@@ -548,6 +556,19 @@ static int physical_state_lower(yvex_program_physical *p, yvex_error *err)
         yvex_gated_delta_plan *d;
         yvex_ir_id root;
         int rc;
+        if (!strcmp(s->implementation, "double_gated_conv.cpu.bf16.v1")) {
+            yvex_short_conv_geometry *g = p->short_conv[i] = calloc(1u, sizeof(*g));
+            if (!g) return physical_refuse(err, YVEX_ERR_NOMEM, "convolution geometry allocation failed");
+            root = p->values[s->operands[2]].state_root;
+            rc = yvex_short_conv_geometry_seal(g,
+                yvex_program_physical_attribute(s, "width")->value.integer,
+                yvex_program_physical_attribute(s, "convolution_kernel")->value.integer, err);
+            if (rc == YVEX_OK) rc = yvex_sequence_state_binding_seal(
+                &p->sequence[p->sequence_count], root, g->state_values, 0u, g->identity, err);
+            if (rc != YVEX_OK) return rc;
+            p->sequence_count++;
+            continue;
+        }
         if (!strcmp(s->implementation, "selective_ssd.cpu.f32state.v1")) {
             yvex_selective_ssd_requirement requirement = {.schema_version = YVEX_SELECTIVE_SSD_SCHEMA_V1};
             yvex_selective_ssd_geometry *geometry = p->ssd[i] = calloc(1u, sizeof(*geometry));
@@ -1095,6 +1116,12 @@ const yvex_selective_ssd_geometry *yvex_program_physical_ssd_at(
     const yvex_program_physical *p, size_t i)
 {
     return p && p->ssd && i < p->summary.step_count ? p->ssd[i] : NULL;
+}
+
+const yvex_short_conv_geometry *yvex_program_physical_short_conv_at(
+    const yvex_program_physical *p, size_t i)
+{
+    return p && p->short_conv && i < p->summary.step_count ? p->short_conv[i] : NULL;
 }
 
 int yvex_program_physical_sequence_state(const yvex_program_physical *p, yvex_sequence_state_plan *out)

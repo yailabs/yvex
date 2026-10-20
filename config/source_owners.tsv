@@ -329,6 +329,8 @@ src/tokenizer/families/deepseek_v4.c	tokenizer.family	tokenizer.family.deepseek_
 src/model/families/minimax_h3.c	model.family	model.family.minimax_h3	family	private	reusable-algorithm	model.compilation,cli,tests	implementation	none
 src/model/families/qwen3_5.c	model.family	model.family.qwen3_5	family	private	reusable-algorithm	model.compilation,graph,runtime,tests	implementation	none
 src/model/families/mamba2.c	model.family	model.family.mamba2	family	private	reusable-algorithm	model.compilation,graph,tests	implementation	none
+src/model/families/lfm2.c	model.family	model.family.lfm2	family	private	reusable-algorithm	model.compilation,graph,tests	implementation	none
+include/yvex/internal/families/lfm2.h	model	model.families.lfm2	family	private	family-interface	model.compilation,graph,tests	interface	none
 include/yvex/internal/families/mamba2.h	model	model.families.mamba2	family	private	family-interface	model.compilation,graph,tests	interface	none
 include/yvex/internal/families/laya.h	graph.family	graph.family.laya	family	private	family-interface	graph,runtime,tests	interface	none
 include/yvex/internal/families/laya_source.h	model	model.families.laya	family	private	family-interface	model,graph,tests	interface	none

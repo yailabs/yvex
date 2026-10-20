@@ -22,7 +22,7 @@ int yvex_sequence_state_binding_seal(
     char transition[YVEX_SEQUENCE_MIXER_IDENTITY_CAP];
 
     if (!binding || !yvex_sha256_hex_valid(transition_identity) ||
-        !recurrent_values ||
+        (!recurrent_values && !convolution_values) ||
         !yvex_core_u64_add(convolution_values, recurrent_values, &values) ||
         !yvex_core_u64_mul(values, sizeof(float), &bytes))
         return mixer_refuse(err, YVEX_ERR_INVALID_ARG,
@@ -30,7 +30,8 @@ int yvex_sequence_state_binding_seal(
     yvex_core_text_copy(transition, sizeof(transition), transition_identity);
     transition_identity = transition;
     memset(binding, 0, sizeof(*binding));
-    binding->schema_version = YVEX_SEQUENCE_STATE_SCHEMA_V1;
+    binding->schema_version = recurrent_values ? YVEX_SEQUENCE_STATE_SCHEMA_V1 :
+        YVEX_SEQUENCE_STATE_CONV_SCHEMA_V2;
     binding->layer_index = layer_index;
     binding->state_dtype = YVEX_DTYPE_F32;
     binding->convolution_state_values = convolution_values;
@@ -38,7 +39,8 @@ int yvex_sequence_state_binding_seal(
     yvex_core_text_copy(binding->transition_identity,
                         sizeof(binding->transition_identity), transition_identity);
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.sequence-state.f32-layout.v1") ||
+    if (!yvex_sha256_update_text(&hash, recurrent_values ? "yvex.sequence-state.f32-layout.v1" :
+                                "yvex.sequence-state.convolution-only.f32-layout.v2") ||
         !yvex_sha256_update_text(&hash, transition_identity) ||
         !yvex_sha256_update_u64(&hash, layer_index) ||
         !yvex_sha256_update_u64(&hash, convolution_values) ||
@@ -55,13 +57,14 @@ int yvex_sequence_state_binding_validate(
 {
     yvex_sequence_state_binding copy;
 
-    if (!binding || binding->schema_version != YVEX_SEQUENCE_STATE_SCHEMA_V1 ||
+    if (!binding || (binding->schema_version != YVEX_SEQUENCE_STATE_SCHEMA_V1 &&
+                     binding->schema_version != YVEX_SEQUENCE_STATE_CONV_SCHEMA_V2) ||
         binding->state_dtype != YVEX_DTYPE_F32 ||
         !yvex_sha256_hex_valid(binding->identity) ||
         yvex_sequence_state_binding_seal(
             &copy, binding->layer_index, binding->convolution_state_values,
             binding->recurrent_state_values, binding->transition_identity, err) != YVEX_OK ||
-        strcmp(copy.identity, binding->identity))
+        copy.schema_version != binding->schema_version || strcmp(copy.identity, binding->identity))
         return mixer_refuse(err, YVEX_ERR_FORMAT, "state geometry is malformed or stale");
     yvex_error_clear(err);
     return YVEX_OK;
