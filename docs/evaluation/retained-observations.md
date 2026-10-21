@@ -244,11 +244,21 @@ DGX original deletion, complete external preservation or YVEX development resump
 
 ## Standard runtime handover for YAI — 2026-10-21
 
-A subsequent founder instruction authorizes existing standard runtimes and
-bounded synthetic checks to unblock independent YAI development while backups
-continue. This does not lift the YVEX development freeze. No Core, SDK, Studio,
-Case, binding, credential or historical submission is changed. The three YVEX
-units stay retired; the GPU is now occupied by the separate standard runtime.
+**WITHDRAWN: files-only handover.** The agent interpreted the request to unblock
+YAI as runtime preparation; the founder clarifies that only preserved artifacts
+and free compute were intended. The runtime setup exceeded that intended scope.
+Both added provider units and the new Exon SSH tunnel have been stopped after
+observing zero connected clients. Added listeners 8010/8011 and 18010/18011 are
+absent; no CUDA compute process is observed; MemAvailable is 127,294,279,680
+bytes at the release check. The Exon launcher is archived outside PATH and
+non-executable; a RETIRED marker makes the controller refuse start/run.
+No artifact is removed. Backup queues and unrelated services are preserved.
+The earlier runtime handoff is prominently marked retired on both machines.
+
+The observations below retain the history of the withdrawn attempt, not an
+active endpoint or authority for further inference. No Core, SDK, Studio, Case,
+binding, credential or historical submission was changed. The three YVEX units
+remain retired and the development freeze is unchanged.
 
 The existing clean llama.cpp source is
 `96fbe0039337a999613a983d66e2bfcc4bb554d7` (b9529), executable SHA-256
@@ -261,8 +271,8 @@ It serves the external 0731 IQ2XXS/Q2K/Q8 target recorded above, in target-only
 mode. Full rereads of Liquid, DS4 target and matching draft match the retained
 SHA-256 identities. External runtimes and their sources are not modified.
 
-Both profiles use context 16384 and are explicitly mutually exclusive. At the
-handoff Liquid is active, DeepSeek tested but intentionally stopped. Exon
+Both profiles used context 16384 and were mutually exclusive. At the withdrawn
+17:20 checkpoint Liquid was active, DeepSeek tested but intentionally stopped. Exon
 loopback endpoints `http://127.0.0.1:18010/v1` and `:18011/v1` forward through a
 new private SSH user unit to Spark loopback 8010 and 8011. Existing carrier
 18001 and SSH trust are preserved. API model IDs are `LFM2.5-24B-A2B` and
@@ -302,10 +312,10 @@ YAI must independently qualify its new provider observations and governed Work.
 No historical replay, parser relaxation, numerical quality certificate, native
 YVEX support, new SDK contract, sustained throughput or Program P exit is earned.
 
-`progression_decision: proceed` — standard-runtime consumer qualification only.
+`progression_decision: proceed` — files-only handover, runtimes withdrawn.
 
-`downstream_safe: true` for the bounded access and readiness checks above, not
-YAI Case acceptance, representation quality, source deletion or YVEX resumption.
+`downstream_safe: true` for preserved artifact access and the released GPU, not
+runtime activation, YAI Case acceptance, source deletion or YVEX resumption.
 
 ## Program P native model titles and retained selectors (2026-10-16)
 

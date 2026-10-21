@@ -40,17 +40,14 @@ recovery key. Larger artifacts and private evidence are still being copied;
 their incomplete staging is not a verified backup. No further source deletion
 is authorized. See the [external preservation checkpoint](../evaluation/retained-observations.md#external-preservation-continuation-2026-10-21).
 
-A subsequent same-day operator instruction authorizes preparation of existing
-standard runtimes for Liquid and external DS4 DeepSeek, independently of YVEX,
-with bounded synthetic readiness checks and loopback SSH access for YAI. This
-does not lift the development freeze or authorize Case changes, historical
-replay, installed YVEX rollout or performance qualification. Runtime readiness,
-native tool qualification and real governed YAI Work remain distinct gates.
-The [standard-runtime handoff](../evaluation/retained-observations.md#standard-runtime-handover-for-yai-2026-10-21)
-records successful bounded text, call/feedback, SSE and long-input controls on
-both external runtimes. Liquid is active at that checkpoint; DeepSeek target-only
-is tested but stopped. Profiles are mutually exclusive and transient. These are
-not YVEX inference, general tool reliability, checkpoint quality or YAI Work exits.
+The founder subsequently clarifies files-only YAI handover: preserve useful
+models/artifacts and leave compute free, without runtime activation or exposure.
+The agent's attempted standard-runtime setup is withdrawn. Both new provider
+units and the new Exon tunnel are stopped; added listeners are gone, no CUDA
+process is observed, and approximately 127.29 GB is available at the release
+check. The launcher is retired and new activation blocked. Artifacts and backups
+are retained. [Historical observations and correction](../evaluation/retained-observations.md#standard-runtime-handover-for-yai-2026-10-21)
+do not imply an active provider, Core/Case acceptance or authority to resume it.
 
 ## Preserved goal-driven Physical Model Compiler
 
