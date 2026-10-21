@@ -26,7 +26,13 @@ this disposition. Existing IN PROGRESS rows preserve their unearned exits.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `V010.FREEZE.PRESERVATION.HANDOVER.0` | Preserve YVEX and release the DGX for independent YAI development | P0 | ⛔ BLOCKED | [Retirement and safe cleanup verified](../evaluation/retained-observations.md#founder-freeze-and-dgx-handover-2026-10-21): three YVEX units stopped/disabled, no GPU compute PID, 814.24 GB measured recovery and approximately 1.079 TB available. All GGUFs, Liquid source, evidence and WIP retained. Local bundle/archive integrity verified; external backup and 2–3 TB recovery remain open. Needs an approved reachable backup destination or exact additional deletion authority. No inference, acquisition, installed rollout, Core or Studio change. |
+| `V010.FREEZE.PRESERVATION.HANDOVER.0` | Preserve YVEX and release the DGX for independent YAI development | P0 | 🔵 IN PROGRESS | [Retirement and initial cleanup verified](../evaluation/retained-observations.md#founder-freeze-and-dgx-handover-2026-10-21): three YVEX units stopped/disabled, 814.24 GB recovered. [External continuation](../evaluation/retained-observations.md#external-preservation-continuation-2026-10-21): Exon secondary ext4 disk and Zima Btrfs verified; encrypted freeze state copied and hash-checked on both; independent external decryption passes. Bulk artifact/evidence copies remain in progress. DGX originals retained; further removal requires exact verified-copy proposal and explicit approval. Complete external preservation and 2–3 TB recovery remain open. No development, inference, acquisition, rollout, Core or Studio change. |
+
+The 2026-10-21 post-freeze continuation of the preservation Task authorizes
+destination discovery and verified, non-destructive external copies to the
+founder's ZimaBoard and Exon secondary disk. YVEX development remains paused.
+Any further removal of DGX originals requires an exact proposal and separate
+explicit founder approval after destination integrity verification.
 
 ## Previously selected development
 
@@ -288,7 +294,7 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 60 | 43 | 5 | 1 | 11 |
+| 60 | 43 | 6 | 1 | 10 |
 <!-- task-counts:end -->
 
 **43/60 selected Tasks complete.** This denominator includes the significant

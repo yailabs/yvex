@@ -23,7 +23,9 @@ remain visible; [Status](../project-control/STATUS.md) alone owns current maturi
 
 **PARTIALLY RELEASED.** Development is suspended until explicitly resumed by the
 operator. Runtime retirement and bounded storage recovery are demonstrated;
-external backup and the requested 2–3 TB recovery are not established. This is
+complete external preservation and the requested 2–3 TB recovery are not established.
+The initial retirement observations below precede the
+[external continuation](#external-preservation-continuation-2026-10-21). This is
 not Program P, Liquid, r17, model-quality or performance completion. The
 [operator handover](../guides/model-lifecycle.md#dgx-handover-2026-10-21)
 owns locations and resumption instructions.
@@ -120,7 +122,7 @@ refuses; those refusals were preserved rather than bypassed.
 The remaining roughly 1.26 TB under `models/evidence` includes large unpublished
 GGUFs and independent controls, not only logs. MiniMax, Mamba, original DSpark
 source, V4.1 partial source, Liquid source/artifacts and external DS4 controls
-remain. No sufficiently verified external backup is available: the configured
+remain. At the initial retirement no sufficiently verified external backup was available: the configured
 Zima mount points to unreachable `192.168.66.20`; no network or credential change
 was made. Local archives on the same NVMe are not disaster-recovery backups.
 Unique local representations, raw numerical evidence and private recovery data
@@ -165,6 +167,80 @@ safe storage disposition; no development resumption.
 `downstream_safe: true` only for independent use of the released accelerator
 and verified available storage; false for complete freeze preservation,
 YVEX model qualification, rollout or YAI acceptance.
+
+## External preservation continuation — 2026-10-21
+
+The operator authorizes external discovery and non-destructive copying while
+the persistent Program P Goal remains PAUSED. DGX original removal is a separate
+approval boundary. No inference, compilation, acquisition, installed rollout,
+Core/Studio change or network/SSH configuration change occurs here.
+
+Private operation records and resumable queues are under
+`/home/dgmothx/lab/yvex-external-preservation-20261021.3w4ckJDh/`.
+`external-copy-audit.json` distinguishes verified objects from incomplete staging;
+`distribution-plan.json` records the selected sources and destination queues;
+`deletion-proposal.json` reports current verified copies, source inode allocation
+and remaining risks. It cannot authorize or perform deletion.
+
+| Destination | Physical identity and observed capacity | Health and protection boundary |
+| --- | --- | --- |
+| Exon, `192.168.1.57` | `/data`, ext4 `/dev/sda1`, UUID `04d5f1e4-a4f6-440a-b3c4-e0063c13e21c`; Toshiba MQ01ABD100 serial `Y4PLPEULT`, 1,000,204,886,016 device bytes; initially 983,332,515,840 available filesystem bytes | UDisks SMART: failing false, bad sectors zero, pending/uncorrectable/reallocated counters zero; ext4 error count zero. Dedicated `yvex-preservation-20261021` directory mode 0700 |
+| ZimaBoard, confirmed LAN `192.168.1.68` | `/mnt/storage`, Btrfs UUID `069c4aef-1a06-47db-a2be-a489fd834299`; two Yotta devices, serials `AA000000000000001500` and `AA000000000000001482`, each 512,110,190,592 bytes; initially 962,136,879,104 available filesystem bytes | SMART failing false and bad sectors zero on both; Btrfs device read/write/flush/corruption/generation counters zero. Data profile single, metadata/system RAID1: this is one data-copy failure domain, not two redundant backups. Dedicated directory mode 0700 |
+
+These are read-only health observations, not new destructive self-tests, a new
+scrub or a guarantee against future failure. Transfers use the existing SSH
+trust; the confirmed Zima LAN endpoint is checked against its previously trusted
+host key. No mount, credential, partition or service is changed.
+
+### Verified preservation and pending bulk copies
+
+The encrypted freeze-state package is 563,691,609 bytes, SHA-256
+`6ca634979f54e34b79a29c7b6381c458aee19c57f790082bfa21ed4ac81094c3`.
+Both destinations independently reread this complete file and match its source
+hash; the Zima observation completed at `2026-10-21T14:50:02Z`. Exon also decrypts
+its stored copy using a separately retained key on its system SSD. The resulting
+plaintext SHA-256 matches
+`f34b8c6da1af63119c24775ebd336806aa7df7745d341c6986bde4b9c8e16b63`.
+This protects the captured source/WIP, Git bundles, installed executables and
+private configuration snapshot externally; it does not protect every model
+weight or raw experiment merely because their metadata is included.
+
+Private evidence packages use AES256 encryption and contain per-file SHA-256,
+source filesystem snapshots and explicit exclusions. Local decrypt/readback
+verifies their included files; each completed destination ciphertext is also
+reread and hashed. Rebuildable compiler output and large GGUFs are recorded
+separately rather than hidden inside a generic metadata-backup claim. Selected
+large representations retain their exact bytes and original lineage. Critical
+Liquid and 0731 MXFP4/Q2 representations are planned for both destinations;
+their ongoing transfers remain unqualified until actually verified.
+
+`objects/<sha256>/` contains only verified published backup objects.
+`incomplete/` and its rsync partial files retain interrupted transfer state.
+Queues check the mounted backing filesystem and actual free space before each
+object, retain forty billion available bytes, and stop on an error. Equal hashes
+can reuse an independently reverified destination object. Source inode/block
+accounting and destination deduplication remain separate; nominal selected file
+sizes are not a measurement of recovered DGX storage.
+
+At this checkpoint no original is removed and **additional DGX recovery is zero**.
+The earlier 814,238,109,696-byte recovery is unchanged. Large representations,
+incomplete downloads and source payloads without completed external copies
+remain on DGX. Copy throughput is limited by the observed wireless path; elapsed
+transfer time and incomplete byte counts remain in the operational receipts.
+Further source removal requires an exact reviewed proposal, verified copies,
+current consumer checks and explicit founder authorization.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Destination identity | SSH host key, hostname, mount/device UUID, statfs | Exon secondary disk and Zima storage | Independent physical destinations | Exact backing devices and available capacity retained | Exact mount identity | PASS | Confirmed backup destinations |
+| External freeze copies | Independent destination SHA-256 | Complete encrypted freeze package | Both equal source | Same 563,691,609-byte package and SHA on both | Exact bytes | PASS | External copies of the captured freeze state |
+| Recovery | Exon disk read and separate system-SSD key | Stored encrypted package | Decrypted content equals original archive | Plaintext SHA matches | Exact SHA-256 | PASS | Demonstrated recovery of that snapshot |
+| Bulk artifact preservation | Per-object source/destination hashes | Selected GGUFs and evidence queues | All selected objects verified | In progress; staging is explicit | No inference from partial bytes | UNQUALIFIED | No complete bulk-backup or deletion claim |
+
+`progression_decision: proceed` — authorized non-destructive copying only.
+
+`downstream_safe: true` for recovery of the verified freeze snapshot; false for
+DGX original deletion, complete external preservation or YVEX development resumption.
 
 ## Program P native model titles and retained selectors (2026-10-16)
 

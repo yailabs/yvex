@@ -352,7 +352,9 @@ The current supported HF syntax and cache semantics are documented in the
 
 **Consegna operativa per YAI: PARTIALLY RELEASED.** La GPU e i servizi YVEX sono
 rilasciati; restano aperti il backup esterno verificato e l'obiettivo di recupero
-2–3 TB. Il [verbale tecnico](../evaluation/retained-observations.md#founder-freeze-and-dgx-handover-2026-10-21)
+2–3 TB. Il successivo [checkpoint esterno](../evaluation/retained-observations.md#external-preservation-continuation-2026-10-21)
+verifica due copie cifrate dello stato congelato; il trasferimento dei grandi
+GGUF e delle restanti evidenze prosegue separatamente. Il [verbale tecnico](../evaluation/retained-observations.md#founder-freeze-and-dgx-handover-2026-10-21)
 conserva identità, misure e limiti. Il pacchetto locale privato è
 `/home/dgmothx/lab/yvex-freeze-20261021.Rd1MuGut/`; contiene `HANDOFF.md`, inventario,
 checksum, patch, bundle Git, configurazioni protette, piani e risultati della
@@ -447,3 +449,20 @@ la lifecycle supportata per il load; mantenere invariati listener, pin e grant.
 Non ripristinare implicitamente il vecchio profilo DSpark 32K al posto del 0731
 16K ritirato. Rileggere health/catalogo/generation dopo ogni ripresa; nessun
 Work storico indeterminato deve essere riprodotto.
+
+### Copie esterne successive al freeze
+
+Destinazioni confermate: Exon `192.168.1.57:/data/yvex-preservation-20261021`
+e ZimaBoard `192.168.1.68:/mnt/storage/yvex-preservation-20261021`.
+Entrambe conservano `VERIFIED-MANIFEST.json`; solo gli oggetti sotto
+`objects/<sha256>/` hanno completato il controllo indipendente. `incomplete/`
+non è un backup. Il volume Zima usa dati Btrfs single su due dispositivi:
+non trattarlo come due copie ridondanti.
+
+Il registro privato della campagna è
+`/home/dgmothx/lab/yvex-external-preservation-20261021.3w4ckJDh/`.
+`RECOVERY.it.md` contiene recupero, chiave separata, ripresa delle code e controllo
+dei file ancora privi di copia esterna. `campaign-status.json` ed
+`external-copy-audit.json` riportano lo stato osservato, non un avanzamento inferito.
+`deletion-proposal.json` è una proposta senza autorità esecutiva: gli originali
+restano sulla DGX fino all'approvazione esplicita degli oggetti esatti.

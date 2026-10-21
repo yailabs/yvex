@@ -33,8 +33,12 @@ The GPU has no compute process; three verified cleanup batches recover
 814,238,109,696 bytes, leaving approximately 1.079 TB available. All GGUFs,
 Liquid source, private evidence and unpublished work are retained. The machine
 is PARTIALLY RELEASED: runtime use is available, but the 2–3 TB recovery objective
-and verified external backup remain unearned. No independent backup destination
-is reachable/approved; local archives are not an external backup.
+and complete external preservation remain unearned. The later post-freeze
+operation verifies Exon's secondary disk and ZimaBoard, copies the encrypted
+freeze state to both, and independently decrypts the Exon copy using its separate
+recovery key. Larger artifacts and private evidence are still being copied;
+their incomplete staging is not a verified backup. No further source deletion
+is authorized. See the [external preservation checkpoint](../evaluation/retained-observations.md#external-preservation-continuation-2026-10-21).
 
 ## Preserved goal-driven Physical Model Compiler
 
