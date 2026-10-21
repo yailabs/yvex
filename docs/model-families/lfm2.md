@@ -21,6 +21,15 @@ inference results. No Liquid Engine, complete-checkpoint generation, performance
 held-out quality or YAI
 acceptance is established.
 
+**2026-10-21 freeze:** the paragraph above describes the published `9135a154`
+boundary, not the later unpublished candidate. The
+[preservation record](../evaluation/retained-observations.md#frozen-engineering-checkpoints)
+retains local whole-model CUDA continuations, component gates, cancellation/reset
+controls and unresolved upstream/chunk-equivalence observations. Those experiments
+are not promoted to independent whole-checkpoint quality, a qualified performance
+release or YAI readiness. Both Liquid GGUFs, original source and all raw evidence
+are retained; development is suspended until the operator lifts the freeze.
+
 ## Checkpoint and representation
 
 | Fact | Authority / value |

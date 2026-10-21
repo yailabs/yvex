@@ -347,3 +347,103 @@ The current supported HF syntax and cache semantics are documented in the
 [Hub CLI guide](https://huggingface.co/docs/huggingface_hub/guides/cli),
 [download guide](https://huggingface.co/docs/huggingface_hub/guides/download), and
 [offline/cache environment reference](https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables).
+
+## DGX handover — 2026-10-21
+
+**Consegna operativa per YAI: PARTIALLY RELEASED.** La GPU e i servizi YVEX sono
+rilasciati; restano aperti il backup esterno verificato e l'obiettivo di recupero
+2–3 TB. Il [verbale tecnico](../evaluation/retained-observations.md#founder-freeze-and-dgx-handover-2026-10-21)
+conserva identità, misure e limiti. Il pacchetto locale privato è
+`/home/dgmothx/lab/yvex-freeze-20261021.Rd1MuGut/`; contiene `HANDOFF.md`, inventario,
+checksum, patch, bundle Git, configurazioni protette, piani e risultati della
+pulizia. È sullo stesso NVMe, **non un backup esterno**.
+
+### Stato utilizzabile senza YVEX
+
+- Una NVIDIA GB10; nessun processo di calcolo GPU dopo il ritiro.
+- `yvex-host.service`, `yvex-management.service` e `yvex-finite-remote.service`
+  sono inattivi e disabilitati. Porte 8001, 18080 e 18002 libere. Il carrier Exon
+  `127.0.0.1:18001` non ha più il producer YVEX a valle; non è stato riconfigurato.
+- DeepSeek 0731 generation 20 è stato scaricato con zero richieste, sessioni,
+  client e lease. Artifact, binding e profilo 16K sono ancora presenti. Una
+  ripresa creerà una nuova generation; non riutilizzare riferimenti alla 20.
+- Circa 1.079 TB disponibili dopo 814.24 GB di recupero misurato. Riserva del
+  filesystem e regole di ammissione non modificate. Non trattare la cache RAM
+  reclamabile come memoria fisicamente libera o come pesi ancora caricati.
+- Nessun nuovo runtime, modello, servizio YAI, SEND o benchmark è stato avviato.
+  SSH ordinario, Dashboard+ e gli altri servizi restano invariati.
+
+Controlli indipendenti, senza avviare YVEX:
+
+```sh
+systemctl --user is-active yvex-host yvex-management yvex-finite-remote
+systemctl --user is-enabled yvex-host yvex-management yvex-finite-remote
+nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
+free -b
+df -B1 /home/dgmothx/lab/models
+ss -ltnp
+```
+
+I primi due comandi restituiscono `inactive`/`disabled` con exit nonzero atteso.
+Queste osservazioni non riservano automaticamente la GPU contro nuovi utenti.
+
+### Modelli conservati
+
+I percorsi seguenti sono relativi a **`/home/dgmothx/lab/models/`**, salvo il
+controllo DS4 indicato esplicitamente. Nessun GGUF è stato eliminato.
+`retained-model-hashes.json` nel pacchetto privato contiene percorsi assoluti,
+byte allocati, dimensioni e SHA-256 completi riletti dai file.
+
+| Oggetto | Percorso / byte logici | Utilizzo e limite |
+| --- | --- | --- |
+| Liquid ufficiale BF16 | `source/hf/LiquidAI/LFM2.5-24B-A2B-GGUF/0912d33141f77e10705345a6732bfd83f0252fdc-1d7970b93db7c0415d26a5d358cf2318812783611f50663d1fec0b90e9de84be/LFM2.5-24B-A2B-BF16.gguf`; 47,962,094,880 byte; SHA `55103fda…` | Candidato per runtime standard; precedente controllo llama.cpp limitato, non confronto completo o certificato di qualità. Non è QAD-Q4_0 |
+| Liquid prodotto da YVEX | `evidence/lfm2-production-20261020.FCtOqX1v/lfm2.5-24b-a2b-bf16.gguf`; 47,969,264,224 byte; SHA `ffd820b1…` | Unico e non pubblicato. Binding CPU/CUDA `29b412a3…` nella stessa directory. Compatibilità llama.cpp non stabilita |
+| DeepSeek 0731 dell'Host ritirato | `evidence/physical-compiler-20261010.sQYLQOVq/0731-mxfp4-q2-candidate.gguf`; 103,728,880,544 byte; SHA `25d29155…` | Binding `091f933e…` in `0731-mxfp4-q2-bindings/`. Preservato per ripristino YVEX; non certificato come drop-in llama.cpp |
+| DeepSeek DSpark storico | `representations/deepseek4-v4-flash-dspark/59dd7bdabf6b81989dfa14e0f70692805a8f02a473afcc040a3e55083f48dda0/model.gguf`; 95,050,210,272 byte; SHA `b669d807…` | Checkpoint precedente, diverso da 0731. Pubblicato alla revisione HF `27f47038…`; non retargettare l'alias 0731 |
+| Qwen3.8-27B Text BF16 | `representations/qwen3.8-27b/a699007af97b96ad6fe85969d9825bc2036b58f3e621bcf2be5187215918b902/model.gguf`; 53,815,809,152 byte; SHA `1fce0700…` | Rappresentazione testuale pubblicata alla revisione HF `066eb288…`. Verificare supporto architetturale/tokenizer del runtime scelto; non dedurlo dal contenitore |
+| Controllo DwarfStar 0731 | `/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf`; 86,720,111,488 byte | Conservato insieme a `DeepSeek-V4-Flash-DSpark-support-0731.gguf`. Support/draft e politica numerica distinti; compatibilità del nuovo runtime da verificare |
+
+L'intera sorgente Liquid `1769516a…`, i dieci shard, la configurazione,
+il tokenizer e `LICENSE` sono conservati. Applicare **LFM Open License v1.0**
+ai pesi Liquid; la licenza MIT di YVEX non li riclassifica. Conservare anche
+licenze/model card DeepSeek, Qwen, Mamba, MiniMax e provenienza delle conversioni.
+La consegna non aggiunge una licenza o un'autorizzazione d'uso dei modelli.
+Il codice llama.cpp già presente in `/home/dgmothx/lab/src/llama.cpp` e DS4
+non viene aggiornato né avviato da questa operazione.
+
+### Cosa è stato rimosso e come si recupera
+
+Sono stati eliminati solo i 70 frammenti temporanei dell'acquisizione V4.1
+fallita e, mediante `model evict --representation source`, le due selezioni
+sorgente upstream di 0731 e Qwen. Le selezioni/digest, tutti i checksum dei
+singoli shard, tokenizer/configurazioni e sidecar compressi sono nel pacchetto
+privato e nei registri conservati. I 57 file già acquisiti di V4.1 restano;
+nessuna acquisizione era attiva. I frammenti eliminati non sono recuperabili
+localmente: una futura acquisizione autorizzata deve riscaricare i byte mancanti.
+
+`source-eviction-plan.json` contiene gli argv esatti di riacquisizione ricavati
+dai registri, comprese le selezioni include/exclude. Prima della ripresa:
+
+1. Ottenere la revoca esplicita del freeze e una finestra di risorse appropriata.
+2. Verificare revisione remota, licenza/accesso, spazio per sorgente più
+   trasformazione e la disponibilità degli shard esatti.
+3. Rieseguire l'argv registrato, non un pull di `main` né una selezione diversa.
+   Controllare il digest sorgente atteso e tutti gli SHA-256 del receipt.
+4. Non ricompilare i GGUF conservati per ricaricarli: profilo e binding originali
+   restano l'autorità. Ogni modifica numerica richiede qualificazione separata.
+
+### Ripresa YVEX, solo dopo autorizzazione
+
+Non cancellare il checkout sporco e non sovrapporre un archivio a modifiche
+future. Confrontare prima `HEAD`, remoto, patch e proprietari; il bundle include
+anche gli HEAD detached. La sorgente pubblicata, i candidati locali e i due
+eseguibili installati sono identità differenti. Il verbale conserva i guasti
+aperti e i percorsi dei controlli, inclusi r17 e la divergenza Liquid fra chunk.
+
+Le unità esistenti possono essere riabilitate solo quando le nuove attività YAI
+non occupano porte o risorse necessarie. Verificare prima SHA dei binari,
+artifact `25d29155…`, binding `091f933e…`, capacità **16,384** e riserva. Usare
+la lifecycle supportata per il load; mantenere invariati listener, pin e grant.
+Non ripristinare implicitamente il vecchio profilo DSpark 32K al posto del 0731
+16K ritirato. Rileggere health/catalogo/generation dopo ogni ripresa; nessun
+Work storico indeterminato deve essere riprodotto.

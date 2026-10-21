@@ -15,6 +15,21 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
+
+## Temporary founder-directed freeze — 2026-10-21
+
+Active development is suspended for approximately one to two weeks, until the
+operator explicitly lifts the freeze. The persistent Program P Goal is paused;
+its Task, Liquid qualification and provider r17 recovery remain unfinished.
+No inference, optimization, acquisition or installed rollout is selected during
+this disposition. Existing IN PROGRESS rows preserve their unearned exits.
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `V010.FREEZE.PRESERVATION.HANDOVER.0` | Preserve YVEX and release the DGX for independent YAI development | P0 | ⛔ BLOCKED | [Retirement and safe cleanup verified](../evaluation/retained-observations.md#founder-freeze-and-dgx-handover-2026-10-21): three YVEX units stopped/disabled, no GPU compute PID, 814.24 GB measured recovery and approximately 1.079 TB available. All GGUFs, Liquid source, evidence and WIP retained. Local bundle/archive integrity verified; external backup and 2–3 TB recovery remain open. Needs an approved reachable backup destination or exact additional deletion authority. No inference, acquisition, installed rollout, Core or Studio change. |
+
+## Previously selected development
+
 The operator independently selected `V010.TERMINAL.WORKBENCH.INTEGRATION.0`
 on 2026-10-10 for the Rust terminal consumer only. Program P retains sole
 compiler/performance implementation authority and all its unearned exits.
@@ -273,10 +288,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 59 | 43 | 5 | 1 | 10 |
+| 60 | 43 | 5 | 1 | 11 |
 <!-- task-counts:end -->
 
-**43/59 selected Tasks complete.** This denominator includes the significant
+**43/60 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research

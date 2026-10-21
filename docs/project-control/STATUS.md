@@ -20,7 +20,23 @@ publication: {html: true, pdf: true, index: true}
 | 36 | 49 | 54 | 14 | 153 |
 <!-- maturity-counts:end -->
 
-## Active goal-driven Physical Model Compiler
+## Temporary development freeze — 2026-10-21
+
+The founder suspends active YVEX development for approximately one to two weeks,
+until explicitly lifted. The persistent Program P Goal is paused. Preservation
+and DGX handover take precedence over compiler, Liquid and provider development;
+none of their incomplete exits becomes COMPLETE through this disposition.
+Source publication, installed executable identity and runtime qualification
+remain distinct. The [handover](../evaluation/retained-observations.md#founder-freeze-and-dgx-handover-2026-10-21)
+retires generation 20 and stops/disables the three exact YVEX user services.
+The GPU has no compute process; three verified cleanup batches recover
+814,238,109,696 bytes, leaving approximately 1.079 TB available. All GGUFs,
+Liquid source, private evidence and unpublished work are retained. The machine
+is PARTIALLY RELEASED: runtime use is available, but the 2–3 TB recovery objective
+and verified external backup remain unearned. No independent backup destination
+is reachable/approved; local archives are not an external backup.
+
+## Preserved goal-driven Physical Model Compiler
 
 On 2026-10-18 the operator selects consolidation of the accumulated Program P
 implementation and retained evidence on `main`, together with the already

@@ -19,6 +19,153 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Founder freeze and DGX handover — 2026-10-21
+
+**PARTIALLY RELEASED.** Development is suspended until explicitly resumed by the
+operator. Runtime retirement and bounded storage recovery are demonstrated;
+external backup and the requested 2–3 TB recovery are not established. This is
+not Program P, Liquid, r17, model-quality or performance completion. The
+[operator handover](../guides/model-lifecycle.md#dgx-handover-2026-10-21)
+owns locations and resumption instructions.
+
+Private operational receipts, immutable-source metadata, dry-runs, before/after
+observations, patches and local preservation copies are retained at
+`/home/dgmothx/lab/yvex-freeze-20261021.Rd1MuGut/` (directory mode 0700).
+Private configuration backups contain credentials and must not be published.
+No inference, acquisition, benchmark, new runtime installation, Core or Studio
+operation is performed by this handover.
+
+### Source and preservation boundary
+
+The freshly fetched integration base is `main` at
+`9135a15467dcada66ebb04ea516acad5050103d0`, tree
+`889877b4715851b6d91fbba44e8e4e1744362290`, equal to `origin/main` before this
+documentation publication. [Hosted QA](https://github.com/yailabs/yvex/actions/runs/39479680810)
+completed successfully in both hermetic Linux and native macOS lanes. This does
+not qualify the thirty modified local paths. All were retained, including the
+separately owned phase-cost work and the unpublished Liquid continuation.
+No untracked file was present in the main checkout at initial inspection.
+
+`yvex-including-detached-heads.bundle` preserves all refs and 34 distinct
+branch/detached worktree heads; SHA-256
+`a2762ad0ec0c199e7334bc26219017d1708e69b5299e93e2aa84a7e278b4a91f`.
+Git independently verifies the bundle. The tracked-tree archive matches all
+1,891 captured regular files; the private configuration archive matches all
+190 captured regular files. The original index was empty. Other worktree
+patches include the fourteen modified diagnostic paths under
+`dspark-numeric-attribution-20261017.KJiGhsSf/source`; those are not promoted.
+No branch, worktree, reset, stash or history rewrite was used.
+
+The last pre-freeze local fast receipt
+`03c8141f3d9dcd5bc952010ef296031ee786161af58a9bac90acaf8b53670442`
+has 107 PASS, zero FAIL/SKIP/BLOCKED/ERROR and stable dirty delta
+`aec53d4da20b3394efc5a49bfc8fb22fe0bb95516d8c6e21d403b6e5d0b59a0a`.
+It is preserved, not rerun or relabeled as hosted QA of a published implementation.
+The final local executable, SHA-256
+`ba2c140a433418f4907cc2c9d58bc194e9482f6712fe75a979a8347b99fa9bfa`,
+is copied and independently hash-checked. It was not installed. The freeze
+publishes preservation documentation only; unfinished source changes remain in
+their original checkout and verified local archive.
+
+### Runtime retirement
+
+| Owner | Observed before | Verified after |
+| --- | --- | --- |
+| Host | PID 3279954; installed source `3aa7e69c05cbcf882a5b3da0a25a2bc5f6318564`; executable SHA-256 `bb3ae5149483429fe1122f92fddceea89ed93ba28480174d463af7f2450223e8`; protocol 25 | Supported unload completed; `yvex-host.service` inactive and disabled; same binary retained |
+| Engine | 0731 generation 20; artifact `25d29155…`; binding `091f933e…`; context 16,384; speculative, chunk 512 | No loaded generation before Host shutdown; generation 20 cannot be reused |
+| Management | PID 2458152; installed source `c0ccd7f19bdd20f53d11df5943b57b21feec51a9`; executable SHA-256 `45b0d002955d97faaa8a6a2a0e6ceb329b52ebc0f431504fe37844e0c081b8ed` | `yvex-management.service` inactive and disabled; binary/configuration retained |
+| Restricted finite producer | PID 3616; user-owned `yvex-finite-remote.service`, listener 18002, no child workers | Inactive and disabled; ordinary machine SSH unchanged |
+| Requests and recovery | Zero active requests, HTTP requests, sessions, attached clients, leases and queued/active work; retained management Jobs: 14 succeeded, three failed | No interrupted active Job; historical indeterminate YAI Work remains untouched |
+| Accelerator and RAM | One NVIDIA GB10, UUID `GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc`, driver 580.159.03; 130,663,165,952 RAM bytes | Empty compute-process population; 127,330,537,472 available RAM bytes at the immediate post-retirement observation |
+
+No established connection to 8001, 18080 or 18002 was present at retirement.
+Those listeners are absent afterwards. Machine SSH, Dashboard+, credentials,
+network configuration and unrelated processes remain unchanged. Disabled unit
+enablement is intentional; there is no automatic restart or model restoration
+during the freeze. Available RAM includes reclaimable cache and is not a physical
+residency measurement.
+
+### Storage decisions and measured recovery
+
+The machine has one 4,096,805,658,624-byte NVMe device. Root is ext4 on
+`/dev/nvme0n1p2`, filesystem capacity 4,031,871,553,536 bytes. Initial
+non-root available space is 265,274,249,216 bytes. The filesystem's approximately
+204.84 GB reserved/free distinction is retained, not changed to inflate headroom.
+The inventory includes the whole home tree, model root, linked worktrees,
+temporary paths, independent evidence, caches and external-runtime sources.
+`model storage` and `st_blocks`/device/inode accounting distinguish logical size,
+allocation and shared hardlinks; no reflink-sharing reclamation is assumed.
+
+| Batch | Eligibility / exact control | Predicted allocated bytes | Measured available-space increase |
+| --- | --- | ---: | ---: |
+| Failed V4.1 transfer cache | 70 exact `.incomplete` files; failed generation-8 acquisition, no provider process; canonical acquisition lock and unchanged exclusive inode checks; 57 acquired source files retained | 591,756,513,280 | 591,756,357,632 |
+| 0731 upstream source | Canonical source eviction, exact digest `2f1de670…`; 48 shard hashes/sizes match immutable upstream revision; sidecars and receipt copied; GGUF/binding retained | 166,899,003,392 file blocks | 166,899,023,872 |
+| Qwen upstream source | Canonical source eviction, exact digest `96ca1b63…`; 18 shard hashes/sizes match immutable upstream revision; sidecars and receipt copied; GGUF/binding retained | 55,582,806,016 file blocks | 55,582,728,192 |
+
+The sum of measured batch deltas is **814,238,109,696 bytes**, not 2–3 TB.
+Small differences from file-block predictions reflect directory allocation and
+concurrent filesystem bookkeeping; each independent before/after observation is
+retained. After these batches, available space is approximately **1.079 TB**.
+The final exact observation belongs to `final-state.json` in the private handover.
+No GGUF, Liquid source, unique evidence, installed executable or user data was
+deleted. Deleted source payloads require reacquisition, not undelete.
+
+Published Qwen and historical DeepSeek GGUFs were reviewed but retained. Their
+immutable revisions, Git LFS SHA-256 and sizes match the catalog; resolve HEAD
+requests reach HTTP 200 with matching linked identities and lengths. This is
+current availability evidence, not a fresh full download or future availability
+guarantee. Source eviction for incomplete V4.1 and unsealed MiniMax material
+refuses; those refusals were preserved rather than bypassed.
+
+The remaining roughly 1.26 TB under `models/evidence` includes large unpublished
+GGUFs and independent controls, not only logs. MiniMax, Mamba, original DSpark
+source, V4.1 partial source, Liquid source/artifacts and external DS4 controls
+remain. No sufficiently verified external backup is available: the configured
+Zima mount points to unreachable `192.168.66.20`; no network or credential change
+was made. Local archives on the same NVMe are not disaster-recovery backups.
+Unique local representations, raw numerical evidence and private recovery data
+remain exposed to loss of this device. Further removal requires an approved
+external backup destination or explicit object-level deletion authority.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Preservation | Git bundle verifier; independent archive/content hashes | Live refs, tracked WIP, private configuration | Recoverable identical contents | Bundle verified; 1,891 + 190 files agree | Exact bytes | PASS | Local preservation, not external backup |
+| Retirement | Typed Host/Engine/Session reports, systemd, socket/process observations | Idle generation 20 and three exact user units | No active work lost; no remaining YVEX computation | Unloaded, inactive/disabled, no GPU compute PID | Zero active population | PASS | Runtime released; no inference correctness claim |
+| Cleanup | Canonical source eviction, remote LFS identity, pinned cache inodes, `statvfs` | Three reviewed dry-runs | Only eligible selected bytes removed | Exact batch receipts and retained artifacts | Measured physical free-space delta | PASS | 814.24 GB recovered, not target attainment |
+| External preservation | Independent backup destination and readback | Unique evidence and unpublished artifacts | Verified second copy | No reachable approved destination | Exact integrity required | BLOCKED | Full handover preservation gate remains open |
+
+### Frozen engineering checkpoints
+
+Program P retains its 20/700 requirements, independent quality gates and source
+controls; none is earned by retirement. The earlier R10/R12 measurements remain
+historical. Liquid's published `9135a154` production/CPU boundary remains distinct
+from the unpublished 2026-10-21 CUDA candidates. The local closure directory
+`/home/dgmothx/lab/models/evidence/lfm2-closure-20261021.0gTMGZMZ` retains:
+
+- `coalesced-candidate.6wix6wc1`: build `e3dcf63b…`, delta `0e6648b4…`, kernel
+  `0f4e1e4d…`; exact source capture and executable, not an installed release.
+- `attempt.yaDNgGYs`: completed 128-token raw continuations at context 512,
+  chunk 32, greedy target-only; three samples plus warmup, cancellation/refusal
+  and reset recovery; raw metrics retained without promotion to the public
+  benchmark registry. Chunk 2 changes continuation; the full llama comparison
+  is interrupted by unavailable resource telemetry. The campaign is not PASS.
+- `attempt.hoF8N8j3`: all forty blocks agree with the independently executed
+  **declared native arithmetic** reference; final logits retain differences.
+  `attempt.VTur83fG` retains the distinct unmodified-upstream discrepancy.
+  Neither is a complete independent checkpoint-quality certificate.
+
+r17 retains recovered exact private requests and the original status-20,
+six-row MoE down-operand failure. Its synchronized diagnostic did not reproduce
+the failure. The separate allocator correction does not establish causality.
+No historical request is replayed and no YAI acceptance is implied.
+
+`progression_decision: blocked_external` — external preservation/additional
+safe storage disposition; no development resumption.
+
+`downstream_safe: true` only for independent use of the released accelerator
+and verified available storage; false for complete freeze preservation,
+YVEX model qualification, rollout or YAI acceptance.
+
 ## Program P native model titles and retained selectors (2026-10-16)
 
 The existing Program P model-identity extension now makes native human model
