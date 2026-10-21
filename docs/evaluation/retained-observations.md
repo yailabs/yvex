@@ -242,6 +242,71 @@ current consumer checks and explicit founder authorization.
 `downstream_safe: true` for recovery of the verified freeze snapshot; false for
 DGX original deletion, complete external preservation or YVEX development resumption.
 
+## Standard runtime handover for YAI — 2026-10-21
+
+A subsequent founder instruction authorizes existing standard runtimes and
+bounded synthetic checks to unblock independent YAI development while backups
+continue. This does not lift the YVEX development freeze. No Core, SDK, Studio,
+Case, binding, credential or historical submission is changed. The three YVEX
+units stay retired; the GPU is now occupied by the separate standard runtime.
+
+The existing clean llama.cpp source is
+`96fbe0039337a999613a983d66e2bfcc4bb554d7` (b9529), executable SHA-256
+`466100770ccee816b247f876118ac6ef57a753191696dd45423f46856316834f`.
+It serves the official Liquid BF16 GGUF retained in the freeze handoff, not
+the experimental YVEX GGUF or QAD-Q4_0. Existing DS4 source is
+`9139e2ae58a41503968a500f36f75895c1ba63fc`, executable SHA-256
+`013b15551552b67c6466b73f9f077485d91ef3701c95f90b6c9214fb27d96f69`.
+It serves the external 0731 IQ2XXS/Q2K/Q8 target recorded above, in target-only
+mode. Full rereads of Liquid, DS4 target and matching draft match the retained
+SHA-256 identities. External runtimes and their sources are not modified.
+
+Both profiles use context 16384 and are explicitly mutually exclusive. At the
+handoff Liquid is active, DeepSeek tested but intentionally stopped. Exon
+loopback endpoints `http://127.0.0.1:18010/v1` and `:18011/v1` forward through a
+new private SSH user unit to Spark loopback 8010 and 8011. Existing carrier
+18001 and SSH trust are preserved. API model IDs are `LFM2.5-24B-A2B` and
+`deepseek-v4-flash`; DS4's additional Pro alias serves the same Flash and is
+not evidence of a loaded Pro checkpoint.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Buffered producer chain | Actual Exon HTTP responses | New inert text, named synthetic function and correlated feedback on each model | Exact final text, argument, correlation and terminal reasons | All three checks complete on both | Exact fixture values, JSON and finish semantics | PASS | Bounded standard-provider protocol readiness, not autonomous tool choice or YAI Work |
+| SSE delivery | Actual Exon HTTP bytes | One new text stream per model | Strict UTF-8, valid events, stop and DONE | Both complete with exact final text | Exact framing and content | PASS | Text SSE only; native tool streaming remains unqualified |
+| Long-input execution | Producer usage and exact response | Fresh inert inputs, no Case data or historical wire | Completed response after long prefill | DeepSeek 9046 input / 5 output; Liquid 9057 / 284; both stop with cached_tokens=0 | Exact request/response hashes retained privately | PASS | Two bounded long-input executions, not full-context coverage, quality or comparable performance |
+| Launcher refusals | Isolated negative controls and live exclusivity check | Other profile, foreign GPU, low memory, connected client | Refuse without unrelated mutation | Four isolated controls and live profile exclusion pass | Exact refusal boundary | PASS | Operational guard behavior, not continuously exclusive hardware |
+
+Negative observations are retained. Liquid's official template always opens
+reasoning: setting `enable_thinking=false` disables parser extraction without
+removing that source-authored prefix. Default reasoning passes; no parser or
+template is patched. A 256-output long-input control correctly ends in length;
+a separately recorded 1024-output control completes, including a cache-disabled
+sample. DSpark preparation and an initial larger-margin target control are
+stopped by the private memory guard, not attributed to CUDA numerical failure.
+The final profile uses target-only and prefill chunk 256, with a guard at 18 GiB
+available and unchanged 16-GiB reserve. Its minimum sampled available memory is
+20,856,819,712 bytes. CUDA allocations are not inferred from cgroup accounting;
+the guard also observes whole-machine MemAvailable. Sampling is not a continuous
+peak guarantee, full-context admission certificate or hardware performance bound.
+
+Private controller, model identities, exit reasons and operational handoff:
+`/home/dgmothx/lab/yai-standard-providers-20261021.dn8fiqoT/`.
+Exon copies, per-attempt private responses and reproducible synthetic checks:
+`/home/mothx/.cache/tmp/yai-standard-providers-20261021/`.
+No private response or reasoning is committed. The profiles and SSH unit are
+transient, not reboot-persistent installations. The corresponding model files
+are now operator-runtime dependencies and cannot be removed merely because a
+backup exists. Original deletion still requires exact approval and consumer checks.
+
+YAI must independently qualify its new provider observations and governed Work.
+No historical replay, parser relaxation, numerical quality certificate, native
+YVEX support, new SDK contract, sustained throughput or Program P exit is earned.
+
+`progression_decision: proceed` — standard-runtime consumer qualification only.
+
+`downstream_safe: true` for the bounded access and readiness checks above, not
+YAI Case acceptance, representation quality, source deletion or YVEX resumption.
+
 ## Program P native model titles and retained selectors (2026-10-16)
 
 The existing Program P model-identity extension now makes native human model

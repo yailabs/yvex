@@ -21,8 +21,8 @@ Selected program: **YVEX shared compiler/runtime delivery**.
 Active development is suspended for approximately one to two weeks, until the
 operator explicitly lifts the freeze. The persistent Program P Goal is paused;
 its Task, Liquid qualification and provider r17 recovery remain unfinished.
-No inference, optimization, acquisition or installed rollout is selected during
-this disposition. Existing IN PROGRESS rows preserve their unearned exits.
+No YVEX inference, optimization, acquisition or installed rollout is selected
+during this disposition. Existing IN PROGRESS rows preserve their unearned exits.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
@@ -33,6 +33,18 @@ destination discovery and verified, non-destructive external copies to the
 founder's ZimaBoard and Exon secondary disk. YVEX development remains paused.
 Any further removal of DGX originals requires an exact proposal and separate
 explicit founder approval after destination integrity verification.
+
+The founder subsequently authorizes an operational handover extension on the
+same day: prepare existing standard inference runtimes and retained official
+Liquid / external DS4 DeepSeek representations for independent YAI development
+while copies continue. Bounded synthetic readiness checks and private loopback
+SSH access are within this extension; YVEX services stay retired, development
+stays paused, and no YAI Case/binding mutation or historical replay is selected.
+Memory reserve and model compatibility must be checked independently. Readiness
+does not establish tool reliability, YAI Work acceptance or Program P performance.
+The [operational evidence](../evaluation/retained-observations.md#standard-runtime-handover-for-yai-2026-10-21)
+retains bounded real-model controls and exact access/scoping; external runtimes
+do not resume YVEX implementation or authorize removal of active model files.
 
 ## Previously selected development
 

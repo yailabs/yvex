@@ -29,7 +29,7 @@ none of their incomplete exits becomes COMPLETE through this disposition.
 Source publication, installed executable identity and runtime qualification
 remain distinct. The [handover](../evaluation/retained-observations.md#founder-freeze-and-dgx-handover-2026-10-21)
 retires generation 20 and stops/disables the three exact YVEX user services.
-The GPU has no compute process; three verified cleanup batches recover
+At initial retirement the GPU has no compute process; three verified cleanup batches recover
 814,238,109,696 bytes, leaving approximately 1.079 TB available. All GGUFs,
 Liquid source, private evidence and unpublished work are retained. The machine
 is PARTIALLY RELEASED: runtime use is available, but the 2–3 TB recovery objective
@@ -39,6 +39,18 @@ freeze state to both, and independently decrypts the Exon copy using its separat
 recovery key. Larger artifacts and private evidence are still being copied;
 their incomplete staging is not a verified backup. No further source deletion
 is authorized. See the [external preservation checkpoint](../evaluation/retained-observations.md#external-preservation-continuation-2026-10-21).
+
+A subsequent same-day operator instruction authorizes preparation of existing
+standard runtimes for Liquid and external DS4 DeepSeek, independently of YVEX,
+with bounded synthetic readiness checks and loopback SSH access for YAI. This
+does not lift the development freeze or authorize Case changes, historical
+replay, installed YVEX rollout or performance qualification. Runtime readiness,
+native tool qualification and real governed YAI Work remain distinct gates.
+The [standard-runtime handoff](../evaluation/retained-observations.md#standard-runtime-handover-for-yai-2026-10-21)
+records successful bounded text, call/feedback, SSE and long-input controls on
+both external runtimes. Liquid is active at that checkpoint; DeepSeek target-only
+is tested but stopped. Profiles are mutually exclusive and transient. These are
+not YVEX inference, general tool reliability, checkpoint quality or YAI Work exits.
 
 ## Preserved goal-driven Physical Model Compiler
 
